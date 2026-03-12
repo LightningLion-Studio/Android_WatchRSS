@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="@color/watch_card_background" />
+    <stroke
+        android:width="@dimen/hey_dotStrokeWidth"
+        android:color="@color/brand_orange" />
+</shape>

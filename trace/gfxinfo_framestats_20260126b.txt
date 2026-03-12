@@ -1,0 +1,171 @@
+Applications Graphics Acceleration Info:
+Uptime: 145538801 Realtime: 347773498
+
+** Graphics info for pid 3959 [com.lightningstudio.watchrss] **
+
+Stats since: 145490837680019ns
+Total frames rendered: 218
+Janky frames: 23 (10.55%)
+Janky frames (legacy): 55 (25.23%)
+50th percentile: 13ms
+90th percentile: 34ms
+95th percentile: 44ms
+99th percentile: 53ms
+Number Missed Vsync: 4
+Number High input latency: 326
+Number Slow UI thread: 23
+Number Slow bitmap uploads: 0
+Number Slow issue draw commands: 0
+Number Frame deadline missed: 23
+Number Frame deadline missed (legacy): 23
+HISTOGRAM: 5ms=4 6ms=1 7ms=6 8ms=17 9ms=28 10ms=22 11ms=9 12ms=18 13ms=23 14ms=12 15ms=14 16ms=9 17ms=2 18ms=4 19ms=4 20ms=3 21ms=2 22ms=2 23ms=2 24ms=2 25ms=0 26ms=0 27ms=0 28ms=0 29ms=1 30ms=2 31ms=2 32ms=4 34ms=5 36ms=3 38ms=2 40ms=2 42ms=2 44ms=2 46ms=2 48ms=3 53ms=3 57ms=0 61ms=1 65ms=0 69ms=0 73ms=0 77ms=0 81ms=0 85ms=0 89ms=0 93ms=0 97ms=0 101ms=0 105ms=0 109ms=0 113ms=0 117ms=0 121ms=0 125ms=0 129ms=0 133ms=0 150ms=0 200ms=0 250ms=0 300ms=0 350ms=0 400ms=0 450ms=0 500ms=0 550ms=0 600ms=0 650ms=0 700ms=0 750ms=0 800ms=0 850ms=0 900ms=0 950ms=0 1000ms=0 1050ms=0 1100ms=0 1150ms=0 1200ms=0 1250ms=0 1300ms=0 1350ms=0 1400ms=0 1450ms=0 1500ms=0 1550ms=0 1600ms=0 1650ms=0 1700ms=0 1750ms=0 1800ms=0 1850ms=0 1900ms=0 1950ms=0 2000ms=0 2050ms=0 2100ms=0 2150ms=0 2200ms=0 2250ms=0 2300ms=0 2350ms=0 2400ms=0 2450ms=0 2500ms=0 2550ms=0 2600ms=0 2650ms=0 2700ms=0 2750ms=0 2800ms=0 2850ms=0 2900ms=0 2950ms=0 3000ms=0 3050ms=0 3100ms=0 3150ms=0 3200ms=0 3250ms=0 3300ms=0 3350ms=0 3400ms=0 3450ms=0 3500ms=0 3550ms=0 3600ms=0 3650ms=0 3700ms=0 3750ms=0 3800ms=0 3850ms=0 3900ms=0 3950ms=0 4000ms=0 4050ms=0 4100ms=0 4150ms=0 4200ms=0 4250ms=0 4300ms=0 4350ms=0 4400ms=0 4450ms=0 4500ms=0 4550ms=0 4600ms=0 4650ms=0 4700ms=0 4750ms=0 4800ms=0 4850ms=0 4900ms=0 4950ms=0
+50th gpu percentile: 1ms
+90th gpu percentile: 1ms
+95th gpu percentile: 1ms
+99th gpu percentile: 11ms
+GPU HISTOGRAM: 1ms=208 2ms=4 3ms=0 4ms=0 5ms=0 6ms=0 7ms=0 8ms=0 9ms=0 10ms=3 11ms=3 12ms=0 13ms=0 14ms=0 15ms=0 16ms=0 17ms=0 18ms=0 19ms=0 20ms=0 21ms=0 22ms=0 23ms=0 24ms=0 25ms=0 4950ms=0
+
+Pipeline=Skia (Vulkan)
+Memory policy:
+  Max surface area: 2073600
+  Max resource usage: 99.53MB (x48)
+  Background retention: 50% (altUiHidden = true)
+  GPU Context timeout: 10
+Contexts: 3 (stopped = 1)
+CPU Caches:
+  Glyph Cache: 291.03 KB (1 entry)
+  Glyph Count: 25 
+Total CPU memory usage:
+  298017 bytes, 291.03 KB (0.00 bytes is purgeable)
+GPU Caches:
+  Other:
+    TextBlobCache: 10.67 KB (1 entry)
+  SW Path Mask:
+    Texture: 424.13 KB (2 entries)
+  Image:
+    Texture: 4.80 MB (9 entries)
+  Scratch:
+    TextureRenderTarget: 288.00 KB (2 entries)
+    Texture: 2.00 MB (1 entry)
+    Buffer Object: 1.42 MB (8 entries)
+    Attachment: 0.00 bytes (14 entries)
+Total GPU memory usage:
+  9357534 bytes, 8.92 MB (6.59 MB is purgeable)
+
+GraphicBufferAllocator buffers:
+            Handle |         Size |     W (Stride) x H | Layers |   Format |      Usage | Requestor
+0xb400006fdfdf23e0 |   932.00 KiB |  466 ( 512) x  466 |      1 |        1 | 0x10000b00 | VRI[FeedActivity]@48f06f1#1(BLAST Consumer)1
+0xb400006fdfe015c0 |   932.00 KiB |  466 ( 512) x  466 |      1 |        1 | 0x10000b00 | VRI[MainActivity]@10df291#0(BLAST Consumer)0
+0xb400006fdfe01b60 |   932.00 KiB |  466 ( 512) x  466 |      1 |        1 | 0x10000b00 | VRI[MainActivity]@10df291#0(BLAST Consumer)0
+0xb400006fdfe02a90 |   932.00 KiB |  466 ( 512) x  466 |      1 |        1 | 0x10000b00 | VRI[MainActivity]@10df291#0(BLAST Consumer)0
+0xb400006fdfe03030 |   932.00 KiB |  466 ( 512) x  466 |      1 |        1 | 0x10000b00 | VRI[MainActivity]@10df291#0(BLAST Consumer)0
+0xb400006fdfe07cb0 |   932.00 KiB |  466 ( 512) x  466 |      1 |        1 | 0x10000b00 | VRI[FeedActivity]@48f06f1#1(BLAST Consumer)1
+0xb400006fdfe0aec0 |   932.00 KiB |  466 ( 512) x  466 |      1 |        1 | 0x10000b00 | VRI[FeedActivity]@48f06f1#1(BLAST Consumer)1
+0xb400006fdfe0bb20 |   932.00 KiB |  466 ( 512) x  466 |      1 |        1 | 0x10000b00 | VRI[FeedActivity]@48f06f1#1(BLAST Consumer)1
+Total allocated by GraphicBufferAllocator (estimate): 7456.00 KB
+Imported gralloc buffers:
++ name:VRI[FeedActivity]@48f06f1#1(BLAST Consumer)1, id:299098, size:968.00KiB, w/h:466x466, usage: 0x10000b00, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x8810000, compressed: true
+	planes: R/G/B/A:	 w/h:466x466, stride:2048 bytes, size:991232
++ name:VRI[FeedActivity]@48f06f1#1(BLAST Consumer)1, id:299097, size:968.00KiB, w/h:466x466, usage: 0x10000b00, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x8810000, compressed: true
+	planes: R/G/B/A:	 w/h:466x466, stride:2048 bytes, size:991232
++ name:VRI[FeedActivity]@48f06f1#1(BLAST Consumer)1, id:299096, size:968.00KiB, w/h:466x466, usage: 0x10000b00, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x8810000, compressed: true
+	planes: R/G/B/A:	 w/h:466x466, stride:2048 bytes, size:991232
++ name:VRI[FeedActivity]@48f06f1#1(BLAST Consumer)1, id:299095, size:968.00KiB, w/h:466x466, usage: 0x10000b00, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x8810000, compressed: true
+	planes: R/G/B/A:	 w/h:466x466, stride:2048 bytes, size:991232
++ name:VRI[MainActivity]@10df291#0(BLAST Consumer)0, id:299088, size:968.00KiB, w/h:466x466, usage: 0x10000b00, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x8810000, compressed: true
+	planes: R/G/B/A:	 w/h:466x466, stride:2048 bytes, size:991232
++ name:VRI[MainActivity]@10df291#0(BLAST Consumer)0, id:299089, size:968.00KiB, w/h:466x466, usage: 0x10000b00, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x8810000, compressed: true
+	planes: R/G/B/A:	 w/h:466x466, stride:2048 bytes, size:991232
++ name:VRI[MainActivity]@10df291#0(BLAST Consumer)0, id:299087, size:968.00KiB, w/h:466x466, usage: 0x10000b00, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x8810000, compressed: true
+	planes: R/G/B/A:	 w/h:466x466, stride:2048 bytes, size:991232
++ name:VRI[MainActivity]@10df291#0(BLAST Consumer)0, id:299086, size:968.00KiB, w/h:466x466, usage: 0x10000b00, req fmt:1, fourcc/mod:875708993/0, dataspace: 0x8810000, compressed: true
+	planes: R/G/B/A:	 w/h:466x466, stride:2048 bytes, size:991232
+Total imported by gralloc: 7744.00KiB
+
+Profile data in ms:
+
+	com.lightningstudio.watchrss/com.lightningstudio.watchrss.MainActivity/android.view.ViewRootImpl@b629142 (visibility=0)
+Window: com.lightningstudio.watchrss/com.lightningstudio.watchrss.MainActivity
+Stats since: 145490836902519ns
+Total frames rendered: 0
+Janky frames: 0 (0.00%)
+Janky frames (legacy): 0 (0.00%)
+50th percentile: 4950ms
+90th percentile: 4950ms
+95th percentile: 4950ms
+99th percentile: 4950ms
+Number Missed Vsync: 0
+Number High input latency: 0
+Number Slow UI thread: 0
+Number Slow bitmap uploads: 0
+Number Slow issue draw commands: 0
+Number Frame deadline missed: 0
+Number Frame deadline missed (legacy): 0
+HISTOGRAM: 5ms=0 6ms=0 7ms=0 8ms=0 9ms=0 10ms=0 11ms=0 12ms=0 13ms=0 14ms=0 15ms=0 16ms=0 17ms=0 18ms=0 19ms=0 20ms=0 21ms=0 22ms=0 23ms=0 24ms=0 25ms=0 26ms=0 27ms=0 28ms=0 29ms=0 30ms=0 31ms=0 32ms=0 34ms=0 36ms=0 38ms=0 40ms=0 42ms=0 44ms=0 46ms=0 48ms=0 53ms=0 57ms=0 61ms=0 65ms=0 69ms=0 73ms=0 77ms=0 81ms=0 85ms=0 89ms=0 93ms=0 97ms=0 101ms=0 105ms=0 109ms=0 113ms=0 117ms=0 121ms=0 125ms=0 129ms=0 133ms=0 150ms=0 200ms=0 250ms=0 300ms=0 350ms=0 400ms=0 450ms=0 500ms=0 550ms=0 600ms=0 650ms=0 700ms=0 750ms=0 800ms=0 850ms=0 900ms=0 950ms=0 1000ms=0 1050ms=0 1100ms=0 1150ms=0 1200ms=0 1250ms=0 1300ms=0 1350ms=0 1400ms=0 1450ms=0 1500ms=0 1550ms=0 1600ms=0 1650ms=0 1700ms=0 1750ms=0 1800ms=0 1850ms=0 1900ms=0 1950ms=0 2000ms=0 2050ms=0 2100ms=0 2150ms=0 2200ms=0 2250ms=0 2300ms=0 2350ms=0 2400ms=0 2450ms=0 2500ms=0 2550ms=0 2600ms=0 2650ms=0 2700ms=0 2750ms=0 2800ms=0 2850ms=0 2900ms=0 2950ms=0 3000ms=0 3050ms=0 3100ms=0 3150ms=0 3200ms=0 3250ms=0 3300ms=0 3350ms=0 3400ms=0 3450ms=0 3500ms=0 3550ms=0 3600ms=0 3650ms=0 3700ms=0 3750ms=0 3800ms=0 3850ms=0 3900ms=0 3950ms=0 4000ms=0 4050ms=0 4100ms=0 4150ms=0 4200ms=0 4250ms=0 4300ms=0 4350ms=0 4400ms=0 4450ms=0 4500ms=0 4550ms=0 4600ms=0 4650ms=0 4700ms=0 4750ms=0 4800ms=0 4850ms=0 4900ms=0 4950ms=0
+50th gpu percentile: 4950ms
+90th gpu percentile: 4950ms
+95th gpu percentile: 4950ms
+99th gpu percentile: 4950ms
+GPU HISTOGRAM: 1ms=0 2ms=0 3ms=0 4ms=0 5ms=0 6ms=0 7ms=0 8ms=0 9ms=0 10ms=0 11ms=0 12ms=0 13ms=0 14ms=0 15ms=0 16ms=0 17ms=0 18ms=0 19ms=0 20ms=0 21ms=0 22ms=0 23ms=0 24ms=0 25ms=0 4950ms=0
+
+
+
+---PROFILEDATA---
+Flags,FrameTimelineVsyncId,IntendedVsync,Vsync,InputEventId,HandleInputStart,AnimationStart,PerformTraversalsStart,DrawStart,FrameDeadline,FrameStartTime,FrameInterval,WorkloadTarget,SyncQueued,SyncStart,IssueDrawCommandsStart,SwapBuffers,FrameCompleted,DequeueBufferDuration,QueueBufferDuration,GpuCompleted,SwapBuffersCompleted,DisplayPresentTime,CommandSubmissionCompleted,
+---PROFILEDATA---
+
+
+	com.lightningstudio.watchrss/com.lightningstudio.watchrss.FeedActivity/android.view.ViewRootImpl@c462553 (visibility=0)
+Window: com.lightningstudio.watchrss/com.lightningstudio.watchrss.FeedActivity
+Stats since: 145490837301008ns
+Total frames rendered: 7
+Janky frames: 6 (85.71%)
+Janky frames (legacy): 7 (100.00%)
+50th percentile: 40ms
+90th percentile: 53ms
+95th percentile: 53ms
+99th percentile: 53ms
+Number Missed Vsync: 1
+Number High input latency: 2
+Number Slow UI thread: 6
+Number Slow bitmap uploads: 0
+Number Slow issue draw commands: 0
+Number Frame deadline missed: 6
+Number Frame deadline missed (legacy): 6
+HISTOGRAM: 5ms=0 6ms=0 7ms=0 8ms=0 9ms=0 10ms=0 11ms=0 12ms=0 13ms=0 14ms=0 15ms=0 16ms=0 17ms=0 18ms=0 19ms=0 20ms=0 21ms=0 22ms=0 23ms=0 24ms=0 25ms=0 26ms=0 27ms=0 28ms=0 29ms=0 30ms=0 31ms=0 32ms=1 34ms=1 36ms=0 38ms=1 40ms=1 42ms=0 44ms=1 46ms=0 48ms=0 53ms=2 57ms=0 61ms=0 65ms=0 69ms=0 73ms=0 77ms=0 81ms=0 85ms=0 89ms=0 93ms=0 97ms=0 101ms=0 105ms=0 109ms=0 113ms=0 117ms=0 121ms=0 125ms=0 129ms=0 133ms=0 150ms=0 200ms=0 250ms=0 300ms=0 350ms=0 400ms=0 450ms=0 500ms=0 550ms=0 600ms=0 650ms=0 700ms=0 750ms=0 800ms=0 850ms=0 900ms=0 950ms=0 1000ms=0 1050ms=0 1100ms=0 1150ms=0 1200ms=0 1250ms=0 1300ms=0 1350ms=0 1400ms=0 1450ms=0 1500ms=0 1550ms=0 1600ms=0 1650ms=0 1700ms=0 1750ms=0 1800ms=0 1850ms=0 1900ms=0 1950ms=0 2000ms=0 2050ms=0 2100ms=0 2150ms=0 2200ms=0 2250ms=0 2300ms=0 2350ms=0 2400ms=0 2450ms=0 2500ms=0 2550ms=0 2600ms=0 2650ms=0 2700ms=0 2750ms=0 2800ms=0 2850ms=0 2900ms=0 2950ms=0 3000ms=0 3050ms=0 3100ms=0 3150ms=0 3200ms=0 3250ms=0 3300ms=0 3350ms=0 3400ms=0 3450ms=0 3500ms=0 3550ms=0 3600ms=0 3650ms=0 3700ms=0 3750ms=0 3800ms=0 3850ms=0 3900ms=0 3950ms=0 4000ms=0 4050ms=0 4100ms=0 4150ms=0 4200ms=0 4250ms=0 4300ms=0 4350ms=0 4400ms=0 4450ms=0 4500ms=0 4550ms=0 4600ms=0 4650ms=0 4700ms=0 4750ms=0 4800ms=0 4850ms=0 4900ms=0 4950ms=0
+50th gpu percentile: 1ms
+90th gpu percentile: 1ms
+95th gpu percentile: 1ms
+99th gpu percentile: 1ms
+GPU HISTOGRAM: 1ms=7 2ms=0 3ms=0 4ms=0 5ms=0 6ms=0 7ms=0 8ms=0 9ms=0 10ms=0 11ms=0 12ms=0 13ms=0 14ms=0 15ms=0 16ms=0 17ms=0 18ms=0 19ms=0 20ms=0 21ms=0 22ms=0 23ms=0 24ms=0 25ms=0 4950ms=0
+
+
+
+---PROFILEDATA---
+Flags,FrameTimelineVsyncId,IntendedVsync,Vsync,InputEventId,HandleInputStart,AnimationStart,PerformTraversalsStart,DrawStart,FrameDeadline,FrameStartTime,FrameInterval,WorkloadTarget,SyncQueued,SyncStart,IssueDrawCommandsStart,SwapBuffers,FrameCompleted,DequeueBufferDuration,QueueBufferDuration,GpuCompleted,SwapBuffersCompleted,DisplayPresentTime,CommandSubmissionCompleted,
+0,17853819,145499075181359,145499075181359,0,145499075806943,145499075807984,145499118956005,145499124482568,145499091848025,145499075803193,16666494,16666666,145499127175849,145499127298088,145499127389963,145499128205172,145499129031890,19947,272760,145499129031890,145499128572776,145499158509077,145499128205172,
+0,17853977,145499458485479,145499458485479,0,145499460872099,145499460873036,145499494152932,145499498219963,145499475152145,145499460867984,16665500,16666666,145499500990172,145499501100849,145499501189703,145499501913609,145499502870797,19479,272344,145499502870797,145499502266474,145459472562634,145499501913609,
+0,17854993,145500675029799,145500675029799,0,145500679480588,145500679481369,145500707314807,145500711043921,145500691696465,145500679476473,16665381,16666666,145500713608973,145500713717827,145500713807307,145500714787463,145500715638452,17812,309375,145500715638452,145500715182150,145459555901749,145500714787463,
+0,17856160,145502291516312,145502291516312,0,145502292196525,145502292197202,145502321981837,145502326034181,145502308182978,145502292193348,16665063,16666666,145502328334962,145502328433764,145502328518920,145502329236733,145502330199441,16614,274532,145502330199441,145502329607150,145459589236488,145502329236733,
+0,17856736,145503108095805,145503108095805,0,145503108646889,145503108647826,145503134498504,145503138063295,145503124762471,145503108643504,16664860,16666666,145503140352566,145503140463035,145503140552879,145503141273816,145503142124858,20209,320000,145503142124858,145503141688295,145459605903519,145503141273816,
+0,17858001,145517924119607,145517940785235,0,145517943194175,145517943196258,145517969532196,145517973589487,145517940786273,145517943186571,16665628,16666666,145517975836779,145517975967560,145517976101935,145517976850842,145517977598185,20468,363334,145517977598185,145517977323810,145459622570759,145517976850842,
+0,17858059,145517957512379,145517974178444,0,145517984915633,145517984916571,145517989945269,145517990012717,145518007448785,145517984909331,16666065,16666666,145517990277404,145517990414383,145517990509592,145517991403237,145517992243446,12917,241458,145517992243446,145517991719279,145478257363668,145517991403237,
+---PROFILEDATA---
+
+
+View hierarchy:
+
+  com.lightningstudio.watchrss/com.lightningstudio.watchrss.MainActivity/android.view.ViewRootImpl@b629142
+  8 views, 15.23 kB of render nodes
+
+  com.lightningstudio.watchrss/com.lightningstudio.watchrss.FeedActivity/android.view.ViewRootImpl@c462553
+  8 views, 15.13 kB of render nodes
+
+
+Total ViewRootImpl   : 2
+Total attached Views : 16
+Total RenderNode     : 30.37 kB (used) / 90.23 kB (capacity)
+
+Total STB frames rendered : 0
+  ProcessConfig={1.0 454mcc12mnc [zh_CN_#Hans,en_US] masculine ldltr sw233dp w233dp h186dp 320dpi smll hdr widecg port finger -keyb/v/h -nav/h winConfig={ mBounds=Rect(0, 0 - 466, 466) mAppBounds=Rect(0, 0 - 466, 466) mMaxBounds=Rect(0, 0 - 466, 466) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mActivityType=undefined mAlwaysOnTop=undefined mRotation=ROTATION_0 mStageConfig=undefined mEmbedActivityMode=undefined mPopOver=off mOverlappingWithCutout=false mFlexPanelMode=off} s.6635 fontWeightAdjustment=0 ff=0 bf=-1 bts=0 cst=1.0 nightDim=0 dt/m themeSeq=0}
+  Application ResourcesConfig={1.0 454mcc12mnc [zh_CN_#Hans,en_US] masculine ldltr sw233dp w233dp h186dp 320dpi smll hdr widecg port finger -keyb/v/h -nav/h winConfig={ mBounds=Rect(0, 0 - 466, 466) mAppBounds=Rect(0, 0 - 466, 466) mMaxBounds=Rect(0, 0 - 466, 466) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mActivityType=undefined mAlwaysOnTop=undefined mRotation=ROTATION_0 mStageConfig=undefined mEmbedActivityMode=undefined mPopOver=off mOverlappingWithCutout=false mFlexPanelMode=off} s.6635 fontWeightAdjustment=0 ff=0 bf=-1 bts=0 cst=1.0 nightDim=0 dt/m themeSeq=0}

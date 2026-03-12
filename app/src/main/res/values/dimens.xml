@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="watch_safe_padding">@dimen/hey_distance_18dp</dimen>
+    <dimen name="detail_page_horizontal_padding">@dimen/hey_content_horizontal_distance_6_0</dimen>
+    <dimen name="detail_block_spacing">@dimen/hey_distance_6dp</dimen>
+    <dimen name="detail_title_safe_padding">0dp</dimen>
+    <dimen name="detail_title_first_line_max_width">150dp</dimen>
+    <dimen name="detail_title_second_line_max_width">190dp</dimen>
+    <dimen name="detail_title_text_size">@dimen/hey_s_title</dimen>
+    <dimen name="detail_subtitle_text_size">@dimen/hey_s_desription</dimen>
+    <dimen name="detail_body_text_size">@dimen/hey_m_desription</dimen>
+    <dimen name="list_option_text_size">@dimen/hey_s_title</dimen>
+    <dimen name="profile_entry_text_size">@dimen/hey_s_title</dimen>
+    <dimen name="settings_detail_text_size">@dimen/hey_m_desription</dimen>
+    <dimen name="settings_title_text_size">@dimen/hey_m_title</dimen>
+    <dimen name="feed_card_title_text_size">@dimen/hey_m_desription</dimen>
+    <dimen name="feed_card_summary_text_size">@dimen/hey_caption</dimen>
+    <dimen name="feed_card_action_text_size">@dimen/hey_s_desription</dimen>
+    <dimen name="feed_card_image_height">100dp</dimen>
+    <dimen name="watch_action_button_width">160dp</dimen>
+    <dimen name="watch_swipe_action_button_width">72dp</dimen>
+    <dimen name="watch_action_button_height">48dp</dimen>
+    <dimen name="watch_action_button_text_size">17sp</dimen>
+    <dimen name="watch_action_button_line_height">23sp</dimen>
+</resources>

@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">腕上RSS</string>
+    <string name="about_intro_content">腕上RSS是一款面向可穿戴设备的 RSS 阅读与内容聚合工具，聚焦轻量阅读、快速刷新与离线收藏。</string>
+    <string name="about_privacy_content">本应用当前仅在设备本地保存你的订阅、阅读进度与收藏数据，不会主动上传到第三方服务。网络访问仅用于拉取你主动添加的内容源，后续若接入新的同步能力，会在文档更新后另行说明。</string>
+    <string name="about_user_agreement_content">腕上RSS是一款面向可穿戴设备场景的内容聚合与阅读工具。在您使用本应用前，请您认真阅读并充分理解本用户协议。您下载、安装、访问或使用本应用，即视为您已阅读、理解并同意接受本协议全部内容。\n\n本应用主要提供 RSS 订阅与阅读、收藏、稍后再看、分享等功能。您应合法合规使用本服务，不得利用本服务从事任何违法违规、侵权、扰乱网络秩序或损害他人合法权益的行为。\n\n详细协议内容请查看应用内完整版用户协议。</string>
+    <string name="about_licenses_content">本应用使用了以下开源库和项目：\n\n• RSS-Parser\n• Jsoup\n• OkHttp\n• SocialSisterYi / bilibili-API-collect\n• SpaceXC / Re-WearBili\n\n本项目已依据 GPL-3.0 开源\n\nLightningLion-Studio / WatchRSS\nhttps://github.com/LightningLion-Studio/WatchRSS</string>
+</resources>

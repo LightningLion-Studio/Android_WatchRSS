@@ -1,0 +1,90 @@
+capturing trace... done
+TRACE:
+# tracer: nop
+#
+# entries-in-buffer/entries-written: 77/77   #P:8
+#
+#                                          _-----=> irqs-off/BH-disabled
+#                                         / _----=> need-resched
+#                                        | / _---=> hardirq/softirq
+#                                        || / _--=> preempt-depth
+#                                        ||| /     delay
+#           TASK-PID       TGID    CPU#  ||||  TIMESTAMP  FUNCTION
+#              | |           |       |   ||||     |         |
+          atrace-32447   (  32447) [002] .... 346774.519088: tracing_mark_write: trace_event_clock_sync: parent_ts=144539.828125
+          atrace-32447   (  32447) [002] .... 346774.519095: tracing_mark_write: trace_event_clock_sync: realtime_ts=1769463400456
+      RQ_handler-7879    (   6726) [006] .... 346775.560473: tracing_mark_write: C|6726|LAND|10
+      RQ_handler-7879    (   6726) [006] .... 346775.560485: tracing_mark_write: C|6726|SKY|3
+      RQ_handler-7879    (   6726) [006] .... 346775.560489: tracing_mark_write: C|6726|BUBBLE|0
+      RQ_handler-7879    (   6726) [005] .... 346775.661232: tracing_mark_write: C|6726|LAND|1
+      RQ_handler-7879    (   6726) [005] .... 346775.661251: tracing_mark_write: C|6726|SKY|0
+      RQ_handler-7879    (   6726) [005] .... 346775.661258: tracing_mark_write: C|6726|BUBBLE|0
+      RQ_handler-7879    (   6726) [005] .... 346775.759413: tracing_mark_write: C|6726|LAND|2
+      RQ_handler-7879    (   6726) [005] .... 346775.759426: tracing_mark_write: C|6726|SKY|0
+      RQ_handler-7879    (   6726) [005] .... 346775.759432: tracing_mark_write: C|6726|BUBBLE|0
+      RQ_handler-7879    (   6726) [006] .... 346775.860018: tracing_mark_write: C|6726|LAND|1
+      RQ_handler-7879    (   6726) [006] .... 346775.860037: tracing_mark_write: C|6726|SKY|0
+      RQ_handler-7879    (   6726) [006] .... 346775.860044: tracing_mark_write: C|6726|BUBBLE|0
+      RQ_handler-7879    (   6726) [006] .... 346775.960441: tracing_mark_write: C|6726|LAND|1
+      RQ_handler-7879    (   6726) [006] .... 346775.960455: tracing_mark_write: C|6726|SKY|0
+      RQ_handler-7879    (   6726) [006] .... 346775.960462: tracing_mark_write: C|6726|BUBBLE|0
+      RQ_handler-7879    (   6726) [006] .... 346776.313591: tracing_mark_write: C|6726|LAND|10
+      RQ_handler-7879    (   6726) [006] .... 346776.313602: tracing_mark_write: C|6726|SKY|4
+      RQ_handler-7879    (   6726) [006] .... 346776.313605: tracing_mark_write: C|6726|BUBBLE|0
+      RQ_handler-7879    (   6726) [003] .... 346776.416178: tracing_mark_write: C|6726|LAND|6
+      RQ_handler-7879    (   6726) [003] .... 346776.416190: tracing_mark_write: C|6726|SKY|2
+      RQ_handler-7879    (   6726) [003] .... 346776.416195: tracing_mark_write: C|6726|BUBBLE|0
+      RQ_handler-7879    (   6726) [006] .... 346776.516292: tracing_mark_write: C|6726|LAND|3
+      RQ_handler-7879    (   6726) [006] .... 346776.516307: tracing_mark_write: C|6726|SKY|3
+      RQ_handler-7879    (   6726) [006] .... 346776.516311: tracing_mark_write: C|6726|BUBBLE|0
+      RQ_handler-7879    (   6726) [006] .... 346776.616491: tracing_mark_write: C|6726|LAND|1
+      RQ_handler-7879    (   6726) [006] .... 346776.616502: tracing_mark_write: C|6726|SKY|5
+      RQ_handler-7879    (   6726) [006] .... 346776.616507: tracing_mark_write: C|6726|BUBBLE|0
+      RQ_handler-7879    (   6726) [006] .... 346776.717173: tracing_mark_write: C|6726|LAND|2
+      RQ_handler-7879    (   6726) [006] .... 346776.717188: tracing_mark_write: C|6726|SKY|1
+      RQ_handler-7879    (   6726) [006] .... 346776.717194: tracing_mark_write: C|6726|BUBBLE|0
+      RQ_handler-7879    (   6726) [005] .... 346777.122652: tracing_mark_write: C|6726|LAND|8
+      RQ_handler-7879    (   6726) [005] .... 346777.122666: tracing_mark_write: C|6726|SKY|2
+      RQ_handler-7879    (   6726) [005] .... 346777.122672: tracing_mark_write: C|6726|BUBBLE|0
+      RQ_handler-7879    (   6726) [005] .... 346777.221054: tracing_mark_write: C|6726|LAND|4
+      RQ_handler-7879    (   6726) [005] .... 346777.221069: tracing_mark_write: C|6726|SKY|1
+      RQ_handler-7879    (   6726) [005] .... 346777.221074: tracing_mark_write: C|6726|BUBBLE|0
+      RQ_handler-7879    (   6726) [005] .... 346777.321567: tracing_mark_write: C|6726|LAND|1
+      RQ_handler-7879    (   6726) [005] .... 346777.321587: tracing_mark_write: C|6726|SKY|4
+      RQ_handler-7879    (   6726) [005] .... 346777.321594: tracing_mark_write: C|6726|BUBBLE|0
+      RQ_handler-7879    (   6726) [006] .... 346777.422739: tracing_mark_write: C|6726|LAND|7
+      RQ_handler-7879    (   6726) [006] .... 346777.422757: tracing_mark_write: C|6726|SKY|1
+      RQ_handler-7879    (   6726) [006] .... 346777.422764: tracing_mark_write: C|6726|BUBBLE|0
+      RQ_handler-7879    (   6726) [005] .... 346777.522142: tracing_mark_write: C|6726|LAND|1
+      RQ_handler-7879    (   6726) [005] .... 346777.522164: tracing_mark_write: C|6726|SKY|0
+      RQ_handler-7879    (   6726) [005] .... 346777.522172: tracing_mark_write: C|6726|BUBBLE|0
+      RQ_handler-7879    (   6726) [004] .... 346777.916223: tracing_mark_write: C|6726|LAND|6
+      RQ_handler-7879    (   6726) [004] .... 346777.916234: tracing_mark_write: C|6726|SKY|2
+      RQ_handler-7879    (   6726) [004] .... 346777.916238: tracing_mark_write: C|6726|BUBBLE|0
+      RQ_handler-7879    (   6726) [003] .... 346778.017211: tracing_mark_write: C|6726|LAND|2
+      RQ_handler-7879    (   6726) [003] .... 346778.017232: tracing_mark_write: C|6726|SKY|4
+      RQ_handler-7879    (   6726) [003] .... 346778.017239: tracing_mark_write: C|6726|BUBBLE|0
+      RQ_handler-7879    (   6726) [006] .... 346778.119551: tracing_mark_write: C|6726|LAND|4
+      RQ_handler-7879    (   6726) [006] .... 346778.119572: tracing_mark_write: C|6726|SKY|5
+      RQ_handler-7879    (   6726) [006] .... 346778.119580: tracing_mark_write: C|6726|BUBBLE|0
+      RQ_handler-7879    (   6726) [005] .... 346778.218943: tracing_mark_write: C|6726|LAND|3
+      RQ_handler-7879    (   6726) [005] .... 346778.218959: tracing_mark_write: C|6726|SKY|1
+      RQ_handler-7879    (   6726) [005] .... 346778.218966: tracing_mark_write: C|6726|BUBBLE|0
+      RQ_handler-7879    (   6726) [005] .... 346778.319592: tracing_mark_write: C|6726|LAND|1
+      RQ_handler-7879    (   6726) [005] .... 346778.319615: tracing_mark_write: C|6726|SKY|1
+      RQ_handler-7879    (   6726) [005] .... 346778.319622: tracing_mark_write: C|6726|BUBBLE|0
+      RQ_handler-7879    (   6726) [006] .... 346778.723829: tracing_mark_write: C|6726|LAND|8
+      RQ_handler-7879    (   6726) [006] .... 346778.723844: tracing_mark_write: C|6726|SKY|1
+      RQ_handler-7879    (   6726) [006] .... 346778.723851: tracing_mark_write: C|6726|BUBBLE|0
+      RQ_handler-7879    (   6726) [006] .... 346778.823961: tracing_mark_write: C|6726|LAND|3
+      RQ_handler-7879    (   6726) [006] .... 346778.823980: tracing_mark_write: C|6726|SKY|1
+      RQ_handler-7879    (   6726) [006] .... 346778.823986: tracing_mark_write: C|6726|BUBBLE|0
+      RQ_handler-7879    (   6726) [006] .... 346778.924310: tracing_mark_write: C|6726|LAND|1
+      RQ_handler-7879    (   6726) [006] .... 346778.924328: tracing_mark_write: C|6726|SKY|0
+      RQ_handler-7879    (   6726) [006] .... 346778.924335: tracing_mark_write: C|6726|BUBBLE|0
+      RQ_handler-7879    (   6726) [006] .... 346779.025304: tracing_mark_write: C|6726|LAND|1
+      RQ_handler-7879    (   6726) [006] .... 346779.025321: tracing_mark_write: C|6726|SKY|0
+      RQ_handler-7879    (   6726) [006] .... 346779.025329: tracing_mark_write: C|6726|BUBBLE|0
+      RQ_handler-7879    (   6726) [006] .... 346779.125101: tracing_mark_write: C|6726|LAND|2
+      RQ_handler-7879    (   6726) [006] .... 346779.125118: tracing_mark_write: C|6726|SKY|0
+      RQ_handler-7879    (   6726) [006] .... 346779.125124: tracing_mark_write: C|6726|BUBBLE|0

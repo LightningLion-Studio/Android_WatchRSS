@@ -1,0 +1,394 @@
+package com.lightningstudio.watchrss.ui.screen.rss
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.res.colorResource
+import androidx.compose.ui.res.dimensionResource
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
+import com.lightningstudio.watchrss.BuildConfig
+import com.lightningstudio.watchrss.R
+import com.lightningstudio.watchrss.ui.components.WatchSwitch
+import com.lightningstudio.watchrss.ui.components.WatchSurface
+import kotlinx.coroutines.flow.StateFlow
+
+@Composable
+fun SettingsScreen(
+    cacheLimitMb: StateFlow<Long>,
+    cacheUsageMb: StateFlow<Long>,
+    readingThemeDark: StateFlow<Boolean>,
+    shareUseSystem: StateFlow<Boolean>,
+    readingFontSizeSp: StateFlow<Int>,
+    phoneConnectionEnabled: StateFlow<Boolean>,
+    showPerformanceTools: Boolean,
+    onSelectCacheLimit: (Long) -> Unit,
+    onToggleReadingTheme: () -> Unit,
+    onToggleShareMode: () -> Unit,
+    onSelectFontSize: (Int) -> Unit,
+    onTogglePhoneConnection: () -> Unit,
+    onOpenOobe: () -> Unit,
+    onOpenPerfLargeList: () -> Unit,
+    onOpenPerfLargeArticle: () -> Unit,
+    onBeianClick: () -> Unit
+) {
+    val cacheLimit by cacheLimitMb.collectAsState()
+    val usage by cacheUsageMb.collectAsState()
+    val themeDark by readingThemeDark.collectAsState()
+    val useSystemShare by shareUseSystem.collectAsState()
+    val fontSizeSp by readingFontSizeSp.collectAsState()
+    val phoneConnection by phoneConnectionEnabled.collectAsState()
+
+    val cacheOptions = remember {
+        listOf(10L, 20L, 30L, 40L, 50L, 60L, 70L, 80L, 90L, 100L, 200L, 300L)
+    }
+    val fontOptions = remember { (12..32 step 2).toList() }
+
+    val lowerCache = cacheOptions.lastOrNull { it < cacheLimit }
+    val higherCache = cacheOptions.firstOrNull { it > cacheLimit }
+    val lowerFont = fontOptions.lastOrNull { it < fontSizeSp }
+    val higherFont = fontOptions.firstOrNull { it > fontSizeSp }
+
+    val safePadding = dimensionResource(R.dimen.watch_safe_padding)
+    val sectionSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_content_horizontal_distance
+    val entrySpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_8dp
+    val valueSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_4dp
+    val stepperSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_6dp
+    val valueIndent = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_content_horizontal_distance_6_0
+    val pillHeight = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_multiple_item_height
+
+    WatchSurface(pureBlack = true) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(safePadding)
+        ) {
+            SettingsHeader()
+
+            Spacer(modifier = Modifier.height(sectionSpacing))
+
+            SettingsPillRow(label = "缓存上限") {
+                RoundIconButtonIcon(
+                    iconRes = R.drawable.ic_action_minus,
+                    contentDescription = "减少缓存上限",
+                    enabled = lowerCache != null,
+                    onClick = { lowerCache?.let(onSelectCacheLimit) }
+                )
+                Spacer(modifier = Modifier.width(stepperSpacing))
+                Text(
+                    text = "${cacheLimit}M",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.width(stepperSpacing))
+                RoundIconButtonIcon(
+                    iconRes = R.drawable.ic_action_plus,
+                    contentDescription = "增加缓存上限",
+                    enabled = higherCache != null,
+                    onClick = { higherCache?.let(onSelectCacheLimit) }
+                )
+            }
+            Text(
+                text = "当前已用 ${usage}MB",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+            )
+
+            Spacer(modifier = Modifier.height(entrySpacing))
+
+            SettingsPillRow(label = "阅读主题", endPaddingMultiplier = 1.5f) {
+                WatchSwitch(checked = themeDark, onCheckedChange = { onToggleReadingTheme() })
+            }
+            Text(
+                text = if (themeDark) "深色" else "浅色",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+            )
+
+            Spacer(modifier = Modifier.height(entrySpacing))
+
+            SettingsPillRow(label = "分享方式", endPaddingMultiplier = 1.5f) {
+                WatchSwitch(checked = useSystemShare, onCheckedChange = { onToggleShareMode() })
+            }
+            Text(
+                text = if (useSystemShare) "系统分享" else "二维码",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+            )
+
+            Spacer(modifier = Modifier.height(entrySpacing))
+
+            SettingsPillRow(label = "字体大小") {
+                RoundIconButtonIcon(
+                    iconRes = R.drawable.ic_action_minus,
+                    contentDescription = "减小字体",
+                    enabled = lowerFont != null,
+                    onClick = { lowerFont?.let(onSelectFontSize) }
+                )
+                Spacer(modifier = Modifier.width(stepperSpacing))
+                Text(
+                    text = "${fontSizeSp}sp",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.width(stepperSpacing))
+                RoundIconButtonIcon(
+                    iconRes = R.drawable.ic_action_plus,
+                    contentDescription = "增大字体",
+                    enabled = higherFont != null,
+                    onClick = { higherFont?.let(onSelectFontSize) }
+                )
+            }
+            Text(
+                text = "正文阅读字号",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+            )
+
+            Spacer(modifier = Modifier.height(entrySpacing))
+
+            if (BuildConfig.DEBUG) {
+                SettingsPillRow(
+                    label = "新手引导",
+                    onClick = onOpenOobe
+                )
+                Text(
+                    text = "重新查看圆屏首启流程",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+                )
+
+                Spacer(modifier = Modifier.height(entrySpacing))
+
+                Text(
+                    text = "开发者选项",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(start = valueIndent)
+                )
+
+                Spacer(modifier = Modifier.height(entrySpacing))
+
+                SettingsPillRow(label = "手机互联", endPaddingMultiplier = 1.5f) {
+                    WatchSwitch(checked = phoneConnection, onCheckedChange = { onTogglePhoneConnection() })
+                }
+                Text(
+                    text = "会在添加RSS页面和收藏及稍后再看页面显示有关手机互联的按钮",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+                )
+
+                if (showPerformanceTools) {
+                    Spacer(modifier = Modifier.height(entrySpacing))
+                    Text(
+                        text = "性能测试",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(start = valueIndent)
+                    )
+                    Spacer(modifier = Modifier.height(entrySpacing))
+                    SettingsPillRow(label = "超大列表") {
+                        RoundIconButton(
+                            text = "进入",
+                            enabled = true,
+                            onClick = onOpenPerfLargeList
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(entrySpacing))
+                    SettingsPillRow(label = "超大文章") {
+                        RoundIconButton(
+                            text = "进入",
+                            enabled = true,
+                            onClick = onOpenPerfLargeArticle
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(entrySpacing))
+            }
+
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "浙ICP备2024111886号-5A",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.clickable(onClick = onBeianClick)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(pillHeight))
+        }
+    }
+}
+
+@Composable
+private fun SettingsHeader() {
+    val padding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_4dp
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(padding),
+        horizontalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = "设置",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+    }
+}
+
+@Composable
+private fun SettingsPillRow(
+    label: String,
+    onClick: (() -> Unit)? = null,
+    endPaddingMultiplier: Float = 1f,
+    content: @Composable RowScope.() -> Unit = {}
+) {
+    val pillColor = colorResource(R.color.watch_pill_background)
+    val pillRadius = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_button_default_radius
+    val pillHeight = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_multiple_item_height
+    val startPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_content_horizontal_distance_6_0
+    val endPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_10dp * endPaddingMultiplier
+    val verticalPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_8dp
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(pillHeight)
+            .clip(RoundedCornerShape(pillRadius))
+            .background(pillColor)
+            .clickable(enabled = onClick != null, onClick = { onClick?.invoke() })
+            .padding(
+                start = startPadding,
+                end = endPadding,
+                top = verticalPadding,
+                bottom = verticalPadding
+            ),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f)
+        )
+        content()
+    }
+}
+
+@Composable
+private fun RoundIconButton(
+    text: String,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    val size = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_20dp
+    val baseColor = colorResource(R.color.watch_pill_background)
+    val idleColor = lerp(baseColor, androidx.compose.ui.graphics.Color.White, 0.12f)
+    val pressedColor = lerp(baseColor, androidx.compose.ui.graphics.Color.Black, 0.18f)
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val backgroundColor = if (isPressed && enabled) pressedColor else idleColor
+
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(backgroundColor)
+            .alpha(if (enabled) 1f else 0.4f)
+            .clickable(
+                enabled = enabled,
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
+private fun RoundIconButtonIcon(
+    iconRes: Int,
+    contentDescription: String,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    val size = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_20dp
+    val iconSize = size * 0.6f
+    val baseColor = colorResource(R.color.watch_pill_background)
+    val idleColor = lerp(baseColor, androidx.compose.ui.graphics.Color.White, 0.12f)
+    val pressedColor = lerp(baseColor, androidx.compose.ui.graphics.Color.Black, 0.18f)
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val backgroundColor = if (isPressed && enabled) pressedColor else idleColor
+
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(backgroundColor)
+            .alpha(if (enabled) 1f else 0.4f)
+            .clickable(
+                enabled = enabled,
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            painter = painterResource(id = iconRes),
+            contentDescription = contentDescription,
+            tint = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.size(iconSize)
+        )
+    }
+}

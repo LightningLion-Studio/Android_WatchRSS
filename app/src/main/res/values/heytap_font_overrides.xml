@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="hey_24M_Title">24sp</dimen>
+    <dimen name="hey_caption">9sp</dimen>
+    <dimen name="hey_dialpad_text_size">28sp</dimen>
+    <dimen name="hey_l_body">57sp</dimen>
+    <dimen name="hey_l_desription">17sp</dimen>
+    <dimen name="hey_l_title">26sp</dimen>
+    <dimen name="hey_m_body">46sp</dimen>
+    <dimen name="hey_m_desription">14sp</dimen>
+    <dimen name="hey_m_title">21sp</dimen>
+    <dimen name="hey_picker_apm_default_text_size">14sp</dimen>
+    <dimen name="hey_picker_apm_selected_text_size">24sp</dimen>
+    <dimen name="hey_picker_default_text_size">21sp</dimen>
+    <dimen name="hey_picker_selected_text_size">26sp</dimen>
+    <dimen name="hey_progress_indicator_text_size">9sp</dimen>
+    <dimen name="hey_s_body">38sp</dimen>
+    <dimen name="hey_s_desription">12sp</dimen>
+    <dimen name="hey_s_title">17sp</dimen>
+    <dimen name="hey_titlebar_clock_text_size">9sp</dimen>
+    <dimen name="hey_xl_body">69sp</dimen>
+    <dimen name="hey_xl_title">31sp</dimen>
+    <dimen name="hey_xxl_body">84sp</dimen>
+    <dimen name="hey_xxxl_body">101sp</dimen>
+</resources>

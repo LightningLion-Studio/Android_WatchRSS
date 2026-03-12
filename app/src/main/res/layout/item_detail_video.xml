@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_settings_card"
+    android:padding="@dimen/hey_distance_6dp">
+
+    <ImageView
+        android:id="@+id/image_video_cover"
+        android:layout_width="match_parent"
+        android:layout_height="@dimen/hey_card_large_height"
+        android:adjustViewBounds="true"
+        android:scaleType="centerCrop"
+        android:contentDescription="视频封面" />
+
+    <ImageView
+        android:id="@+id/image_play_icon"
+        android:layout_width="@dimen/hey_listitem_widget_size"
+        android:layout_height="@dimen/hey_listitem_widget_size"
+        android:layout_gravity="center"
+        android:src="@drawable/ic_play_circle"
+        android:contentDescription="播放" />
+</FrameLayout>
