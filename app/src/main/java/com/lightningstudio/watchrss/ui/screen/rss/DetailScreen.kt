@@ -527,8 +527,9 @@ internal fun DetailContent(
                     items = contentBlocks,
                     key = { index, block ->
                         when (block) {
-                            is ContentBlock.Image -> "img:${block.url}"
-                            is ContentBlock.Video -> "vid:${block.url}:${block.poster.orEmpty()}"
+                            is ContentBlock.Image -> "img:$index:${block.url}"
+                            is ContentBlock.Video ->
+                                "vid:$index:${block.url}:${block.poster.orEmpty()}"
                             is ContentBlock.Text ->
                                 "txt:${block.style}:${block.text.hashCode()}:$index"
                         }

@@ -37,7 +37,7 @@ fun BiliLoginScreen(
 ) {
     val safePadding = dimensionResource(R.dimen.watch_safe_padding)
     val spacing = dimensionResource(R.dimen.hey_distance_6dp)
-    val qrSize = 200.dp
+    val qrSize = 180.dp
     val scrollState = rememberScrollState()
 
     LaunchedEffect(uiState.isSuccess) {
