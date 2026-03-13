@@ -18,7 +18,7 @@ class AboutActivity : BaseWatchActivity() {
                         openInfo("项目自介", getString(R.string.about_intro_content))
                     },
                     onPrivacyClick = {
-                        openInfo("隐私协议", getString(R.string.about_privacy_content))
+                        startActivity(InfoActivity.createIntent(this, "隐私政策", R.raw.privacy_policy))
                     },
                     onTermsClick = {
                         startActivity(InfoActivity.createIntent(this, "用户协议", R.raw.user_agreement))

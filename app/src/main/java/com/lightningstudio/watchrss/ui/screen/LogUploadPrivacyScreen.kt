@@ -59,9 +59,9 @@ fun LogUploadPrivacyScreen(
             Spacer(modifier = Modifier.height(sectionSpacing))
 
             Text(
-                text = "只应该在开发者要求时上传日志，以避免泄露个人信息。\n\n" +
-                        "日志平时只存储在您的设备本地，仅当您明确点击\u201c开始上传\u201d后才会上传。\n\n" +
-                        "开发者只会将日志用于性能提升和Bug修复，不会用于广告及追踪。",
+                text = "只应在开发者要求协助排障时上传日志，以降低信息暴露风险。\n\n" +
+                        "日志默认仅保存在您的设备本地。点击“开始上传”后，应用会跳转并自动开始上传加密日志。\n\n" +
+                        "上传日志仅用于排查问题，不用于广告或个性化推荐。根据当前说明，已上传日志会临时存储在美国俄勒冈州服务器，原则上保存24小时；如需删除已上传日志，请通过QQ群1083518433联系并提供取件码等必要信息。",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.fillMaxWidth(),

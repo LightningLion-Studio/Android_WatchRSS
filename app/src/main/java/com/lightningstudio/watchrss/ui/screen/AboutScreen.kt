@@ -80,8 +80,8 @@ fun AboutScreen(
             Spacer(modifier = Modifier.height(entrySpacing))
 
             AboutEntry(
-                title = "隐私协议",
-                summary = "数据与网络说明",
+                title = "隐私政策",
+                summary = "个人信息与日志说明",
                 onClick = onPrivacyClick,
                 pillHeight = pillHeight,
                 pillRadius = pillRadius,

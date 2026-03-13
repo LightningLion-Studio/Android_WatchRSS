@@ -53,7 +53,7 @@ class OobeActivity : BaseWatchActivity() {
                             InfoActivity.createIntent(
                                 context = this,
                                 title = "用户协议",
-                                content = getString(R.string.about_user_agreement_content)
+                                contentRawResId = R.raw.user_agreement
                             )
                         )
                     },
@@ -62,7 +62,7 @@ class OobeActivity : BaseWatchActivity() {
                             InfoActivity.createIntent(
                                 context = this,
                                 title = "隐私政策",
-                                content = getString(R.string.about_privacy_content)
+                                contentRawResId = R.raw.privacy_policy
                             )
                         )
                     }
