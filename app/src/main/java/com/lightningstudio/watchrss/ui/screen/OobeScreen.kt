@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -39,11 +38,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -161,46 +163,42 @@ private fun OobeIntroStep(
 
                     Spacer(modifier = Modifier.size(4.dp))
 
+                    val linkStyle = TextLinkStyles(
+                        style = SpanStyle(
+                            color = MaterialTheme.colorScheme.primary,
+                            textDecoration = TextDecoration.Underline
+                        )
+                    )
+
                     val annotatedText = buildAnnotatedString {
                         append("同意")
-                        pushStringAnnotation(tag = "user_agreement", annotation = "user_agreement")
-                        withStyle(
-                            style = SpanStyle(
-                                color = MaterialTheme.colorScheme.primary,
-                                textDecoration = TextDecoration.Underline
+                        withLink(
+                            LinkAnnotation.Clickable(
+                                tag = "user_agreement",
+                                styles = linkStyle,
+                                linkInteractionListener = { onOpenUserAgreement() }
                             )
                         ) {
                             append("《用户协议》")
                         }
-                        pop()
                         append("与")
-                        pushStringAnnotation(tag = "privacy", annotation = "privacy")
-                        withStyle(
-                            style = SpanStyle(
-                                color = MaterialTheme.colorScheme.primary,
-                                textDecoration = TextDecoration.Underline
+                        withLink(
+                            LinkAnnotation.Clickable(
+                                tag = "privacy",
+                                styles = linkStyle,
+                                linkInteractionListener = { onOpenPrivacy() }
                             )
                         ) {
                             append("《隐私政策》")
                         }
-                        pop()
                     }
 
-                    ClickableText(
+                    Text(
                         text = annotatedText,
                         style = MaterialTheme.typography.labelMedium.copy(
                             color = MaterialTheme.colorScheme.onSurface
                         ),
-                        modifier = Modifier.testTag(OobeTestTags.LEGAL_TEXT),
-                        onClick = { offset ->
-                            annotatedText.getStringAnnotations(offset, offset)
-                                .firstOrNull()?.let { annotation ->
-                                    when (annotation.tag) {
-                                        "user_agreement" -> onOpenUserAgreement()
-                                        "privacy" -> onOpenPrivacy()
-                                    }
-                                }
-                        }
+                        modifier = Modifier.testTag(OobeTestTags.LEGAL_TEXT)
                     )
                 }
 
