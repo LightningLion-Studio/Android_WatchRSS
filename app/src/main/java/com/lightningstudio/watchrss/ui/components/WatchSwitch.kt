@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 fun WatchSwitch(
     checked: Boolean,
     enabled: Boolean = true,
+    modifier: Modifier = Modifier,
     onCheckedChange: (Boolean) -> Unit
 ) {
     val density = LocalDensity.current
@@ -49,7 +50,7 @@ fun WatchSwitch(
     )
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .size(trackWidth, trackHeight)
             .alpha(alpha)
             .toggleable(

@@ -55,6 +55,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.painterResource
@@ -70,6 +71,7 @@ import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.rss.RssChannel
+import com.lightningstudio.watchrss.ui.testing.HomeTestTags
 import com.lightningstudio.watchrss.ui.util.formatTime
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -110,11 +112,13 @@ fun HomeComposeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black)
+                .testTag(HomeTestTags.ROOT)
         ) {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = safePadding),
+                    .padding(horizontal = safePadding)
+                    .testTag(HomeTestTags.CHANNEL_LIST),
                 state = listState,
                 contentPadding = PaddingValues(
                     top = safePadding,
@@ -136,7 +140,8 @@ fun HomeComposeScreen(
                                 title = "还没有 RSS 频道",
                                 summary = "点击下方添加你的第一个订阅源",
                                 backgroundColor = MaterialTheme.colorScheme.surface,
-                                showIndicator = false
+                                showIndicator = false,
+                                testTag = HomeTestTags.EMPTY_ENTRY
                             )
                         }
                         HomeEntry.Recommend -> {
@@ -145,6 +150,7 @@ fun HomeComposeScreen(
                                 summary = "一键加入官方支持频道",
                                 backgroundColor = MaterialTheme.colorScheme.surface,
                                 showIndicator = false,
+                                testTag = HomeTestTags.RECOMMEND_ENTRY,
                                 onClick = onRecommendClick
                             )
                         }
@@ -214,7 +220,8 @@ private fun HomeProfileEntry(onProfileClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(padding)
-            .clickableWithoutRipple(onClick = onProfileClick),
+            .clickableWithoutRipple(onClick = onProfileClick)
+            .testTag(HomeTestTags.PROFILE_ENTRY),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
@@ -269,6 +276,7 @@ private fun HomeAddEntry(onAddRssClick: () -> Unit) {
                 .then(scaleModifier)
                 .clip(RoundedCornerShape(radius))
                 .background(MaterialTheme.colorScheme.surfaceVariant)
+                .testTag(HomeTestTags.ADD_ENTRY)
                 .clickableWithoutRipple(
                     onClick = onAddRssClick,
                     interactionSource = pressState.interactionSource
@@ -349,6 +357,7 @@ private fun HomeChannelEntry(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(offsetModifier)
+                .testTag(HomeTestTags.channelRow(channel.id))
                 .onSizeChanged { size ->
                     if (!isScrolling) {
                         cardHeightPx = size.height
@@ -369,6 +378,7 @@ private fun HomeChannelEntry(
                     MaterialTheme.colorScheme.surface
                 },
                 showIndicator = channel.unreadCount > 0,
+                testTag = HomeTestTags.channelCard(channel.id),
                 modifier = Modifier
                     .then(cardScaleModifier)
                     .clickableWithoutRipple(
@@ -416,6 +426,7 @@ private fun HomeChannelEntry(
                     HomeSwipeActionButton(
                         text = "移到顶",
                         width = actionWidth,
+                        testTag = HomeTestTags.moveTopAction(channel.id),
                         onClick = {
                             onCloseSwipe()
                             onMoveTopClick()
@@ -428,6 +439,7 @@ private fun HomeChannelEntry(
                         text = "标记已读",
                         width = actionWidth,
                         alpha = if (canMarkRead) 1f else 0.5f,
+                        testTag = HomeTestTags.markReadAction(channel.id),
                         onClick = {
                             onCloseSwipe()
                             if (canMarkRead) {
@@ -448,6 +460,7 @@ private fun HomeSwipeActionButton(
     text: String,
     width: Dp,
     alpha: Float = 1f,
+    testTag: String? = null,
     onClick: () -> Unit,
     @DrawableRes iconRes: Int? = null
 ) {
@@ -465,6 +478,7 @@ private fun HomeSwipeActionButton(
             .fillMaxHeight()
             .clip(RoundedCornerShape(radius))
             .background(MaterialTheme.colorScheme.surfaceVariant)
+            .then(testTag?.let(Modifier::testTag) ?: Modifier)
             .clickableWithoutRipple(onClick = onClick)
             .alpha(alpha),
         contentAlignment = Alignment.Center
@@ -592,6 +606,7 @@ private fun HomeDefaultItem(
     summary: String,
     backgroundColor: Color,
     showIndicator: Boolean,
+    testTag: String? = null,
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null
 ) {
@@ -620,6 +635,7 @@ private fun HomeDefaultItem(
         modifier = modifier
             .fillMaxWidth()
             .then(clickModifier)
+            .then(testTag?.let(Modifier::testTag) ?: Modifier)
             .clip(shape)
             .background(backgroundColor)
             .padding(
@@ -693,7 +709,9 @@ private fun HomeBeianEntry(onBeianClick: () -> Unit) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = textSize,
             textAlign = TextAlign.Center,
-            modifier = Modifier.clickableWithoutRipple(onClick = onBeianClick)
+            modifier = Modifier
+                .testTag(HomeTestTags.BEIAN_ENTRY)
+                .clickableWithoutRipple(onClick = onBeianClick)
         )
     }
 }

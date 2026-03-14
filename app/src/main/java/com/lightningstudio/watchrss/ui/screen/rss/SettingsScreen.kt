@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.painterResource
@@ -40,6 +41,7 @@ import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.settings.CACHE_LIMIT_OPTIONS_MB
 import com.lightningstudio.watchrss.ui.components.WatchSwitch
 import com.lightningstudio.watchrss.ui.components.WatchSurface
+import com.lightningstudio.watchrss.ui.testing.SettingsTestTags
 import kotlinx.coroutines.flow.StateFlow
 
 @Composable
@@ -91,6 +93,7 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(safePadding)
+                .testTag(SettingsTestTags.ROOT)
         ) {
             SettingsHeader()
 
@@ -101,18 +104,21 @@ fun SettingsScreen(
                     iconRes = R.drawable.ic_action_minus,
                     contentDescription = "减少缓存上限",
                     enabled = lowerCache != null,
+                    testTag = SettingsTestTags.CACHE_DECREASE_BUTTON,
                     onClick = { lowerCache?.let(onSelectCacheLimit) }
                 )
                 Spacer(modifier = Modifier.width(stepperSpacing))
                 StepperValue(
                     text = formatCacheSize(cacheLimit),
-                    width = stepperValueWidth
+                    width = stepperValueWidth,
+                    testTag = SettingsTestTags.CACHE_VALUE
                 )
                 Spacer(modifier = Modifier.width(stepperSpacing))
                 RoundIconButtonIcon(
                     iconRes = R.drawable.ic_action_plus,
                     contentDescription = "增加缓存上限",
                     enabled = higherCache != null,
+                    testTag = SettingsTestTags.CACHE_INCREASE_BUTTON,
                     onClick = { higherCache?.let(onSelectCacheLimit) }
                 )
             }
@@ -132,7 +138,11 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(entrySpacing))
 
             SettingsPillRow(label = "阅读主题", endPaddingMultiplier = 1.5f) {
-                WatchSwitch(checked = themeDark, onCheckedChange = { onToggleReadingTheme() })
+                WatchSwitch(
+                    checked = themeDark,
+                    modifier = Modifier.testTag(SettingsTestTags.THEME_SWITCH),
+                    onCheckedChange = { onToggleReadingTheme() }
+                )
             }
             Text(
                 text = if (themeDark) "深色" else "浅色",
@@ -144,7 +154,11 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(entrySpacing))
 
             SettingsPillRow(label = "分享方式", endPaddingMultiplier = 1.5f) {
-                WatchSwitch(checked = useSystemShare, onCheckedChange = { onToggleShareMode() })
+                WatchSwitch(
+                    checked = useSystemShare,
+                    modifier = Modifier.testTag(SettingsTestTags.SHARE_SWITCH),
+                    onCheckedChange = { onToggleShareMode() }
+                )
             }
             Text(
                 text = if (useSystemShare) "系统分享" else "二维码",
@@ -160,18 +174,21 @@ fun SettingsScreen(
                     iconRes = R.drawable.ic_action_minus,
                     contentDescription = "减小字体",
                     enabled = lowerFont != null,
+                    testTag = SettingsTestTags.FONT_DECREASE_BUTTON,
                     onClick = { lowerFont?.let(onSelectFontSize) }
                 )
                 Spacer(modifier = Modifier.width(stepperSpacing))
                 StepperValue(
                     text = "${fontSizeSp}sp",
-                    width = stepperValueWidth
+                    width = stepperValueWidth,
+                    testTag = SettingsTestTags.FONT_VALUE
                 )
                 Spacer(modifier = Modifier.width(stepperSpacing))
                 RoundIconButtonIcon(
                     iconRes = R.drawable.ic_action_plus,
                     contentDescription = "增大字体",
                     enabled = higherFont != null,
+                    testTag = SettingsTestTags.FONT_INCREASE_BUTTON,
                     onClick = { higherFont?.let(onSelectFontSize) }
                 )
             }
@@ -187,6 +204,7 @@ fun SettingsScreen(
             if (BuildConfig.DEBUG) {
                 SettingsPillRow(
                     label = "新手引导",
+                    testTag = SettingsTestTags.OPEN_OOBE_ENTRY,
                     onClick = onOpenOobe
                 )
                 Text(
@@ -208,7 +226,11 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(entrySpacing))
 
                 SettingsPillRow(label = "手机互联", endPaddingMultiplier = 1.5f) {
-                    WatchSwitch(checked = phoneConnection, onCheckedChange = { onTogglePhoneConnection() })
+                    WatchSwitch(
+                        checked = phoneConnection,
+                        modifier = Modifier.testTag(SettingsTestTags.PHONE_CONNECTION_SWITCH),
+                        onCheckedChange = { onTogglePhoneConnection() }
+                    )
                 }
                 Text(
                     text = "会在添加RSS页面和收藏及稍后再看页面显示有关手机互联的按钮",
@@ -254,7 +276,9 @@ fun SettingsScreen(
                     text = "浙ICP备2024111886号-5A",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.clickable(onClick = onBeianClick)
+                    modifier = Modifier
+                        .testTag(SettingsTestTags.BEIAN_ENTRY)
+                        .clickable(onClick = onBeianClick)
                 )
             }
 
@@ -284,6 +308,7 @@ private fun SettingsHeader() {
 @Composable
 private fun SettingsPillRow(
     label: String,
+    testTag: String? = null,
     onClick: (() -> Unit)? = null,
     endPaddingMultiplier: Float = 1f,
     content: @Composable RowScope.() -> Unit = {}
@@ -301,6 +326,7 @@ private fun SettingsPillRow(
             .height(pillHeight)
             .clip(RoundedCornerShape(pillRadius))
             .background(pillColor)
+            .then(testTag?.let(Modifier::testTag) ?: Modifier)
             .clickable(enabled = onClick != null, onClick = { onClick?.invoke() })
             .padding(
                 start = startPadding,
@@ -323,10 +349,13 @@ private fun SettingsPillRow(
 @Composable
 private fun StepperValue(
     text: String,
-    width: androidx.compose.ui.unit.Dp
+    width: androidx.compose.ui.unit.Dp,
+    testTag: String? = null
 ) {
     Box(
-        modifier = Modifier.width(width),
+        modifier = Modifier
+            .width(width)
+            .then(testTag?.let(Modifier::testTag) ?: Modifier),
         contentAlignment = Alignment.Center
     ) {
         Text(
@@ -379,6 +408,7 @@ private fun RoundIconButtonIcon(
     iconRes: Int,
     contentDescription: String,
     enabled: Boolean,
+    testTag: String? = null,
     onClick: () -> Unit
 ) {
     val size = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_20dp
@@ -395,6 +425,7 @@ private fun RoundIconButtonIcon(
             .size(size)
             .clip(CircleShape)
             .background(backgroundColor)
+            .then(testTag?.let(Modifier::testTag) ?: Modifier)
             .clickable(
                 enabled = enabled,
                 interactionSource = interactionSource,

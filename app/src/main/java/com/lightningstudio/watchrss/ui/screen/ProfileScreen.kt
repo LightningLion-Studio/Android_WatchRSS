@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.res.painterResource
@@ -29,6 +30,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.WatchSurface
+import com.lightningstudio.watchrss.ui.testing.ProfileTestTags
 
 @Composable
 fun ProfileScreen(
@@ -54,7 +56,8 @@ fun ProfileScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(safePadding),
+                .padding(safePadding)
+                .testTag(ProfileTestTags.ROOT),
             verticalArrangement = Arrangement.Top,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -72,6 +75,7 @@ fun ProfileScreen(
                 title = "我的收藏",
                 iconRes = R.drawable.ic_action_favorite,
                 onClick = onFavoritesClick,
+                testTag = ProfileTestTags.FAVORITES_ENTRY,
                 pillHeight = pillHeight,
                 pillRadius = pillRadius,
                 pillColor = pillColor,
@@ -87,6 +91,7 @@ fun ProfileScreen(
                 title = "稍后再看",
                 iconRes = R.drawable.ic_play_circle,
                 onClick = onWatchLaterClick,
+                testTag = ProfileTestTags.WATCH_LATER_ENTRY,
                 pillHeight = pillHeight,
                 pillRadius = pillRadius,
                 pillColor = pillColor,
@@ -102,6 +107,7 @@ fun ProfileScreen(
                 title = "设置",
                 iconRes = R.drawable.ic_settings,
                 onClick = onSettingsClick,
+                testTag = ProfileTestTags.SETTINGS_ENTRY,
                 pillHeight = pillHeight,
                 pillRadius = pillRadius,
                 pillColor = pillColor,
@@ -117,6 +123,7 @@ fun ProfileScreen(
                 title = "关于",
                 iconRes = R.drawable.ic_action_share,
                 onClick = onAboutClick,
+                testTag = ProfileTestTags.ABOUT_ENTRY,
                 pillHeight = pillHeight,
                 pillRadius = pillRadius,
                 pillColor = pillColor,
@@ -132,6 +139,7 @@ fun ProfileScreen(
                 title = "联系开发者",
                 iconRes = R.drawable.ic_person,
                 onClick = onContactDeveloperClick,
+                testTag = ProfileTestTags.CONTACT_DEVELOPER_ENTRY,
                 pillHeight = pillHeight,
                 pillRadius = pillRadius,
                 pillColor = pillColor,
@@ -151,6 +159,7 @@ private fun ProfileEntry(
     title: String,
     @DrawableRes iconRes: Int,
     onClick: () -> Unit,
+    testTag: String,
     pillHeight: androidx.compose.ui.unit.Dp,
     pillRadius: androidx.compose.ui.unit.Dp,
     pillColor: androidx.compose.ui.graphics.Color,
@@ -165,6 +174,7 @@ private fun ProfileEntry(
             .height(pillHeight)
             .clip(RoundedCornerShape(pillRadius))
             .background(pillColor)
+            .testTag(testTag)
             .clickable(onClick = onClick)
             .padding(
                 start = pillHorizontalPadding,

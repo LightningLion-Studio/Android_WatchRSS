@@ -13,9 +13,15 @@ import java.util.Date
 import java.util.Locale
 
 class WatchRssApplication : Application() {
-    val container: AppContainer by lazy {
+    private val defaultContainer: AppContainer by lazy {
         DefaultAppContainer(this)
     }
+
+    @Volatile
+    private var testContainerOverride: AppContainer? = null
+
+    val container: AppContainer
+        get() = testContainerOverride ?: defaultContainer
 
     override fun onCreate() {
         super.onCreate()
@@ -31,6 +37,10 @@ class WatchRssApplication : Application() {
             BiliDebugLog.setLogger { tag, message -> DebugLogBuffer.log(tag, message) }
         }
 
-        container.managedCacheService.scheduleMaintenance(CacheTrimReason.APP_START)
+        defaultContainer.managedCacheService.scheduleMaintenance(CacheTrimReason.APP_START)
+    }
+
+    fun setContainerForTesting(container: AppContainer?) {
+        testContainerOverride = container
     }
 }

@@ -36,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -48,6 +49,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.WatchSurface
+import com.lightningstudio.watchrss.ui.testing.OobeTestTags
 import com.lightningstudio.watchrss.ui.viewmodel.OobeUiState
 
 private data class IntroPageContent(
@@ -106,7 +108,8 @@ private fun OobeIntroStep(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = horizontalSafePadding, vertical = verticalSafePadding),
+            .padding(horizontal = horizontalSafePadding, vertical = verticalSafePadding)
+            .testTag(OobeTestTags.ROOT),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Spacer(modifier = Modifier.height(2.dp))
@@ -117,6 +120,7 @@ private fun OobeIntroStep(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
+                .testTag(OobeTestTags.INTRO_PAGE)
         )
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -132,7 +136,9 @@ private fun OobeIntroStep(
                         text = "请勾选\"同意《用户协议》与《隐私政策》\"",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(bottom = 2.dp)
+                        modifier = Modifier
+                            .padding(bottom = 2.dp)
+                            .testTag(OobeTestTags.ERROR_TEXT)
                     )
                 }
 
@@ -148,7 +154,9 @@ private fun OobeIntroStep(
                             isAgreed = it
                             if (isAgreed) showError = false
                         },
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier
+                            .size(18.dp)
+                            .testTag(OobeTestTags.AGREEMENT_CHECKBOX)
                     )
 
                     Spacer(modifier = Modifier.size(4.dp))
@@ -183,6 +191,7 @@ private fun OobeIntroStep(
                         style = MaterialTheme.typography.labelMedium.copy(
                             color = MaterialTheme.colorScheme.onSurface
                         ),
+                        modifier = Modifier.testTag(OobeTestTags.LEGAL_TEXT),
                         onClick = { offset ->
                             annotatedText.getStringAnnotations(offset, offset)
                                 .firstOrNull()?.let { annotation ->
@@ -198,6 +207,7 @@ private fun OobeIntroStep(
                 OobePrimaryButton(
                     text = "继续",
                     enabled = true,
+                    testTag = OobeTestTags.CONTINUE_BUTTON,
                     onClick = {
                         if (isAgreed) {
                             showError = false
@@ -212,6 +222,7 @@ private fun OobeIntroStep(
             OobePrimaryButton(
                 text = "下一页",
                 enabled = true,
+                testTag = OobeTestTags.NEXT_BUTTON,
                 onClick = { onSetIntroPage(1) }
             )
         }
@@ -345,11 +356,13 @@ private fun IntroHero(
 private fun OobePrimaryButton(
     text: String,
     enabled: Boolean,
+    testTag: String,
     onClick: () -> Unit
 ) {
     val shape = RoundedCornerShape(24.dp)
     Box(
         modifier = Modifier
+            .testTag(testTag)
             .clip(shape)
             .background(
                 if (enabled) {
