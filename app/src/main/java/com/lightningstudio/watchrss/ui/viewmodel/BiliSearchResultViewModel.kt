@@ -9,7 +9,7 @@ import androidx.paging.PagingData
 import androidx.paging.cachedIn
 import androidx.paging.filter
 import androidx.paging.map
-import com.lightningstudio.watchrss.data.bili.BiliRepository
+import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
 import com.lightningstudio.watchrss.data.bili.search.SearchPagingSource
 import com.lightningstudio.watchrss.sdk.bili.BiliSearchResultItem
 import kotlinx.coroutines.flow.Flow
@@ -17,7 +17,7 @@ import kotlinx.coroutines.flow.map
 
 class BiliSearchResultViewModel(
     private val savedStateHandle: SavedStateHandle,
-    private val repository: BiliRepository
+    private val repository: BiliRepositoryContract
 ) : ViewModel() {
 
     private val keyword: String = savedStateHandle.get<String>("keyword") ?: ""

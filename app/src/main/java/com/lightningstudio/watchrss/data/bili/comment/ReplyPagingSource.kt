@@ -2,11 +2,11 @@ package com.lightningstudio.watchrss.data.bili.comment
 
 import androidx.paging.PagingSource
 import androidx.paging.PagingState
-import com.lightningstudio.watchrss.data.bili.BiliRepository
+import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
 import com.lightningstudio.watchrss.sdk.bili.BiliCommentData
 
 class ReplyPagingSource(
-    private val repository: BiliRepository,
+    private val repository: BiliRepositoryContract,
     private val oid: Long,
     private val root: Long
 ) : PagingSource<Int, BiliCommentData>() {

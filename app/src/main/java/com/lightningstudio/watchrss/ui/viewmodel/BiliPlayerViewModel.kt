@@ -4,7 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lightningstudio.watchrss.data.bili.BiliErrorCodes
-import com.lightningstudio.watchrss.data.bili.BiliRepository
+import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
 import com.lightningstudio.watchrss.data.bili.formatBiliError
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,7 +23,7 @@ data class BiliPlayerUiState(
 
 class BiliPlayerViewModel(
     savedStateHandle: SavedStateHandle,
-    private val repository: BiliRepository
+    private val repository: BiliRepositoryContract
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(BiliPlayerUiState())
     val uiState: StateFlow<BiliPlayerUiState> = _uiState

@@ -15,7 +15,7 @@ import com.lightningstudio.watchrss.BiliDetailActivity
 import com.lightningstudio.watchrss.BiliLoginActivity
 import com.lightningstudio.watchrss.BiliListActivity
 import com.lightningstudio.watchrss.BiliSearchActivity
-import com.lightningstudio.watchrss.data.bili.BiliRepository
+import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.rss.RssRepository
 import com.lightningstudio.watchrss.ui.viewmodel.BiliFeedViewModel
@@ -39,7 +39,7 @@ object BiliRoutes {
 }
 
 @Composable
-fun BiliEntryNavGraph(repository: BiliRepository, rssRepository: RssRepository) {
+fun BiliEntryNavGraph(repository: BiliRepositoryContract, rssRepository: RssRepository) {
     val navController = rememberNavController()
     val factory = remember(repository, rssRepository) { BiliViewModelFactory(repository, rssRepository) }
     val context = androidx.compose.ui.platform.LocalContext.current

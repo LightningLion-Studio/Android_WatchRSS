@@ -6,7 +6,9 @@ import androidx.datastore.preferences.preferencesDataStoreFile
 import androidx.room.Room
 import com.lightningstudio.watchrss.data.cache.ManagedCacheService
 import com.lightningstudio.watchrss.data.bili.BiliRepository
+import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
 import com.lightningstudio.watchrss.data.douyin.DouyinRepository
+import com.lightningstudio.watchrss.data.douyin.DouyinRepositoryContract
 import com.lightningstudio.watchrss.data.db.WatchRssDatabase
 import com.lightningstudio.watchrss.data.rss.DefaultRssRepository
 import com.lightningstudio.watchrss.data.rss.RssReadableService
@@ -24,8 +26,8 @@ interface AppContainer {
     val rssRepository: RssRepository
     val settingsRepository: SettingsRepository
     val managedCacheService: ManagedCacheService
-    val biliRepository: BiliRepository
-    val douyinRepository: DouyinRepository
+    val biliRepository: BiliRepositoryContract
+    val douyinRepository: DouyinRepositoryContract
 }
 
 class DefaultAppContainer(context: Context) : AppContainer {
@@ -60,14 +62,14 @@ class DefaultAppContainer(context: Context) : AppContainer {
         }
     }
 
-    override val biliRepository: BiliRepository by lazy {
+    override val biliRepository: BiliRepositoryContract by lazy {
         val dataStore = PreferenceDataStoreFactory.create(
             produceFile = { appContext.preferencesDataStoreFile("bili_cache.preferences_pb") }
         )
         BiliRepository(appContext, dataStore, managedCacheService)
     }
 
-    override val douyinRepository: DouyinRepository by lazy {
+    override val douyinRepository: DouyinRepositoryContract by lazy {
         DouyinRepository(appContext, managedCacheService)
     }
 

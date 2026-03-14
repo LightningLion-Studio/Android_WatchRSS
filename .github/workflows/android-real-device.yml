@@ -1,0 +1,102 @@
+name: Android Real Device
+
+on:
+  workflow_dispatch:
+    inputs:
+      device_serial:
+        description: Optional adb serial. Falls back to repository variable ANDROID_SERIAL.
+        required: false
+        type: string
+      instrumentation_class:
+        description: Optional androidTest class or package filter.
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      device_serial:
+        required: false
+        type: string
+      instrumentation_class:
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  real-device:
+    runs-on:
+      - self-hosted
+      - linux
+      - android-real-device
+    timeout-minutes: 60
+    concurrency:
+      group: android-real-device
+      cancel-in-progress: false
+    env:
+      GRADLE_USER_HOME: ${{ github.workspace }}/.gradle-ci
+      ANDROID_SERIAL: ${{ inputs.device_serial || vars.ANDROID_SERIAL }}
+      INSTRUMENTATION_CLASS: ${{ inputs.instrumentation_class }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Bootstrap environment
+        run: bash scripts/ci/bootstrap_env.sh
+
+      - name: Build and host-side verification
+        run: >
+          ./gradlew --no-daemon --stacktrace
+          :app:testDebugUnitTest
+          :app:lintDebug
+          :app:assembleDebug
+          :app:assembleDebugAndroidTest
+
+      - name: Device preflight
+        run: bash scripts/ci/device_preflight.sh
+
+      - name: Device smoke
+        run: bash scripts/ci/device_smoke.sh
+
+      - name: Connected instrumentation tests
+        run: |
+          set -euo pipefail
+          DEVICE_SERIAL="${ANDROID_SERIAL:-}"
+          if [ -z "${DEVICE_SERIAL}" ] && [ -f artifacts/device/selected-serial.txt ]; then
+            DEVICE_SERIAL="$(cat artifacts/device/selected-serial.txt)"
+          fi
+          if [ -z "${DEVICE_SERIAL}" ]; then
+            echo "No device serial available for connectedDebugAndroidTest" >&2
+            exit 1
+          fi
+          export ANDROID_SERIAL="${DEVICE_SERIAL}"
+          adb -s "${DEVICE_SERIAL}" logcat -c
+          if [ -n "${INSTRUMENTATION_CLASS:-}" ]; then
+            ./gradlew --no-daemon --stacktrace \
+              :app:connectedDebugAndroidTest \
+              -Pandroid.testInstrumentationRunnerArguments.class="${INSTRUMENTATION_CLASS}"
+          else
+            ./gradlew --no-daemon --stacktrace :app:connectedDebugAndroidTest
+          fi
+
+      - name: Collect artifacts
+        if: always()
+        run: bash scripts/ci/collect_artifacts.sh
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-real-device-artifacts
+          path: artifacts
+          if-no-files-found: warn

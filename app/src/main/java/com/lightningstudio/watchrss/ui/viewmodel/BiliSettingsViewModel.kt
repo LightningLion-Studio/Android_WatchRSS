@@ -2,7 +2,7 @@ package com.lightningstudio.watchrss.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.lightningstudio.watchrss.data.bili.BiliRepository
+import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.rss.RssRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,7 +20,7 @@ data class BiliSettingsUiState(
 )
 
 class BiliSettingsViewModel(
-    private val repository: BiliRepository,
+    private val repository: BiliRepositoryContract,
     private val rssRepository: RssRepository
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(BiliSettingsUiState())

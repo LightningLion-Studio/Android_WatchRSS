@@ -19,17 +19,30 @@
   - `添加RSS`
   - `备案信息`
 
-### 第一批自动化覆盖页面
+### 当前自动化覆盖页面
 - `OobeScreen`
 - `HomeComposeScreen`
 - `ProfileScreen`
 - `AddRssScreen`
 - `SettingsScreen`
-- `ProfileActivity` smoke test
-- `AddRssActivity` smoke test
-- `SettingsActivity` smoke test
+- `AboutScreen`
+- `ContactDeveloperScreen`
+- `CollaboratorsScreen`
+- `ProjectInfoScreen`
+- `BeianScreen`
+- `JoinGroupScreen`
+- `LogUploadPrivacyScreen`
+- `ActionDialogScreen`
+- `ProfileActivity`
+- `AddRssActivity`
+- `SettingsActivity`
+- `StaticCommonActivityTest` 覆盖的通用静态页面
+- `StaticCommonActivitySmokeTest` 覆盖的静态 Activity 启动链路
+- `BiliActivitySmokeTest`
+- `DouyinActivitySmokeTest`
+- `CommonActivitySmokeTest`
 
-这些页面共同特点是 Compose 纯度高、业务状态可控、对网络和登录态依赖低，适合作为 `androidx.compose.ui.test` 的首批基线。
+当前基线已经从“首批 Compose 页面”扩展到“Compose screen test + Activity smoke + 平台假仓库注入”的整套真机自动化。
 
 ## testTag 设计
 
@@ -85,13 +98,19 @@
 - `app/src/androidTest/java/com/lightningstudio/watchrss/ui/screen/OobeScreenTest.kt`
 - `app/src/androidTest/java/com/lightningstudio/watchrss/ui/screen/home/HomeComposeScreenTest.kt`
 - `app/src/androidTest/java/com/lightningstudio/watchrss/ui/screen/ProfileScreenTest.kt`
+- `app/src/androidTest/java/com/lightningstudio/watchrss/ui/screen/common/StaticCommonScreenTest.kt`
 - `app/src/androidTest/java/com/lightningstudio/watchrss/ui/screen/rss/AddRssScreenTest.kt`
 - `app/src/androidTest/java/com/lightningstudio/watchrss/ui/screen/rss/SettingsScreenTest.kt`
 - `app/src/androidTest/java/com/lightningstudio/watchrss/ui/activity/ProfileActivityTest.kt`
 - `app/src/androidTest/java/com/lightningstudio/watchrss/ui/activity/AddRssActivityTest.kt`
 - `app/src/androidTest/java/com/lightningstudio/watchrss/ui/activity/SettingsActivityTest.kt`
+- `app/src/androidTest/java/com/lightningstudio/watchrss/ui/activity/BiliActivitySmokeTest.kt`
+- `app/src/androidTest/java/com/lightningstudio/watchrss/ui/activity/DouyinActivitySmokeTest.kt`
+- `app/src/androidTest/java/com/lightningstudio/watchrss/ui/activity/CommonActivitySmokeTest.kt`
+- `app/src/androidTest/java/com/lightningstudio/watchrss/ui/activity/common/StaticCommonActivityTest.kt`
+- `app/src/androidTest/java/com/lightningstudio/watchrss/ui/activity/common/StaticCommonActivitySmokeTest.kt`
 
-当前真机通过数：18/18
+当前真机通过数：75/75
 
 ## Activity 级落地方式
 
@@ -110,6 +129,11 @@ Activity 场景推荐做法：
 - `ActivityTest` 负责应用容器接线、生命周期和首屏可见性。
 - 复杂导航链路放到后续集成测试，不把所有职责堆进单个 UI 用例。
 
+### 当前稳定性策略
+- `connectedDebugAndroidTest` 已切到 `Android Test Orchestrator`
+- instrumentation 运行时开启 `clearPackageData=true`
+- 真实设备全量回归不再共享同一个测试进程，避免前序用例污染后续 Activity/Compose 状态
+
 ## 运行方式
 
 - 构建主 APK 与测试 APK：
@@ -121,6 +145,9 @@ Activity 场景推荐做法：
   - `./gradlew :app:connectedDebugAndroidTest`
 - 定向跑某一组测试：
   - `./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.lightningstudio.watchrss.ui.screen.rss.SettingsScreenTest`
+
+说明：
+- 当前 `connectedDebugAndroidTest` 由 orchestrator 隔离执行，速度比共享进程更慢，但真机稳定性明显更高。
 
 ## 后续扩展建议
 

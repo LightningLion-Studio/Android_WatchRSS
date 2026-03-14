@@ -3,7 +3,7 @@ package com.lightningstudio.watchrss.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lightningstudio.watchrss.data.bili.BiliErrorCodes
-import com.lightningstudio.watchrss.data.bili.BiliRepository
+import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
 import com.lightningstudio.watchrss.data.bili.formatBiliError
 import com.lightningstudio.watchrss.sdk.bili.QrPollStatus
 import kotlinx.coroutines.Job
@@ -24,7 +24,7 @@ data class BiliLoginUiState(
 )
 
 class BiliLoginViewModel(
-    private val repository: BiliRepository
+    private val repository: BiliRepositoryContract
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(BiliLoginUiState())
     val uiState: StateFlow<BiliLoginUiState> = _uiState

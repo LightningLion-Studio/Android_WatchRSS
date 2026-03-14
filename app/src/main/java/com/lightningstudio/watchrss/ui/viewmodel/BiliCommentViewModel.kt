@@ -8,14 +8,14 @@ import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
-import com.lightningstudio.watchrss.data.bili.BiliRepository
+import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
 import com.lightningstudio.watchrss.data.bili.comment.CommentPagingSource
 import com.lightningstudio.watchrss.sdk.bili.BiliCommentData
 import kotlinx.coroutines.flow.Flow
 
 class BiliCommentViewModel(
     private val savedStateHandle: SavedStateHandle,
-    private val repository: BiliRepository
+    private val repository: BiliRepositoryContract
 ) : ViewModel() {
 
     private val oid: Long = savedStateHandle.get<String>("oid")?.toLongOrNull() ?: 0L

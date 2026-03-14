@@ -21,22 +21,22 @@ import java.io.IOException
 class DouyinRepository(
     context: Context,
     private val cacheService: ManagedCacheService? = null
-) {
+) : DouyinRepositoryContract {
     private val appContext = context.applicationContext
     private val cookieStore = EncryptedDouyinCookieStore(context)
     private val parser = DouyinUnifiedParser()
     private val crawler = DouyinWebCrawler(ABogus())
 
-    suspend fun isLoggedIn(): Boolean = !cookieStore.readCookie().isNullOrBlank()
+    override suspend fun isLoggedIn(): Boolean = !cookieStore.readCookie().isNullOrBlank()
 
-    suspend fun readCookie(): String? = cookieStore.readCookie()
+    override suspend fun readCookie(): String? = cookieStore.readCookie()
 
-    suspend fun clearCookie() {
+    override suspend fun clearCookie() {
         cookieStore.writeCookie(null)
         clearWebViewSession()
     }
 
-    suspend fun logoutAndClearMediaCache() {
+    override suspend fun logoutAndClearMediaCache() {
         clearCookie()
         if (cacheService != null) {
             cacheService.clearBucket(ManagedCacheBucket.DOUYIN_PRELOAD)
@@ -45,7 +45,7 @@ class DouyinRepository(
         }
     }
 
-    suspend fun applyCookieHeader(rawCookie: String): Result<Unit> {
+    override suspend fun applyCookieHeader(rawCookie: String): Result<Unit> {
         val trimmed = rawCookie.trim()
         if (trimmed.isBlank()) {
             return Result.failure(IllegalArgumentException("缺少有效 Cookie"))
@@ -54,7 +54,7 @@ class DouyinRepository(
         return Result.success(Unit)
     }
 
-    suspend fun fetchFeed(): DouyinResult<List<DouyinVideo>> {
+    override suspend fun fetchFeed(): DouyinResult<List<DouyinVideo>> {
         val page = fetchFeedPage(cursor = null, count = 10)
         return if (page.isSuccess) {
             DouyinResult(DouyinErrorCodes.OK, data = page.data?.items.orEmpty())
@@ -63,7 +63,7 @@ class DouyinRepository(
         }
     }
 
-    suspend fun fetchFeedPage(cursor: String?, count: Int): DouyinResult<DouyinFeedPage> {
+    override suspend fun fetchFeedPage(cursor: String?, count: Int): DouyinResult<DouyinFeedPage> {
         val cookie = cookieStore.readCookie().orEmpty()
         if (cookie.isBlank()) {
             return DouyinResult(DouyinErrorCodes.NOT_LOGGED_IN, "未登录")
@@ -87,7 +87,7 @@ class DouyinRepository(
         }
     }
 
-    suspend fun fetchVideo(awemeId: String): DouyinResult<DouyinContent> {
+    override suspend fun fetchVideo(awemeId: String): DouyinResult<DouyinContent> {
         val cookie = cookieStore.readCookie().orEmpty()
         if (cookie.isBlank()) {
             return DouyinResult(DouyinErrorCodes.NOT_LOGGED_IN, "未登录")
@@ -111,7 +111,7 @@ class DouyinRepository(
         }
     }
 
-    suspend fun buildPlayHeaders(): Map<String, String> {
+    override suspend fun buildPlayHeaders(): Map<String, String> {
         val cookie = cookieStore.readCookie()
         val headers = mutableMapOf(
             "User-Agent" to DouyinWebCrawler.USER_AGENT,

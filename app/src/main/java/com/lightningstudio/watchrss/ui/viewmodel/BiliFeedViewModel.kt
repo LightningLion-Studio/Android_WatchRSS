@@ -2,7 +2,7 @@ package com.lightningstudio.watchrss.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.lightningstudio.watchrss.data.bili.BiliRepository
+import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
 import com.lightningstudio.watchrss.data.bili.formatBiliError
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.rss.ExternalSavedItem
@@ -29,7 +29,7 @@ data class BiliFeedUiState(
 )
 
 class BiliFeedViewModel(
-    private val repository: BiliRepository,
+    private val repository: BiliRepositoryContract,
     private val rssRepository: RssRepository? = null
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(BiliFeedUiState())

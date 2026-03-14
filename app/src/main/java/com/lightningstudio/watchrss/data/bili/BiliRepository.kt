@@ -60,7 +60,7 @@ class BiliRepository(
     context: Context,
     private val dataStore: DataStore<Preferences>,
     private val cacheService: ManagedCacheService? = null
-) {
+) : BiliRepositoryContract {
     private val appContext = context.applicationContext
     private val accountStore = EncryptedBiliAccountStore(context)
     private val client = BiliClient(BiliSdkConfig(), accountStore)
@@ -71,18 +71,18 @@ class BiliRepository(
         .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
         .build()
 
-    suspend fun isLoggedIn(): Boolean {
+    override suspend fun isLoggedIn(): Boolean {
         val account = accountStore.read()
         return !account?.cookies?.get("SESSDATA").isNullOrBlank()
     }
 
-    suspend fun readAccount(): BiliAccount? = accountStore.read()
+    override suspend fun readAccount(): BiliAccount? = accountStore.read()
 
-    suspend fun clearAccount() {
+    override suspend fun clearAccount() {
         accountStore.write(BiliAccount())
     }
 
-    suspend fun logoutAndClearPreviewCache() {
+    override suspend fun logoutAndClearPreviewCache() {
         clearAccount()
         if (cacheService != null) {
             cacheService.clearBucket(ManagedCacheBucket.BILI_PREVIEW)
@@ -92,7 +92,7 @@ class BiliRepository(
         }
     }
 
-    suspend fun applyCookieHeader(rawCookie: String): Result<Unit> {
+    override suspend fun applyCookieHeader(rawCookie: String): Result<Unit> {
         val cookies = BiliCookies.parseCookieHeader(rawCookie)
         if (cookies.isEmpty()) {
             return Result.failure(IllegalArgumentException("缺少有效 Cookie"))
@@ -102,11 +102,11 @@ class BiliRepository(
         return Result.success(Unit)
     }
 
-    suspend fun requestWebQrCode(): WebQrCode? = safeNullableCall { client.auth.requestWebQrCode() }
+    override suspend fun requestWebQrCode(): WebQrCode? = safeNullableCall { client.auth.requestWebQrCode() }
 
-    suspend fun requestTvQrCode(): TvQrCode? = safeNullableCall { client.auth.requestTvQrCode() }
+    override suspend fun requestTvQrCode(): TvQrCode? = safeNullableCall { client.auth.requestTvQrCode() }
 
-    suspend fun pollWebQrCode(qrKey: String): QrPollResult {
+    override suspend fun pollWebQrCode(qrKey: String): QrPollResult {
         val result = safeQrPoll { client.auth.pollWebQrCode(qrKey) }
         if (result.status == QrPollStatus.SUCCESS) {
             debugLogAuth("web_qr", "success")
@@ -114,7 +114,7 @@ class BiliRepository(
         return result
     }
 
-    suspend fun pollTvQrCode(authCode: String): QrPollResult {
+    override suspend fun pollTvQrCode(authCode: String): QrPollResult {
         val result = safeQrPoll { client.auth.pollTvQrCode(authCode) }
         if (result.status == QrPollStatus.SUCCESS) {
             debugLogAuth("tv_qr", "success")
@@ -122,16 +122,16 @@ class BiliRepository(
         return result
     }
 
-    suspend fun fetchFeed(): BiliResult<BiliFeedPage> =
+    override suspend fun fetchFeed(): BiliResult<BiliFeedPage> =
         safeCall { client.feed.fetchDefaultFeed() }
 
-    suspend fun readFeedCache(): List<BiliItem> = withContext(Dispatchers.IO) {
+    override suspend fun readFeedCache(): List<BiliItem> = withContext(Dispatchers.IO) {
         val raw = dataStore.data.first()[FEED_CACHE_JSON].orEmpty()
         if (raw.isBlank()) return@withContext emptyList()
         parseFeedCache(raw)
     }
 
-    suspend fun writeFeedCache(items: List<BiliItem>) {
+    override suspend fun writeFeedCache(items: List<BiliItem>) {
         val trimmed = items.take(FEED_CACHE_LIMIT)
         val raw = buildFeedCacheJson(trimmed)
         dataStore.edit { preferences ->
@@ -140,14 +140,14 @@ class BiliRepository(
         }
     }
 
-    suspend fun fetchVideoDetail(aid: Long? = null, bvid: String? = null): BiliResult<BiliVideoDetail> =
+    override suspend fun fetchVideoDetail(aid: Long?, bvid: String?): BiliResult<BiliVideoDetail> =
         safeCall { client.video.fetchView(aid = aid, bvid = bvid, useWbi = true) }
 
-    suspend fun fetchPlayUrlMp4(
+    override suspend fun fetchPlayUrlMp4(
         cid: Long,
-        aid: Long? = null,
-        bvid: String? = null,
-        qn: Int = 32
+        aid: Long?,
+        bvid: String?,
+        qn: Int
     ): BiliResult<BiliPlayUrl> = safeCall {
         client.play.fetchMp4Url(
             cid = cid,
@@ -157,14 +157,14 @@ class BiliRepository(
         )
     }
 
-    suspend fun like(aid: Long, like: Boolean): BiliResult<Unit> {
+    override suspend fun like(aid: Long, like: Boolean): BiliResult<Unit> {
         debugLogAction("like", aid, "start", extra = "like=$like")
         val result = safeCall { client.action.like(aid, like) }
         debugLogAction("like", aid, "result", result = result)
         return result
     }
 
-    suspend fun coin(aid: Long, multiply: Int = 1, selectLike: Boolean = false): BiliResult<Boolean> {
+    override suspend fun coin(aid: Long, multiply: Int, selectLike: Boolean): BiliResult<Boolean> {
         debugLogAction(
             "coin",
             aid,
@@ -182,14 +182,14 @@ class BiliRepository(
         return result
     }
 
-    suspend fun triple(aid: Long): BiliResult<com.lightningstudio.watchrss.sdk.bili.BiliTripleResult> {
+    override suspend fun triple(aid: Long): BiliResult<com.lightningstudio.watchrss.sdk.bili.BiliTripleResult> {
         debugLogAction("triple", aid, "start")
         val result = safeCall { client.action.triple(aid) }
         debugLogAction("triple", aid, "result", result = result)
         return result
     }
 
-    suspend fun favorite(aid: Long, add: Boolean): BiliResult<Boolean> = safeCall {
+    override suspend fun favorite(aid: Long, add: Boolean): BiliResult<Boolean> = safeCall {
         val folderId = defaultFavoriteFolderId()
             ?: return@safeCall BiliResult(BiliErrorCodes.MISSING_FAVORITE_FOLDER, "missing_favorite_folder")
         val addIds = if (add) listOf(folderId) else emptyList()
@@ -197,37 +197,37 @@ class BiliRepository(
         client.action.favorite(aid, addMediaIds = addIds, delMediaIds = delIds)
     }
 
-    suspend fun addToView(aid: Long? = null, bvid: String? = null): BiliResult<Unit> =
+    override suspend fun addToView(aid: Long?, bvid: String?): BiliResult<Unit> =
         safeCall { client.history.addToView(aid, bvid) }
 
-    suspend fun fetchToView(): BiliResult<BiliToViewPage> =
+    override suspend fun fetchToView(): BiliResult<BiliToViewPage> =
         safeCall { client.history.fetchToView() }
 
-    suspend fun fetchHistory(cursor: BiliHistoryCursor? = null): BiliResult<BiliHistoryPage> =
+    override suspend fun fetchHistory(cursor: BiliHistoryCursor?): BiliResult<BiliHistoryPage> =
         safeCall { client.history.fetchHistory(cursor) }
 
-    suspend fun fetchFavoriteFolders(): BiliResult<List<BiliFavoriteFolder>> = safeCall {
+    override suspend fun fetchFavoriteFolders(): BiliResult<List<BiliFavoriteFolder>> = safeCall {
         val mid = currentUserMid() ?: return@safeCall BiliResult(BiliErrorCodes.MISSING_MID, "missing_mid")
         client.favorite.listFolders(mid)
     }
 
-    suspend fun fetchFavoriteItems(mediaId: Long, pn: Int = 1, ps: Int = 20): BiliResult<BiliFavoritePage> =
+    override suspend fun fetchFavoriteItems(mediaId: Long, pn: Int, ps: Int): BiliResult<BiliFavoritePage> =
         safeCall { client.favorite.listResources(mediaId = mediaId, pn = pn, ps = ps) }
 
     // Search methods
-    suspend fun getHotSearch(): BiliResult<BiliHotSearchResponse> =
+    override suspend fun getHotSearch(): BiliResult<BiliHotSearchResponse> =
         safeCall { client.search.getHotSearch() }
 
-    suspend fun searchAll(keyword: String, page: Int): BiliResult<BiliSearchResponse> =
+    override suspend fun searchAll(keyword: String, page: Int): BiliResult<BiliSearchResponse> =
         safeCall { client.search.searchAll(keyword, page) }
 
-    suspend fun getSearchHistory(): List<String> = withContext(Dispatchers.IO) {
+    override suspend fun getSearchHistory(): List<String> = withContext(Dispatchers.IO) {
         val raw = dataStore.data.first()[SEARCH_HISTORY_JSON].orEmpty()
         if (raw.isBlank()) return@withContext emptyList()
         parseSearchHistory(raw)
     }
 
-    suspend fun addSearchHistory(keyword: String) {
+    override suspend fun addSearchHistory(keyword: String) {
         val history = getSearchHistory().toMutableList()
         history.remove(keyword)
         history.add(0, keyword)
@@ -238,20 +238,20 @@ class BiliRepository(
         }
     }
 
-    suspend fun clearSearchHistory() {
+    override suspend fun clearSearchHistory() {
         dataStore.edit { preferences ->
             preferences.remove(SEARCH_HISTORY_JSON)
         }
     }
 
     // Comment methods
-    suspend fun getComments(oid: Long, next: Long = 0): BiliResult<BiliCommentPage> =
+    override suspend fun getComments(oid: Long, next: Long): BiliResult<BiliCommentPage> =
         safeCall { client.comment.getComments(oid, next) }
 
-    suspend fun getReplies(oid: Long, root: Long, pn: Int = 1): BiliResult<BiliCommentReplyPage> =
+    override suspend fun getReplies(oid: Long, root: Long, pn: Int): BiliResult<BiliCommentReplyPage> =
         safeCall { client.comment.getReplies(oid, root, pn) }
 
-    suspend fun buildPlayHeaders(): Map<String, String> {
+    override suspend fun buildPlayHeaders(): Map<String, String> {
         val account = accountStore.read()
         val cookies = account?.cookies?.takeIf { it.isNotEmpty() }
         val headers = mutableMapOf(
@@ -264,7 +264,7 @@ class BiliRepository(
         return headers
     }
 
-    fun shareLink(bvid: String?, aid: Long?): String? {
+    override fun shareLink(bvid: String?, aid: Long?): String? {
         return when {
             !bvid.isNullOrBlank() -> "https://www.bilibili.com/video/$bvid"
             aid != null -> "https://www.bilibili.com/video/av$aid"
@@ -272,13 +272,13 @@ class BiliRepository(
         }
     }
 
-    fun savedLink(bvid: String?, aid: Long?, cid: Long?): String? {
+    override fun savedLink(bvid: String?, aid: Long?, cid: Long?): String? {
         val base = shareLink(bvid, aid) ?: return null
         val safeCid = cid ?: return base
         return "$base?cid=$safeCid"
     }
 
-    suspend fun cachedPreviewUri(aid: Long?, bvid: String?, cid: Long?): String? {
+    override suspend fun cachedPreviewUri(aid: Long?, bvid: String?, cid: Long?): String? {
         return withContext(Dispatchers.IO) {
             val file = previewCacheFile(aid, bvid, cid) ?: return@withContext null
             if (file.exists() && file.length() > 0) {
@@ -290,7 +290,7 @@ class BiliRepository(
         }
     }
 
-    suspend fun cachedPreviewUriAny(aid: Long?, bvid: String?): String? = withContext(Dispatchers.IO) {
+    override suspend fun cachedPreviewUriAny(aid: Long?, bvid: String?): String? = withContext(Dispatchers.IO) {
         val key = when {
             !bvid.isNullOrBlank() -> bvid
             aid != null -> "av$aid"
@@ -306,7 +306,7 @@ class BiliRepository(
         match?.toURI()?.toString()
     }
 
-    suspend fun cachePreviewClip(
+    override suspend fun cachePreviewClip(
         aid: Long?,
         bvid: String?,
         cid: Long?
@@ -380,7 +380,7 @@ class BiliRepository(
         }
     }
 
-    suspend fun clearCachedPreview(aid: Long?, bvid: String?, cid: Long?) {
+    override suspend fun clearCachedPreview(aid: Long?, bvid: String?, cid: Long?) {
         withContext(Dispatchers.IO) {
             val file = previewCacheFile(aid, bvid, cid) ?: return@withContext
             if (file.exists()) {

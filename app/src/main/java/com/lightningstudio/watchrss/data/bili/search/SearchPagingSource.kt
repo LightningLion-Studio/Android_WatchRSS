@@ -2,12 +2,12 @@ package com.lightningstudio.watchrss.data.bili.search
 
 import androidx.paging.PagingSource
 import androidx.paging.PagingState
-import com.lightningstudio.watchrss.data.bili.BiliRepository
+import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
 import com.lightningstudio.watchrss.sdk.bili.BiliSearchResultItem
 import com.lightningstudio.watchrss.util.AppLogger
 
 class SearchPagingSource(
-    private val repository: BiliRepository,
+    private val repository: BiliRepositoryContract,
     private val keyword: String
 ) : PagingSource<Int, BiliSearchResultItem>() {
 

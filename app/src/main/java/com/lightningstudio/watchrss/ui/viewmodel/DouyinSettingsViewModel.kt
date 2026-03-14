@@ -2,7 +2,7 @@ package com.lightningstudio.watchrss.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.lightningstudio.watchrss.data.douyin.DouyinRepository
+import com.lightningstudio.watchrss.data.douyin.DouyinRepositoryContract
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.rss.RssRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,7 +21,7 @@ data class DouyinSettingsUiState(
 )
 
 class DouyinSettingsViewModel(
-    private val repository: DouyinRepository,
+    private val repository: DouyinRepositoryContract,
     private val rssRepository: RssRepository
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(DouyinSettingsUiState())

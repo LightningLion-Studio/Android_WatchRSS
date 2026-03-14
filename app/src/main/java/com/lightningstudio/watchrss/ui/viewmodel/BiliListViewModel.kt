@@ -3,7 +3,7 @@ package com.lightningstudio.watchrss.ui.viewmodel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.lightningstudio.watchrss.data.bili.BiliRepository
+import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
 import com.lightningstudio.watchrss.data.bili.BiliErrorCodes
 import com.lightningstudio.watchrss.data.bili.formatBiliError
 import com.lightningstudio.watchrss.sdk.bili.BiliFavoritePage
@@ -53,7 +53,7 @@ private data class FavoritePageResult(
 
 class BiliListViewModel(
     savedStateHandle: SavedStateHandle,
-    private val repository: BiliRepository
+    private val repository: BiliRepositoryContract
 ) : ViewModel() {
     private val type: BiliListType = BiliListType.from(savedStateHandle.get<String>("type"))
     private val _uiState = MutableStateFlow(BiliListUiState(type = type))

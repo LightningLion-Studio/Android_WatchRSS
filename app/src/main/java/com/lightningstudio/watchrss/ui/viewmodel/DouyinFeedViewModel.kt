@@ -6,7 +6,7 @@ import kotlinx.coroutines.Job
 import com.lightningstudio.watchrss.data.douyin.DouyinErrorCodes
 import com.lightningstudio.watchrss.data.douyin.DouyinFeedCacheStore
 import com.lightningstudio.watchrss.data.douyin.DouyinPreloadManager
-import com.lightningstudio.watchrss.data.douyin.DouyinRepository
+import com.lightningstudio.watchrss.data.douyin.DouyinRepositoryContract
 import com.lightningstudio.watchrss.data.douyin.DouyinStreamItem
 import com.lightningstudio.watchrss.data.douyin.DouyinWatchHistoryStore
 import com.lightningstudio.watchrss.data.douyin.formatDouyinError
@@ -29,7 +29,7 @@ data class DouyinFeedUiState(
 )
 
 class DouyinFeedViewModel(
-    private val repository: DouyinRepository,
+    private val repository: DouyinRepositoryContract,
     private val preloadManager: DouyinPreloadManager,
     private val watchHistoryStore: DouyinWatchHistoryStore,
     private val feedCacheStore: DouyinFeedCacheStore

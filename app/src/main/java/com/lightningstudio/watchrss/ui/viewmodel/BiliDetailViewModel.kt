@@ -5,7 +5,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lightningstudio.watchrss.data.bili.formatBiliError
-import com.lightningstudio.watchrss.data.bili.BiliRepository
+import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.rss.ExternalSavedItem
 import com.lightningstudio.watchrss.data.rss.RssItem
@@ -35,7 +35,7 @@ data class BiliDetailUiState(
 
 class BiliDetailViewModel(
     savedStateHandle: SavedStateHandle,
-    private val repository: BiliRepository,
+    private val repository: BiliRepositoryContract,
     private val rssRepository: RssRepository
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(BiliDetailUiState())

@@ -5,9 +5,9 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import com.lightningstudio.watchrss.WatchRssApplication
 import com.lightningstudio.watchrss.data.AppContainer
 import com.lightningstudio.watchrss.data.DefaultAppContainer
+import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
 import com.lightningstudio.watchrss.data.cache.ManagedCacheService
-import com.lightningstudio.watchrss.data.douyin.DouyinRepository
-import com.lightningstudio.watchrss.data.bili.BiliRepository
+import com.lightningstudio.watchrss.data.douyin.DouyinRepositoryContract
 import com.lightningstudio.watchrss.data.rss.RssRepository
 import com.lightningstudio.watchrss.data.settings.SettingsRepository
 import androidx.test.platform.app.InstrumentationRegistry
@@ -18,18 +18,20 @@ import java.util.UUID
 class TestAppContainer(
     context: Context,
     override val rssRepository: RssRepository,
-    override val settingsRepository: SettingsRepository
+    override val settingsRepository: SettingsRepository,
+    private val biliRepositoryOverride: BiliRepositoryContract? = null,
+    private val douyinRepositoryOverride: DouyinRepositoryContract? = null
 ) : AppContainer {
     private val fallback by lazy { DefaultAppContainer(context.applicationContext) }
 
     override val managedCacheService: ManagedCacheService
         get() = fallback.managedCacheService
 
-    override val biliRepository: BiliRepository
-        get() = fallback.biliRepository
+    override val biliRepository: BiliRepositoryContract
+        get() = biliRepositoryOverride ?: fallback.biliRepository
 
-    override val douyinRepository: DouyinRepository
-        get() = fallback.douyinRepository
+    override val douyinRepository: DouyinRepositoryContract
+        get() = douyinRepositoryOverride ?: fallback.douyinRepository
 }
 
 class TestAppContainerRule(
