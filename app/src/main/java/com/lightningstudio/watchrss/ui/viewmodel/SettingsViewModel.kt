@@ -22,7 +22,9 @@ class SettingsViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DEFAULT_CACHE_LIMIT_MB)
 
     val cacheUsageMb: StateFlow<Long> = rssRepository.observeCacheUsageBytes()
-        .map { it / MB_BYTES }
+        .map { bytes ->
+            if (bytes <= 0L) 0L else (bytes + MB_BYTES - 1L) / MB_BYTES
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0L)
 
     val readingThemeDark: StateFlow<Boolean> = settingsRepository.readingThemeDark

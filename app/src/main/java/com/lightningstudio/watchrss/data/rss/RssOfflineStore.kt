@@ -1,5 +1,7 @@
 package com.lightningstudio.watchrss.data.rss
 
+import com.lightningstudio.watchrss.data.cache.CacheTrimReason
+import com.lightningstudio.watchrss.data.cache.ManagedCacheService
 import com.lightningstudio.watchrss.data.db.OfflineMediaDao
 import com.lightningstudio.watchrss.data.db.OfflineMediaEntity
 import com.lightningstudio.watchrss.data.db.RssItemEntity
@@ -9,16 +11,19 @@ import java.io.File
 class RssOfflineStore(
     private val offlineRoot: File,
     private val offlineMediaDao: OfflineMediaDao,
-    private val downloadClient: RssDownloadClient
+    private val downloadClient: RssDownloadClient,
+    private val cacheService: ManagedCacheService? = null
 ) {
     constructor(
         appContext: android.content.Context,
         offlineMediaDao: OfflineMediaDao,
-        downloadClient: RssDownloadClient
+        downloadClient: RssDownloadClient,
+        cacheService: ManagedCacheService? = null
     ) : this(
-        File(appContext.filesDir, "offline/rss"),
+        File(appContext.filesDir, OFFLINE_ROOT_DIR_NAME),
         offlineMediaDao,
-        downloadClient
+        downloadClient,
+        cacheService
     )
 
     init {
@@ -47,6 +52,7 @@ class RssOfflineStore(
                     )
                 } else {
                     offlineMediaDao.updateLocalPath(item.id, ref.url, localPath)
+                    cacheService?.scheduleMaintenance(CacheTrimReason.CACHE_WRITE)
                     DebugLogBuffer.log(
                         "offline",
                         "retry ok item=${item.id} url=${ref.url}"
@@ -57,10 +63,13 @@ class RssOfflineStore(
             val file = File(itemDir, buildFileName(ref.type, index, ref.url))
             val localPath = downloadClient.downloadToFile(ref.url, file)
             if (localPath == null) {
+                runCatching { file.delete() }
                 DebugLogBuffer.log(
                     "offline",
                     "download failed item=${item.id} url=${ref.url}"
                 )
+            } else {
+                cacheService?.scheduleMaintenance(CacheTrimReason.CACHE_WRITE)
             }
             entities.add(
                 OfflineMediaEntity(
@@ -84,6 +93,8 @@ class RssOfflineStore(
             runCatching { File(path).delete() }
         }
         offlineMediaDao.deleteByItemId(itemId)
+        cleanupEmptyDirectories(offlineRoot)
+        cacheService?.scheduleMaintenance(CacheTrimReason.CACHE_DELETE)
     }
 
     suspend fun deleteMediaForChannel(channelId: Long) {
@@ -92,6 +103,8 @@ class RssOfflineStore(
             val path = entry.localPath ?: return@forEach
             runCatching { File(path).delete() }
         }
+        cleanupEmptyDirectories(offlineRoot)
+        cacheService?.scheduleMaintenance(CacheTrimReason.CACHE_DELETE)
     }
 
     private fun buildFileName(type: OfflineMediaType, index: Int, url: String): String {
@@ -123,4 +136,19 @@ class RssOfflineStore(
         readingProgress = readingProgress,
         fetchedAt = fetchedAt
     )
+
+    private fun cleanupEmptyDirectories(root: File) {
+        if (!root.exists()) return
+        root.walkBottomUp()
+            .filter { it.isDirectory && it != root }
+            .forEach { dir ->
+                if (dir.listFiles().isNullOrEmpty()) {
+                    dir.delete()
+                }
+            }
+    }
+
+    companion object {
+        internal const val OFFLINE_ROOT_DIR_NAME = "offline/rss"
+    }
 }

@@ -29,7 +29,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.res.colorResource
@@ -38,6 +37,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import com.lightningstudio.watchrss.BuildConfig
 import com.lightningstudio.watchrss.R
+import com.lightningstudio.watchrss.data.settings.CACHE_LIMIT_OPTIONS_MB
 import com.lightningstudio.watchrss.ui.components.WatchSwitch
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import kotlinx.coroutines.flow.StateFlow
@@ -68,9 +68,7 @@ fun SettingsScreen(
     val fontSizeSp by readingFontSizeSp.collectAsState()
     val phoneConnection by phoneConnectionEnabled.collectAsState()
 
-    val cacheOptions = remember {
-        listOf(10L, 20L, 30L, 40L, 50L, 60L, 70L, 80L, 90L, 100L, 200L, 300L)
-    }
+    val cacheOptions = remember { CACHE_LIMIT_OPTIONS_MB }
     val fontOptions = remember { (12..32 step 2).toList() }
 
     val lowerCache = cacheOptions.lastOrNull { it < cacheLimit }
@@ -83,6 +81,7 @@ fun SettingsScreen(
     val entrySpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_8dp
     val valueSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_4dp
     val stepperSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_6dp
+    val stepperValueWidth = dimensionResource(R.dimen.watch_action_button_height)
     val valueIndent = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_content_horizontal_distance_6_0
     val pillHeight = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_multiple_item_height
 
@@ -105,10 +104,9 @@ fun SettingsScreen(
                     onClick = { lowerCache?.let(onSelectCacheLimit) }
                 )
                 Spacer(modifier = Modifier.width(stepperSpacing))
-                Text(
-                    text = "${cacheLimit}M",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface
+                StepperValue(
+                    text = formatCacheSize(cacheLimit),
+                    width = stepperValueWidth
                 )
                 Spacer(modifier = Modifier.width(stepperSpacing))
                 RoundIconButtonIcon(
@@ -119,7 +117,13 @@ fun SettingsScreen(
                 )
             }
             Text(
-                text = "当前已用 ${usage}MB",
+                text = "当前已用 ${formatCacheSize(usage)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+            )
+            Text(
+                text = "包含图片、预览和离线媒体；离线媒体不会自动清理",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
@@ -159,10 +163,9 @@ fun SettingsScreen(
                     onClick = { lowerFont?.let(onSelectFontSize) }
                 )
                 Spacer(modifier = Modifier.width(stepperSpacing))
-                Text(
+                StepperValue(
                     text = "${fontSizeSp}sp",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurface
+                    width = stepperValueWidth
                 )
                 Spacer(modifier = Modifier.width(stepperSpacing))
                 RoundIconButtonIcon(
@@ -318,6 +321,24 @@ private fun SettingsPillRow(
 }
 
 @Composable
+private fun StepperValue(
+    text: String,
+    width: androidx.compose.ui.unit.Dp
+) {
+    Box(
+        modifier = Modifier.width(width),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
 private fun RoundIconButton(
     text: String,
     enabled: Boolean,
@@ -336,7 +357,6 @@ private fun RoundIconButton(
             .size(size)
             .clip(CircleShape)
             .background(backgroundColor)
-            .alpha(if (enabled) 1f else 0.4f)
             .clickable(
                 enabled = enabled,
                 interactionSource = interactionSource,
@@ -375,7 +395,6 @@ private fun RoundIconButtonIcon(
             .size(size)
             .clip(CircleShape)
             .background(backgroundColor)
-            .alpha(if (enabled) 1f else 0.4f)
             .clickable(
                 enabled = enabled,
                 interactionSource = interactionSource,
@@ -387,8 +406,20 @@ private fun RoundIconButtonIcon(
         Icon(
             painter = painterResource(id = iconRes),
             contentDescription = contentDescription,
-            tint = MaterialTheme.colorScheme.onSurface,
+            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.45f),
             modifier = Modifier.size(iconSize)
         )
+    }
+}
+
+private fun formatCacheSize(valueMb: Long): String {
+    if (valueMb < 1024L) return "${valueMb}M"
+    val tenths = (valueMb * 10L) / 1024L
+    val whole = tenths / 10L
+    val fraction = tenths % 10L
+    return if (fraction == 0L) {
+        "${whole}G"
+    } else {
+        "${whole}.${fraction}G"
     }
 }

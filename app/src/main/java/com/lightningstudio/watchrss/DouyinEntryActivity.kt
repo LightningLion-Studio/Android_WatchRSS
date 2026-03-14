@@ -23,9 +23,10 @@ import com.lightningstudio.watchrss.ui.viewmodel.DouyinViewModelFactory
 import kotlinx.coroutines.flow.map
 
 class DouyinEntryActivity : BaseWatchActivity() {
-    private val repository by lazy { (application as WatchRssApplication).container.douyinRepository }
-    private val rssRepository by lazy { (application as WatchRssApplication).container.rssRepository }
-    private val preloadManager by lazy { DouyinPreloadManager(this) }
+    private val container by lazy { (application as WatchRssApplication).container }
+    private val repository by lazy { container.douyinRepository }
+    private val rssRepository by lazy { container.rssRepository }
+    private val preloadManager by lazy { DouyinPreloadManager(this, container.managedCacheService) }
     private val watchHistoryStore by lazy { DouyinWatchHistoryStore(this) }
     private val feedCacheStore by lazy { DouyinFeedCacheStore(this) }
     private val viewModel: DouyinFeedViewModel by viewModels {

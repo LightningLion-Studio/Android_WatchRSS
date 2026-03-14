@@ -6,6 +6,8 @@ import android.graphics.BitmapFactory
 import android.util.LruCache
 import android.view.View
 import android.widget.ImageView
+import com.lightningstudio.watchrss.data.cache.CacheTrimReason
+import com.lightningstudio.watchrss.data.cache.ManagedCacheService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -16,8 +18,12 @@ import java.net.URL
 import java.security.MessageDigest
 
 object RssImageLoader {
+    internal const val DISK_CACHE_DIR_NAME = "rss_images"
     private const val cacheSizeBytes = 8 * 1024 * 1024
     private const val ratioCacheSize = 300
+
+    @Volatile
+    private var cacheService: ManagedCacheService? = null
 
     private val cache = object : LruCache<String, Bitmap>(cacheSizeBytes) {
         override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
@@ -28,6 +34,10 @@ object RssImageLoader {
     fun getCachedBitmap(url: String): Bitmap? = cache.get(url)
 
     fun getCachedAspectRatio(url: String): Float? = ratioCache.get(url)
+
+    fun configure(cacheService: ManagedCacheService?) {
+        this.cacheService = cacheService
+    }
 
     suspend fun preloadAndCacheRatio(context: Context, url: String, maxWidthPx: Int): Float? {
         loadBitmap(context, url, maxWidthPx)
@@ -183,7 +193,7 @@ object RssImageLoader {
             BitmapFactory.decodeFile(file.absolutePath, bounds)
             cacheAspectRatio(url, bounds.outWidth, bounds.outHeight)
             val options = decodeOptions(bounds, maxWidthPx)
-            BitmapFactory.decodeFile(file.absolutePath, options)
+            BitmapFactory.decodeFile(file.absolutePath, options)?.also { touchFile(file) }
         } catch (e: Exception) {
             null
         }
@@ -191,14 +201,25 @@ object RssImageLoader {
 
     private fun persistToDisk(context: Context, url: String, bytes: ByteArray) {
         val file = cacheFile(context, url)
-        if (file.exists()) return
+        val tempFile = File(file.parentFile, "${file.name}.tmp")
         runCatching {
-            file.outputStream().use { it.write(bytes) }
+            tempFile.outputStream().use { it.write(bytes) }
+            if (file.exists()) {
+                file.delete()
+            }
+            if (!tempFile.renameTo(file)) {
+                tempFile.copyTo(file, overwrite = true)
+                tempFile.delete()
+            }
+            touchFile(file)
+            cacheService?.scheduleMaintenance(CacheTrimReason.CACHE_WRITE)
+        }.onFailure {
+            tempFile.delete()
         }
     }
 
     private fun cacheFile(context: Context, url: String): File {
-        val dir = File(context.cacheDir, "rss_images").apply { mkdirs() }
+        val dir = File(context.cacheDir, DISK_CACHE_DIR_NAME).apply { mkdirs() }
         return File(dir, "${hashUrl(url)}.img")
     }
 
@@ -228,6 +249,10 @@ object RssImageLoader {
 
     private fun prepareBitmap(bitmap: Bitmap) {
         runCatching { bitmap.prepareToDraw() }
+    }
+
+    private fun touchFile(file: File) {
+        runCatching { file.setLastModified(System.currentTimeMillis()) }
     }
 
     private fun calculateInSampleSize(

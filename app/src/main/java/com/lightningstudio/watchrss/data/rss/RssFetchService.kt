@@ -16,18 +16,33 @@ class RssFetchService(
 
     override fun downloadToFile(url: String, file: File): String? {
         return try {
+            val tempFile = File(file.parentFile, "${file.name}.tmp")
             downloadClient.newCall(Request.Builder().url(url).build()).execute().use { response ->
                 if (!response.isSuccessful) {
                     return null
                 }
                 response.body?.byteStream()?.use { input ->
-                    file.outputStream().use { output ->
+                    tempFile.outputStream().use { output ->
                         input.copyTo(output)
                     }
                 }
             }
+            if (tempFile.length() <= 0L) {
+                tempFile.delete()
+                return null
+            }
+            file.parentFile?.mkdirs()
+            if (file.exists()) {
+                file.delete()
+            }
+            if (!tempFile.renameTo(file)) {
+                tempFile.copyTo(file, overwrite = true)
+                tempFile.delete()
+            }
             if (file.exists() && file.length() > 0) file.absolutePath else null
         } catch (e: Exception) {
+            runCatching { File(file.parentFile, "${file.name}.tmp").delete() }
+            runCatching { file.delete() }
             null
         }
     }

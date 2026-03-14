@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.preferencesDataStoreFile
 import androidx.room.Room
+import com.lightningstudio.watchrss.data.cache.ManagedCacheService
 import com.lightningstudio.watchrss.data.bili.BiliRepository
 import com.lightningstudio.watchrss.data.douyin.DouyinRepository
 import com.lightningstudio.watchrss.data.db.WatchRssDatabase
@@ -14,6 +15,7 @@ import com.lightningstudio.watchrss.data.rss.RssOfflineStore
 import com.lightningstudio.watchrss.data.rss.RssParseService
 import com.lightningstudio.watchrss.data.rss.RssRepository
 import com.lightningstudio.watchrss.data.settings.SettingsRepository
+import com.lightningstudio.watchrss.ui.util.RssImageLoader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -21,6 +23,7 @@ import kotlinx.coroutines.SupervisorJob
 interface AppContainer {
     val rssRepository: RssRepository
     val settingsRepository: SettingsRepository
+    val managedCacheService: ManagedCacheService
     val biliRepository: BiliRepository
     val douyinRepository: DouyinRepository
 }
@@ -51,15 +54,21 @@ class DefaultAppContainer(context: Context) : AppContainer {
         SettingsRepository(dataStore)
     }
 
+    override val managedCacheService: ManagedCacheService by lazy {
+        ManagedCacheService(appContext, settingsRepository, appScope).also { cacheService ->
+            RssImageLoader.configure(cacheService)
+        }
+    }
+
     override val biliRepository: BiliRepository by lazy {
         val dataStore = PreferenceDataStoreFactory.create(
             produceFile = { appContext.preferencesDataStoreFile("bili_cache.preferences_pb") }
         )
-        BiliRepository(appContext, dataStore)
+        BiliRepository(appContext, dataStore, managedCacheService)
     }
 
     override val douyinRepository: DouyinRepository by lazy {
-        DouyinRepository(appContext)
+        DouyinRepository(appContext, managedCacheService)
     }
 
     override val rssRepository: RssRepository by lazy {
@@ -69,7 +78,8 @@ class DefaultAppContainer(context: Context) : AppContainer {
         val offlineStore = RssOfflineStore(
             appContext,
             database.offlineMediaDao(),
-            fetchService
+            fetchService,
+            managedCacheService
         )
         DefaultRssRepository(
             channelDao = database.rssChannelDao(),
@@ -77,6 +87,7 @@ class DefaultAppContainer(context: Context) : AppContainer {
             savedEntryDao = database.savedEntryDao(),
             offlineMediaDao = database.offlineMediaDao(),
             settingsRepository = settingsRepository,
+            cacheService = managedCacheService,
             appScope = appScope,
             fetchService = fetchService,
             readableService = readableService,

@@ -1,6 +1,9 @@
 package com.lightningstudio.watchrss.data.rss
 
 import android.net.Uri
+import com.lightningstudio.watchrss.data.cache.CacheTrimReason
+import com.lightningstudio.watchrss.data.cache.ManagedCacheBucket
+import com.lightningstudio.watchrss.data.cache.ManagedCacheService
 import com.lightningstudio.watchrss.data.db.OfflineMediaDao
 import com.lightningstudio.watchrss.data.db.OfflineMediaEntity
 import com.lightningstudio.watchrss.data.db.RssChannelDao
@@ -30,6 +33,7 @@ class DefaultRssRepository(
     private val savedEntryDao: SavedEntryDao,
     private val offlineMediaDao: OfflineMediaDao,
     private val settingsRepository: SettingsRepository,
+    private val cacheService: ManagedCacheService,
     private val appScope: CoroutineScope,
     private val fetchService: RssFetchService,
     private val readableService: RssReadableService,
@@ -89,7 +93,7 @@ class DefaultRssRepository(
     }
 
     override fun observeCacheUsageBytes(): Flow<Long> =
-        itemDao.observeTotalCacheBytes().map { it ?: 0L }
+        cacheService.observeUsageBytes()
 
     override fun observeSavedItems(saveType: SaveType): Flow<List<SavedItem>> =
         savedEntryDao.observeSavedItems(saveType.name).map { items ->
@@ -557,15 +561,19 @@ class DefaultRssRepository(
 
     override suspend fun deleteChannel(channelId: Long) {
         withContext(Dispatchers.IO) {
+            val channel = channelDao.getChannel(channelId) ?: return@withContext
             offlineStore.deleteMediaForChannel(channelId)
+            when (channel.url) {
+                BuiltinChannelType.BILI.url -> cacheService.clearBucket(ManagedCacheBucket.BILI_PREVIEW)
+                BuiltinChannelType.DOUYIN.url -> cacheService.clearBucket(ManagedCacheBucket.DOUYIN_PRELOAD)
+            }
             channelDao.deleteChannel(channelId)
         }
     }
 
     override suspend fun trimCacheToLimit() {
         withContext(Dispatchers.IO) {
-            val limit = settingsRepository.cacheLimitBytes.first()
-            enforceCacheLimit(limit)
+            cacheService.trimToLimit(CacheTrimReason.MANUAL)
         }
     }
 
@@ -614,23 +622,6 @@ class DefaultRssRepository(
                     contentSizeBytes = update.contentSizeBytes
                 )
             }
-        }
-    }
-
-    private suspend fun enforceCacheLimit(limitBytes: Long) {
-        if (limitBytes <= 0) return
-        var total = itemDao.getTotalCacheBytes() ?: 0L
-        if (total <= limitBytes) return
-
-        val oldest = itemDao.loadOldestItemsExcludingSaved()
-        val toDelete = mutableListOf<Long>()
-        for (item in oldest) {
-            if (total <= limitBytes) break
-            total -= item.contentSizeBytes
-            toDelete.add(item.id)
-        }
-        if (toDelete.isNotEmpty()) {
-            itemDao.deleteByIds(toDelete)
         }
     }
 
@@ -726,11 +717,54 @@ class DefaultRssRepository(
                 runCatching { offlineStore.downloadMediaForItem(item) }
             }
             if (savedEntryDao.countByItemId(itemId) == 0) {
+                maybeClearBiliPreviewForItem(item)
                 offlineStore.deleteMediaForItem(itemId)
             }
             val updated = savedEntryDao.getByItemId(itemId)
             Result.success(buildSavedState(updated))
         }
+
+    private suspend fun maybeClearBiliPreviewForItem(item: RssItemEntity) {
+        val channel = channelDao.getChannel(item.channelId) ?: return
+        if (channel.url != BuiltinChannelType.BILI.url) return
+        val ids = extractBiliVideoIds(item) ?: return
+        cacheService.clearBiliPreviewsForVideo(ids.aid, ids.bvid)
+    }
+
+    private fun extractBiliVideoIds(item: RssItemEntity): BiliVideoIds? {
+        parseBiliGuid(item.guid)?.let { return it }
+        return parseBiliLink(item.link)
+    }
+
+    private fun parseBiliGuid(guid: String?): BiliVideoIds? {
+        val raw = guid?.trim()?.removePrefix("bili:")?.takeIf { it.isNotBlank() } ?: return null
+        return when {
+            raw.startsWith("BV", ignoreCase = true) -> BiliVideoIds(bvid = raw)
+            raw.startsWith("av", ignoreCase = true) -> BiliVideoIds(aid = raw.substring(2).toLongOrNull())
+            else -> null
+        }
+    }
+
+    private fun parseBiliLink(link: String?): BiliVideoIds? {
+        val uri = runCatching { Uri.parse(link) }.getOrNull() ?: return null
+        val segments = uri.pathSegments.orEmpty()
+        val videoIndex = segments.indexOf("video")
+        if (videoIndex >= 0 && videoIndex + 1 < segments.size) {
+            val videoId = segments[videoIndex + 1]
+            if (videoId.startsWith("BV", ignoreCase = true)) {
+                return BiliVideoIds(bvid = videoId)
+            }
+            if (videoId.startsWith("av", ignoreCase = true)) {
+                return BiliVideoIds(aid = videoId.substring(2).toLongOrNull())
+            }
+        }
+        val bvid = uri.getQueryParameter("bvid")?.takeIf { it.isNotBlank() }
+        if (bvid != null) {
+            return BiliVideoIds(bvid = bvid)
+        }
+        val aid = uri.getQueryParameter("aid")?.toLongOrNull()
+        return if (aid != null) BiliVideoIds(aid = aid) else null
+    }
 
     private fun buildOriginalFallbackContent(item: ParsedItem): String {
         val notice = "原文抓取失败，已显示 RSS 内容。"
@@ -847,4 +881,9 @@ private data class PendingOriginalUpdate(
     val dedupKey: String,
     val content: String,
     val contentSizeBytes: Long
+)
+
+private data class BiliVideoIds(
+    val aid: Long? = null,
+    val bvid: String? = null
 )

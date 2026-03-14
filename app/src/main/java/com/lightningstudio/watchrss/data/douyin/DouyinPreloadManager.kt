@@ -2,13 +2,18 @@ package com.lightningstudio.watchrss.data.douyin
 
 import android.content.Context
 import android.net.Uri
+import com.lightningstudio.watchrss.data.cache.CacheTrimReason
+import com.lightningstudio.watchrss.data.cache.ManagedCacheService
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
-class DouyinPreloadManager(context: Context) {
+class DouyinPreloadManager(
+    context: Context,
+    private val cacheService: ManagedCacheService? = null
+) {
     private val appContext = context.applicationContext
     private val cacheDir = File(appContext.cacheDir, CACHE_DIR_NAME).apply { mkdirs() }
     private val httpClient = OkHttpClient.Builder()
@@ -18,7 +23,14 @@ class DouyinPreloadManager(context: Context) {
 
     suspend fun localPathFor(awemeId: String): String? {
         val file = mediaFileFor(awemeId) ?: return null
-        return file.takeIf { it.exists() && it.length() >= MIN_VALID_FILE_BYTES }?.absolutePath
+        if (!file.exists()) return null
+        if (file.length() < MIN_VALID_FILE_BYTES) {
+            file.delete()
+            cacheService?.scheduleMaintenance(CacheTrimReason.CACHE_DELETE)
+            return null
+        }
+        touchFile(file)
+        return file.absolutePath
     }
 
     suspend fun resolveLocalPaths(awemeIds: List<String>): Map<String, String> {
@@ -54,7 +66,7 @@ class DouyinPreloadManager(context: Context) {
         val cachedNow = resolveLocalPaths(validItems.keys.toList())
         var cachedUnwatchedCount = cachedNow.keys.count { awemeId -> !watchedIds.contains(awemeId) }
         if (cachedUnwatchedCount >= targetUnwatchedCount) {
-            trimCache(maxEntries = MAX_CACHE_ENTRIES, keepAwemeIds = validItems.keys)
+            trimCache(maxEntries = MAX_CACHE_ENTRIES)
             return
         }
 
@@ -68,7 +80,7 @@ class DouyinPreloadManager(context: Context) {
                 cachedUnwatchedCount += 1
             }
         }
-        trimCache(maxEntries = MAX_CACHE_ENTRIES, keepAwemeIds = validItems.keys)
+        trimCache(maxEntries = MAX_CACHE_ENTRIES)
     }
 
     fun toLocalUri(path: String): Uri = Uri.fromFile(File(path))
@@ -111,7 +123,8 @@ class DouyinPreloadManager(context: Context) {
                 temp.copyTo(target, overwrite = true)
                 temp.delete()
             }
-            target.setLastModified(System.currentTimeMillis())
+            touchFile(target)
+            cacheService?.scheduleMaintenance(CacheTrimReason.CACHE_WRITE)
             true
         }.getOrElse {
             temp.delete()
@@ -127,32 +140,23 @@ class DouyinPreloadManager(context: Context) {
         return File(cacheDir, "$safeId.mp4")
     }
 
-    private fun trimCache(maxEntries: Int, keepAwemeIds: Set<String>) {
+    private fun trimCache(maxEntries: Int) {
         val files = cacheDir
             .listFiles { file -> file.isFile && file.extension.equals("mp4", ignoreCase = true) }
             ?.sortedByDescending { it.lastModified() }
             .orEmpty()
         if (files.size <= maxEntries) return
+        files.drop(maxEntries).forEach { file -> file.delete() }
+        cacheService?.scheduleMaintenance(CacheTrimReason.CACHE_DELETE)
+    }
 
-        val keepNames = keepAwemeIds.map { awemeId ->
-            awemeId.replace(Regex("[^A-Za-z0-9_-]"), "_")
-        }.toSet()
-
-        var kept = 0
-        files.forEach { file ->
-            val awemeId = file.nameWithoutExtension
-            val shouldKeep = kept < maxEntries || keepNames.contains(awemeId)
-            if (shouldKeep) {
-                kept += 1
-            } else {
-                file.delete()
-            }
-        }
+    private fun touchFile(file: File) {
+        runCatching { file.setLastModified(System.currentTimeMillis()) }
     }
 
     companion object {
-        private const val CACHE_DIR_NAME = "douyin_preload"
-        private const val MIN_VALID_FILE_BYTES = 64 * 1024L
+        internal const val CACHE_DIR_NAME = "douyin_preload"
+        internal const val MIN_VALID_FILE_BYTES = 64 * 1024L
         private const val MAX_CACHE_ENTRIES = 36
     }
 }

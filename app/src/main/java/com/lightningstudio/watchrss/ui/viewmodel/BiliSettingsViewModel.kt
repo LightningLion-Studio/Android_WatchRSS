@@ -42,7 +42,7 @@ class BiliSettingsViewModel(
 
     fun logout() {
         viewModelScope.launch {
-            repository.clearAccount()
+            repository.logoutAndClearPreviewCache()
             _uiState.update { it.copy(isLoggedIn = false, message = "已退出登录") }
         }
     }

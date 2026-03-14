@@ -16,14 +16,17 @@ private val READING_THEME_DARK = booleanPreferencesKey("reading_theme_dark")
 private val READING_FONT_SIZE_SP = intPreferencesKey("reading_font_size_sp")
 private val SHARE_USE_SYSTEM = booleanPreferencesKey("share_use_system")
 private val PHONE_CONNECTION_ENABLED = booleanPreferencesKey("phone_connection_enabled")
-const val DEFAULT_CACHE_LIMIT_MB: Long = 50
+const val MIN_CACHE_LIMIT_MB: Long = 512
+const val MAX_CACHE_LIMIT_MB: Long = 4 * 1024
+const val DEFAULT_CACHE_LIMIT_MB: Long = MIN_CACHE_LIMIT_MB
+val CACHE_LIMIT_OPTIONS_MB: List<Long> = listOf(512L, 768L, 1024L, 1536L, 2048L, 2560L, 3072L, 4096L)
 const val MB_BYTES: Long = 1024 * 1024
 const val DEFAULT_READING_FONT_SIZE_SP: Int = 14
 const val CURRENT_OOBE_VERSION: Int = 1
 
 class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     val cacheLimitBytes: Flow<Long> = dataStore.data.map { preferences ->
-        preferences[CACHE_LIMIT_BYTES] ?: (DEFAULT_CACHE_LIMIT_MB * MB_BYTES)
+        clampCacheLimitBytes(preferences[CACHE_LIMIT_BYTES] ?: (DEFAULT_CACHE_LIMIT_MB * MB_BYTES))
     }
     val builtinChannelsInitialized: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[BUILTIN_CHANNELS_INITIALIZED] ?: false
@@ -46,7 +49,7 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
 
     suspend fun setCacheLimitBytes(bytes: Long) {
         dataStore.edit { preferences ->
-            preferences[CACHE_LIMIT_BYTES] = bytes
+            preferences[CACHE_LIMIT_BYTES] = clampCacheLimitBytes(bytes)
         }
     }
 
@@ -84,5 +87,11 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         dataStore.edit { preferences ->
             preferences[PHONE_CONNECTION_ENABLED] = value
         }
+    }
+
+    private fun clampCacheLimitBytes(bytes: Long): Long {
+        val minBytes = MIN_CACHE_LIMIT_MB * MB_BYTES
+        val maxBytes = MAX_CACHE_LIMIT_MB * MB_BYTES
+        return bytes.coerceIn(minBytes, maxBytes)
     }
 }

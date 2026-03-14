@@ -3,6 +3,8 @@ package com.lightningstudio.watchrss.data.douyin
 import android.content.Context
 import android.webkit.CookieManager
 import android.webkit.WebStorage
+import com.lightningstudio.watchrss.data.cache.ManagedCacheBucket
+import com.lightningstudio.watchrss.data.cache.ManagedCacheService
 import com.lightningstudio.watchrss.sdk.douyin.ABogus
 import com.lightningstudio.watchrss.sdk.douyin.DouyinContent
 import com.lightningstudio.watchrss.sdk.douyin.DouyinFeedPage
@@ -13,9 +15,14 @@ import com.lightningstudio.watchrss.sdk.douyin.EncryptedDouyinCookieStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONException
+import java.io.File
 import java.io.IOException
 
-class DouyinRepository(context: Context) {
+class DouyinRepository(
+    context: Context,
+    private val cacheService: ManagedCacheService? = null
+) {
+    private val appContext = context.applicationContext
     private val cookieStore = EncryptedDouyinCookieStore(context)
     private val parser = DouyinUnifiedParser()
     private val crawler = DouyinWebCrawler(ABogus())
@@ -27,6 +34,15 @@ class DouyinRepository(context: Context) {
     suspend fun clearCookie() {
         cookieStore.writeCookie(null)
         clearWebViewSession()
+    }
+
+    suspend fun logoutAndClearMediaCache() {
+        clearCookie()
+        if (cacheService != null) {
+            cacheService.clearBucket(ManagedCacheBucket.DOUYIN_PRELOAD)
+        } else {
+            File(appContext.cacheDir, DouyinPreloadManager.CACHE_DIR_NAME).deleteRecursively()
+        }
     }
 
     suspend fun applyCookieHeader(rawCookie: String): Result<Unit> {

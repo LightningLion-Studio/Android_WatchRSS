@@ -6,6 +6,9 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.lightningstudio.watchrss.data.cache.CacheTrimReason
+import com.lightningstudio.watchrss.data.cache.ManagedCacheBucket
+import com.lightningstudio.watchrss.data.cache.ManagedCacheService
 import com.lightningstudio.watchrss.debug.DebugLogBuffer
 import com.lightningstudio.watchrss.sdk.bili.BiliAccount
 import com.lightningstudio.watchrss.sdk.bili.BiliClient
@@ -55,11 +58,13 @@ private const val PREVIEW_CACHE_MS = 30 * 60 * 1000L
 
 class BiliRepository(
     context: Context,
-    private val dataStore: DataStore<Preferences>
+    private val dataStore: DataStore<Preferences>,
+    private val cacheService: ManagedCacheService? = null
 ) {
+    private val appContext = context.applicationContext
     private val accountStore = EncryptedBiliAccountStore(context)
     private val client = BiliClient(BiliSdkConfig(), accountStore)
-    private val previewCacheDir = File(context.filesDir, "offline/bili").apply { mkdirs() }
+    private val previewCacheDir = File(appContext.filesDir, PREVIEW_CACHE_DIR_NAME).apply { mkdirs() }
     private val downloadClient = OkHttpClient.Builder()
         .callTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
         .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
@@ -75,6 +80,16 @@ class BiliRepository(
 
     suspend fun clearAccount() {
         accountStore.write(BiliAccount())
+    }
+
+    suspend fun logoutAndClearPreviewCache() {
+        clearAccount()
+        if (cacheService != null) {
+            cacheService.clearBucket(ManagedCacheBucket.BILI_PREVIEW)
+        } else {
+            previewCacheDir.deleteRecursively()
+            previewCacheDir.mkdirs()
+        }
     }
 
     suspend fun applyCookieHeader(rawCookie: String): Result<Unit> {
@@ -267,6 +282,7 @@ class BiliRepository(
         return withContext(Dispatchers.IO) {
             val file = previewCacheFile(aid, bvid, cid) ?: return@withContext null
             if (file.exists() && file.length() > 0) {
+                touchPreviewFile(file)
                 file.toURI().toString()
             } else {
                 null
@@ -286,6 +302,7 @@ class BiliRepository(
             ?.asSequence()
             ?.filter { it.isFile && it.length() > 0 && it.name.startsWith(prefix) && it.name.endsWith(suffix) }
             ?.maxByOrNull { it.lastModified() }
+        match?.let(::touchPreviewFile)
         match?.toURI()?.toString()
     }
 
@@ -297,6 +314,7 @@ class BiliRepository(
         val file = previewCacheFile(aid, bvid, cid)
             ?: return@withContext Result.failure(IllegalArgumentException("missing_video_id"))
         if (file.exists() && file.length() > 0) {
+            touchPreviewFile(file)
             return@withContext Result.success(file.absolutePath)
         }
         val safeCid = cid ?: return@withContext Result.failure(IllegalArgumentException("missing_cid"))
@@ -330,22 +348,33 @@ class BiliRepository(
                 headers.forEach { (key, value) -> addHeader(key, value) }
             }
             .build()
+        val tempFile = File(previewCacheDir, "${file.name}.tmp")
         runCatching {
             downloadClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) {
                     throw IllegalStateException("download_failed:${response.code}")
                 }
                 response.body?.byteStream()?.use { input ->
-                    file.outputStream().use { output ->
+                    tempFile.outputStream().use { output ->
                         input.copyTo(output)
                     }
                 } ?: throw IllegalStateException("empty_body")
             }
-            if (!file.exists() || file.length() <= 0) {
+            if (tempFile.length() <= 0) {
                 throw IllegalStateException("empty_file")
             }
+            if (file.exists()) {
+                file.delete()
+            }
+            if (!tempFile.renameTo(file)) {
+                tempFile.copyTo(file, overwrite = true)
+                tempFile.delete()
+            }
+            touchPreviewFile(file)
+            cacheService?.scheduleMaintenance(CacheTrimReason.CACHE_WRITE)
             Result.success(file.absolutePath)
         }.getOrElse { error ->
+            runCatching { tempFile.delete() }
             runCatching { file.delete() }
             Result.failure(error)
         }
@@ -356,6 +385,7 @@ class BiliRepository(
             val file = previewCacheFile(aid, bvid, cid) ?: return@withContext
             if (file.exists()) {
                 runCatching { file.delete() }
+                cacheService?.scheduleMaintenance(CacheTrimReason.CACHE_DELETE)
             }
         }
     }
@@ -452,6 +482,10 @@ class BiliRepository(
         } ?: return null
         val safeCid = cid ?: 0L
         return File(previewCacheDir, "${key}_${safeCid}_q$PREVIEW_CACHE_QN.mp4")
+    }
+
+    private fun touchPreviewFile(file: File) {
+        runCatching { file.setLastModified(System.currentTimeMillis()) }
     }
 
     private fun errorMessage(error: Throwable): String {
@@ -561,5 +595,9 @@ class BiliRepository(
             }
             list
         }.getOrDefault(emptyList())
+    }
+
+    companion object {
+        internal const val PREVIEW_CACHE_DIR_NAME = "offline/bili"
     }
 }

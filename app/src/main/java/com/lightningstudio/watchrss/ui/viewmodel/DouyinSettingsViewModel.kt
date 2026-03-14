@@ -43,7 +43,7 @@ class DouyinSettingsViewModel(
 
     fun logout() {
         viewModelScope.launch {
-            repository.clearCookie()
+            repository.logoutAndClearMediaCache()
             _uiState.update { it.copy(isLoggedIn = false, message = "已退出登录") }
         }
     }
@@ -95,4 +95,3 @@ class DouyinSettingsViewModel(
         }
     }
 }
-
