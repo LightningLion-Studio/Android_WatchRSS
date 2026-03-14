@@ -1,6 +1,7 @@
 package com.lightningstudio.watchrss.ui.components
 
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -41,6 +42,10 @@ fun SearchInputBar(
     val focusManager = LocalFocusManager.current
     val shape = RoundedCornerShape(30.dp)
     val borderColor = MaterialTheme.colorScheme.outline
+    val submitSearch = {
+        onSearch?.invoke()
+        focusManager.clearFocus()
+    }
     val textStyle = TextStyle(
         color = MaterialTheme.colorScheme.onSurface,
         fontSize = 17.sp,
@@ -66,10 +71,7 @@ fun SearchInputBar(
                 cursorBrush = SolidColor(MaterialTheme.colorScheme.onSurface),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(
-                    onSearch = {
-                        onSearch?.invoke()
-                        focusManager.clearFocus()
-                    }
+                    onSearch = { submitSearch() }
                 ),
                 modifier = Modifier.fillMaxWidth()
             )
@@ -82,7 +84,9 @@ fun SearchInputBar(
             imageVector = Icons.Default.Search,
             contentDescription = "搜索",
             tint = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.size(24.dp)
+            modifier = Modifier
+                .size(24.dp)
+                .clickable(enabled = onSearch != null, onClick = submitSearch)
         )
     }
 }
