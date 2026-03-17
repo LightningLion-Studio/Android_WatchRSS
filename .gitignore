@@ -15,7 +15,6 @@
 .externalNativeBuild
 .cxx
 local.properties
-gradle.properties
 .gradle-local/
 sdk/bili/build/**
 sdk/bili/build/kotlin/compileReleaseKotlin/local-state/build-history.bin
