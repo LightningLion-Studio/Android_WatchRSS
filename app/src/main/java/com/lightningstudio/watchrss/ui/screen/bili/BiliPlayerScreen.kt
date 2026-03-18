@@ -84,6 +84,30 @@ import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
+internal enum class PlayerScaleMode {
+    Standard,
+    Expanded,
+    Shrunk;
+
+    fun next(): PlayerScaleMode {
+        return when (this) {
+            Standard -> Expanded
+            Expanded -> Shrunk
+            Shrunk -> Standard
+        }
+    }
+}
+
+internal data class PlayerScale(
+    val scaleX: Float,
+    val scaleY: Float
+)
+
+private data class PlayerScaleToggleAction(
+    val iconRes: Int,
+    val contentDescription: String
+)
+
 @Composable
 fun BiliPlayerScreen(
     uiState: BiliPlayerUiState,
@@ -111,7 +135,7 @@ fun BiliPlayerScreen(
     var isBuffering by remember { mutableStateOf(false) }
     var durationMs by remember { mutableStateOf(0) }
     var positionMs by remember { mutableStateOf(0) }
-    var isFullscreen by remember { mutableStateOf(false) }
+    var scaleMode by remember { mutableStateOf(PlayerScaleMode.Standard) }
     var rotationAngle by remember { mutableStateOf(0f) }
     var controlsVisible by remember { mutableStateOf(true) }
     var viewSize by remember { mutableStateOf(IntSize.Zero) }
@@ -222,8 +246,8 @@ fun BiliPlayerScreen(
     val isVerticalPan = remember(videoSize, videoRotation) {
         isPortraitVideo(videoSize, videoRotation)
     }
-    val panRangePx = remember(viewSize, videoSize, isFullscreen, videoRotation, isVerticalPan) {
-        calculatePanRange(viewSize, videoSize, isFullscreen, videoRotation, isVerticalPan)
+    val panRangePx = remember(viewSize, videoSize, scaleMode, videoRotation, isVerticalPan) {
+        calculatePanRange(viewSize, videoSize, scaleMode, videoRotation, isVerticalPan)
     }
 
     LaunchedEffect(panRangePx) {
@@ -237,7 +261,7 @@ fun BiliPlayerScreen(
             textureViewRef,
             viewSize,
             videoSize,
-            isFullscreen,
+            scaleMode,
             videoRotation,
             panOffsetX,
             isVerticalPan
@@ -252,8 +276,8 @@ fun BiliPlayerScreen(
         }
     }
 
-    LaunchedEffect(isFullscreen) {
-        if (!isFullscreen && panOffsetX != 0f) {
+    LaunchedEffect(scaleMode) {
+        if (scaleMode != PlayerScaleMode.Expanded && panOffsetX != 0f) {
             stopPanFling()
             panOffsetX = 0f
             panAnimator.snapTo(0f)
@@ -271,7 +295,7 @@ fun BiliPlayerScreen(
     }
 
     LaunchedEffect(
-        isFullscreen,
+        scaleMode,
         viewSize,
         videoSize,
         textureViewRef,
@@ -283,19 +307,19 @@ fun BiliPlayerScreen(
             textureViewRef,
             viewSize,
             videoSize,
-            isFullscreen,
+            scaleMode,
             videoRotation,
             panOffsetX,
             isVerticalPan
         )
     }
 
-    DisposableEffect(isFullscreen, view) {
+    DisposableEffect(scaleMode, view) {
         val activity = view.context.findActivity() ?: return@DisposableEffect onDispose { }
         val controller = WindowInsetsControllerCompat(activity.window, view).apply {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
-        if (isFullscreen) {
+        if (scaleMode == PlayerScaleMode.Expanded) {
             controller.hide(WindowInsetsCompat.Type.systemBars())
         } else {
             controller.hide(WindowInsetsCompat.Type.statusBars())
@@ -343,7 +367,7 @@ fun BiliPlayerScreen(
                 textureViewRef,
                 viewSize,
                 videoSize,
-                isFullscreen,
+                scaleMode,
                 videoRotation,
                 panOffsetX,
                 isVerticalPan
@@ -361,7 +385,7 @@ fun BiliPlayerScreen(
                 textureViewRef,
                 viewSize,
                 videoSize,
-                isFullscreen,
+                scaleMode,
                 videoRotation,
                 panOffsetX,
                 isVerticalPan
@@ -432,7 +456,7 @@ fun BiliPlayerScreen(
                             textureViewRef,
                             viewSize,
                             videoSize,
-                            isFullscreen,
+                            scaleMode,
                             videoRotation,
                             panOffsetX,
                             isVerticalPan
@@ -478,7 +502,7 @@ fun BiliPlayerScreen(
                                     this@apply,
                                     viewSize,
                                     videoSize,
-                                    isFullscreen,
+                                    scaleMode,
                                     videoRotation,
                                     panOffsetX,
                                     isVerticalPan
@@ -495,7 +519,7 @@ fun BiliPlayerScreen(
                                     this@apply,
                                     viewSize,
                                     videoSize,
-                                    isFullscreen,
+                                    scaleMode,
                                     videoRotation,
                                     panOffsetX,
                                     isVerticalPan
@@ -523,7 +547,7 @@ fun BiliPlayerScreen(
                             view,
                             viewSize,
                             videoSize,
-                            isFullscreen,
+                            scaleMode,
                             videoRotation,
                             panOffsetX,
                             isVerticalPan
@@ -555,7 +579,7 @@ fun BiliPlayerScreen(
                                     textureViewRef,
                                     viewSize,
                                     videoSize,
-                                    isFullscreen,
+                                    scaleMode,
                                     videoRotation,
                                     panOffsetX,
                                     isVerticalPan
@@ -576,7 +600,7 @@ fun BiliPlayerScreen(
                                             textureViewRef,
                                             viewSize,
                                             videoSize,
-                                            isFullscreen,
+                                            scaleMode,
                                             videoRotation,
                                             panOffsetX,
                                             isVerticalPan
@@ -653,17 +677,13 @@ fun BiliPlayerScreen(
                             horizontalArrangement = Arrangement.spacedBy(spacing),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            val fullscreenIcon = if (isFullscreen) {
-                                R.drawable.ic_player_fullscreen_exit
-                            } else {
-                                R.drawable.ic_player_fullscreen
-                            }
+                            val scaleToggleAction = scaleMode.toggleAction()
                             PlayerIconButton(
-                                iconRes = fullscreenIcon,
-                                contentDescription = if (isFullscreen) "退出全屏" else "全屏",
+                                iconRes = scaleToggleAction.iconRes,
+                                contentDescription = scaleToggleAction.contentDescription,
                                 size = controlSize,
                                 iconSize = iconSize,
-                                onClick = { isFullscreen = !isFullscreen }
+                                onClick = { scaleMode = scaleMode.next() }
                             )
                             PlayerIconButton(
                                 iconRes = R.drawable.ic_player_rotate,
@@ -852,7 +872,7 @@ private fun updateTextureTransform(
     textureView: TextureView?,
     viewSize: IntSize,
     videoSize: IntSize,
-    isFullscreen: Boolean,
+    scaleMode: PlayerScaleMode,
     videoRotation: Int,
     panOffsetX: Float,
     isVerticalPan: Boolean
@@ -866,21 +886,13 @@ private fun updateTextureTransform(
     val videoWidth = videoSize.width.toFloat()
     val videoHeight = videoSize.height.toFloat()
     if (videoWidth <= 0f || videoHeight <= 0f) return
-    val viewAspect = viewWidth / viewHeight
-    val videoAspect = videoWidth / videoHeight
-    val (scaleX, scaleY) = if (isFullscreen) {
-        if (videoAspect > viewAspect) {
-            videoAspect / viewAspect to 1f
-        } else {
-            1f to viewAspect / videoAspect
-        }
-    } else {
-        if (videoAspect > viewAspect) {
-            1f to viewAspect / videoAspect
-        } else {
-            videoAspect / viewAspect to 1f
-        }
-    }
+    val (scaleX, scaleY) = calculatePlayerScale(
+        viewWidth = viewWidth,
+        viewHeight = viewHeight,
+        videoWidth = videoWidth,
+        videoHeight = videoHeight,
+        scaleMode = scaleMode
+    )
     val centerX = viewWidth / 2f
     val centerY = viewHeight / 2f
     val contentWidth = viewWidth * scaleX
@@ -914,7 +926,7 @@ private fun updateTextureTransform(
 private fun calculatePanRange(
     viewSize: IntSize,
     videoSize: IntSize,
-    isFullscreen: Boolean,
+    scaleMode: PlayerScaleMode,
     videoRotation: Int,
     isVerticalPan: Boolean
 ): Float {
@@ -926,21 +938,13 @@ private fun calculatePanRange(
     if (videoWidth <= 0f || videoHeight <= 0f) return 0f
     val viewWidth = viewSize.width.toFloat()
     val viewHeight = viewSize.height.toFloat()
-    val viewAspect = viewWidth / viewHeight
-    val videoAspect = videoWidth / videoHeight
-    val (scaleX, scaleY) = if (isFullscreen) {
-        if (videoAspect > viewAspect) {
-            videoAspect / viewAspect to 1f
-        } else {
-            1f to viewAspect / videoAspect
-        }
-    } else {
-        if (videoAspect > viewAspect) {
-            1f to viewAspect / videoAspect
-        } else {
-            videoAspect / viewAspect to 1f
-        }
-    }
+    val (scaleX, scaleY) = calculatePlayerScale(
+        viewWidth = viewWidth,
+        viewHeight = viewHeight,
+        videoWidth = videoWidth,
+        videoHeight = videoHeight,
+        scaleMode = scaleMode
+    )
     val contentWidth = viewWidth * scaleX
     val contentHeight = viewHeight * scaleY
     val rotated = videoRotation % 180 != 0
@@ -950,6 +954,74 @@ private fun calculatePanRange(
         calculateVerticalPanRange(viewWidth, viewHeight, effectiveWidth, effectiveHeight)
     } else {
         calculateHorizontalPanRange(viewWidth, viewHeight, effectiveWidth, effectiveHeight)
+    }
+}
+
+internal fun calculatePlayerScale(
+    viewWidth: Float,
+    viewHeight: Float,
+    videoWidth: Float,
+    videoHeight: Float,
+    scaleMode: PlayerScaleMode
+): PlayerScale {
+    val standardScale = calculateStandardPlayerScale(
+        viewWidth = viewWidth,
+        viewHeight = viewHeight,
+        videoWidth = videoWidth,
+        videoHeight = videoHeight
+    )
+    return when (scaleMode) {
+        PlayerScaleMode.Standard -> standardScale
+        PlayerScaleMode.Expanded -> calculateExpandedPlayerScale(
+            viewWidth = viewWidth,
+            viewHeight = viewHeight,
+            videoWidth = videoWidth,
+            videoHeight = videoHeight
+        )
+        PlayerScaleMode.Shrunk -> {
+            val contentWidth = viewWidth * standardScale.scaleX
+            val contentHeight = viewHeight * standardScale.scaleY
+            val diagonal = sqrt(contentWidth * contentWidth + contentHeight * contentHeight)
+            val shrinkFactor = if (diagonal > 0f) {
+                (viewWidth / diagonal).coerceAtMost(1f)
+            } else {
+                1f
+            }
+            PlayerScale(
+                scaleX = standardScale.scaleX * shrinkFactor,
+                scaleY = standardScale.scaleY * shrinkFactor
+            )
+        }
+    }
+}
+
+private fun calculateStandardPlayerScale(
+    viewWidth: Float,
+    viewHeight: Float,
+    videoWidth: Float,
+    videoHeight: Float
+): PlayerScale {
+    val viewAspect = viewWidth / viewHeight
+    val videoAspect = videoWidth / videoHeight
+    return if (videoAspect > viewAspect) {
+        PlayerScale(scaleX = 1f, scaleY = viewAspect / videoAspect)
+    } else {
+        PlayerScale(scaleX = videoAspect / viewAspect, scaleY = 1f)
+    }
+}
+
+private fun calculateExpandedPlayerScale(
+    viewWidth: Float,
+    viewHeight: Float,
+    videoWidth: Float,
+    videoHeight: Float
+): PlayerScale {
+    val viewAspect = viewWidth / viewHeight
+    val videoAspect = videoWidth / videoHeight
+    return if (videoAspect > viewAspect) {
+        PlayerScale(scaleX = videoAspect / viewAspect, scaleY = 1f)
+    } else {
+        PlayerScale(scaleX = 1f, scaleY = viewAspect / videoAspect)
     }
 }
 
@@ -1008,6 +1080,23 @@ private fun panSignForBack(rotationStep: Int, isVerticalPan: Boolean): Float {
             2 -> -1f
             else -> 0f
         }
+    }
+}
+
+private fun PlayerScaleMode.toggleAction(): PlayerScaleToggleAction {
+    return when (this) {
+        PlayerScaleMode.Standard -> PlayerScaleToggleAction(
+            iconRes = R.drawable.ic_player_fullscreen,
+            contentDescription = "放大"
+        )
+        PlayerScaleMode.Expanded -> PlayerScaleToggleAction(
+            iconRes = R.drawable.ic_player_shrink,
+            contentDescription = "缩小"
+        )
+        PlayerScaleMode.Shrunk -> PlayerScaleToggleAction(
+            iconRes = R.drawable.ic_player_fullscreen_exit,
+            contentDescription = "标准"
+        )
     }
 }
 
