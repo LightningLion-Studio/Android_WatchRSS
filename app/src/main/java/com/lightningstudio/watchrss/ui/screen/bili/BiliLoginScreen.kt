@@ -41,7 +41,7 @@ fun BiliLoginScreen(
 ) {
     val safePadding = WatchDimens.watch_safe_padding
     val spacing = watchDimensionResource(R.dimen.hey_distance_6dp)
-    val topPadding = 2.dp
+    val topPadding = 4.dp
     val titleSpacing = spacing / 4
     val scrollState = rememberScrollState()
     InstallRotaryScrollHandler(scrollState)

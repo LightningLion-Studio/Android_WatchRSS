@@ -57,7 +57,6 @@ fun BiliChannelInfoScreen(
     val titleSpacing = WatchDimens.hey_distance_6dp
     val infoSpacing = WatchDimens.hey_distance_4dp
     val buttonSpacing = WatchDimens.hey_distance_4dp
-    val loginTopSpacing = (buttonSpacing / 2) - 5.dp
     val buttonHeight = WatchDimens.watch_action_button_height
     val titleSize = textSize(R.dimen.hey_s_title)
     val context = LocalContext.current
@@ -164,7 +163,6 @@ fun BiliChannelInfoScreen(
                     )
 
                     if (!isLoggedIn) {
-                        Spacer(modifier = Modifier.height(loginTopSpacing))
                         ActionButton(
                             label = "登录",
                             enabled = true,

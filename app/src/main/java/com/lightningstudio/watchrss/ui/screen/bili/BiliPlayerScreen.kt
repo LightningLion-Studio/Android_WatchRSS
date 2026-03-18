@@ -11,6 +11,7 @@ import android.net.Uri
 import android.os.SystemClock
 import android.view.Surface
 import android.view.TextureView
+import android.view.WindowManager
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -63,6 +64,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.PlayerVolumeOverlay
 import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
@@ -95,6 +99,7 @@ fun BiliPlayerScreen(
     val timeSize = textSize(R.dimen.hey_caption)
     val controlSize = watchDimensionResource(R.dimen.hey_button_height)
     val iconSize = watchDimensionResource(R.dimen.hey_listitem_widget_size)
+    val lifecycleOwner = LocalLifecycleOwner.current
     val context = LocalContext.current
     val view = LocalView.current
     var mediaPlayerRef by remember { mutableStateOf<MediaPlayer?>(null) }
@@ -113,21 +118,68 @@ fun BiliPlayerScreen(
     var videoSize by remember { mutableStateOf(IntSize.Zero) }
     var videoRotation by remember { mutableStateOf(0) }
     var lastUrl by remember { mutableStateOf<String?>(null) }
+    var playWhenReady by remember { mutableStateOf(!uiState.playUrl.isNullOrBlank()) }
     var panOffsetX by remember { mutableStateOf(0f) }
     val panAnimator = remember { Animatable(0f) }
     val panDecay = remember { exponentialDecay<Float>() }
     val panScope = rememberCoroutineScope()
     val panFlingJob = remember { mutableStateOf<Job?>(null) }
     val volumeState = rememberPlayerVolumeState()
+    val shouldKeepScreenOn = !uiState.playUrl.isNullOrBlank() &&
+        playbackError.isNullOrBlank() &&
+        (isPlaying || isBuffering || (!isPrepared && surfaceRef != null))
 
     fun stopPanFling() {
         panFlingJob.value?.cancel()
         panFlingJob.value = null
     }
 
+    fun pausePlayback(clearPlayWhenReady: Boolean = true) {
+        if (clearPlayWhenReady) {
+            playWhenReady = false
+        }
+        val player = mediaPlayerRef
+        if (player != null) {
+            runCatching {
+                if (player.isPlaying) {
+                    player.pause()
+                }
+                val current = player.currentPosition
+                if (current >= 0) {
+                    positionMs = current
+                }
+            }
+        }
+        isPlaying = false
+        isBuffering = false
+    }
+
+    fun togglePlayback() {
+        val player = mediaPlayerRef ?: return
+        runCatching {
+            if (player.isPlaying) {
+                player.pause()
+                playWhenReady = false
+                isPlaying = false
+                isBuffering = false
+                val current = player.currentPosition
+                if (current >= 0) {
+                    positionMs = current
+                }
+            } else if (isPrepared) {
+                player.start()
+                playWhenReady = true
+                isPlaying = true
+                isBuffering = false
+            }
+        }
+    }
+
     DisposableEffect(Unit) {
         onDispose {
             stopPanFling()
+            pausePlayback()
+            runCatching { mediaPlayerRef?.setSurface(null) }
             mediaPlayerRef?.release()
             mediaPlayerRef = null
             surfaceRef?.release()
@@ -145,10 +197,12 @@ fun BiliPlayerScreen(
         videoSize = IntSize.Zero
         videoRotation = 0
         lastUrl = null
+        playWhenReady = !uiState.playUrl.isNullOrBlank()
         controlsVisible = true
         stopPanFling()
         panOffsetX = 0f
         panAnimator.snapTo(0f)
+        isBuffering = false
         mediaPlayerRef?.reset()
     }
 
@@ -250,6 +304,28 @@ fun BiliPlayerScreen(
         onDispose { }
     }
 
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_PAUSE) {
+                pausePlayback()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    DisposableEffect(shouldKeepScreenOn, view) {
+        val window = view.context.findActivity()?.window
+        if (shouldKeepScreenOn) {
+            window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        onDispose {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
     fun prepareMediaPlayer(surface: Surface, targetUrl: String) {
         val headers = uiState.headers ?: emptyMap()
         val player = mediaPlayerRef ?: MediaPlayer().also { mediaPlayerRef = it }
@@ -272,8 +348,12 @@ fun BiliPlayerScreen(
                 panOffsetX,
                 isVerticalPan
             )
-            mp.start()
-            isPlaying = true
+            if (playWhenReady) {
+                mp.start()
+                isPlaying = true
+            } else {
+                isPlaying = false
+            }
         }
         player.setOnVideoSizeChangedListener { _, width, height ->
             videoSize = IntSize(width, height)
@@ -287,7 +367,11 @@ fun BiliPlayerScreen(
                 isVerticalPan
             )
         }
-        player.setOnCompletionListener { isPlaying = false }
+        player.setOnCompletionListener {
+            isPlaying = false
+            isBuffering = false
+            playWhenReady = false
+        }
         player.setOnInfoListener { _, what, _ ->
             when (what) {
                 MediaPlayer.MEDIA_INFO_BUFFERING_START -> isBuffering = true
@@ -299,6 +383,8 @@ fun BiliPlayerScreen(
         player.setOnErrorListener { _, _, _ ->
             playbackError = "播放失败"
             isBuffering = false
+            isPlaying = false
+            playWhenReady = false
             true
         }
         player.setSurface(surface)
@@ -308,13 +394,20 @@ fun BiliPlayerScreen(
         } catch (e: Exception) {
             playbackError = "播放失败"
             isBuffering = false
+            isPlaying = false
         }
     }
 
-    LaunchedEffect(uiState.playUrl, surfaceRef) {
+    LaunchedEffect(uiState.playUrl, uiState.headers, uiState.isLoading, surfaceRef) {
+        if (uiState.isLoading) {
+            return@LaunchedEffect
+        }
         val targetUrl = uiState.playUrl
         val surface = surfaceRef
         if (!targetUrl.isNullOrBlank() && surface != null && (targetUrl != lastUrl || !isPrepared)) {
+            if (targetUrl != lastUrl || !playbackError.isNullOrBlank()) {
+                playWhenReady = true
+            }
             lastUrl = targetUrl
             prepareMediaPlayer(surface, targetUrl)
         }
@@ -380,6 +473,7 @@ fun BiliPlayerScreen(
                                 viewSize = IntSize(width, height)
                                 surfaceRef?.release()
                                 surfaceRef = Surface(surfaceTexture)
+                                runCatching { mediaPlayerRef?.setSurface(surfaceRef) }
                                 updateTextureTransform(
                                     this@apply,
                                     viewSize,
@@ -409,10 +503,10 @@ fun BiliPlayerScreen(
                             }
 
                             override fun onSurfaceTextureDestroyed(surfaceTexture: SurfaceTexture): Boolean {
+                                pausePlayback()
+                                runCatching { mediaPlayerRef?.setSurface(null) }
                                 surfaceRef?.release()
                                 surfaceRef = null
-                                isPrepared = false
-                                isPlaying = false
                                 return true
                             }
 
@@ -443,7 +537,7 @@ fun BiliPlayerScreen(
                             onTap = { controlsVisible = !controlsVisible },
                             onDoubleTap = {
                                 if (isPrepared) {
-                                    togglePlayback(mediaPlayerRef) { isPlaying = it }
+                                    togglePlayback()
                                 }
                             }
                         )
@@ -637,7 +731,7 @@ fun BiliPlayerScreen(
                             size = controlSize + spacing,
                             iconSize = iconSize + 4.dp,
                             enabled = isPrepared,
-                            onClick = { togglePlayback(mediaPlayerRef, { isPlaying = it }) }
+                            onClick = { togglePlayback() }
                         )
                         PlayerSeekButton(
                             iconRes = R.drawable.ic_player_forward,
@@ -697,17 +791,6 @@ private fun PlayerBadge(text: String) {
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
-    }
-}
-
-private fun togglePlayback(player: MediaPlayer?, onState: (Boolean) -> Unit) {
-    val target = player ?: return
-    if (target.isPlaying) {
-        target.pause()
-        onState(false)
-    } else {
-        target.start()
-        onState(true)
     }
 }
 

@@ -1,13 +1,12 @@
 package com.lightningstudio.watchrss.ui.screen.bili
 
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -43,6 +42,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.sdk.bili.BiliPage
@@ -290,7 +290,6 @@ private fun BiliStatChip(text: String) {
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun BiliActionSection(
     isLiked: Boolean,
@@ -301,35 +300,48 @@ private fun BiliActionSection(
     onFavorite: () -> Unit,
     onShare: () -> Unit
 ) {
-    FlowRow(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(WatchDimens.hey_distance_12dp, Alignment.CenterHorizontally),
-        verticalArrangement = Arrangement.spacedBy(WatchDimens.hey_distance_12dp)
-    ) {
-        BiliActionCircleButton(
-            iconRes = R.drawable.ic_action_like,
-            contentDescription = "点赞",
-            selected = isLiked,
-            onClick = onLike
-        )
-        BiliActionCircleButton(
-            iconRes = R.drawable.ic_action_coin,
-            contentDescription = "投币",
-            selected = isCoined,
-            enabled = !isCoined,
-            onClick = onCoin
-        )
-        BiliActionCircleButton(
-            iconRes = R.drawable.ic_action_favorite,
-            contentDescription = "收藏",
-            selected = isFavorited,
-            onClick = onFavorite
-        )
-        BiliActionCircleButton(
-            iconRes = R.drawable.ic_action_share,
-            contentDescription = "转发",
-            onClick = onShare
-        )
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        val buttonCount = 4
+        val defaultButtonSize = watchDimensionResource(R.dimen.hey_button_height)
+        val minSpacing = WatchDimens.hey_distance_6dp
+        val buttonSize = ((maxWidth - minSpacing * (buttonCount - 1)) / buttonCount)
+            .coerceAtMost(defaultButtonSize)
+            .coerceAtLeast(36.dp)
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(minSpacing, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            BiliActionCircleButton(
+                iconRes = R.drawable.ic_action_like,
+                contentDescription = "点赞",
+                selected = isLiked,
+                size = buttonSize,
+                onClick = onLike
+            )
+            BiliActionCircleButton(
+                iconRes = R.drawable.ic_action_coin,
+                contentDescription = "投币",
+                selected = isCoined,
+                enabled = !isCoined,
+                size = buttonSize,
+                onClick = onCoin
+            )
+            BiliActionCircleButton(
+                iconRes = R.drawable.ic_action_favorite,
+                contentDescription = "收藏",
+                selected = isFavorited,
+                size = buttonSize,
+                onClick = onFavorite
+            )
+            BiliActionCircleButton(
+                iconRes = R.drawable.ic_action_share,
+                contentDescription = "转发",
+                size = buttonSize,
+                onClick = onShare
+            )
+        }
     }
 }
 
@@ -339,11 +351,14 @@ private fun BiliActionCircleButton(
     contentDescription: String,
     selected: Boolean = false,
     enabled: Boolean = true,
+    size: Dp = watchDimensionResource(R.dimen.hey_button_height),
     onClick: () -> Unit
 ) {
     val accent = MaterialTheme.colorScheme.primary
-    val size = watchDimensionResource(R.dimen.hey_button_height)
-    val iconSize = watchDimensionResource(R.dimen.hey_listitem_widget_size)
+    val defaultIconSize = watchDimensionResource(R.dimen.hey_listitem_widget_size)
+    val iconSize = (size * 0.55f)
+        .coerceAtLeast(18.dp)
+        .coerceAtMost(defaultIconSize)
     val background = if (selected) accent else MaterialTheme.colorScheme.surfaceVariant
     Box(
         modifier = Modifier
