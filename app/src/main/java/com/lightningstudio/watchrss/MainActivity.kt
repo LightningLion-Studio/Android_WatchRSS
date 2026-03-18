@@ -1,7 +1,9 @@
 package com.lightningstudio.watchrss
 
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -27,7 +29,18 @@ class MainActivity : BaseWatchActivity() {
         AppViewModelFactory((application as WatchRssApplication).container)
     }
 
-    private var openSwipeKey by mutableStateOf<Long?>(null)
+    private val closeOpenSwipeBackCallback = object : OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() {
+            closeOpenSwipe()
+        }
+    }
+    private val openSwipeKeyState = mutableStateOf<Long?>(null)
+    private var openSwipeKey: Long?
+        get() = openSwipeKeyState.value
+        set(value) {
+            openSwipeKeyState.value = value
+            closeOpenSwipeBackCallback.isEnabled = value != null
+        }
     private var draggingSwipeKey by mutableStateOf<Long?>(null)
     private var keepSplashOnScreen = true
 
@@ -39,6 +52,10 @@ class MainActivity : BaseWatchActivity() {
         return hasOpen
     }
 
+    override fun isSwipeBackEnabled(): Boolean = !usesSystemBackGesture()
+
+    override fun shouldAnimateSwipeBackGesture(): Boolean = false
+
     override fun onResume() {
         super.onResume()
         closeOpenSwipe()
@@ -47,6 +64,7 @@ class MainActivity : BaseWatchActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen().setKeepOnScreenCondition { keepSplashOnScreen }
         super.onCreate(savedInstanceState)
+        onBackPressedDispatcher.addCallback(this, closeOpenSwipeBackCallback)
 
         lifecycleScope.launch {
             val settingsRepository = (application as WatchRssApplication).container.settingsRepository
@@ -101,6 +119,9 @@ class MainActivity : BaseWatchActivity() {
                     onChannelLongClick = { channel ->
                         showChannelActions(channel, quick = false)
                     },
+                    onSwipeBack = {
+                        onBackPressedDispatcher.onBackPressed()
+                    },
                     onAddRssClick = {
                         if (!allowNavigation()) return@HomeComposeScreen
                         startActivity(Intent(this, AddRssActivity::class.java))
@@ -128,6 +149,10 @@ class MainActivity : BaseWatchActivity() {
             openSwipeKey = null
         }
         return hasOpen
+    }
+
+    private fun usesSystemBackGesture(): Boolean {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
     }
 
     private fun showChannelActions(channel: RssChannel, quick: Boolean) {

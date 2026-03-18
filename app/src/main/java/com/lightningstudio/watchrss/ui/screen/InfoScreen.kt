@@ -16,19 +16,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.dimensionResource
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
-import com.lightningstudio.watchrss.ui.screen.rss.DetailActionButton
 import com.lightningstudio.watchrss.ui.screen.rss.DetailTextBlock
 import com.lightningstudio.watchrss.ui.screen.rss.DetailTitle
-import com.lightningstudio.watchrss.ui.screen.rss.adjustedTextSizeSp
-import com.lightningstudio.watchrss.ui.theme.WatchBackgroundDeep
-import com.lightningstudio.watchrss.ui.theme.WatchReadingBackgroundLight
-import com.lightningstudio.watchrss.ui.theme.WatchReadingTextLight
-import com.lightningstudio.watchrss.ui.theme.WatchTextPrimary
 import com.lightningstudio.watchrss.ui.input.InstallRotaryLazyListHandler
 import com.lightningstudio.watchrss.ui.util.ContentBlock
 import com.lightningstudio.watchrss.ui.util.TextStyle as ContentTextStyle
@@ -41,27 +35,18 @@ fun InfoScreen(
     content: String,
     readingThemeDark: Boolean,
     readingFontSizeSp: Int,
-    onOpenProjectInfo: () -> Unit,
     onBeianClick: () -> Unit
 ) {
-    val context = LocalContext.current
     val density = LocalDensity.current
     val safePadding = dimensionResource(R.dimen.watch_safe_padding)
     val pagePadding = dimensionResource(R.dimen.detail_page_horizontal_padding)
     val blockSpacing = dimensionResource(R.dimen.detail_block_spacing)
     val titlePadding = dimensionResource(R.dimen.detail_title_safe_padding)
-    val backgroundColor = androidx.compose.ui.graphics.Color.Black
-    val textColor = if (readingThemeDark) WatchTextPrimary else WatchReadingTextLight
-    val bodyFontSize = remember(readingFontSizeSp, density, context) {
-        adjustedTextSizeSp(
-            context = context,
-            density = density,
-            baseDimenRes = R.dimen.detail_body_text_size,
-            currentFontSizeSp = readingFontSizeSp
-        )
-    }
+    val backgroundColor = Color.Black
+    val textColor = Color.White
+    val bodyFontSize = with(density) { 12.dp.toSp() }
     val textBlocks = remember(content) { buildInfoBlocks(content) }
-    val showProjectInfoAction = title == "开源许可与清单"
+    val contentGap = blockSpacing + 4.dp
     val listState = rememberLazyListState()
 
     InstallRotaryLazyListHandler(listState)
@@ -86,18 +71,8 @@ fun InfoScreen(
                 textColor = textColor
             )
         }
-        if (showProjectInfoAction) {
-            item(key = "projectInfoAction") {
-                Spacer(modifier = Modifier.height(blockSpacing))
-                DetailActionButton(
-                    text = "查看项目清单",
-                    fontSize = bodyFontSize,
-                    onClick = onOpenProjectInfo
-                )
-            }
-        }
         item(key = "contentGap") {
-            Spacer(modifier = Modifier.height(blockSpacing))
+            Spacer(modifier = Modifier.height(contentGap))
         }
         if (textBlocks.isEmpty()) {
             item(key = "emptyContent") {
@@ -140,7 +115,7 @@ fun InfoScreen(
             }
         }
         item(key = "bottomSpacer") {
-            Spacer(modifier = Modifier.height(safePadding))
+            Spacer(modifier = Modifier.height(safePadding + 40.dp))
         }
     }
 }

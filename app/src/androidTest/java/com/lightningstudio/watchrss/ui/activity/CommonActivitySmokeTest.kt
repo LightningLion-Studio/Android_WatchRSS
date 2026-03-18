@@ -15,7 +15,6 @@ import com.lightningstudio.watchrss.InfoActivity
 import com.lightningstudio.watchrss.JoinGroupActivity
 import com.lightningstudio.watchrss.LogUploadPrivacyActivity
 import com.lightningstudio.watchrss.OobeActivity
-import com.lightningstudio.watchrss.ProjectInfoActivity
 import com.lightningstudio.watchrss.ServerActivity
 import com.lightningstudio.watchrss.ShareQrActivity
 import com.lightningstudio.watchrss.WebViewActivity
@@ -76,11 +75,6 @@ class CommonActivitySmokeTest {
     @Test
     fun infoActivity_launches() {
         launchAndAssertResumed(InfoActivity.createIntent(context(), "测试标题", "测试内容"))
-    }
-
-    @Test
-    fun projectInfoActivity_launches() {
-        launchAndAssertResumed(ProjectInfoActivity::class.java)
     }
 
     @Test

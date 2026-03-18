@@ -39,7 +39,7 @@ fun ChannelSettingsScreen(
     val sectionSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_content_horizontal_distance
     val entrySpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_8dp
     val valueSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_4dp
-    val valueIndent = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_content_horizontal_distance_6_0
+    val valueIndent = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_10dp
     val spacerHeight = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_20dp
     val scrollState = rememberScrollState()
 
@@ -110,7 +110,7 @@ private fun SettingsPillRow(
     val pillColor = colorResource(R.color.watch_pill_background)
     val pillRadius = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_button_default_radius
     val pillHeight = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_multiple_item_height
-    val startPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_content_horizontal_distance_6_0
+    val startPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_10dp
     val endPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_10dp * endPaddingMultiplier
     val verticalPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_8dp
 
@@ -147,7 +147,7 @@ private fun SettingsDangerRow(
     val pillColor = colorResource(R.color.watch_pill_background)
     val pillRadius = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_button_default_radius
     val pillHeight = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_multiple_item_height
-    val startPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_content_horizontal_distance_6_0
+    val startPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_10dp
     val endPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_10dp
     val verticalPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_8dp
     val background = pillColor

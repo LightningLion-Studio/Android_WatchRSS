@@ -28,6 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.rss.RssRecommendChannel
 import com.lightningstudio.watchrss.data.rss.RssRecommendGroup
@@ -45,7 +46,7 @@ fun RssRecommendScreen(
 
     InstallRotaryLazyListHandler(listState)
 
-    WatchSurface {
+    WatchSurface(pureBlack = true) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             state = listState,
@@ -74,7 +75,7 @@ fun RssRecommendGroupScreen(
 
     InstallRotaryLazyListHandler(listState)
 
-    WatchSurface {
+    WatchSurface(pureBlack = true) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             state = listState,
@@ -121,7 +122,7 @@ private fun RecommendHeader(title: String, hint: String) {
 @Composable
 private fun RecommendGroupCard(group: RssRecommendGroup, onClick: () -> Unit) {
     val cardColor = MaterialTheme.colorScheme.surface
-    val cardRadius = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_card_normal_bg_radius
+    val cardRadius = dimensionResource(R.dimen.hey_card_normal_bg_radius)
     val horizontalPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_12dp
     val verticalPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_content_horizontal_distance
     val summarySpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_2dp
@@ -141,7 +142,7 @@ private fun RecommendGroupCard(group: RssRecommendGroup, onClick: () -> Unit) {
     ) {
         Text(
             text = group.name,
-            style = MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp),
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
@@ -164,7 +165,7 @@ private fun RecommendChannelCard(
     onAddClick: () -> Unit
 ) {
     val cardColor = MaterialTheme.colorScheme.surface
-    val cardRadius = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_card_normal_bg_radius
+    val cardRadius = dimensionResource(R.dimen.hey_card_normal_bg_radius)
     val horizontalPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_12dp
     val endPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_content_horizontal_distance
     val verticalPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_8dp

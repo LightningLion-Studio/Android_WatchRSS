@@ -6,8 +6,6 @@ import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
@@ -22,8 +20,6 @@ import com.lightningstudio.watchrss.ui.viewmodel.BiliSearchViewModel
 import com.lightningstudio.watchrss.ui.viewmodel.BiliViewModelFactory
 
 class BiliSearchActivity : BaseWatchActivity() {
-    private val resetSearchRequest = mutableIntStateOf(0)
-
     private object Routes {
         const val SEARCH = "search"
         const val SEARCH_RESULT = "search_result"
@@ -38,9 +34,6 @@ class BiliSearchActivity : BaseWatchActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setupSystemBars()
-        if (savedInstanceState == null && intent.getBooleanExtra(EXTRA_RESET_TO_ROOT, false)) {
-            resetSearchRequest.intValue++
-        }
 
         setContent {
             WatchRSSTheme {
@@ -48,13 +41,12 @@ class BiliSearchActivity : BaseWatchActivity() {
                 CompositionLocalProvider(LocalDensity provides Density(2f, baseDensity.fontScale)) {
                 val navController = rememberNavController()
                 val context = LocalContext.current
-                val resetSearchRequestToken = resetSearchRequest.intValue
 
                 val handleSearchAction: (BiliSearchSubmitAction) -> Unit = { action ->
                     when (action) {
                         BiliSearchSubmitAction.None -> Unit
                         BiliSearchSubmitAction.OpenResults -> {
-                            if (navController.currentDestination?.route != Routes.SEARCH_RESULT && allowNavigation()) {
+                            if (navController.currentDestination?.route != Routes.SEARCH_RESULT) {
                                 navController.navigate(Routes.SEARCH_RESULT)
                             }
                         }
@@ -73,13 +65,6 @@ class BiliSearchActivity : BaseWatchActivity() {
                     }
                 }
 
-                LaunchedEffect(resetSearchRequestToken) {
-                    if (resetSearchRequestToken > 0) {
-                        searchViewModel.resetSearchSession()
-                        navController.popBackStack(Routes.SEARCH, inclusive = false)
-                    }
-                }
-
                 NavHost(
                     navController = navController,
                     startDestination = Routes.SEARCH
@@ -95,10 +80,7 @@ class BiliSearchActivity : BaseWatchActivity() {
                     composable(Routes.SEARCH_RESULT) {
                         BiliSearchResultScreen(
                             viewModel = searchViewModel,
-                            onNavigateBack = {
-                                searchViewModel.resetSearchSession()
-                                navController.popBackStack()
-                            },
+                            onNavigateBack = { finish() },
                             onVideoClick = { aid, bvid ->
                                 if (!allowNavigation()) return@BiliSearchResultScreen
                                 context.startActivity(
@@ -114,27 +96,14 @@ class BiliSearchActivity : BaseWatchActivity() {
         }
     }
 
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        setIntent(intent)
-        if (intent.getBooleanExtra(EXTRA_RESET_TO_ROOT, false)) {
-            resetSearchRequest.intValue++
-        }
-    }
-
     override fun finish() {
         searchViewModel.resetSearchSession()
         super.finish()
     }
 
     companion object {
-        private const val EXTRA_RESET_TO_ROOT = "resetToRoot"
-
         fun createIntent(context: Context): Intent {
-            return Intent(context, BiliSearchActivity::class.java).apply {
-                putExtra(EXTRA_RESET_TO_ROOT, true)
-                addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            }
+            return Intent(context, BiliSearchActivity::class.java)
         }
     }
 }

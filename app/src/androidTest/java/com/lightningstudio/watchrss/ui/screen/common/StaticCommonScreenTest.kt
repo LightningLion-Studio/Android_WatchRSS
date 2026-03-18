@@ -14,7 +14,6 @@ import com.lightningstudio.watchrss.ui.screen.CollaboratorsScreen
 import com.lightningstudio.watchrss.ui.screen.ContactDeveloperScreen
 import com.lightningstudio.watchrss.ui.screen.JoinGroupScreen
 import com.lightningstudio.watchrss.ui.screen.LogUploadPrivacyScreen
-import com.lightningstudio.watchrss.ui.screen.ProjectInfoScreen
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -77,16 +76,6 @@ class StaticCommonScreenTest {
         composeRule.onNodeWithText("协作者名单").assertExists()
         composeRule.onNodeWithText("闪电狮").assertExists()
         composeRule.onNodeWithText("Nicolas").assertExists()
-    }
-
-    @Test
-    fun projectInfoScreen_rendersProjectQr() {
-        composeRule.setWatchContent {
-            ProjectInfoScreen()
-        }
-
-        composeRule.onNodeWithText("LightningLion-Studio / WatchRSS").assertExists()
-        composeRule.onNodeWithContentDescription("GitHub QR Code").assertExists()
     }
 
     @Test

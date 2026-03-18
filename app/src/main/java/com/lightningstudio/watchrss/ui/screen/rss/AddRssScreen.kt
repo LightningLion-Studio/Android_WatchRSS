@@ -34,6 +34,7 @@ import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.lightningstudio.watchrss.data.rss.RssChannel
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.R
@@ -70,7 +71,7 @@ fun AddRssScreen(
         }
     }
 
-    WatchSurface {
+    WatchSurface(pureBlack = true) {
         val scrollState = rememberScrollState()
         InstallRotaryScrollHandler(scrollState)
         val actionShape = RoundedCornerShape(dimensionResource(R.dimen.hey_button_default_radius))
@@ -78,6 +79,11 @@ fun AddRssScreen(
         val actionHeight = dimensionResource(R.dimen.watch_action_button_height)
         val actionColor = MaterialTheme.colorScheme.surfaceVariant
         val actionTextColor = MaterialTheme.colorScheme.onSurface
+        val titleStyle = if (state.step == AddRssStep.INPUT) {
+            MaterialTheme.typography.headlineSmall
+        } else {
+            MaterialTheme.typography.headlineSmall.copy(fontSize = 12.sp)
+        }
 
         Column(
             modifier = Modifier
@@ -90,7 +96,7 @@ fun AddRssScreen(
         ) {
             Text(
                 text = "添加 RSS",
-                style = MaterialTheme.typography.headlineSmall,
+                style = titleStyle,
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
@@ -214,9 +220,7 @@ fun AddRssScreen(
                     ) {
                         Text(
                             text = preview?.title ?: "频道预览",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontSize = MaterialTheme.typography.titleMedium.fontSize / 2
-                            ),
+                            style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
                             color = MaterialTheme.colorScheme.onSurface,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.fillMaxWidth()

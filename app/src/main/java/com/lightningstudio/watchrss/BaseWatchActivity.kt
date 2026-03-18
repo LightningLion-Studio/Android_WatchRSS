@@ -5,6 +5,7 @@ import android.hardware.input.InputManager
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.InputDevice
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
@@ -29,6 +30,7 @@ open class BaseWatchActivity : ComponentActivity() {
     private var swipeLastDx = 0f
     private var swipeCommitted = false
     private var lastNavigationAt = 0L
+    private var pendingHardwareBackKeyCode: Int? = null
     private var nextRotaryHandlerId = 0
     private val rotaryHandlers = LinkedHashMap<Int, (Float) -> Boolean>()
     private val swipeSlop by lazy { ViewConfiguration.get(this).scaledTouchSlop.toFloat() }
@@ -155,6 +157,13 @@ open class BaseWatchActivity : ComponentActivity() {
         return super.dispatchGenericMotionEvent(ev)
     }
 
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (shouldMapHardwareBackKey(event)) {
+            return handleHardwareBackKeyEvent(event)
+        }
+        return super.dispatchKeyEvent(event)
+    }
+
     override fun onPause() {
         window.decorView.removeCallbacks(resetRunnable)
         if (!swipeCommitted) {
@@ -247,7 +256,9 @@ open class BaseWatchActivity : ComponentActivity() {
                 }
                 if (swipeIntercepting) {
                     swipeLastDx = (ev.x - swipeStartX).coerceAtLeast(0f)
-                    root.translationX = swipeLastDx
+                    if (shouldAnimateSwipeBackGesture()) {
+                        root.translationX = swipeLastDx
+                    }
                     return true
                 }
             }
@@ -257,9 +268,13 @@ open class BaseWatchActivity : ComponentActivity() {
                     val dy = abs(ev.y - swipeStartY)
                     val commitDistance = max(minSwipeDistance, root.width * SWIPE_COMMIT_RATIO)
                     if (dx > commitDistance && dy < maxSwipeOffPath) {
-                        animateBackCommit(root)
+                        if (shouldAnimateSwipeBackGesture()) {
+                            animateBackCommit(root)
+                        } else {
+                            commitBack(root)
+                        }
                     } else {
-                        animateBackCancel(root)
+                        cancelBack(root)
                     }
                     resetSwipeState()
                     return true
@@ -268,7 +283,7 @@ open class BaseWatchActivity : ComponentActivity() {
             }
             MotionEvent.ACTION_CANCEL -> {
                 if (swipeIntercepting) {
-                    animateBackCancel(root)
+                    cancelBack(root)
                     resetSwipeState()
                     return true
                 }
@@ -283,6 +298,16 @@ open class BaseWatchActivity : ComponentActivity() {
     protected open fun shouldDeferSwipeBack(dx: Float, dy: Float): Boolean = false
 
     protected open fun isSwipeBackEnabled(): Boolean = true
+
+    protected open fun shouldAnimateSwipeBackGesture(): Boolean = true
+
+    protected open fun shouldMapHardwareBackKey(event: KeyEvent): Boolean {
+        return when (event.keyCode) {
+            KeyEvent.KEYCODE_STEM_1,
+            KeyEvent.KEYCODE_STEM_2 -> true
+            else -> false
+        }
+    }
 
     fun registerRotaryHandler(handler: (Float) -> Boolean): Int {
         val id = ++nextRotaryHandlerId
@@ -317,6 +342,33 @@ open class BaseWatchActivity : ComponentActivity() {
         return ev.x <= width * SWIPE_START_RATIO
     }
 
+    private fun handleHardwareBackKeyEvent(event: KeyEvent): Boolean {
+        when (event.action) {
+            KeyEvent.ACTION_DOWN -> {
+                if (event.repeatCount == 0) {
+                    pendingHardwareBackKeyCode = event.keyCode
+                }
+                return true
+            }
+
+            KeyEvent.ACTION_UP -> {
+                val shouldDispatchBack =
+                    pendingHardwareBackKeyCode == event.keyCode && !event.isCanceled
+                pendingHardwareBackKeyCode = null
+                if (shouldDispatchBack) {
+                    AppLogger.d(
+                        "Input",
+                        "映射硬件返回键: ${KeyEvent.keyCodeToString(event.keyCode)} -> 应用内返回"
+                    )
+                    onBackPressedDispatcher.onBackPressed()
+                }
+                return true
+            }
+
+            else -> return true
+        }
+    }
+
     private fun cancelChildTouch(ev: MotionEvent) {
         val cancelEvent = MotionEvent.obtain(ev)
         cancelEvent.action = MotionEvent.ACTION_CANCEL
@@ -337,9 +389,20 @@ open class BaseWatchActivity : ComponentActivity() {
             .setInterpolator(DecelerateInterpolator())
             .withEndAction {
                 onBackPressedDispatcher.onBackPressed()
-                overridePendingTransition(0, 0)
+                clearPendingTransitionAnimation()
             }
             .start()
+    }
+
+    private fun commitBack(root: View) {
+        swipeCommitted = true
+        val now = SystemClock.elapsedRealtime()
+        lastNavigationAt = now
+        globalNavigationAt = now
+        root.removeCallbacks(resetRunnable)
+        root.translationX = 0f
+        onBackPressedDispatcher.onBackPressed()
+        clearPendingTransitionAnimation()
     }
 
     private fun animateBackCancel(root: View) {
@@ -353,10 +416,23 @@ open class BaseWatchActivity : ComponentActivity() {
             .start()
     }
 
+    private fun cancelBack(root: View) {
+        if (shouldAnimateSwipeBackGesture()) {
+            animateBackCancel(root)
+            return
+        }
+        root.translationX = 0f
+    }
+
     private fun resetSwipeState() {
         swipeActive = false
         swipeIntercepting = false
         swipeLastDx = 0f
+    }
+
+    @Suppress("DEPRECATION")
+    private fun clearPendingTransitionAnimation() {
+        overridePendingTransition(0, 0)
     }
 
     companion object {

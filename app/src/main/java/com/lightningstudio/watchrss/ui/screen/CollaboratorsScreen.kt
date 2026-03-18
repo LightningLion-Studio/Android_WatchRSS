@@ -112,6 +112,8 @@ fun CollaboratorsScreen(
                             leadingText = "N"
                         )
                     }
+
+                    Spacer(modifier = Modifier.height(40.dp))
                 }
             }
         }

@@ -21,6 +21,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.TextUnit
@@ -51,7 +52,7 @@ fun BiliSearchScreen(
     BackHandler(onBack = onNavigateBack)
     InstallRotaryLazyListHandler(listState)
 
-    WatchSurface {
+    WatchSurface(pureBlack = true) {
         LazyColumn(
             modifier = modifier.fillMaxSize(),
             state = listState,
@@ -95,7 +96,8 @@ fun BiliSearchScreen(
                         ) {
                             Text(
                                 text = "搜索历史",
-                                style = MaterialTheme.typography.titleMedium
+                                style = MaterialTheme.typography.labelLarge,
+                                color = Color.White
                             )
                             TextButton(onClick = { viewModel.clearSearchHistory() }) {
                                 Text("清空")

@@ -68,6 +68,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.rss.RssChannel
@@ -90,6 +91,7 @@ fun HomeComposeScreen(
     onRecommendClick: () -> Unit,
     onChannelClick: (RssChannel) -> Unit,
     onChannelLongClick: (RssChannel) -> Unit,
+    onSwipeBack: () -> Unit,
     onAddRssClick: () -> Unit,
     onMoveTopClick: (RssChannel) -> Unit,
     onMarkReadClick: (RssChannel) -> Unit,
@@ -174,6 +176,7 @@ fun HomeComposeScreen(
                                 onDragEnd = onDragEnd,
                                 onChannelClick = { onChannelClick(entry.channel) },
                                 onChannelLongClick = { onChannelLongClick(entry.channel) },
+                                onSwipeBack = onSwipeBack,
                                 onMoveTopClick = { onMoveTopClick(entry.channel) },
                                 onMarkReadClick = { onMarkReadClick(entry.channel) }
                             )
@@ -307,6 +310,7 @@ private fun HomeChannelEntry(
     onDragEnd: () -> Unit,
     onChannelClick: () -> Unit,
     onChannelLongClick: () -> Unit,
+    onSwipeBack: () -> Unit,
     onMoveTopClick: () -> Unit,
     onMarkReadClick: () -> Unit
 ) {
@@ -379,6 +383,7 @@ private fun HomeChannelEntry(
                 } else {
                     MaterialTheme.colorScheme.surface
                 },
+                titleFontSize = 16.sp,
                 showIndicator = channel.unreadCount > 0,
                 testTag = HomeTestTags.channelCard(channel.id),
                 modifier = Modifier
@@ -407,6 +412,7 @@ private fun HomeChannelEntry(
             draggingSwipeId = draggingSwipeId,
             onDragStart = onDragStart,
             onDragEnd = onDragEnd,
+            onSwipeBack = onSwipeBack,
             actionsWidthPx = actionsWidthPx,
             revealGapPx = revealGapPx
         ) { offsetModifier ->
@@ -528,6 +534,7 @@ private fun HomeSwipeRow(
     draggingSwipeId: Long?,
     onDragStart: (Long) -> Unit,
     onDragEnd: () -> Unit,
+    onSwipeBack: () -> Unit,
     actionsWidthPx: Float,
     revealGapPx: Float,
     content: @Composable (Modifier) -> Unit
@@ -536,6 +543,7 @@ private fun HomeSwipeRow(
     val offsetX = remember { Animatable(0f) }
     val revealWidth = (actionsWidthPx + revealGapPx).coerceAtLeast(0f)
     val dragThreshold = revealWidth * 0.5f
+    val backSwipeThreshold = with(LocalDensity.current) { 48.dp.toPx() }
     val openSwipeIdState = rememberUpdatedState(openSwipeId)
 
     LaunchedEffect(openSwipeId, actionsWidthPx, revealGapPx, draggingSwipeId, enabled) {
@@ -554,42 +562,75 @@ private fun HomeSwipeRow(
     val dragModifier = if (!enabled || revealWidth <= 0f) {
         Modifier
     } else {
-        Modifier.pointerInput(itemId, actionsWidthPx, revealGapPx) {
+        Modifier.pointerInput(itemId, actionsWidthPx, revealGapPx, backSwipeThreshold) {
             if (revealWidth <= 0f) return@pointerInput
+            var handlingRowDrag = false
+            var handlingBackSwipe = false
+            var backSwipeDistance = 0f
             detectHorizontalDragGestures(
                 onDragStart = {
-                    onDragStart(itemId)
-                    if (openSwipeIdState.value != null && openSwipeIdState.value != itemId) {
-                        onCloseSwipe()
-                    }
+                    handlingRowDrag = false
+                    handlingBackSwipe = false
+                    backSwipeDistance = 0f
                 },
                 onDragEnd = {
-                    val shouldOpen = offsetX.value <= -dragThreshold
-                    val target = if (shouldOpen) -revealWidth else 0f
-                    scope.launch {
-                        offsetX.animateTo(target, animationSpec = tween(durationMillis = 180))
+                    when {
+                        handlingRowDrag -> {
+                            val shouldOpen = offsetX.value <= -dragThreshold
+                            val target = if (shouldOpen) -revealWidth else 0f
+                            scope.launch {
+                                offsetX.animateTo(target, animationSpec = tween(durationMillis = 180))
+                            }
+                            if (shouldOpen) {
+                                onOpenSwipe(itemId)
+                            } else if (openSwipeIdState.value == itemId) {
+                                onCloseSwipe()
+                            }
+                            onDragEnd()
+                        }
+                        handlingBackSwipe && backSwipeDistance >= backSwipeThreshold -> {
+                            onSwipeBack()
+                        }
                     }
-                    if (shouldOpen) {
-                        onOpenSwipe(itemId)
-                    } else if (openSwipeIdState.value == itemId) {
-                        onCloseSwipe()
-                    }
-                    onDragEnd()
+                    handlingRowDrag = false
+                    handlingBackSwipe = false
+                    backSwipeDistance = 0f
                 },
                 onDragCancel = {
-                    scope.launch {
-                        offsetX.animateTo(0f, animationSpec = tween(durationMillis = 180))
+                    if (handlingRowDrag) {
+                        scope.launch {
+                            offsetX.animateTo(0f, animationSpec = tween(durationMillis = 180))
+                        }
+                        if (openSwipeIdState.value == itemId) {
+                            onCloseSwipe()
+                        }
+                        onDragEnd()
                     }
-                    if (openSwipeIdState.value == itemId) {
-                        onCloseSwipe()
-                    }
-                    onDragEnd()
+                    handlingRowDrag = false
+                    handlingBackSwipe = false
+                    backSwipeDistance = 0f
                 }
             ) { change, dragAmount ->
+                val isRowOpen = offsetX.value < 0f || openSwipeIdState.value == itemId
+                if (!handlingRowDrag && !handlingBackSwipe) {
+                    if (!isRowOpen && dragAmount > 0f) {
+                        handlingBackSwipe = true
+                    } else {
+                        handlingRowDrag = true
+                        onDragStart(itemId)
+                        if (openSwipeIdState.value != null && openSwipeIdState.value != itemId) {
+                            onCloseSwipe()
+                        }
+                    }
+                }
                 change.consume()
-                val newOffset = (offsetX.value + dragAmount).coerceIn(-revealWidth, 0f)
-                scope.launch {
-                    offsetX.snapTo(newOffset)
+                if (handlingBackSwipe) {
+                    backSwipeDistance = (backSwipeDistance + dragAmount).coerceAtLeast(0f)
+                } else {
+                    val newOffset = (offsetX.value + dragAmount).coerceIn(-revealWidth, 0f)
+                    scope.launch {
+                        offsetX.snapTo(newOffset)
+                    }
                 }
             }
         }
@@ -607,6 +648,7 @@ private fun HomeDefaultItem(
     title: String,
     summary: String,
     backgroundColor: Color,
+    titleFontSize: TextUnit? = null,
     showIndicator: Boolean,
     testTag: String? = null,
     modifier: Modifier = Modifier,
@@ -620,7 +662,7 @@ private fun HomeDefaultItem(
     val titleMargin = dimensionResource(R.dimen.hey_listitem_widget_padding_vertical)
     val summaryTop = dimensionResource(R.dimen.hey_alone_summary_margin_top)
     val summaryBottom = dimensionResource(R.dimen.hey_alone_summary_margin_bottom)
-    val titleSize = textSize(R.dimen.hey_s_title)
+    val titleSize = titleFontSize ?: textSize(R.dimen.hey_s_title)
     val summarySize = textSize(R.dimen.hey_m_desription)
     val summaryColor = MaterialTheme.colorScheme.onSurfaceVariant
     val arrowMargin = dimensionResource(R.dimen.hey_listitem_widget_margin_left)

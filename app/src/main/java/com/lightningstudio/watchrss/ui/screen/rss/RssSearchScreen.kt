@@ -45,7 +45,7 @@ fun RssSearchScreen(
 
     InstallRotaryLazyListHandler(listState)
 
-    WatchSurface {
+    WatchSurface(pureBlack = true) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize(),

@@ -40,8 +40,7 @@ fun AboutScreen(
     val entrySpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_8dp
     val summarySpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_4dp
     val pillHeight = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_multiple_item_height
-    val pillStartPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_content_horizontal_distance_6_0
-    val pillEndPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_10dp
+    val pillHorizontalPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_10dp
     val pillVerticalPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_8dp
     val pillRadius = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_button_default_radius
     val pillColor = colorResource(R.color.watch_pill_background)
@@ -75,8 +74,7 @@ fun AboutScreen(
                 pillHeight = pillHeight,
                 pillRadius = pillRadius,
                 pillColor = pillColor,
-                pillStartPadding = pillStartPadding,
-                pillEndPadding = pillEndPadding,
+                pillHorizontalPadding = pillHorizontalPadding,
                 pillVerticalPadding = pillVerticalPadding,
                 summarySpacing = summarySpacing
             )
@@ -90,8 +88,7 @@ fun AboutScreen(
                 pillHeight = pillHeight,
                 pillRadius = pillRadius,
                 pillColor = pillColor,
-                pillStartPadding = pillStartPadding,
-                pillEndPadding = pillEndPadding,
+                pillHorizontalPadding = pillHorizontalPadding,
                 pillVerticalPadding = pillVerticalPadding,
                 summarySpacing = summarySpacing
             )
@@ -105,8 +102,7 @@ fun AboutScreen(
                 pillHeight = pillHeight,
                 pillRadius = pillRadius,
                 pillColor = pillColor,
-                pillStartPadding = pillStartPadding,
-                pillEndPadding = pillEndPadding,
+                pillHorizontalPadding = pillHorizontalPadding,
                 pillVerticalPadding = pillVerticalPadding,
                 summarySpacing = summarySpacing
             )
@@ -120,8 +116,7 @@ fun AboutScreen(
                 pillHeight = pillHeight,
                 pillRadius = pillRadius,
                 pillColor = pillColor,
-                pillStartPadding = pillStartPadding,
-                pillEndPadding = pillEndPadding,
+                pillHorizontalPadding = pillHorizontalPadding,
                 pillVerticalPadding = pillVerticalPadding,
                 summarySpacing = summarySpacing
             )
@@ -135,8 +130,7 @@ fun AboutScreen(
                 pillHeight = pillHeight,
                 pillRadius = pillRadius,
                 pillColor = pillColor,
-                pillStartPadding = pillStartPadding,
-                pillEndPadding = pillEndPadding,
+                pillHorizontalPadding = pillHorizontalPadding,
                 pillVerticalPadding = pillVerticalPadding,
                 summarySpacing = summarySpacing
             )
@@ -154,8 +148,7 @@ private fun AboutEntry(
     pillHeight: androidx.compose.ui.unit.Dp,
     pillRadius: androidx.compose.ui.unit.Dp,
     pillColor: androidx.compose.ui.graphics.Color,
-    pillStartPadding: androidx.compose.ui.unit.Dp,
-    pillEndPadding: androidx.compose.ui.unit.Dp,
+    pillHorizontalPadding: androidx.compose.ui.unit.Dp,
     pillVerticalPadding: androidx.compose.ui.unit.Dp,
     summarySpacing: androidx.compose.ui.unit.Dp
 ) {
@@ -167,8 +160,8 @@ private fun AboutEntry(
                 .clip(RoundedCornerShape(pillRadius))
                 .background(pillColor)
                 .padding(
-                    start = pillStartPadding,
-                    end = pillEndPadding,
+                    start = pillHorizontalPadding,
+                    end = pillHorizontalPadding,
                     top = pillVerticalPadding,
                     bottom = pillVerticalPadding
                 )
@@ -187,7 +180,7 @@ private fun AboutEntry(
             text = summary,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = pillStartPadding, top = summarySpacing)
+            modifier = Modifier.padding(start = pillHorizontalPadding, top = summarySpacing)
         )
     }
 }

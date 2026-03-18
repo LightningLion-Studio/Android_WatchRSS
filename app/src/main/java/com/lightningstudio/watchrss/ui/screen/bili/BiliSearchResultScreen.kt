@@ -48,7 +48,7 @@ fun BiliSearchResultScreen(
     BackHandler(onBack = onNavigateBack)
     InstallRotaryLazyListHandler(listState)
 
-    WatchSurface {
+    WatchSurface(pureBlack = true) {
         LazyColumn(
             modifier = modifier.fillMaxSize(),
             state = listState,

@@ -12,7 +12,6 @@ import com.lightningstudio.watchrss.CollaboratorsActivity
 import com.lightningstudio.watchrss.ContactDeveloperActivity
 import com.lightningstudio.watchrss.JoinGroupActivity
 import com.lightningstudio.watchrss.LogUploadPrivacyActivity
-import com.lightningstudio.watchrss.ProjectInfoActivity
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -46,15 +45,6 @@ class StaticCommonActivityTest {
             composeRule.waitForIdle()
             composeRule.onNodeWithText("协作者名单").assertExists()
             composeRule.onNodeWithText("Nicolas").assertExists()
-        }
-    }
-
-    @Test
-    fun projectInfoActivity_rendersProjectQr() {
-        launchAndAssert(ProjectInfoActivity::class.java) {
-            composeRule.waitForIdle()
-            composeRule.onNodeWithText("LightningLion-Studio / WatchRSS").assertExists()
-            composeRule.onNodeWithContentDescription("GitHub QR Code").assertExists()
         }
     }
 

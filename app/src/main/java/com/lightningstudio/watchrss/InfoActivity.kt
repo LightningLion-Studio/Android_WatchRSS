@@ -35,9 +35,6 @@ class InfoActivity : BaseWatchActivity() {
                         content = content,
                         readingThemeDark = readingThemeDark,
                         readingFontSizeSp = readingFontSizeSp,
-                        onOpenProjectInfo = {
-                            startActivity(Intent(this, ProjectInfoActivity::class.java))
-                        },
                         onBeianClick = {
                             startActivity(BeianActivity.createIntent(this))
                         }

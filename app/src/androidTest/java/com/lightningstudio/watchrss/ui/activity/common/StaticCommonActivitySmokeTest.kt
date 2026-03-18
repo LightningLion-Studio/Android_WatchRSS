@@ -17,7 +17,6 @@ import com.lightningstudio.watchrss.ImagePreviewActivity
 import com.lightningstudio.watchrss.JoinGroupActivity
 import com.lightningstudio.watchrss.LogUploadActivity
 import com.lightningstudio.watchrss.LogUploadPrivacyActivity
-import com.lightningstudio.watchrss.ProjectInfoActivity
 import com.lightningstudio.watchrss.RssRecommendActivity
 import com.lightningstudio.watchrss.RssRecommendGroupActivity
 import com.lightningstudio.watchrss.ShareQrActivity
@@ -60,11 +59,6 @@ class StaticCommonActivitySmokeTest {
     @Test
     fun logUploadPrivacyActivity_launches() {
         launchAndAssertNotFinishing<LogUploadPrivacyActivity>()
-    }
-
-    @Test
-    fun projectInfoActivity_launches() {
-        launchAndAssertNotFinishing<ProjectInfoActivity>()
     }
 
     @Test
