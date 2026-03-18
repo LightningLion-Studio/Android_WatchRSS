@@ -53,11 +53,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.colorResource
-import androidx.compose.ui.res.dimensionResource
+import com.lightningstudio.watchrss.ui.theme.watchColorResource
+import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -100,8 +99,8 @@ fun HomeComposeScreen(
     val baseDensity = LocalDensity.current
     CompositionLocalProvider(LocalDensity provides Density(2f, baseDensity.fontScale)) {
         val entries = remember(channels) { buildHomeEntries(channels) }
-        val safePadding = dimensionResource(R.dimen.watch_safe_padding)
-        val itemSpacing = dimensionResource(R.dimen.hey_distance_6dp)
+        val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
+        val itemSpacing = watchDimensionResource(R.dimen.hey_distance_6dp)
         val listState = rememberLazyListState()
         InstallRotaryLazyListHandler(listState)
         // 目的：解决纵向滚动与卡片横向滑动（HomeSwipeRow）之间的手势冲突。
@@ -213,11 +212,11 @@ private fun buildHomeEntries(channels: List<RssChannel>): List<HomeEntry> {
 
 @Composable
 private fun HomeProfileEntry(onProfileClick: () -> Unit) {
-    val avatarSize = dimensionResource(R.dimen.hey_listitem_big_lefticon_height_width)
-    val padding = dimensionResource(R.dimen.hey_distance_4dp)
+    val avatarSize = watchDimensionResource(R.dimen.hey_listitem_big_lefticon_height_width)
+    val padding = watchDimensionResource(R.dimen.hey_distance_4dp)
     val hintSize = textSize(R.dimen.hey_caption)
     val avatarTextSize = textSize(R.dimen.hey_m_desription)
-    val strokeWidth = dimensionResource(R.dimen.hey_dotStrokeWidth)
+    val strokeWidth = watchDimensionResource(R.dimen.hey_dotStrokeWidth)
     val accentColor = MaterialTheme.colorScheme.primary
     val cardColor = MaterialTheme.colorScheme.surface
 
@@ -255,9 +254,9 @@ private fun HomeProfileEntry(onProfileClick: () -> Unit) {
 
 @Composable
 private fun HomeAddEntry(onAddRssClick: () -> Unit) {
-    val buttonSize = dimensionResource(R.dimen.hey_button_height)
-    val padding = dimensionResource(R.dimen.hey_distance_4dp)
-    val radius = dimensionResource(R.dimen.hey_button_default_radius)
+    val buttonSize = watchDimensionResource(R.dimen.hey_button_height)
+    val padding = watchDimensionResource(R.dimen.hey_distance_4dp)
+    val radius = watchDimensionResource(R.dimen.hey_button_default_radius)
     val pressState = rememberPressScaleState()
     val pressScale = pressState.scale
     val scaleModifier = if (pressScale != 1f) {
@@ -314,8 +313,8 @@ private fun HomeChannelEntry(
     onMoveTopClick: () -> Unit,
     onMarkReadClick: () -> Unit
 ) {
-    val actionPadding = dimensionResource(R.dimen.hey_distance_4dp)
-    val actionWidth = dimensionResource(R.dimen.watch_swipe_action_button_width)
+    val actionPadding = watchDimensionResource(R.dimen.hey_distance_4dp)
+    val actionWidth = watchDimensionResource(R.dimen.watch_swipe_action_button_width)
     val fallbackActionsWidthPx = with(LocalDensity.current) {
         (actionWidth * 2 + actionPadding * 2).toPx()
     }
@@ -472,12 +471,12 @@ private fun HomeSwipeActionButton(
     onClick: () -> Unit,
     @DrawableRes iconRes: Int? = null
 ) {
-    val radius = dimensionResource(R.dimen.hey_card_normal_bg_radius)
+    val radius = watchDimensionResource(R.dimen.hey_card_normal_bg_radius)
     val textSize = textSize(R.dimen.feed_card_action_text_size)
-    val textPadding = dimensionResource(R.dimen.hey_distance_8dp)
-    val iconSize = dimensionResource(R.dimen.hey_distance_16dp)
-    val iconSpacing = dimensionResource(R.dimen.hey_distance_4dp)
-    val dangerColor = colorResource(R.color.danger_red)
+    val textPadding = watchDimensionResource(R.dimen.hey_distance_8dp)
+    val iconSize = watchDimensionResource(R.dimen.hey_distance_16dp)
+    val iconSpacing = watchDimensionResource(R.dimen.hey_distance_4dp)
+    val dangerColor = watchColorResource(R.color.danger_red)
     val actionColor = if (text.contains("删除")) dangerColor else MaterialTheme.colorScheme.onSurface
 
     Box(
@@ -654,21 +653,16 @@ private fun HomeDefaultItem(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null
 ) {
-    val context = LocalContext.current
-    val isRound = remember(context) { context.resources.configuration.isScreenRound }
-    val paddingStart = dimensionResource(R.dimen.hey_content_horizontal_distance_6_0)
-    val paddingEnd = dimensionResource(R.dimen.hey_listitem_padding_right)
-    val verticalPadding = dimensionResource(R.dimen.hey_multiple_default_summary_alone_padding_vertical)
-    val titleMargin = dimensionResource(R.dimen.hey_listitem_widget_padding_vertical)
-    val summaryTop = dimensionResource(R.dimen.hey_alone_summary_margin_top)
-    val summaryBottom = dimensionResource(R.dimen.hey_alone_summary_margin_bottom)
+    val paddingStart = watchDimensionResource(R.dimen.hey_content_horizontal_distance_6_0)
+    val paddingEnd = watchDimensionResource(R.dimen.hey_listitem_padding_right)
+    val verticalPadding = watchDimensionResource(R.dimen.hey_multiple_default_summary_alone_padding_vertical)
     val titleSize = titleFontSize ?: textSize(R.dimen.hey_s_title)
     val summarySize = textSize(R.dimen.hey_m_desription)
     val summaryColor = MaterialTheme.colorScheme.onSurfaceVariant
-    val arrowMargin = dimensionResource(R.dimen.hey_listitem_widget_margin_left)
-    val minorMarginRight = dimensionResource(R.dimen.hey_listitem_widget_minor_margin_right)
-    val indicatorSize = dimensionResource(R.dimen.hey_distance_6dp)
-    val shape = RoundedCornerShape(dimensionResource(R.dimen.hey_card_normal_bg_radius))
+    val arrowMargin = watchDimensionResource(R.dimen.hey_listitem_widget_margin_left)
+    val minorMarginRight = watchDimensionResource(R.dimen.hey_listitem_widget_minor_margin_right)
+    val indicatorSize = watchDimensionResource(R.dimen.hey_distance_6dp)
+    val shape = RoundedCornerShape(watchDimensionResource(R.dimen.hey_card_normal_bg_radius))
     val clickModifier = if (onClick != null) {
         Modifier.clickableWithoutRipple(onClick = onClick)
     } else {
@@ -685,8 +679,8 @@ private fun HomeDefaultItem(
             .padding(
                 start = paddingStart,
                 end = paddingEnd,
-                top = if (isRound) 0.dp else verticalPadding,
-                bottom = if (isRound) 0.dp else verticalPadding
+                top = verticalPadding,
+                bottom = verticalPadding
             ),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -696,24 +690,14 @@ private fun HomeDefaultItem(
                 color = MaterialTheme.colorScheme.onSurface,
                 fontSize = titleSize,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = if (isRound) {
-                    Modifier.padding(top = titleMargin, bottom = titleMargin)
-                } else {
-                    Modifier
-                }
+                overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = summary,
                 color = summaryColor,
                 fontSize = summarySize,
                 maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = if (isRound) {
-                    Modifier.padding(top = summaryTop, bottom = summaryBottom)
-                } else {
-                    Modifier
-                }
+                overflow = TextOverflow.Ellipsis
             )
         }
         if (showIndicator) {
@@ -739,7 +723,7 @@ private fun buildChannelSummary(channel: RssChannel): String {
 
 @Composable
 private fun HomeBeianEntry(onBeianClick: () -> Unit) {
-    val padding = dimensionResource(R.dimen.hey_distance_4dp)
+    val padding = watchDimensionResource(R.dimen.hey_distance_4dp)
     val textSize = textSize(R.dimen.hey_caption)
 
     Box(
@@ -784,7 +768,7 @@ private fun rememberPressScaleState(enabled: Boolean = true): PressScaleState {
 @Composable
 private fun textSize(id: Int): TextUnit {
     val density = LocalDensity.current
-    return with(density) { dimensionResource(id).toSp() }
+    return with(density) { watchDimensionResource(id).toSp() }
 }
 
 @OptIn(ExperimentalFoundationApi::class)

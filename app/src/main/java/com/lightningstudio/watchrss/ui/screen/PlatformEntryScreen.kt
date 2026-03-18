@@ -14,7 +14,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.dimensionResource
+import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.style.TextAlign
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.WatchSurface
@@ -22,7 +22,7 @@ import com.lightningstudio.watchrss.ui.input.InstallRotaryScrollHandler
 
 @Composable
 fun PlatformEntryScreen(title: String, message: String) {
-    val safePadding = dimensionResource(R.dimen.watch_safe_padding)
+    val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
     val messageSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_12dp
     val scrollState = rememberScrollState()
 

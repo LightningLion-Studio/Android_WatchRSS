@@ -19,8 +19,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.res.colorResource
-import androidx.compose.ui.res.dimensionResource
+import com.lightningstudio.watchrss.ui.theme.watchColorResource
+import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import com.lightningstudio.watchrss.R
@@ -35,7 +35,7 @@ fun AboutScreen(
     onLicensesClick: () -> Unit,
     onCollaboratorsClick: () -> Unit
 ) {
-    val safePadding = dimensionResource(R.dimen.watch_safe_padding)
+    val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
     val sectionSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_content_horizontal_distance
     val entrySpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_8dp
     val summarySpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_4dp
@@ -43,7 +43,7 @@ fun AboutScreen(
     val pillHorizontalPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_10dp
     val pillVerticalPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_8dp
     val pillRadius = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_button_default_radius
-    val pillColor = colorResource(R.color.watch_pill_background)
+    val pillColor = watchColorResource(R.color.watch_pill_background)
     val scrollState = rememberScrollState()
 
     InstallRotaryScrollHandler(scrollState)

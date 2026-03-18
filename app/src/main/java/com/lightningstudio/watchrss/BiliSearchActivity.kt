@@ -47,7 +47,9 @@ class BiliSearchActivity : BaseWatchActivity() {
                         BiliSearchSubmitAction.None -> Unit
                         BiliSearchSubmitAction.OpenResults -> {
                             if (navController.currentDestination?.route != Routes.SEARCH_RESULT) {
-                                navController.navigate(Routes.SEARCH_RESULT)
+                                navController.navigate(Routes.SEARCH_RESULT) {
+                                    launchSingleTop = true
+                                }
                             }
                         }
                         is BiliSearchSubmitAction.OpenVideo -> {

@@ -1,6 +1,5 @@
 package com.lightningstudio.watchrss
 
-import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import com.lightningstudio.watchrss.ui.screen.LogUploadPrivacyScreen
@@ -16,7 +15,7 @@ class LogUploadPrivacyActivity : BaseWatchActivity() {
                 LogUploadPrivacyScreen(
                     onStartUploadClick = {
                         if (!allowNavigation()) return@LogUploadPrivacyScreen
-                        startActivity(Intent(this, LogUploadActivity::class.java))
+                        LogUploadActivity.open(this)
                     }
                 )
             }

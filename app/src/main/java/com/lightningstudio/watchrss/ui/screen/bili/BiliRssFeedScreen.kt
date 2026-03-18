@@ -34,7 +34,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.res.dimensionResource
+import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -74,8 +74,8 @@ fun BiliRssFeedScreen(
 ) {
     val baseDensity = LocalDensity.current
     CompositionLocalProvider(LocalDensity provides Density(2f, baseDensity.fontScale)) {
-        val safePadding = dimensionResource(R.dimen.watch_safe_padding)
-        val itemSpacing = dimensionResource(R.dimen.hey_distance_8dp)
+        val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
+        val itemSpacing = watchDimensionResource(R.dimen.hey_distance_8dp)
         val listState = rememberLazyListState()
         InstallRotaryLazyListHandler(listState)
         val isScrolling by remember(listState) {
@@ -212,8 +212,8 @@ private fun BiliRssFeedItemEntry(
     onFavoriteClick: () -> Unit,
     onWatchLaterClick: () -> Unit
 ) {
-    val actionPadding = dimensionResource(R.dimen.hey_distance_4dp)
-    val actionWidth = dimensionResource(R.dimen.watch_swipe_action_button_width)
+    val actionPadding = watchDimensionResource(R.dimen.hey_distance_4dp)
+    val actionWidth = watchDimensionResource(R.dimen.watch_swipe_action_button_width)
     val fallbackActionsWidthPx = with(LocalDensity.current) {
         (actionWidth * 2 + actionPadding * 3).toPx()
     }
@@ -289,12 +289,12 @@ private fun BiliRssTextCard(
     onLongClick: () -> Unit
 ) {
     val background = MaterialTheme.colorScheme.surface
-    val shape = RoundedCornerShape(dimensionResource(R.dimen.hey_card_normal_bg_radius))
-    val padding = dimensionResource(R.dimen.hey_content_horizontal_distance)
+    val shape = RoundedCornerShape(watchDimensionResource(R.dimen.hey_card_normal_bg_radius))
+    val padding = watchDimensionResource(R.dimen.hey_content_horizontal_distance)
     val titleSize = textSize(R.dimen.feed_card_title_text_size)
     val summarySize = textSize(R.dimen.feed_card_summary_text_size)
     val summaryLineHeight = summarySize * 1.1f
-    val summaryTop = dimensionResource(R.dimen.hey_distance_2dp)
+    val summaryTop = watchDimensionResource(R.dimen.hey_distance_2dp)
 
     Box(
         modifier = modifier
@@ -337,7 +337,7 @@ private fun BiliRssFeedHeader(
 ) {
     val titleSize = textSize(R.dimen.hey_m_title)
     val captionSize = textSize(R.dimen.hey_caption)
-    val spacing = dimensionResource(R.dimen.hey_distance_6dp)
+    val spacing = watchDimensionResource(R.dimen.hey_distance_6dp)
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -399,7 +399,7 @@ private fun channelTitleWithStyledHint(
 @Composable
 private fun textSize(id: Int): TextUnit {
     return androidx.compose.ui.platform.LocalDensity.current.run {
-        dimensionResource(id).toSp()
+        watchDimensionResource(id).toSp()
     }
 }
 

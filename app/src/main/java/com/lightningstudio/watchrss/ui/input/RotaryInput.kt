@@ -96,7 +96,9 @@ fun InstallRotaryPagerHandler(
 
 @Composable
 fun InstallRotaryVolumeHandler(
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    showSystemUi: Boolean = true,
+    onVolumeStep: ((Int) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val audioManager = remember(context) {
@@ -109,18 +111,18 @@ fun InstallRotaryVolumeHandler(
             return@InstallRotaryHandler true
         }
         val steps = abs(accumulatedDelta).toInt().coerceAtLeast(1)
-        val direction = if (accumulatedDelta > 0f) {
-            AudioManager.ADJUST_RAISE
-        } else {
-            AudioManager.ADJUST_LOWER
-        }
+        val direction = if (accumulatedDelta > 0f) 1 else -1
         accumulatedDelta = 0f
-        repeat(steps) {
-            audioManager.adjustStreamVolume(
-                AudioManager.STREAM_MUSIC,
-                direction,
-                AudioManager.FLAG_SHOW_UI
-            )
+        if (onVolumeStep != null) {
+            onVolumeStep(direction * steps)
+        } else {
+            repeat(steps) {
+                audioManager.adjustStreamVolume(
+                    AudioManager.STREAM_MUSIC,
+                    if (direction > 0) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER,
+                    if (showSystemUi) AudioManager.FLAG_SHOW_UI else 0
+                )
+            }
         }
         true
     }

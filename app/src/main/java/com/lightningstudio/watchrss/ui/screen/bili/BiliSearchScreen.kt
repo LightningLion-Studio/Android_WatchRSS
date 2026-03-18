@@ -15,19 +15,19 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.dimensionResource
+import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.SearchInputBar
+import com.lightningstudio.watchrss.ui.components.WatchTextButton
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.input.InstallRotaryLazyListHandler
 import com.lightningstudio.watchrss.ui.viewmodel.BiliSearchSubmitAction
@@ -44,7 +44,7 @@ fun BiliSearchScreen(
     val searchText by viewModel.draftQuery.collectAsState()
     val hotSearchWords by viewModel.hotSearchWords.collectAsState()
     val searchHistory by viewModel.searchHistory.collectAsState()
-    val safePadding = dimensionResource(R.dimen.watch_safe_padding)
+    val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
     val titleSize = textSize(R.dimen.hey_s_title)
     val listSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_6dp
     val listState = rememberLazyListState()
@@ -99,7 +99,7 @@ fun BiliSearchScreen(
                                 style = MaterialTheme.typography.labelLarge,
                                 color = Color.White
                             )
-                            TextButton(onClick = { viewModel.clearSearchHistory() }) {
+                            WatchTextButton(onClick = { viewModel.clearSearchHistory() }) {
                                 Text("清空")
                             }
                         }
@@ -153,6 +153,6 @@ fun BiliSearchScreen(
 @Composable
 private fun textSize(id: Int): TextUnit {
     return androidx.compose.ui.platform.LocalDensity.current.run {
-        dimensionResource(id).toSp()
+        watchDimensionResource(id).toSp()
     }
 }

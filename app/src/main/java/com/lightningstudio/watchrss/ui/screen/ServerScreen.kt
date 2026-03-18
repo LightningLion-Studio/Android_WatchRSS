@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -33,12 +32,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.dimensionResource
+import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ServerActivity
+import com.lightningstudio.watchrss.ui.components.WatchButton
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.theme.ActionButtonTextStyle
 import com.lightningstudio.watchrss.ui.util.QrCodeGenerator
@@ -140,15 +140,15 @@ fun ServerScreen(
                         textAlign = TextAlign.Center
                     )
                     Spacer(modifier = Modifier.height(12.dp))
-                    Button(
+                    WatchButton(
                         onClick = onDismiss,
                         colors = ButtonDefaults.buttonColors(
                             containerColor = lerp(Color(0xFF2C2C2C), Color(0xFFE0E0E0), backgroundProgress)
                         ),
-                        shape = RoundedCornerShape(dimensionResource(R.dimen.hey_button_default_radius)),
+                        shape = RoundedCornerShape(watchDimensionResource(R.dimen.hey_button_default_radius)),
                         modifier = Modifier
-                            .width(dimensionResource(R.dimen.watch_action_button_width))
-                            .height(dimensionResource(R.dimen.watch_action_button_height))
+                            .width(watchDimensionResource(R.dimen.watch_action_button_width))
+                            .height(watchDimensionResource(R.dimen.watch_action_button_height))
                     ) {
                         Text(
                             text = "关闭",
@@ -177,15 +177,15 @@ fun ServerScreen(
                             textAlign = TextAlign.Center
                         )
                         Spacer(modifier = Modifier.height(12.dp))
-                        Button(
+                        WatchButton(
                             onClick = onDismiss,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = lerp(Color(0xFF2C2C2C), Color(0xFFE0E0E0), backgroundProgress)
                             ),
-                            shape = RoundedCornerShape(dimensionResource(R.dimen.hey_button_default_radius)),
+                            shape = RoundedCornerShape(watchDimensionResource(R.dimen.hey_button_default_radius)),
                             modifier = Modifier
-                                .width(dimensionResource(R.dimen.watch_action_button_width))
-                                .height(dimensionResource(R.dimen.watch_action_button_height))
+                                .width(watchDimensionResource(R.dimen.watch_action_button_width))
+                                .height(watchDimensionResource(R.dimen.watch_action_button_height))
                         ) {
                             Text(
                                 text = "关闭",

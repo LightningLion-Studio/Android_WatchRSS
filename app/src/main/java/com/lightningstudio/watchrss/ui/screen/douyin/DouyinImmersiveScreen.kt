@@ -19,9 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -41,7 +39,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.dimensionResource
+import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -59,7 +57,11 @@ import androidx.media3.ui.PlayerView
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.douyin.DouyinStreamItem
 import com.lightningstudio.watchrss.ui.components.ToastMessage
+import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
+import com.lightningstudio.watchrss.ui.components.WatchIconButton
 import com.lightningstudio.watchrss.ui.components.WatchSurface
+import com.lightningstudio.watchrss.ui.components.PlayerVolumeOverlay
+import com.lightningstudio.watchrss.ui.components.rememberPlayerVolumeState
 import com.lightningstudio.watchrss.ui.input.InstallRotaryPagerHandler
 import com.lightningstudio.watchrss.ui.input.InstallRotaryVolumeHandler
 import com.lightningstudio.watchrss.ui.viewmodel.DouyinFeedUiState
@@ -75,6 +77,7 @@ fun DouyinImmersiveScreen(
     onMessageShown: () -> Unit,
     onHeaderClick: () -> Unit
 ) {
+    val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
     val pageCount = uiState.items.size + 1
     val pagerState = rememberPagerState(
         initialPage = uiState.currentPage.coerceIn(0, (pageCount - 1).coerceAtLeast(0)),
@@ -82,12 +85,17 @@ fun DouyinImmersiveScreen(
     )
     var controlsVisible by rememberSaveable { mutableStateOf(true) }
     var isFullscreen by rememberSaveable { mutableStateOf(true) }
+    val volumeState = rememberPlayerVolumeState()
 
     InstallRotaryPagerHandler(
         pagerState = pagerState,
         enabled = pagerState.currentPage == 0 && pageCount > 1
     )
-    InstallRotaryVolumeHandler(enabled = pagerState.currentPage > 0)
+    InstallRotaryVolumeHandler(
+        enabled = pagerState.currentPage > 0,
+        showSystemUi = false,
+        onVolumeStep = volumeState::adjustBySteps
+    )
 
     LaunchedEffect(pagerState.currentPage) {
         onPageSettled(pagerState.currentPage)
@@ -133,11 +141,11 @@ fun DouyinImmersiveScreen(
         }
 
         if (uiState.isLoading && uiState.items.isEmpty()) {
-            CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+            WatchCircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
         }
 
         if (uiState.isLoadingMore) {
-            CircularProgressIndicator(
+            WatchCircularProgressIndicator(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(12.dp)
@@ -150,6 +158,13 @@ fun DouyinImmersiveScreen(
                 onMessageShown()
             }
         }
+
+        PlayerVolumeOverlay(
+            state = volumeState,
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = safePadding)
+        )
     }
 }
 
@@ -158,10 +173,10 @@ private fun DouyinTitlePage(
     onEnterFlow: () -> Unit,
     onHeaderClick: () -> Unit
 ) {
-    val safePadding = dimensionResource(R.dimen.watch_safe_padding)
-    val subtitleSpacing = dimensionResource(R.dimen.hey_distance_2dp)
-    val buttonBottom = dimensionResource(R.dimen.hey_distance_12dp)
-    val buttonSize = dimensionResource(R.dimen.hey_button_height)
+    val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
+    val subtitleSpacing = watchDimensionResource(R.dimen.hey_distance_2dp)
+    val buttonBottom = watchDimensionResource(R.dimen.hey_distance_12dp)
+    val buttonSize = watchDimensionResource(R.dimen.hey_button_height)
 
     WatchSurface(pureBlack = true) {
         Box(
@@ -205,7 +220,7 @@ private fun DouyinTitlePage(
                         painter = painterResource(id = R.drawable.ic_action_douyin_up),
                         contentDescription = "向上进入视频流",
                         tint = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(dimensionResource(R.dimen.hey_distance_16dp))
+                        modifier = Modifier.size(watchDimensionResource(R.dimen.hey_distance_16dp))
                     )
                 }
             }
@@ -226,12 +241,12 @@ private fun DouyinVideoPage(
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
-    val safePadding = dimensionResource(R.dimen.watch_safe_padding)
-    val topPadding = dimensionResource(R.dimen.hey_distance_6dp)
-    val bottomPadding = dimensionResource(R.dimen.hey_distance_8dp)
-    val controlsSize = dimensionResource(R.dimen.hey_button_height)
-    val controlsIconSize = dimensionResource(R.dimen.hey_listitem_widget_size)
-    val titleFontSize = with(density) { dimensionResource(R.dimen.feed_card_title_text_size).toSp() }
+    val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
+    val topPadding = watchDimensionResource(R.dimen.hey_distance_6dp)
+    val bottomPadding = watchDimensionResource(R.dimen.hey_distance_8dp)
+    val controlsSize = watchDimensionResource(R.dimen.hey_button_height)
+    val controlsIconSize = watchDimensionResource(R.dimen.hey_listitem_widget_size)
+    val titleFontSize = with(density) { watchDimensionResource(R.dimen.feed_card_title_text_size).toSp() }
 
     val localUri = remember(item.awemeId) { localPlayPath?.let { "file://$it" } }
     val remoteUri = remember(item.awemeId) { item.playUrl }
@@ -382,7 +397,7 @@ private fun DouyinVideoPage(
         )
 
         if (isBuffering && !hasError && isActive) {
-            CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+            WatchCircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
         }
 
         if (hasError && isActive) {
@@ -414,7 +429,7 @@ private fun DouyinVideoPage(
                 } else {
                     R.drawable.ic_player_fullscreen
                 }
-                IconButton(
+                WatchIconButton(
                     onClick = onToggleFullscreen,
                     modifier = Modifier
                         .align(Alignment.Center)
@@ -464,7 +479,7 @@ private fun DouyinVideoPage(
 
                 Column(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(dimensionResource(R.dimen.hey_distance_2dp)),
+                    verticalArrangement = Arrangement.spacedBy(watchDimensionResource(R.dimen.hey_distance_2dp)),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(

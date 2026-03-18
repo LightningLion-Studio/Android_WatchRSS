@@ -46,7 +46,7 @@ class DouyinChannelInfoActivity : BaseWatchActivity() {
                     DouyinChannelInfoScreen(
                         isLoggedIn = isLoggedIn,
                         lastRefreshAt = channel?.lastFetchedAt,
-                        onLoginClick = { context.startActivity(DouyinLoginActivity.createIntent(context)) },
+                        onLoginClick = { DouyinLoginActivity.open(context) },
                         onOpenSettings = { context.startActivity(DouyinSettingsActivity.createIntent(context)) },
                         onSearchClick = { },
                         onShareClick = {

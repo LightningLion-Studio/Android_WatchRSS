@@ -9,6 +9,7 @@ import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -42,6 +43,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -53,20 +55,25 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.lightningstudio.watchrss.ui.util.getWebViewUnavailableMessage
 import com.lightningstudio.watchrss.util.AppLogger
+import com.lightningstudio.watchrss.ui.theme.rememberIsRoundWatch
 import kotlinx.coroutines.delay
 
 @Composable
 fun DouyinLoginScreen(
+    initialErrorMessage: String?,
+    onWebViewInitFailed: (String) -> Unit,
     onLoginComplete: (String) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val isRoundWatch = rememberIsRoundWatch()
 
-    var isLoading by remember { mutableStateOf(true) }
+    var isLoading by remember(initialErrorMessage) { mutableStateOf(initialErrorMessage == null) }
     var loadProgress by remember { mutableFloatStateOf(0f) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var errorMessage by remember(initialErrorMessage) { mutableStateOf(initialErrorMessage) }
     var cookieResult by remember { mutableStateOf<String?>(null) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
     var loginPanelExists by remember { mutableStateOf(false) }
@@ -271,96 +278,109 @@ fun DouyinLoginScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .clip(CircleShape)
+                        .clip(if (isRoundWatch) CircleShape else RectangleShape)
                 ) {
                     AndroidView(
                         factory = { ctx ->
-                            WebView(ctx).apply {
-                                // 为了避免闪白
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                                    // 对于 API 21+，需要先允许背景设为透明
-                                    setLayerType(View.LAYER_TYPE_HARDWARE, null)
-                                    // 设置背景色为透明
-                                    setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                                }
-
-                                settings.apply {
-                                    javaScriptEnabled = true
-                                    domStorageEnabled = true
-                                    databaseEnabled = true
-                                    userAgentString = USER_AGENT
-                                    loadWithOverviewMode = true
-                                    useWideViewPort = true
-                                }
-
-                                webViewClient = object : WebViewClient() {
-                                    override fun shouldOverrideUrlLoading(
-                                        view: WebView?,
-                                        request: WebResourceRequest?
-                                    ): Boolean {
-                                        return false
+                            try {
+                                WebView(ctx).apply {
+                                    // 为了避免闪白
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                                        // 对于 API 21+，需要先允许背景设为透明
+                                        setLayerType(View.LAYER_TYPE_HARDWARE, null)
+                                        // 设置背景色为透明
+                                        setBackgroundColor(android.graphics.Color.TRANSPARENT)
                                     }
 
-                                    override fun onPageFinished(view: WebView?, url: String?) {
-                                        super.onPageFinished(view, url)
-                                        // Don't stop loading until we detect login page
+                                    settings.apply {
+                                        javaScriptEnabled = true
+                                        domStorageEnabled = true
+                                        databaseEnabled = true
+                                        userAgentString = USER_AGENT
+                                        loadWithOverviewMode = true
+                                        useWideViewPort = true
                                     }
 
-                                    override fun onReceivedError(
-                                        view: WebView?,
-                                        request: WebResourceRequest?,
-                                        error: WebResourceError?
-                                    ) {
-                                        super.onReceivedError(view, request, error)
-                                        if (request?.isForMainFrame == true) {
-                                            // 记录技术性错误信息到日志
-                                            AppLogger.e("DouyinLoginScreen", "WebView error: ${error?.description} (code: ${error?.errorCode})")
+                                    webViewClient = object : WebViewClient() {
+                                        override fun shouldOverrideUrlLoading(
+                                            view: WebView?,
+                                            request: WebResourceRequest?
+                                        ): Boolean {
+                                            return false
+                                        }
 
-                                            // 根据错误代码提供友好的中文提示
-                                            errorMessage = when (error?.errorCode) {
-                                                WebViewClient.ERROR_HOST_LOOKUP -> "无法找到服务器，请检查网络连接"
-                                                WebViewClient.ERROR_CONNECT -> "连接服务器失败，请稍后重试"
-                                                WebViewClient.ERROR_TIMEOUT -> "连接超时，请检查网络后重试"
-                                                WebViewClient.ERROR_IO -> "网络读写失败，请重试"
-                                                WebViewClient.ERROR_UNSUPPORTED_AUTH_SCHEME -> "不支持的认证方式"
-                                                WebViewClient.ERROR_AUTHENTICATION -> "身份验证失败"
-                                                WebViewClient.ERROR_PROXY_AUTHENTICATION -> "代理认证失败"
-                                                WebViewClient.ERROR_REDIRECT_LOOP -> "页面重定向次数过多"
-                                                WebViewClient.ERROR_UNSUPPORTED_SCHEME -> "不支持的链接协议"
-                                                WebViewClient.ERROR_FAILED_SSL_HANDSHAKE -> "安全连接失败，请检查网络环境"
-                                                WebViewClient.ERROR_BAD_URL -> "网址格式错误"
-                                                WebViewClient.ERROR_FILE -> "文件访问错误"
-                                                WebViewClient.ERROR_FILE_NOT_FOUND -> "文件不存在"
-                                                WebViewClient.ERROR_TOO_MANY_REQUESTS -> "请求过于频繁，请稍后重试"
-                                                WebViewClient.ERROR_UNSAFE_RESOURCE -> "页面存在安全风险，已被拦截"
-                                                WebViewClient.ERROR_UNKNOWN -> "加载失败，请重试"
-                                                else -> "加载失败，请重试"
+                                        override fun onPageFinished(view: WebView?, url: String?) {
+                                            super.onPageFinished(view, url)
+                                            // Don't stop loading until we detect login page
+                                        }
+
+                                        override fun onReceivedError(
+                                            view: WebView?,
+                                            request: WebResourceRequest?,
+                                            error: WebResourceError?
+                                        ) {
+                                            super.onReceivedError(view, request, error)
+                                            if (request?.isForMainFrame == true) {
+                                                // 记录技术性错误信息到日志
+                                                AppLogger.e("DouyinLoginScreen", "WebView error: ${error?.description} (code: ${error?.errorCode})")
+
+                                                // 根据错误代码提供友好的中文提示
+                                                errorMessage = when (error?.errorCode) {
+                                                    WebViewClient.ERROR_HOST_LOOKUP -> "无法找到服务器，请检查网络连接"
+                                                    WebViewClient.ERROR_CONNECT -> "连接服务器失败，请稍后重试"
+                                                    WebViewClient.ERROR_TIMEOUT -> "连接超时，请检查网络后重试"
+                                                    WebViewClient.ERROR_IO -> "网络读写失败，请重试"
+                                                    WebViewClient.ERROR_UNSUPPORTED_AUTH_SCHEME -> "不支持的认证方式"
+                                                    WebViewClient.ERROR_AUTHENTICATION -> "身份验证失败"
+                                                    WebViewClient.ERROR_PROXY_AUTHENTICATION -> "代理认证失败"
+                                                    WebViewClient.ERROR_REDIRECT_LOOP -> "页面重定向次数过多"
+                                                    WebViewClient.ERROR_UNSUPPORTED_SCHEME -> "不支持的链接协议"
+                                                    WebViewClient.ERROR_FAILED_SSL_HANDSHAKE -> "安全连接失败，请检查网络环境"
+                                                    WebViewClient.ERROR_BAD_URL -> "网址格式错误"
+                                                    WebViewClient.ERROR_FILE -> "文件访问错误"
+                                                    WebViewClient.ERROR_FILE_NOT_FOUND -> "文件不存在"
+                                                    WebViewClient.ERROR_TOO_MANY_REQUESTS -> "请求过于频繁，请稍后重试"
+                                                    WebViewClient.ERROR_UNSAFE_RESOURCE -> "页面存在安全风险，已被拦截"
+                                                    WebViewClient.ERROR_UNKNOWN -> "加载失败，请重试"
+                                                    else -> "加载失败，请重试"
+                                                }
+                                                isLoading = false
                                             }
-                                            isLoading = false
                                         }
                                     }
-                                }
 
-                                webChromeClient = object : WebChromeClient() {
-                                    override fun onProgressChanged(view: WebView?, newProgress: Int) {
-                                        // Map WebView progress (0-100) to 0-45%
-                                        val newMappedProgress = (newProgress / 100f) * 0.45f
-                                        // 避免进度倒退，因为WebView的onProgressChanged可能会给出比当前值更小的进度
-                                        if (newMappedProgress > loadProgress) {
-                                            loadProgress = newMappedProgress
+                                    webChromeClient = object : WebChromeClient() {
+                                        override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                                            // Map WebView progress (0-100) to 0-45%
+                                            val newMappedProgress = (newProgress / 100f) * 0.45f
+                                            // 避免进度倒退，因为WebView的onProgressChanged可能会给出比当前值更小的进度
+                                            if (newMappedProgress > loadProgress) {
+                                                loadProgress = newMappedProgress
+                                            }
+                                            if (newProgress >= 100) {
+                                                webViewLoadComplete = true
+                                            }
+                                            // Don't stop loading until we detect login page
                                         }
-                                        if (newProgress >= 100) {
-                                            webViewLoadComplete = true
-                                        }
-                                        // Don't stop loading until we detect login page
+                                    }
+
+                                    loadUrl(LOGIN_URL)
+                                }
+                            } catch (throwable: Throwable) {
+                                AppLogger.e("DouyinLoginScreen", "Failed to initialize WebView", throwable)
+                                val message = getWebViewUnavailableMessage(ctx)
+                                    ?: "当前设备无法初始化 WebView，无法打开登录页"
+                                FrameLayout(ctx).apply {
+                                    post {
+                                        errorMessage = message
+                                        isLoading = false
+                                        onWebViewInitFailed(message)
                                     }
                                 }
-
-                                loadUrl(LOGIN_URL)
                             }
                         },
                         modifier = Modifier.fillMaxSize(),
-                        update = { webViewRef = it }
+                        update = { webViewRef = it as? WebView }
                     )
                 }
 

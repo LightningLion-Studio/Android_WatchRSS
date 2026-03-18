@@ -79,7 +79,7 @@ object PerfDataFactory {
         return RssItem(
             id = 0L,
             channelId = 0L,
-            title = "性能测试：超长文章",
+            title = "性能测试：这是一个用于阅读页标题断行与圆表安全区验证的超长文章标题，包含 RSS 2026、English words、数字 1234567890 与多段信息",
             description = null,
             content = content,
             link = null,

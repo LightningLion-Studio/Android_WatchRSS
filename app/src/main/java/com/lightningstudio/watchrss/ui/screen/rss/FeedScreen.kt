@@ -53,7 +53,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.dimensionResource
+import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
@@ -76,6 +76,7 @@ import com.lightningstudio.watchrss.ui.components.SwipeActionButton
 import com.lightningstudio.watchrss.ui.components.SwipeActionRow
 import com.lightningstudio.watchrss.ui.input.InstallRotaryLazyListHandler
 import com.lightningstudio.watchrss.ui.util.RssImageLoader
+import com.lightningstudio.watchrss.ui.util.normalizeWatchTitleWhitespace
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -114,9 +115,9 @@ fun FeedScreen(
 ) {
     val baseDensity = LocalDensity.current
     CompositionLocalProvider(LocalDensity provides Density(densityScale, baseDensity.fontScale)) {
-        val safePadding = dimensionResource(R.dimen.watch_safe_padding)
-        val imageItemSpacing = dimensionResource(R.dimen.hey_distance_8dp)
-        val textItemSpacing = dimensionResource(R.dimen.hey_distance_8dp)
+        val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
+        val imageItemSpacing = watchDimensionResource(R.dimen.hey_distance_8dp)
+        val textItemSpacing = watchDimensionResource(R.dimen.hey_distance_8dp)
         val listState = rememberLazyListState()
         InstallRotaryLazyListHandler(listState)
         val context = LocalContext.current
@@ -316,17 +317,17 @@ private fun FeedHeader(
     enabled: Boolean,
     onClick: () -> Unit
 ) {
-    val verticalPadding = dimensionResource(R.dimen.hey_content_horizontal_distance)
+    val verticalPadding = watchDimensionResource(R.dimen.hey_content_horizontal_distance)
     val hintSize = textSize(R.dimen.hey_caption)
     val titleSize = textSize(R.dimen.hey_m_title)
     val context = LocalContext.current
     val density = LocalDensity.current
-    val titleSizePx = with(density) { dimensionResource(R.dimen.hey_m_title).toPx() }
+    val titleSizePx = with(density) { watchDimensionResource(R.dimen.hey_m_title).toPx() }
     val firstLimitPx = with(density) {
-        dimensionResource(R.dimen.detail_title_first_line_max_width).toPx()
+        watchDimensionResource(R.dimen.detail_title_first_line_max_width).toPx()
     }
     val secondLimitPx = with(density) {
-        dimensionResource(R.dimen.detail_title_second_line_max_width).toPx()
+        watchDimensionResource(R.dimen.detail_title_second_line_max_width).toPx()
     }
     val typeface = remember(context) { ResourcesCompat.getFont(context, R.font.watch_sans) }
     val paint = remember(typeface, titleSizePx) {
@@ -403,8 +404,8 @@ private fun channelTitleWithStyledHint(
 private fun FeedEmpty(
     onBack: () -> Unit
 ) {
-    val padding = dimensionResource(R.dimen.hey_content_horizontal_distance)
-    val buttonSpacing = dimensionResource(R.dimen.hey_distance_6dp)
+    val padding = watchDimensionResource(R.dimen.hey_content_horizontal_distance)
+    val buttonSpacing = watchDimensionResource(R.dimen.hey_distance_6dp)
     val hintSize = textSize(R.dimen.hey_caption)
 
     Column(
@@ -430,7 +431,7 @@ private fun FeedActions(
     canLoadMore: Boolean,
     onLoadMore: () -> Unit
 ) {
-    val padding = dimensionResource(R.dimen.hey_distance_4dp)
+    val padding = watchDimensionResource(R.dimen.hey_distance_4dp)
 
     Row(
         modifier = Modifier
@@ -453,10 +454,10 @@ private fun FeedPillButton(
     enabled: Boolean = true,
     onClick: () -> Unit
 ) {
-    val radius = dimensionResource(R.dimen.hey_button_default_radius)
-    val height = dimensionResource(R.dimen.hey_button_height)
-    val horizontalPadding = dimensionResource(R.dimen.hey_button_mergin_horizontal)
-    val verticalPadding = dimensionResource(R.dimen.hey_button_padding_vertical)
+    val radius = watchDimensionResource(R.dimen.hey_button_default_radius)
+    val height = watchDimensionResource(R.dimen.hey_button_height)
+    val horizontalPadding = watchDimensionResource(R.dimen.hey_button_mergin_horizontal)
+    val verticalPadding = watchDimensionResource(R.dimen.hey_button_padding_vertical)
     val textSize = textSize(R.dimen.hey_s_title)
     val background = MaterialTheme.colorScheme.surfaceVariant
 
@@ -497,8 +498,8 @@ private fun FeedItemEntry(
     onFavoriteClick: () -> Unit,
     onWatchLaterClick: () -> Unit
 ) {
-    val actionPadding = dimensionResource(R.dimen.hey_distance_4dp)
-    val actionWidth = dimensionResource(R.dimen.watch_swipe_action_button_width)
+    val actionPadding = watchDimensionResource(R.dimen.hey_distance_4dp)
+    val actionWidth = watchDimensionResource(R.dimen.watch_swipe_action_button_width)
     val fallbackActionsWidthPx = with(LocalDensity.current) {
         (actionWidth * 2 + actionPadding * 3).toPx()
     }
@@ -643,14 +644,14 @@ private fun FeedTextCard(
     onLongClick: () -> Unit
 ) {
     val background = MaterialTheme.colorScheme.surface
-    val shape = RoundedCornerShape(dimensionResource(R.dimen.hey_card_normal_bg_radius))
-    val padding = dimensionResource(R.dimen.hey_content_horizontal_distance)
+    val shape = RoundedCornerShape(watchDimensionResource(R.dimen.hey_card_normal_bg_radius))
+    val padding = watchDimensionResource(R.dimen.hey_content_horizontal_distance)
     val titleSize = textSize(R.dimen.feed_card_title_text_size)
     val summarySize = textSize(R.dimen.feed_card_summary_text_size)
     val summaryLineHeight = summarySize * 1.1f
-    val summaryTop = dimensionResource(R.dimen.hey_distance_2dp)
-    val unreadSize = dimensionResource(R.dimen.hey_distance_8dp)
-    val unreadMargin = dimensionResource(R.dimen.hey_distance_6dp)
+    val summaryTop = watchDimensionResource(R.dimen.hey_distance_2dp)
+    val unreadSize = watchDimensionResource(R.dimen.hey_distance_8dp)
+    val unreadMargin = watchDimensionResource(R.dimen.hey_distance_6dp)
     val summary = remember(item.id, item.summary, item.content, useOriginalContent) {
         val baseSummary = item.summary ?: "暂无摘要"
         if (useOriginalContent && item.content.isNullOrBlank()) {
@@ -718,15 +719,15 @@ private fun FeedImageCard(
     onLongClick: () -> Unit
 ) {
     val background = MaterialTheme.colorScheme.surface
-    val shape = RoundedCornerShape(dimensionResource(R.dimen.hey_card_normal_bg_radius))
-    val imageHeight = dimensionResource(R.dimen.feed_card_image_height)
-    val padding = dimensionResource(R.dimen.hey_distance_8dp)
+    val shape = RoundedCornerShape(watchDimensionResource(R.dimen.hey_card_normal_bg_radius))
+    val imageHeight = watchDimensionResource(R.dimen.feed_card_image_height)
+    val padding = watchDimensionResource(R.dimen.hey_distance_8dp)
     val titleSize = textSize(R.dimen.feed_card_title_text_size)
     val summarySize = textSize(R.dimen.feed_card_summary_text_size)
     val summaryLineHeight = summarySize * 1.1f
-    val summaryTop = dimensionResource(R.dimen.hey_distance_2dp)
-    val unreadSize = dimensionResource(R.dimen.hey_distance_8dp)
-    val unreadMargin = dimensionResource(R.dimen.hey_distance_6dp)
+    val summaryTop = watchDimensionResource(R.dimen.hey_distance_2dp)
+    val unreadSize = watchDimensionResource(R.dimen.hey_distance_8dp)
+    val unreadMargin = watchDimensionResource(R.dimen.hey_distance_6dp)
     val summary = remember(item.id, item.summary, item.content, useOriginalContent) {
         val baseSummary = item.summary ?: "暂无摘要"
         if (useOriginalContent && item.content.isNullOrBlank()) {
@@ -875,7 +876,7 @@ private fun rememberPressScaleState(enabled: Boolean): PressScaleState {
 @Composable
 private fun textSize(id: Int): TextUnit {
     val density = LocalDensity.current
-    return with(density) { dimensionResource(id).toSp() }
+    return with(density) { watchDimensionResource(id).toSp() }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -917,7 +918,7 @@ private fun formatTitleForWidthLimits(
     firstLimitPx: Float,
     secondLimitPx: Float
 ): String {
-    val normalized = title.trim().replace('\n', ' ')
+    val normalized = normalizeWatchTitleWhitespace(title)
     if (normalized.isEmpty()) {
         return title
     }

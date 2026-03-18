@@ -18,7 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.dimensionResource
+import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.style.TextAlign
@@ -38,7 +38,7 @@ fun RssSearchScreen(
     onKeywordChange: (String) -> Unit,
     onItemClick: (RssItem) -> Unit
 ) {
-    val safePadding = dimensionResource(R.dimen.watch_safe_padding)
+    val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
     val titleSize = textSize(R.dimen.hey_s_title)
     val listSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_6dp
     val listState = rememberLazyListState()
@@ -107,12 +107,12 @@ private fun SearchResultCard(
     onClick: () -> Unit
 ) {
     val background = MaterialTheme.colorScheme.surface
-    val shape = RoundedCornerShape(dimensionResource(R.dimen.hey_card_normal_bg_radius))
-    val padding = dimensionResource(R.dimen.hey_content_horizontal_distance)
+    val shape = RoundedCornerShape(watchDimensionResource(R.dimen.hey_card_normal_bg_radius))
+    val padding = watchDimensionResource(R.dimen.hey_content_horizontal_distance)
     val titleSize = textSize(R.dimen.feed_card_title_text_size)
     val summarySize = textSize(R.dimen.feed_card_summary_text_size)
     val summaryLineHeight = summarySize * 1.1f
-    val summaryTop = dimensionResource(R.dimen.hey_distance_2dp)
+    val summaryTop = watchDimensionResource(R.dimen.hey_distance_2dp)
     val highlightColor = MaterialTheme.colorScheme.primary
     val snippet = remember(item.id, item.summary, item.description, item.content, keyword) {
         buildSearchSnippet(item, keyword)
@@ -241,7 +241,7 @@ private fun buildHighlightedText(text: String, keyword: String, highlightColor: 
 @Composable
 private fun textSize(id: Int): TextUnit {
     val density = androidx.compose.ui.platform.LocalDensity.current
-    return with(density) { dimensionResource(id).toSp() }
+    return with(density) { watchDimensionResource(id).toSp() }
 }
 
 private const val MAX_SNIPPET_LENGTH = 140

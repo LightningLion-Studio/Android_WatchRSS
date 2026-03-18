@@ -21,7 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.dimensionResource
+import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
@@ -31,7 +31,7 @@ import com.lightningstudio.watchrss.ui.util.QrCodeGenerator
 fun BeianScreen() {
     val context = LocalContext.current
     val density = LocalDensity.current
-    val safePadding = dimensionResource(R.dimen.watch_safe_padding)
+    val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
     val qrSize = with(density) { 120.dp.toPx().toInt() }
 
     val qrBitmap = remember {

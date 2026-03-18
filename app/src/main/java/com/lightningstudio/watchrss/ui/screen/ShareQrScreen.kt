@@ -18,9 +18,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.dimensionResource
+import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.WatchSurface
+import com.lightningstudio.watchrss.ui.theme.WatchDimens
+import com.lightningstudio.watchrss.ui.theme.watchQrSizeFor
 import com.lightningstudio.watchrss.ui.util.QrCodeGenerator
 import kotlin.math.roundToInt
 
@@ -30,7 +32,7 @@ fun ShareQrScreen(
     onQrError: () -> Unit,
     onBack: () -> Unit
 ) {
-    val safePadding = dimensionResource(R.dimen.watch_safe_padding)
+    val safePadding = WatchDimens.watch_safe_padding
 
     WatchSurface {
         Box(
@@ -48,7 +50,12 @@ fun ShareQrScreen(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                val maxSize = if (maxWidth < maxHeight) maxWidth else maxHeight
+                val preferredSize = if (maxWidth < maxHeight) maxWidth else maxHeight
+                val maxSize = watchQrSizeFor(
+                    availableWidth = maxWidth,
+                    availableHeight = maxHeight,
+                    preferredSize = preferredSize
+                )
                 val sizePx = with(LocalDensity.current) {
                     maxSize.toPx().roundToInt().coerceAtLeast(1)
                 }

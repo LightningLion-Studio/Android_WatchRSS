@@ -18,6 +18,7 @@ fi
 
 APP_PACKAGE="com.lightningstudio.watchrss"
 TEST_PACKAGE="${APP_PACKAGE}.test"
+CLEAR_APP_DATA="${WATCHRSS_CLEAR_APP_DATA:-false}"
 APP_APK="$(find "${ROOT_DIR}/app/build/outputs/apk/debug" -maxdepth 1 -type f -name '*-debug.apk' | sort | head -n 1)"
 TEST_APK="$(find "${ROOT_DIR}/app/build/outputs/apk/androidTest/debug" -maxdepth 1 -type f -name '*androidTest*.apk' | sort | head -n 1)"
 if [[ -z "${APP_APK}" || -z "${TEST_APK}" ]]; then
@@ -40,8 +41,10 @@ log_contains_app_fatal() {
 }
 
 adb -s "${SERIAL}" logcat -c
-adb -s "${SERIAL}" shell pm clear "${APP_PACKAGE}" || true
-adb -s "${SERIAL}" shell pm clear "${TEST_PACKAGE}" || true
+if [[ "${CLEAR_APP_DATA}" == "true" ]]; then
+    adb -s "${SERIAL}" shell pm clear "${APP_PACKAGE}" || true
+    adb -s "${SERIAL}" shell pm clear "${TEST_PACKAGE}" || true
+fi
 adb -s "${SERIAL}" install -r -t "${APP_APK}"
 adb -s "${SERIAL}" install -r -t "${TEST_APK}"
 adb -s "${SERIAL}" shell input keyevent KEYCODE_WAKEUP || true

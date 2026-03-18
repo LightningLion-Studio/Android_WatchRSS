@@ -4,9 +4,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -19,14 +21,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.res.colorResource
-import androidx.compose.ui.res.dimensionResource
+import com.lightningstudio.watchrss.ui.theme.watchColorResource
+import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.input.InstallRotaryScrollHandler
 import com.lightningstudio.watchrss.ui.theme.ActionButtonTextStyle
+import com.lightningstudio.watchrss.ui.theme.WatchDimens
+import com.lightningstudio.watchrss.ui.theme.watchActionButtonWidthFor
 
 data class ActionItem(
     val label: String,
@@ -36,21 +40,20 @@ data class ActionItem(
 
 @Composable
 fun ActionDialogScreen(items: List<ActionItem>) {
-    val safePadding = dimensionResource(R.dimen.watch_safe_padding)
-    val horizontalPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_content_horizontal_distance
-    val bottomPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_content_horizontal_distance
-    val dividerSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_8dp
-    val endSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_content_horizontal_distance_6_0
-    val buttonWidth = dimensionResource(R.dimen.watch_action_button_width)
-    val buttonHeight = dimensionResource(R.dimen.watch_action_button_height)
-    val buttonRadius = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_button_default_radius
-    val buttonColor = colorResource(R.color.watch_pill_background)
+    val safePadding = WatchDimens.watch_safe_padding
+    val horizontalPadding = WatchDimens.hey_content_horizontal_distance
+    val bottomPadding = WatchDimens.hey_content_horizontal_distance
+    val dividerSpacing = WatchDimens.hey_distance_8dp
+    val endSpacing = WatchDimens.hey_content_horizontal_distance_6_0
+    val buttonHeight = WatchDimens.watch_action_button_height
+    val buttonRadius = WatchDimens.hey_button_default_radius
+    val buttonColor = watchColorResource(R.color.watch_pill_background)
     val scrollState = rememberScrollState()
 
     InstallRotaryScrollHandler(scrollState)
 
     WatchSurface {
-        Column(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(scrollState)
@@ -60,24 +63,29 @@ fun ActionDialogScreen(items: List<ActionItem>) {
                     top = safePadding,
                     bottom = bottomPadding
                 ),
-            verticalArrangement = Arrangement.Top,
-            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            items.forEachIndexed { index, item ->
-                ActionButton(
-                    label = item.label,
-                    enabled = item.enabled,
-                    onClick = item.onClick,
-                    width = buttonWidth,
-                    height = buttonHeight,
-                    radius = buttonRadius,
-                    backgroundColor = buttonColor
-                )
-                if (index != items.lastIndex) {
-                    Spacer(modifier = Modifier.height(dividerSpacing))
+            val buttonWidth = watchActionButtonWidthFor(maxWidth)
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.Top,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                items.forEachIndexed { index, item ->
+                    ActionButton(
+                        label = item.label,
+                        enabled = item.enabled,
+                        onClick = item.onClick,
+                        width = buttonWidth,
+                        height = buttonHeight,
+                        radius = buttonRadius,
+                        backgroundColor = buttonColor
+                    )
+                    if (index != items.lastIndex) {
+                        Spacer(modifier = Modifier.height(dividerSpacing))
+                    }
                 }
+                Spacer(modifier = Modifier.height(endSpacing))
             }
-            Spacer(modifier = Modifier.height(endSpacing))
         }
     }
 }
@@ -95,7 +103,7 @@ private fun ActionButton(
     val shape = RoundedCornerShape(radius)
     val background = backgroundColor
     val baseColor = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.6f)
-    val dangerColor = colorResource(R.color.danger_red).copy(alpha = if (enabled) 1f else 0.6f)
+    val dangerColor = watchColorResource(R.color.danger_red).copy(alpha = if (enabled) 1f else 0.6f)
     val textColor = if (label.contains("删除")) dangerColor else baseColor
     Box(
         modifier = Modifier

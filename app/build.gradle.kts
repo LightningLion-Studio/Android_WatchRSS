@@ -14,6 +14,17 @@ if (hasKeystoreProperties) {
     keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
 }
 
+val useIsolatedInstrumentation = providers
+    .gradleProperty("watchrss.instrumentation.orchestrator")
+    .orNull
+    ?.toBoolean()
+    ?: false
+val clearPackageDataForInstrumentation = providers
+    .gradleProperty("watchrss.instrumentation.clearPackageData")
+    .orNull
+    ?.toBoolean()
+    ?: useIsolatedInstrumentation
+
 android {
     namespace = "com.lightningstudio.watchrss"
     compileSdk = 36
@@ -27,7 +38,9 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        testInstrumentationRunnerArguments["clearPackageData"] = "true"
+        if (clearPackageDataForInstrumentation) {
+            testInstrumentationRunnerArguments["clearPackageData"] = "true"
+        }
     }
 
     signingConfigs {
@@ -71,7 +84,9 @@ android {
     }
     testOptions {
         animationsDisabled = true
-        execution = "ANDROIDX_TEST_ORCHESTRATOR"
+        if (useIsolatedInstrumentation) {
+            execution = "ANDROIDX_TEST_ORCHESTRATOR"
+        }
     }
 }
 
@@ -122,7 +137,13 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
-    androidTestUtil("androidx.test:orchestrator:1.4.2")
+    if (useIsolatedInstrumentation) {
+        androidTestUtil("androidx.test:orchestrator:1.4.2")
+    }
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+}
+
+tasks.matching { it.name == "connectedDebugAndroidTest" }.configureEach {
+    finalizedBy("installDebug")
 }

@@ -33,7 +33,11 @@ class OobeActivity : BaseWatchActivity() {
                 viewModel.events.collect { event ->
                     if (event == OobeEvent.Finish) {
                         if (returnHomeOnFinish) {
-                            startActivity(Intent(this@OobeActivity, MainActivity::class.java))
+                            startActivity(
+                                Intent(this@OobeActivity, MainActivity::class.java).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                                }
+                            )
                         }
                         finish()
                     }

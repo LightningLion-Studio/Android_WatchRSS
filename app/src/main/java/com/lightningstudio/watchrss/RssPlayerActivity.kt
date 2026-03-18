@@ -32,7 +32,7 @@ class RssPlayerActivity : BaseWatchActivity() {
                     onOpenWeb = {
                         val link = viewModel.webUrl() ?: return@BiliPlayerScreen
                         if (link.startsWith("http", ignoreCase = true)) {
-                            startActivity(WebViewActivity.createIntent(this, link))
+                            WebViewActivity.open(this, link)
                         } else {
                             openExternalLink(this, link)
                         }

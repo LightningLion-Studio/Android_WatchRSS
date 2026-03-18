@@ -24,8 +24,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.colorResource
-import androidx.compose.ui.res.dimensionResource
+import com.lightningstudio.watchrss.ui.theme.watchColorResource
+import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.TextUnit
 import androidx.core.content.res.ResourcesCompat
@@ -36,6 +36,10 @@ import com.lightningstudio.watchrss.data.rss.RssChannel
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.input.InstallRotaryScrollHandler
 import com.lightningstudio.watchrss.ui.theme.ActionButtonTextStyle
+import com.lightningstudio.watchrss.ui.theme.WatchDimens
+import com.lightningstudio.watchrss.ui.theme.rememberWatchTitleLineLimitsPx
+import com.lightningstudio.watchrss.ui.theme.watchActionButtonWidthFor
+import com.lightningstudio.watchrss.ui.util.normalizeWatchTitleWhitespace
 import kotlin.math.min
 
 @Composable
@@ -46,22 +50,15 @@ fun ChannelDetailScreen(
     onMarkRead: () -> Unit,
     onShare: () -> Unit
 ) {
-    val safePadding = dimensionResource(R.dimen.watch_safe_padding)
-    val titleSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_6dp
-    val infoSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_4dp
-    val buttonSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_4dp
-    val buttonWidth = dimensionResource(R.dimen.watch_action_button_width)
-    val buttonHeight = dimensionResource(R.dimen.watch_action_button_height)
+    val safePadding = WatchDimens.watch_safe_padding
+    val titleSpacing = WatchDimens.hey_distance_6dp
+    val infoSpacing = WatchDimens.hey_distance_4dp
+    val buttonSpacing = WatchDimens.hey_distance_4dp
+    val buttonHeight = WatchDimens.watch_action_button_height
     val titleSize = textSize(R.dimen.hey_s_title)
     val context = LocalContext.current
     val density = LocalDensity.current
-    val titleSizePx = with(density) { dimensionResource(R.dimen.hey_s_title).toPx() }
-    val firstLimitPx = with(density) {
-        dimensionResource(R.dimen.detail_title_first_line_max_width).toPx()
-    }
-    val secondLimitPx = with(density) {
-        dimensionResource(R.dimen.detail_title_second_line_max_width).toPx()
-    }
+    val titleSizePx = with(density) { watchDimensionResource(R.dimen.hey_s_title).toPx() }
     val typeface = remember(context) { ResourcesCompat.getFont(context, R.font.watch_sans) }
     val paint = remember(typeface, titleSizePx) {
         TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -83,6 +80,9 @@ fun ChannelDetailScreen(
         ) {
             BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
                 val availableWidthPx = with(density) { maxWidth.toPx() }
+                val (firstLimitPx, secondLimitPx) = remember(availableWidthPx, density) {
+                    rememberWatchTitleLineLimitsPx(availableWidthPx, density)
+                }
                 val formattedTitle = remember(channel?.title, availableWidthPx, titleSizePx, typeface) {
                     formatTitleForWidthLimits(
                         title = channel?.title ?: "加载中...",
@@ -136,45 +136,53 @@ fun ChannelDetailScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(buttonSpacing))
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val buttonWidth = watchActionButtonWidthFor(maxWidth)
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Spacer(modifier = Modifier.height(buttonSpacing))
 
-            ActionButton(
-                label = "设置",
-                enabled = channel != null,
-                width = buttonWidth,
-                height = buttonHeight,
-                onClick = onOpenSettings
-            )
+                    ActionButton(
+                        label = "设置",
+                        enabled = channel != null,
+                        width = buttonWidth,
+                        height = buttonHeight,
+                        onClick = onOpenSettings
+                    )
 
-            Spacer(modifier = Modifier.height(buttonSpacing))
+                    Spacer(modifier = Modifier.height(buttonSpacing))
 
-            ActionButton(
-                label = "搜索",
-                enabled = channel != null,
-                width = buttonWidth,
-                height = buttonHeight,
-                onClick = onSearch
-            )
+                    ActionButton(
+                        label = "搜索",
+                        enabled = channel != null,
+                        width = buttonWidth,
+                        height = buttonHeight,
+                        onClick = onSearch
+                    )
 
-            Spacer(modifier = Modifier.height(buttonSpacing))
+                    Spacer(modifier = Modifier.height(buttonSpacing))
 
-            ActionButton(
-                label = "分享",
-                enabled = channel != null,
-                width = buttonWidth,
-                height = buttonHeight,
-                onClick = onShare
-            )
+                    ActionButton(
+                        label = "分享",
+                        enabled = channel != null,
+                        width = buttonWidth,
+                        height = buttonHeight,
+                        onClick = onShare
+                    )
 
-            Spacer(modifier = Modifier.height(buttonSpacing))
+                    Spacer(modifier = Modifier.height(buttonSpacing))
 
-            ActionButton(
-                label = "标记已读",
-                enabled = channel?.unreadCount?.let { it > 0 } ?: false,
-                width = buttonWidth,
-                height = buttonHeight,
-                onClick = onMarkRead
-            )
+                    ActionButton(
+                        label = "标记已读",
+                        enabled = channel?.unreadCount?.let { it > 0 } ?: false,
+                        width = buttonWidth,
+                        height = buttonHeight,
+                        onClick = onMarkRead
+                    )
+                }
+            }
         }
     }
 }
@@ -187,9 +195,9 @@ private fun ActionButton(
     height: androidx.compose.ui.unit.Dp,
     onClick: () -> Unit
 ) {
-    val pillColor = colorResource(R.color.watch_pill_background)
-    val pillRadius = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_button_default_radius
-    val horizontalPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_6dp
+    val pillColor = watchColorResource(R.color.watch_pill_background)
+    val pillRadius = WatchDimens.hey_button_default_radius
+    val horizontalPadding = WatchDimens.hey_distance_6dp
     val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.6f)
 
     Box(
@@ -214,7 +222,7 @@ private fun ActionButton(
 @Composable
 private fun textSize(id: Int): TextUnit {
     val density = LocalDensity.current
-    return with(density) { dimensionResource(id).toSp() }
+    return with(density) { watchDimensionResource(id).toSp() }
 }
 
 private fun formatTitleForWidthLimits(
@@ -224,7 +232,7 @@ private fun formatTitleForWidthLimits(
     firstLimitPx: Float,
     secondLimitPx: Float
 ): String {
-    val normalized = title.trim().replace('\n', ' ')
+    val normalized = normalizeWatchTitleWhitespace(title)
     if (normalized.isEmpty()) {
         return title
     }

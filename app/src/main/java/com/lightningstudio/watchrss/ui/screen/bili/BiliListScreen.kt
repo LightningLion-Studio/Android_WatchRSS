@@ -19,7 +19,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.dimensionResource
+import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.style.TextAlign
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.EmptyStateCard
@@ -37,9 +37,9 @@ fun BiliListScreen(
     onLoadMore: () -> Unit,
     onItemClick: (BiliListItem) -> Unit
 ) {
-    val safePadding = dimensionResource(R.dimen.watch_safe_padding)
-    val itemSpacing = dimensionResource(R.dimen.hey_distance_8dp)
-    val spacing = dimensionResource(R.dimen.hey_distance_6dp)
+    val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
+    val itemSpacing = watchDimensionResource(R.dimen.hey_distance_8dp)
+    val spacing = watchDimensionResource(R.dimen.hey_distance_6dp)
     val listState = rememberLazyListState()
     InstallRotaryLazyListHandler(listState)
 
@@ -148,7 +148,7 @@ fun BiliListScreen(
 @Composable
 private fun textSize(id: Int): androidx.compose.ui.unit.TextUnit {
     return androidx.compose.ui.platform.LocalDensity.current.run {
-        dimensionResource(id).toSp()
+        watchDimensionResource(id).toSp()
     }
 }
 

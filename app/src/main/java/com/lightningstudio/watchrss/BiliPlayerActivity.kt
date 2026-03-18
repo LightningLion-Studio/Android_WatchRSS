@@ -41,7 +41,7 @@ class BiliPlayerActivity : BaseWatchActivity() {
                         onRetry = viewModel::loadPlayUrl,
                         onOpenWeb = {
                             val safeLink = link ?: return@BiliPlayerScreen
-                            startActivity(WebViewActivity.createIntent(this, safeLink))
+                            WebViewActivity.open(this, safeLink)
                         },
                         onPanStateChange = { offsetX, rangeX ->
                             panOffsetX = offsetX

@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -34,10 +35,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.colorResource
-import androidx.compose.ui.res.dimensionResource
+import com.lightningstudio.watchrss.ui.theme.watchColorResource
+import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -46,8 +46,11 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
+import com.lightningstudio.watchrss.ui.components.WatchButton
 import com.lightningstudio.watchrss.data.rss.SavedItem
 import com.lightningstudio.watchrss.ui.input.InstallRotaryLazyListHandler
+import com.lightningstudio.watchrss.ui.theme.WatchDimens
+import com.lightningstudio.watchrss.ui.theme.watchActionButtonWidthFor
 import com.lightningstudio.watchrss.ui.util.formatTime
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -65,8 +68,8 @@ fun SavedItemsScreen(
     onItemRemove: (SavedItem) -> Unit,
     onSyncToPhone: () -> Unit
 ) {
-    val safePadding = dimensionResource(R.dimen.watch_safe_padding)
-    val itemSpacing = dimensionResource(R.dimen.hey_distance_6dp)
+    val safePadding = WatchDimens.watch_safe_padding
+    val itemSpacing = watchDimensionResource(R.dimen.hey_distance_6dp)
     val listState = rememberLazyListState()
 
     InstallRotaryLazyListHandler(listState)
@@ -129,7 +132,7 @@ private fun buildSavedSummary(savedItem: SavedItem): String {
 
 @Composable
 private fun SavedHeader(title: String, hint: String) {
-    val padding = dimensionResource(R.dimen.hey_distance_4dp)
+    val padding = watchDimensionResource(R.dimen.hey_distance_4dp)
     val titleSize = textSize(R.dimen.settings_title_text_size)
     val hintSize = textSize(R.dimen.hey_s_desription)
 
@@ -155,24 +158,25 @@ private fun SavedHeader(title: String, hint: String) {
 
 @Composable
 private fun SyncButton(onClick: () -> Unit) {
-    val padding = dimensionResource(R.dimen.hey_distance_4dp)
-    val shape = RoundedCornerShape(dimensionResource(R.dimen.hey_button_default_radius))
+    val padding = watchDimensionResource(R.dimen.hey_distance_4dp)
+    val shape = RoundedCornerShape(WatchDimens.hey_button_default_radius)
 
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = padding, vertical = padding),
         contentAlignment = Alignment.Center
     ) {
-        androidx.compose.material3.Button(
+        val buttonWidth = watchActionButtonWidthFor(maxWidth)
+        WatchButton(
             onClick = onClick,
             colors = androidx.compose.material3.ButtonDefaults.buttonColors(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant
             ),
             shape = shape,
             modifier = Modifier
-                .width(dimensionResource(R.dimen.watch_action_button_width))
-                .height(dimensionResource(R.dimen.watch_action_button_height))
+                .width(buttonWidth)
+                .height(WatchDimens.watch_action_button_height)
         ) {
             Text(
                 text = "同步到手机",
@@ -186,7 +190,7 @@ private fun SyncButton(onClick: () -> Unit) {
 
 @Composable
 private fun SavedEmpty(message: String) {
-    val padding = dimensionResource(R.dimen.hey_content_horizontal_distance)
+    val padding = watchDimensionResource(R.dimen.hey_content_horizontal_distance)
     val textSize = textSize(R.dimen.hey_m_desription)
 
     Text(
@@ -207,16 +211,11 @@ private fun SavedItemRow(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
-    val context = LocalContext.current
-    val isRound = remember(context) { context.resources.configuration.isScreenRound }
     val backgroundColor = MaterialTheme.colorScheme.surface
-    val shape = RoundedCornerShape(dimensionResource(R.dimen.hey_card_normal_bg_radius))
-    val paddingStart = dimensionResource(R.dimen.hey_content_horizontal_distance_6_0)
-    val paddingEnd = dimensionResource(R.dimen.hey_listitem_padding_right)
-    val verticalPadding = dimensionResource(R.dimen.hey_multiple_default_summary_alone_padding_vertical)
-    val titleMargin = dimensionResource(R.dimen.hey_listitem_widget_padding_vertical)
-    val summaryTop = dimensionResource(R.dimen.hey_alone_summary_margin_top)
-    val summaryBottom = dimensionResource(R.dimen.hey_alone_summary_margin_bottom)
+    val shape = RoundedCornerShape(WatchDimens.hey_card_normal_bg_radius)
+    val paddingStart = WatchDimens.hey_content_horizontal_distance_6_0
+    val paddingEnd = watchDimensionResource(R.dimen.hey_listitem_padding_right)
+    val verticalPadding = watchDimensionResource(R.dimen.hey_multiple_default_summary_alone_padding_vertical)
     val titleSize = textSize(R.dimen.hey_s_title)
     val summarySize = textSize(R.dimen.hey_m_desription)
     val summaryColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -230,8 +229,8 @@ private fun SavedItemRow(
             .padding(
                 start = paddingStart,
                 end = paddingEnd,
-                top = if (isRound) 0.dp else verticalPadding,
-                bottom = if (isRound) 0.dp else verticalPadding
+                top = verticalPadding,
+                bottom = verticalPadding
             ),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -241,24 +240,14 @@ private fun SavedItemRow(
                 color = MaterialTheme.colorScheme.onSurface,
                 fontSize = titleSize,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = if (isRound) {
-                    Modifier.padding(top = titleMargin, bottom = titleMargin)
-                } else {
-                    Modifier
-                }
+                overflow = TextOverflow.Ellipsis
             )
             Text(
                 text = summary,
                 color = summaryColor,
                 fontSize = summarySize,
                 maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = if (isRound) {
-                    Modifier.padding(top = summaryTop, bottom = summaryBottom)
-                } else {
-                    Modifier
-                }
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
@@ -269,10 +258,10 @@ private fun UndoFloatingButton(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
-    val size = dimensionResource(R.dimen.hey_listitem_big_lefticon_height_width)
-    val radius = dimensionResource(R.dimen.hey_card_normal_bg_radius)
-    val background = colorResource(R.color.watch_pill_background)
-    val iconSize = dimensionResource(R.dimen.hey_listitem_widget_size)
+    val size = watchDimensionResource(R.dimen.hey_listitem_big_lefticon_height_width)
+    val radius = WatchDimens.hey_card_normal_bg_radius
+    val background = watchColorResource(R.color.watch_pill_background)
+    val iconSize = watchDimensionResource(R.dimen.hey_listitem_widget_size)
 
     Box(
         modifier = modifier
@@ -340,7 +329,7 @@ private fun SwipeToRemoveRow(
 @Composable
 private fun textSize(id: Int): TextUnit {
     val density = LocalDensity.current
-    return with(density) { dimensionResource(id).toSp() }
+    return with(density) { watchDimensionResource(id).toSp() }
 }
 
 @Composable

@@ -29,7 +29,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.dimensionResource
+import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
@@ -43,10 +43,10 @@ fun BiliPillButton(
     enabled: Boolean = true,
     onClick: () -> Unit
 ) {
-    val radius = dimensionResource(R.dimen.hey_button_default_radius)
-    val height = dimensionResource(R.dimen.hey_button_height)
-    val horizontalPadding = dimensionResource(R.dimen.hey_button_mergin_horizontal)
-    val verticalPadding = dimensionResource(R.dimen.hey_button_padding_vertical)
+    val radius = watchDimensionResource(R.dimen.hey_button_default_radius)
+    val height = watchDimensionResource(R.dimen.hey_button_height)
+    val horizontalPadding = watchDimensionResource(R.dimen.hey_button_mergin_horizontal)
+    val verticalPadding = watchDimensionResource(R.dimen.hey_button_padding_vertical)
     val textSize = textSize(R.dimen.hey_s_title)
     val background = MaterialTheme.colorScheme.surfaceVariant
 
@@ -77,12 +77,12 @@ fun BiliVideoCard(
     durationSeconds: Int?,
     onClick: () -> Unit
 ) {
-    val cardRadius = dimensionResource(R.dimen.hey_card_normal_bg_radius)
-    val coverHeight = dimensionResource(R.dimen.hey_card_large_height)
-    val textPadding = dimensionResource(R.dimen.hey_distance_6dp)
+    val cardRadius = watchDimensionResource(R.dimen.hey_card_normal_bg_radius)
+    val coverHeight = watchDimensionResource(R.dimen.hey_card_large_height)
+    val textPadding = watchDimensionResource(R.dimen.hey_distance_6dp)
     val titleSize = textSize(R.dimen.hey_s_title)
     val subtitleSize = textSize(R.dimen.hey_caption)
-    val badgePadding = dimensionResource(R.dimen.hey_distance_4dp)
+    val badgePadding = watchDimensionResource(R.dimen.hey_distance_4dp)
     val badgeTextSize = textSize(R.dimen.feed_card_action_text_size)
     val cardColor = MaterialTheme.colorScheme.surface
     val durationText = remember(durationSeconds) { formatDuration(durationSeconds) }
@@ -122,7 +122,7 @@ fun BiliVideoCard(
             Image(
                 painter = painterResource(R.drawable.ic_play_circle),
                 contentDescription = "播放",
-                modifier = Modifier.size(dimensionResource(R.dimen.hey_listitem_widget_size))
+                modifier = Modifier.size(watchDimensionResource(R.dimen.hey_listitem_widget_size))
             )
             if (durationText != null) {
                 Box(
@@ -172,12 +172,12 @@ fun BiliFeedCard(
     modifier: Modifier = Modifier
 ) {
     val background = MaterialTheme.colorScheme.surface
-    val shape = RoundedCornerShape(dimensionResource(R.dimen.hey_card_normal_bg_radius))
-    val imageHeight = dimensionResource(R.dimen.feed_card_image_height)
-    val padding = dimensionResource(R.dimen.hey_distance_8dp)
+    val shape = RoundedCornerShape(watchDimensionResource(R.dimen.hey_card_normal_bg_radius))
+    val imageHeight = watchDimensionResource(R.dimen.feed_card_image_height)
+    val padding = watchDimensionResource(R.dimen.hey_distance_8dp)
     val titleSize = textSize(R.dimen.feed_card_title_text_size)
     val summarySize = textSize(R.dimen.feed_card_summary_text_size)
-    val summaryTop = dimensionResource(R.dimen.hey_distance_2dp)
+    val summaryTop = watchDimensionResource(R.dimen.hey_distance_2dp)
     val overlay = Brush.verticalGradient(
         colors = listOf(Color.Transparent, MaterialTheme.colorScheme.background.copy(alpha = 0.7f))
     )
@@ -280,7 +280,7 @@ fun BiliStatsRow(
         danmakuCount?.let { "弹幕 ${formatBiliCount(it)}" }
     )
     if (parts.isEmpty()) return
-    Row(horizontalArrangement = Arrangement.spacedBy(dimensionResource(R.dimen.hey_distance_4dp))) {
+    Row(horizontalArrangement = Arrangement.spacedBy(watchDimensionResource(R.dimen.hey_distance_4dp))) {
         parts.forEach { text ->
             Text(text = text, color = color, fontSize = captionSize)
         }
@@ -290,7 +290,7 @@ fun BiliStatsRow(
 @Composable
 private fun textSize(id: Int): TextUnit {
     return androidx.compose.ui.platform.LocalDensity.current.run {
-        dimensionResource(id).toSp()
+        watchDimensionResource(id).toSp()
     }
 }
 

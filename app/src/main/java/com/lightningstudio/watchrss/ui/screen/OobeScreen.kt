@@ -21,7 +21,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -36,7 +35,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.dimensionResource
+import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.TextLinkStyles
@@ -50,8 +49,10 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
+import com.lightningstudio.watchrss.ui.components.WatchCheckbox
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.testing.OobeTestTags
+import com.lightningstudio.watchrss.ui.theme.WatchDimens
 import com.lightningstudio.watchrss.ui.viewmodel.OobeUiState
 
 private data class IntroPageContent(
@@ -92,8 +93,9 @@ private fun OobeIntroStep(
     onOpenUserAgreement: () -> Unit,
     onOpenPrivacy: () -> Unit
 ) {
-    val horizontalSafePadding = dimensionResource(R.dimen.watch_safe_padding)
-    val verticalSafePadding = 8.dp
+    val horizontalSafePadding = WatchDimens.watch_safe_padding
+    val topSafePadding = WatchDimens.hey_distance_8dp
+    val bottomSafePadding = WatchDimens.hey_distance_8dp
     val introPage = currentPage.coerceAtLeast(0)
     val introContent = remember {
         IntroPageContent(
@@ -110,15 +112,21 @@ private fun OobeIntroStep(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = horizontalSafePadding, vertical = verticalSafePadding)
+            .padding(
+                start = horizontalSafePadding,
+                end = horizontalSafePadding,
+                top = topSafePadding,
+                bottom = bottomSafePadding
+            )
             .testTag(OobeTestTags.ROOT),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(2.dp))
+        Spacer(modifier = Modifier.height(if (introPage == 0) 2.dp else 0.dp))
 
         IntroPage(
             page = introContent,
             showTitle = introPage == 0,
+            compact = introPage > 0,
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f)
@@ -132,7 +140,6 @@ private fun OobeIntroStep(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                // 错误提示
                 if (showError) {
                     Text(
                         text = "请勾选\"同意《用户协议》与《隐私政策》\"",
@@ -144,13 +151,12 @@ private fun OobeIntroStep(
                     )
                 }
 
-                // Checkbox 和协议文本
                 Row(
                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center
                 ) {
-                    Checkbox(
+                    WatchCheckbox(
                         checked = isAgreed,
                         onCheckedChange = {
                             isAgreed = it
@@ -231,16 +237,21 @@ private fun OobeIntroStep(
 private fun IntroPage(
     page: IntroPageContent,
     showTitle: Boolean,
+    compact: Boolean,
     modifier: Modifier = Modifier
 ) {
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
-        val heroSize = (maxHeight * 0.42f).coerceIn(82.dp, 104.dp)
+        val heroSize = if (compact) {
+            (maxHeight * 0.36f).coerceIn(74.dp, 90.dp)
+        } else {
+            (maxHeight * 0.42f).coerceIn(82.dp, 104.dp)
+        }
         val textWidth = (maxWidth * 0.96f).coerceAtMost(196.dp)
 
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 8.dp),
+                .padding(top = if (compact) 0.dp else 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             IntroHero(
@@ -249,7 +260,7 @@ private fun IntroPage(
                 size = heroSize
             )
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(if (compact) 6.dp else 10.dp))
 
             Text(
                 text = page.label,

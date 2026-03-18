@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -36,7 +35,7 @@ fun VideoSearchCard(
     val highlightColor = MaterialTheme.colorScheme.primary
     val titleAnnotated = BiliFormatUtils.parseKeywordHighlight(video.title, highlightColor)
 
-    Card(
+    WatchCard(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
@@ -102,7 +101,7 @@ fun UserSearchCard(
     val highlightColor = MaterialTheme.colorScheme.primary
     val nameAnnotated = BiliFormatUtils.parseKeywordHighlight(user.uname, highlightColor)
 
-    Card(
+    WatchCard(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
@@ -162,7 +161,7 @@ fun MediaSearchCard(
     val highlightColor = MaterialTheme.colorScheme.primary
     val titleAnnotated = BiliFormatUtils.parseKeywordHighlight(media.title, highlightColor)
 
-    Card(
+    WatchCard(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),

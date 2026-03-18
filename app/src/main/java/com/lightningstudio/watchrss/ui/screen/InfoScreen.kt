@@ -17,7 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.dimensionResource
+import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
@@ -38,10 +38,10 @@ fun InfoScreen(
     onBeianClick: () -> Unit
 ) {
     val density = LocalDensity.current
-    val safePadding = dimensionResource(R.dimen.watch_safe_padding)
-    val pagePadding = dimensionResource(R.dimen.detail_page_horizontal_padding)
-    val blockSpacing = dimensionResource(R.dimen.detail_block_spacing)
-    val titlePadding = dimensionResource(R.dimen.detail_title_safe_padding)
+    val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
+    val pagePadding = watchDimensionResource(R.dimen.detail_page_horizontal_padding)
+    val blockSpacing = watchDimensionResource(R.dimen.detail_block_spacing)
+    val titlePadding = watchDimensionResource(R.dimen.detail_title_safe_padding)
     val backgroundColor = Color.Black
     val textColor = Color.White
     val bodyFontSize = with(density) { 12.dp.toSp() }
@@ -62,7 +62,7 @@ fun InfoScreen(
             Spacer(modifier = Modifier.height(safePadding))
         }
         item(key = "titleGap") {
-            Spacer(modifier = Modifier.height(dimensionResource(R.dimen.hey_distance_4dp)))
+            Spacer(modifier = Modifier.height(watchDimensionResource(R.dimen.hey_distance_4dp)))
         }
         item(key = "title") {
             DetailTitle(

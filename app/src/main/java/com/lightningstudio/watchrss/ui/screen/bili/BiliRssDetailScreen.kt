@@ -2,10 +2,13 @@ package com.lightningstudio.watchrss.ui.screen.bili
 
 import android.graphics.Bitmap
 import android.graphics.Paint
+import android.text.TextPaint
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -37,10 +40,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.dimensionResource
+import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
@@ -52,13 +56,16 @@ import androidx.core.content.res.ResourcesCompat
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.input.InstallRotaryLazyListHandler
 import com.lightningstudio.watchrss.ui.theme.WatchBackgroundDeep
+import com.lightningstudio.watchrss.ui.theme.WatchDimens
 import com.lightningstudio.watchrss.ui.theme.WatchReadingBackgroundLight
 import com.lightningstudio.watchrss.ui.theme.WatchReadingTextLight
 import com.lightningstudio.watchrss.ui.theme.WatchTextPrimary
+import com.lightningstudio.watchrss.ui.theme.rememberWatchTitleLineLimitsPx
 import com.lightningstudio.watchrss.ui.util.RssImageLoader
+import com.lightningstudio.watchrss.ui.util.formatWatchTitleForWidthLimits
+import com.lightningstudio.watchrss.ui.util.normalizeWatchTitleWhitespace
 import com.lightningstudio.watchrss.ui.viewmodel.BiliDetailUiState
-import android.text.TextPaint
-import kotlin.math.min
+import kotlin.math.max
 
 @Composable
 fun BiliRssDetailScreen(
@@ -69,9 +76,9 @@ fun BiliRssDetailScreen(
     onFavorite: () -> Unit,
     onShare: () -> Unit
 ) {
-    val safePadding = dimensionResource(R.dimen.watch_safe_padding)
-    val pagePadding = dimensionResource(R.dimen.detail_page_horizontal_padding)
-    val blockSpacing = dimensionResource(R.dimen.detail_block_spacing)
+    val safePadding = WatchDimens.watch_safe_padding
+    val pagePadding = WatchDimens.detail_page_horizontal_padding
+    val blockSpacing = WatchDimens.detail_block_spacing
     val listState = rememberLazyListState()
     InstallRotaryLazyListHandler(listState)
     val isScrolling by remember(listState) {
@@ -81,9 +88,40 @@ fun BiliRssDetailScreen(
     val textColor = if (readingThemeDark) WatchTextPrimary else WatchReadingTextLight
     val bodySize = readingFontSizeSp.sp
     val titleSize = textSize(R.dimen.hey_m_title)
+    val actionTopSpacing = 15.dp
     val actionIconSize = 32.dp
-    val actionIconPadding = dimensionResource(R.dimen.hey_distance_6dp)
+    val actionIconPadding = watchDimensionResource(R.dimen.hey_distance_6dp)
     val activeColor = MaterialTheme.colorScheme.primary
+    val actionContainerColor = if (readingThemeDark) {
+        MaterialTheme.colorScheme.surfaceVariant
+    } else {
+        Color.White.copy(alpha = 0.96f)
+    }
+    val actionBorderColor = if (readingThemeDark) {
+        Color.Transparent
+    } else {
+        Color(0xFFD9CFC3)
+    }
+    val activeActionContainerColor = if (readingThemeDark) {
+        MaterialTheme.colorScheme.surfaceVariant
+    } else {
+        Color(0xFFFFF0E6)
+    }
+    val activeActionBorderColor = if (readingThemeDark) {
+        Color.Transparent
+    } else {
+        activeColor.copy(alpha = 0.6f)
+    }
+    val mediaCardContainerColor = if (readingThemeDark) {
+        MaterialTheme.colorScheme.surface
+    } else {
+        Color.White.copy(alpha = 0.96f)
+    }
+    val mediaCardBorderColor = if (readingThemeDark) {
+        Color.Transparent
+    } else {
+        Color(0xFFD9CFC3)
+    }
 
     val detail = uiState.detail
     if (detail == null) {
@@ -117,9 +155,9 @@ fun BiliRssDetailScreen(
     }
     val coverUrl = detail.item.cover
     val context = LocalContext.current
-    val maxWidthPx = remember(context) {
-        val paddingPx =
-            context.resources.getDimensionPixelSize(R.dimen.detail_page_horizontal_padding)
+    val density = LocalDensity.current
+    val maxWidthPx = remember(context, density, pagePadding) {
+        val paddingPx = with(density) { pagePadding.roundToPx() }
         (context.resources.displayMetrics.widthPixels - paddingPx * 2).coerceAtLeast(1)
     }
 
@@ -137,12 +175,12 @@ fun BiliRssDetailScreen(
                 Spacer(modifier = Modifier.height(safePadding))
             }
             item(key = "titleGap") {
-                Spacer(modifier = Modifier.height(dimensionResource(R.dimen.hey_distance_4dp)))
+                Spacer(modifier = Modifier.height(watchDimensionResource(R.dimen.hey_distance_4dp)))
             }
             item(key = "title") {
                 BiliRssDetailTitle(
                     title = display.title,
-                    titlePadding = dimensionResource(R.dimen.detail_title_safe_padding),
+                    titlePadding = WatchDimens.detail_title_safe_padding,
                     textColor = textColor
                 )
             }
@@ -171,10 +209,15 @@ fun BiliRssDetailScreen(
                 BiliRssVideoCard(
                     poster = coverUrl,
                     maxWidthPx = maxWidthPx,
+                    containerColor = mediaCardContainerColor,
+                    borderColor = mediaCardBorderColor,
                     topPadding = 0.dp,
                     isScrolling = isScrolling,
                     onClick = onPlayClick
                 )
+            }
+            item(key = "actionSpacing") {
+                Spacer(modifier = Modifier.height(actionTopSpacing))
             }
             item(key = "actions") {
                 Row(
@@ -186,6 +229,8 @@ fun BiliRssDetailScreen(
                         iconRes = R.drawable.ic_action_favorite,
                         contentDescription = "收藏",
                         tint = if (uiState.isFavorited) activeColor else textColor,
+                        containerColor = if (uiState.isFavorited) activeActionContainerColor else actionContainerColor,
+                        borderColor = if (uiState.isFavorited) activeActionBorderColor else actionBorderColor,
                         size = actionIconSize,
                         padding = actionIconPadding,
                         enabled = !isScrolling,
@@ -196,6 +241,8 @@ fun BiliRssDetailScreen(
                         iconRes = R.drawable.ic_action_share,
                         contentDescription = "分享",
                         tint = textColor,
+                        containerColor = actionContainerColor,
+                        borderColor = actionBorderColor,
                         size = actionIconSize,
                         padding = actionIconPadding,
                         enabled = !isScrolling,
@@ -224,6 +271,8 @@ fun BiliRssDetailScreen(
 private fun BiliRssVideoCard(
     poster: String?,
     maxWidthPx: Int,
+    containerColor: Color,
+    borderColor: Color,
     topPadding: Dp,
     isScrolling: Boolean,
     onClick: () -> Unit
@@ -232,8 +281,8 @@ private fun BiliRssVideoCard(
     var cover by remember(poster, maxWidthPx) { mutableStateOf<Bitmap?>(null) }
     val ratio = cover?.let { it.width.toFloat() / it.height.toFloat() }
         ?: poster?.let { RssImageLoader.getCachedAspectRatio(it) }
-    val coverHeight = dimensionResource(R.dimen.hey_card_large_height)
-    val shape = RoundedCornerShape(dimensionResource(R.dimen.hey_card_normal_bg_radius))
+    val coverHeight = watchDimensionResource(R.dimen.hey_card_large_height)
+    val shape = RoundedCornerShape(watchDimensionResource(R.dimen.hey_card_normal_bg_radius))
 
     LaunchedEffect(poster, maxWidthPx, isScrolling) {
         if (isScrolling) return@LaunchedEffect
@@ -247,7 +296,10 @@ private fun BiliRssVideoCard(
             .fillMaxWidth()
             .padding(top = topPadding)
             .clip(shape)
-            .background(MaterialTheme.colorScheme.surface)
+            .background(containerColor)
+            .then(
+                if (borderColor.alpha > 0f) Modifier.border(1.dp, borderColor, shape) else Modifier
+            )
             .clickableWithoutRipple(enabled = !isScrolling, onClick = onClick)
     ) {
         val bitmap = cover
@@ -278,7 +330,7 @@ private fun BiliRssVideoCard(
             contentDescription = "播放",
             modifier = Modifier
                 .align(Alignment.Center)
-                .size(dimensionResource(R.dimen.hey_listitem_widget_size))
+                .size(watchDimensionResource(R.dimen.hey_listitem_widget_size))
         )
     }
 }
@@ -288,17 +340,40 @@ private fun CircleIconButton(
     iconRes: Int,
     contentDescription: String,
     tint: Color,
+    containerColor: Color,
+    borderColor: Color,
     size: Dp,
     padding: Dp,
     enabled: Boolean = true,
     onClick: () -> Unit
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val backgroundColor = if (isPressed && enabled) {
+        tint.copy(
+            alpha = if (containerColor.red + containerColor.green + containerColor.blue > 1.8f) {
+                0.08f
+            } else {
+                0.14f
+            }
+        ).compositeOver(containerColor)
+    } else {
+        containerColor
+    }
+
     Box(
         modifier = Modifier
             .size(size)
             .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .clickableWithoutRipple(enabled = enabled, onClick = onClick),
+            .background(backgroundColor)
+            .then(
+                if (borderColor.alpha > 0f) Modifier.border(1.dp, borderColor, CircleShape) else Modifier
+            )
+            .clickableWithoutRipple(
+                enabled = enabled,
+                interactionSource = interactionSource,
+                onClick = onClick
+            ),
         contentAlignment = Alignment.Center
     ) {
         Image(
@@ -315,17 +390,18 @@ private fun CircleIconButton(
 @Composable
 private fun textSize(id: Int): TextUnit {
     val density = LocalDensity.current
-    return with(density) { dimensionResource(id).toSp() }
+    return with(density) { watchDimensionResource(id).toSp() }
 }
 
 @Composable
 private fun Modifier.clickableWithoutRipple(
     enabled: Boolean = true,
+    interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
     onClick: () -> Unit
 ): Modifier {
     return clickable(
         enabled = enabled,
-        interactionSource = remember { MutableInteractionSource() },
+        interactionSource = interactionSource,
         indication = null,
         onClick = onClick
     )
@@ -344,15 +420,16 @@ private fun BiliRssDetailTitle(
     textColor: Color
 ) {
     val hintSize = textSize(R.dimen.hey_m_title)
+    val titleStyle = MaterialTheme.typography.titleMedium.copy(
+        fontSize = hintSize,
+        lineHeight = max(
+            MaterialTheme.typography.titleMedium.lineHeight.value,
+            hintSize.value * 1.24f
+        ).sp
+    )
     val context = LocalContext.current
     val density = LocalDensity.current
-    val titleSizePx = with(density) { dimensionResource(R.dimen.hey_m_title).toPx() }
-    val firstLimitPx = with(density) {
-        dimensionResource(R.dimen.detail_title_first_line_max_width).toPx()
-    }
-    val secondLimitPx = with(density) {
-        dimensionResource(R.dimen.detail_title_second_line_max_width).toPx()
-    }
+    val titleSizePx = with(density) { watchDimensionResource(R.dimen.hey_m_title).toPx() }
     val typeface = remember(context) { ResourcesCompat.getFont(context, R.font.watch_sans) }
     val paint = remember(typeface, titleSizePx) {
         TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -367,8 +444,11 @@ private fun BiliRssDetailTitle(
             .padding(horizontal = titlePadding)
     ) {
         val availableWidthPx = with(density) { maxWidth.toPx() }
-        val formattedTitle = remember(title, availableWidthPx, titleSizePx, typeface) {
-            formatTitleForWidthLimits(
+        val (firstLimitPx, secondLimitPx) = remember(availableWidthPx, density) {
+            rememberWatchTitleLineLimitsPx(availableWidthPx, density)
+        }
+        val formattedTitle = remember(title, availableWidthPx, paint) {
+            formatWatchTitleForWidthLimits(
                 title = title,
                 paint = paint,
                 availableWidthPx = availableWidthPx,
@@ -378,116 +458,10 @@ private fun BiliRssDetailTitle(
         }
         Text(
             text = formattedTitle,
+            style = titleStyle,
             color = textColor,
-            fontSize = hintSize,
             textAlign = TextAlign.Center,
             modifier = Modifier.fillMaxWidth()
         )
-    }
-}
-
-private fun formatTitleForWidthLimits(
-    title: String,
-    paint: TextPaint,
-    availableWidthPx: Float,
-    firstLimitPx: Float,
-    secondLimitPx: Float
-): String {
-    val normalized = title.trim().replace('\n', ' ')
-    if (normalized.isEmpty()) {
-        return title
-    }
-    val cappedFirst = min(firstLimitPx, availableWidthPx)
-    val cappedSecond = min(secondLimitPx, availableWidthPx)
-    val lines = mutableListOf<String>()
-    var start = 0
-    var lineIndex = 0
-    while (start < normalized.length) {
-        val limitPx = if (lineIndex == 0) cappedFirst else cappedSecond
-        val end = breakTextIndex(normalized, start, limitPx, paint)
-        if (end <= start) {
-            lines.add(normalized.substring(start, start + 1))
-            start += 1
-        } else {
-            lines.add(normalized.substring(start, end))
-            start = end
-        }
-        lineIndex++
-    }
-    balanceSingleCharLines(lines, paint, cappedFirst, cappedSecond)
-    return lines.joinToString("\n")
-}
-
-private fun breakTextIndex(
-    text: String,
-    start: Int,
-    maxWidthPx: Float,
-    paint: TextPaint
-): Int {
-    if (start >= text.length || maxWidthPx <= 0f) {
-        return text.length
-    }
-    val count = paint.breakText(text, start, text.length, true, maxWidthPx, null)
-    if (count <= 0) {
-        return start
-    }
-    var end = start + count
-    while (end < text.length && text[end] == ' ') {
-        end++
-    }
-    return end
-}
-
-private fun balanceSingleCharLines(
-    lines: MutableList<String>,
-    paint: TextPaint,
-    firstLimitPx: Float,
-    otherLimitPx: Float
-) {
-    var index = 1
-    while (index < lines.size) {
-        val current = lines[index]
-        if (current.length == 1) {
-            val prevIndex = index - 1
-            val prev = lines[prevIndex]
-            val prevLimit = if (prevIndex == 0) firstLimitPx else otherLimitPx
-            val mergedPrev = prev + current
-            if (paint.measureText(mergedPrev) <= prevLimit) {
-                lines[prevIndex] = mergedPrev
-                lines.removeAt(index)
-                continue
-            }
-            if (prev.length > 1) {
-                val shiftedPrev = prev.dropLast(1)
-                val shiftedCurrent = prev.takeLast(1) + current
-                val currentLimit = if (index == 0) firstLimitPx else otherLimitPx
-                if (paint.measureText(shiftedCurrent) <= currentLimit) {
-                    lines[prevIndex] = shiftedPrev
-                    lines[index] = shiftedCurrent
-                    if (prevIndex > 0) {
-                        index--
-                        continue
-                    }
-                }
-            }
-            if (index + 1 < lines.size) {
-                val next = lines[index + 1]
-                if (next.isNotEmpty()) {
-                    val mergedCurrent = current + next.first()
-                    val currentLimit = if (index == 0) firstLimitPx else otherLimitPx
-                    if (paint.measureText(mergedCurrent) <= currentLimit) {
-                        lines[index] = mergedCurrent
-                        val remaining = next.substring(1)
-                        if (remaining.isEmpty()) {
-                            lines.removeAt(index + 1)
-                            continue
-                        } else {
-                            lines[index + 1] = remaining
-                        }
-                    }
-                }
-            }
-        }
-        index++
     }
 }

@@ -1,6 +1,8 @@
 package com.lightningstudio.watchrss.ui.screen.bili
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -36,7 +38,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.dimensionResource
+import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -45,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.sdk.bili.BiliPage
 import com.lightningstudio.watchrss.ui.input.InstallRotaryLazyListHandler
+import com.lightningstudio.watchrss.ui.theme.WatchDimens
 import com.lightningstudio.watchrss.ui.util.RssImageLoader
 import com.lightningstudio.watchrss.ui.viewmodel.BiliDetailUiState
 
@@ -60,8 +63,8 @@ fun BiliDetailScreen(
     onCommentClick: () -> Unit,
     showCommentEntry: Boolean
 ) {
-    val safePadding = dimensionResource(R.dimen.watch_safe_padding)
-    val spacing = dimensionResource(R.dimen.hey_distance_6dp)
+    val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
+    val spacing = watchDimensionResource(R.dimen.hey_distance_6dp)
     val extraBottomPadding = 32.dp
     val listState = rememberLazyListState()
     InstallRotaryLazyListHandler(listState)
@@ -154,9 +157,9 @@ private fun BiliCoverCard(
     coverUrl: String?,
     onClick: () -> Unit
 ) {
-    val radius = dimensionResource(R.dimen.hey_card_normal_bg_radius)
-    val coverHeight = dimensionResource(R.dimen.hey_card_large_height)
-    val playIconSize = dimensionResource(R.dimen.hey_listitem_widget_size)
+    val radius = watchDimensionResource(R.dimen.hey_card_normal_bg_radius)
+    val coverHeight = watchDimensionResource(R.dimen.hey_card_large_height)
+    val playIconSize = watchDimensionResource(R.dimen.hey_listitem_widget_size)
     val overlay = Brush.verticalGradient(
         colors = listOf(Color.Transparent, MaterialTheme.colorScheme.background.copy(alpha = 0.7f))
     )
@@ -215,8 +218,8 @@ private fun BiliMetaCard(
     likeCount: Long?,
     danmakuCount: Long?
 ) {
-    val radius = dimensionResource(R.dimen.hey_card_normal_bg_radius)
-    val spacing = dimensionResource(R.dimen.hey_distance_6dp)
+    val radius = watchDimensionResource(R.dimen.hey_card_normal_bg_radius)
+    val spacing = watchDimensionResource(R.dimen.hey_distance_6dp)
     val cardColor = MaterialTheme.colorScheme.surface
     Column(
         modifier = Modifier
@@ -261,15 +264,15 @@ private fun BiliStatChips(
         danmakuCount?.let { add("弹幕 ${formatBiliCount(it)}") }
     }
     if (parts.isEmpty()) return
-    Row(horizontalArrangement = Arrangement.spacedBy(dimensionResource(R.dimen.hey_distance_4dp))) {
+    Row(horizontalArrangement = Arrangement.spacedBy(watchDimensionResource(R.dimen.hey_distance_4dp))) {
         parts.forEach { text -> BiliStatChip(text = text) }
     }
 }
 
 @Composable
 private fun BiliStatChip(text: String) {
-    val radius = dimensionResource(R.dimen.hey_button_default_radius)
-    val padding = dimensionResource(R.dimen.hey_distance_4dp)
+    val radius = watchDimensionResource(R.dimen.hey_button_default_radius)
+    val padding = watchDimensionResource(R.dimen.hey_distance_4dp)
     val background = MaterialTheme.colorScheme.surfaceVariant
     Box(
         modifier = Modifier
@@ -287,6 +290,7 @@ private fun BiliStatChip(text: String) {
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun BiliActionSection(
     isLiked: Boolean,
@@ -297,10 +301,10 @@ private fun BiliActionSection(
     onFavorite: () -> Unit,
     onShare: () -> Unit
 ) {
-    Row(
+    FlowRow(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically
+        horizontalArrangement = Arrangement.spacedBy(WatchDimens.hey_distance_12dp, Alignment.CenterHorizontally),
+        verticalArrangement = Arrangement.spacedBy(WatchDimens.hey_distance_12dp)
     ) {
         BiliActionCircleButton(
             iconRes = R.drawable.ic_action_like,
@@ -338,8 +342,8 @@ private fun BiliActionCircleButton(
     onClick: () -> Unit
 ) {
     val accent = MaterialTheme.colorScheme.primary
-    val size = dimensionResource(R.dimen.hey_button_height)
-    val iconSize = dimensionResource(R.dimen.hey_listitem_widget_size)
+    val size = watchDimensionResource(R.dimen.hey_button_height)
+    val iconSize = watchDimensionResource(R.dimen.hey_listitem_widget_size)
     val background = if (selected) accent else MaterialTheme.colorScheme.surfaceVariant
     Box(
         modifier = Modifier
@@ -347,7 +351,7 @@ private fun BiliActionCircleButton(
             .clip(CircleShape)
             .background(background)
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = dimensionResource(R.dimen.hey_distance_2dp)),
+            .padding(horizontal = watchDimensionResource(R.dimen.hey_distance_2dp)),
         contentAlignment = Alignment.Center
     ) {
         Image(
@@ -382,8 +386,8 @@ private fun BiliSectionTitle(title: String, trailing: String? = null) {
 
 @Composable
 private fun BiliDescriptionCard(text: String) {
-    val radius = dimensionResource(R.dimen.hey_card_normal_bg_radius)
-    val padding = dimensionResource(R.dimen.hey_distance_6dp)
+    val radius = watchDimensionResource(R.dimen.hey_card_normal_bg_radius)
+    val padding = watchDimensionResource(R.dimen.hey_distance_6dp)
     val background = MaterialTheme.colorScheme.surface
     val textSize = textSize(R.dimen.hey_s_title)
     val lineHeight = textSize * 1.1f
@@ -444,8 +448,8 @@ private fun BiliDescriptionCard(text: String) {
 
 @Composable
 private fun BiliCommentEntryCard(onClick: () -> Unit) {
-    val radius = dimensionResource(R.dimen.hey_card_normal_bg_radius)
-    val padding = dimensionResource(R.dimen.hey_distance_6dp)
+    val radius = watchDimensionResource(R.dimen.hey_card_normal_bg_radius)
+    val padding = watchDimensionResource(R.dimen.hey_distance_6dp)
     val background = MaterialTheme.colorScheme.surface
     Box(
         modifier = Modifier
@@ -467,8 +471,8 @@ private fun BiliCommentEntryCard(onClick: () -> Unit) {
 
 @Composable
 private fun BiliMessageCard(message: String) {
-    val radius = dimensionResource(R.dimen.hey_card_normal_bg_radius)
-    val padding = dimensionResource(R.dimen.hey_distance_6dp)
+    val radius = watchDimensionResource(R.dimen.hey_card_normal_bg_radius)
+    val padding = watchDimensionResource(R.dimen.hey_distance_6dp)
     val background = MaterialTheme.colorScheme.surface
     Box(
         modifier = Modifier
@@ -492,11 +496,11 @@ private fun BiliPageEntry(
     selected: Boolean,
     onClick: () -> Unit
 ) {
-    val radius = dimensionResource(R.dimen.hey_card_normal_bg_radius)
+    val radius = watchDimensionResource(R.dimen.hey_card_normal_bg_radius)
     val accent = MaterialTheme.colorScheme.primary
     val background = if (selected) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface
     val borderColor = if (selected) accent else Color.Transparent
-    val padding = dimensionResource(R.dimen.hey_distance_6dp)
+    val padding = watchDimensionResource(R.dimen.hey_distance_6dp)
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -535,7 +539,7 @@ private fun BiliPageEntry(
 @Composable
 private fun textSize(id: Int): androidx.compose.ui.unit.TextUnit {
     return androidx.compose.ui.platform.LocalDensity.current.run {
-        dimensionResource(id).toSp()
+        watchDimensionResource(id).toSp()
     }
 }
 

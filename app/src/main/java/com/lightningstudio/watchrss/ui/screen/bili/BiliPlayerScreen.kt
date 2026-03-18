@@ -30,7 +30,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -54,8 +53,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalViewConfiguration
-import androidx.compose.ui.res.colorResource
-import androidx.compose.ui.res.dimensionResource
+import com.lightningstudio.watchrss.ui.theme.watchColorResource
+import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
@@ -65,7 +64,10 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.lightningstudio.watchrss.R
+import com.lightningstudio.watchrss.ui.components.PlayerVolumeOverlay
+import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.input.InstallRotaryVolumeHandler
+import com.lightningstudio.watchrss.ui.components.rememberPlayerVolumeState
 import com.lightningstudio.watchrss.ui.viewmodel.BiliPlayerUiState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -84,14 +86,15 @@ fun BiliPlayerScreen(
     onRetry: () -> Unit,
     onOpenWeb: () -> Unit,
     onPanStateChange: (Float, Float) -> Unit,
-    allowPan: Boolean = true
+    allowPan: Boolean = true,
+    rotaryVolumeEnabled: Boolean = true
 ) {
-    val safePadding = dimensionResource(R.dimen.watch_safe_padding)
-    val spacing = dimensionResource(R.dimen.hey_distance_6dp)
-    val accent = colorResource(R.color.brand_orange)
+    val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
+    val spacing = watchDimensionResource(R.dimen.hey_distance_6dp)
+    val accent = watchColorResource(R.color.brand_orange)
     val timeSize = textSize(R.dimen.hey_caption)
-    val controlSize = dimensionResource(R.dimen.hey_button_height)
-    val iconSize = dimensionResource(R.dimen.hey_listitem_widget_size)
+    val controlSize = watchDimensionResource(R.dimen.hey_button_height)
+    val iconSize = watchDimensionResource(R.dimen.hey_listitem_widget_size)
     val context = LocalContext.current
     val view = LocalView.current
     var mediaPlayerRef by remember { mutableStateOf<MediaPlayer?>(null) }
@@ -115,6 +118,7 @@ fun BiliPlayerScreen(
     val panDecay = remember { exponentialDecay<Float>() }
     val panScope = rememberCoroutineScope()
     val panFlingJob = remember { mutableStateOf<Job?>(null) }
+    val volumeState = rememberPlayerVolumeState()
 
     fun stopPanFling() {
         panFlingJob.value?.cancel()
@@ -348,7 +352,11 @@ fun BiliPlayerScreen(
         }
     }
 
-    InstallRotaryVolumeHandler()
+    InstallRotaryVolumeHandler(
+        enabled = rotaryVolumeEnabled,
+        showSystemUi = false,
+        onVolumeStep = volumeState::adjustBySteps
+    )
 
     Box(
         modifier = Modifier
@@ -492,7 +500,7 @@ fun BiliPlayerScreen(
             (!isPrepared && !uiState.playUrl.isNullOrBlank()) ||
             isBuffering
         if (showLoading && errorText.isNullOrBlank()) {
-            CircularProgressIndicator(
+            WatchCircularProgressIndicator(
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.align(Alignment.Center)
             )
@@ -515,6 +523,13 @@ fun BiliPlayerScreen(
                 }
             }
         }
+
+        PlayerVolumeOverlay(
+            state = volumeState,
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = safePadding)
+        )
 
         if (errorText.isNullOrBlank()) {
             Box(modifier = Modifier.fillMaxSize()) {
@@ -667,8 +682,8 @@ private fun PlayerIconButton(
 
 @Composable
 private fun PlayerBadge(text: String) {
-    val radius = dimensionResource(R.dimen.hey_button_default_radius)
-    val padding = dimensionResource(R.dimen.hey_distance_4dp)
+    val radius = watchDimensionResource(R.dimen.hey_button_default_radius)
+    val padding = watchDimensionResource(R.dimen.hey_distance_4dp)
     Box(
         modifier = Modifier
             .clip(androidx.compose.foundation.shape.RoundedCornerShape(radius))
@@ -706,7 +721,7 @@ private fun seekBy(player: MediaPlayer?, durationMs: Int, deltaMs: Int) {
 @Composable
 private fun textSize(id: Int): TextUnit {
     return androidx.compose.ui.platform.LocalDensity.current.run {
-        dimensionResource(id).toSp()
+        watchDimensionResource(id).toSp()
     }
 }
 

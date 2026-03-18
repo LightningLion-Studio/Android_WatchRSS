@@ -40,7 +40,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.dimensionResource
+import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -80,8 +80,8 @@ fun BiliFeedScreen(
     onItemClick: (BiliItem) -> Unit,
     onSearchClick: () -> Unit = {}
 ) {
-    val safePadding = dimensionResource(R.dimen.watch_safe_padding)
-    val itemSpacing = dimensionResource(R.dimen.hey_distance_8dp)
+    val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
+    val itemSpacing = watchDimensionResource(R.dimen.hey_distance_8dp)
     val listState = rememberLazyListState()
     InstallRotaryLazyListHandler(listState)
     val isScrolling by remember(listState) {
@@ -313,8 +313,8 @@ private fun BiliFeedItemEntry(
     onFavoriteClick: () -> Unit,
     onWatchLaterClick: () -> Unit
 ) {
-    val actionPadding = dimensionResource(R.dimen.hey_distance_4dp)
-    val actionWidth = dimensionResource(R.dimen.watch_swipe_action_button_width)
+    val actionPadding = watchDimensionResource(R.dimen.hey_distance_4dp)
+    val actionWidth = watchDimensionResource(R.dimen.watch_swipe_action_button_width)
     val fallbackActionsWidthPx = with(LocalDensity.current) {
         (actionWidth * 2 + actionPadding * 3).toPx()
     }
@@ -391,7 +391,7 @@ private fun BiliFeedHeader(
 ) {
     val titleSize = textSize(R.dimen.hey_m_title)
     val captionSize = textSize(R.dimen.hey_caption)
-    val spacing = dimensionResource(R.dimen.hey_distance_6dp)
+    val spacing = watchDimensionResource(R.dimen.hey_distance_6dp)
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -453,7 +453,7 @@ private fun channelTitleWithStyledHint(
 @Composable
 private fun textSize(id: Int): androidx.compose.ui.unit.TextUnit {
     return androidx.compose.ui.platform.LocalDensity.current.run {
-        dimensionResource(id).toSp()
+        watchDimensionResource(id).toSp()
     }
 }
 
@@ -491,8 +491,8 @@ private fun BiliSideMenu(
     onOpenHistory: () -> Unit,
     onOpenFavorites: () -> Unit
 ) {
-    val spacing = dimensionResource(R.dimen.hey_distance_6dp)
-    val padding = dimensionResource(R.dimen.hey_distance_6dp)
+    val spacing = watchDimensionResource(R.dimen.hey_distance_6dp)
+    val padding = watchDimensionResource(R.dimen.hey_distance_6dp)
 
     Column(
         modifier = modifier.padding(padding),
@@ -546,9 +546,9 @@ private fun BiliSideMenuItem(
     enabled: Boolean,
     onClick: () -> Unit
 ) {
-    val radius = dimensionResource(R.dimen.hey_card_normal_bg_radius)
-    val height = dimensionResource(R.dimen.hey_button_height)
-    val padding = dimensionResource(R.dimen.hey_distance_8dp)
+    val radius = watchDimensionResource(R.dimen.hey_card_normal_bg_radius)
+    val height = watchDimensionResource(R.dimen.hey_button_height)
+    val padding = watchDimensionResource(R.dimen.hey_distance_8dp)
     val textSize = textSize(R.dimen.feed_card_action_text_size)
     val background = MaterialTheme.colorScheme.surfaceVariant
 

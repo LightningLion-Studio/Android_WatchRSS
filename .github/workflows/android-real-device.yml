@@ -37,6 +37,8 @@ jobs:
       GRADLE_USER_HOME: ${{ github.workspace }}/.gradle-ci
       ANDROID_SERIAL: ${{ inputs.device_serial || vars.ANDROID_SERIAL }}
       INSTRUMENTATION_CLASS: ${{ inputs.instrumentation_class }}
+      WATCHRSS_CLEAR_APP_DATA: "true"
+      WATCHRSS_USE_ISOLATED_INSTRUMENTATION: "true"
 
     steps:
       - name: Checkout
@@ -84,9 +86,14 @@ jobs:
           if [ -n "${INSTRUMENTATION_CLASS:-}" ]; then
             ./gradlew --no-daemon --stacktrace \
               :app:connectedDebugAndroidTest \
+              -Pwatchrss.instrumentation.orchestrator="${WATCHRSS_USE_ISOLATED_INSTRUMENTATION}" \
+              -Pwatchrss.instrumentation.clearPackageData="${WATCHRSS_CLEAR_APP_DATA}" \
               -Pandroid.testInstrumentationRunnerArguments.class="${INSTRUMENTATION_CLASS}"
           else
-            ./gradlew --no-daemon --stacktrace :app:connectedDebugAndroidTest
+            ./gradlew --no-daemon --stacktrace \
+              :app:connectedDebugAndroidTest \
+              -Pwatchrss.instrumentation.orchestrator="${WATCHRSS_USE_ISOLATED_INSTRUMENTATION}" \
+              -Pwatchrss.instrumentation.clearPackageData="${WATCHRSS_CLEAR_APP_DATA}"
           fi
 
       - name: Collect artifacts

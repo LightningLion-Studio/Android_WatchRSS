@@ -1,6 +1,7 @@
 package com.lightningstudio.watchrss
 
 import android.content.Context
+import android.content.Intent
 import android.hardware.input.InputManager
 import android.os.Bundle
 import android.os.SystemClock
@@ -30,6 +31,8 @@ open class BaseWatchActivity : ComponentActivity() {
     private var swipeLastDx = 0f
     private var swipeCommitted = false
     private var lastNavigationAt = 0L
+    private var pendingActivityStartAllowanceAt = 0L
+    private var hasResumedOnce = false
     private var pendingHardwareBackKeyCode: Int? = null
     private var nextRotaryHandlerId = 0
     private val rotaryHandlers = LinkedHashMap<Int, (Float) -> Boolean>()
@@ -51,8 +54,10 @@ open class BaseWatchActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        hasResumedOnce = true
         window.decorView.removeCallbacks(resetRunnable)
         swipeCommitted = false
+        pendingActivityStartAllowanceAt = 0L
         resetViewState(window.decorView)
 
         // 记录Activity活跃
@@ -169,7 +174,19 @@ open class BaseWatchActivity : ComponentActivity() {
         if (!swipeCommitted) {
             resetViewState(window.decorView)
         }
+        pendingActivityStartAllowanceAt = 0L
         super.onPause()
+    }
+
+    override fun startActivity(intent: Intent) {
+        startActivity(intent, null)
+    }
+
+    override fun startActivity(intent: Intent, options: Bundle?) {
+        if (!allowActivityStart(intent)) {
+            return
+        }
+        super.startActivity(intent, options)
     }
 
     override fun attachBaseContext(newBase: Context) {
@@ -320,14 +337,11 @@ open class BaseWatchActivity : ComponentActivity() {
     }
 
     protected fun allowNavigation(minIntervalMs: Long = NAVIGATION_THROTTLE_MS): Boolean {
-        val now = SystemClock.elapsedRealtime()
-        val latestNavigationAt = max(lastNavigationAt, globalNavigationAt)
-        if (now - latestNavigationAt < minIntervalMs) {
-            return false
-        }
-        lastNavigationAt = now
-        globalNavigationAt = now
-        return true
+        return tryMarkNavigation(
+            now = SystemClock.elapsedRealtime(),
+            minIntervalMs = minIntervalMs,
+            reserveActivityStart = true
+        )
     }
 
     fun tryAllowNavigation(minIntervalMs: Long = NAVIGATION_THROTTLE_MS): Boolean {
@@ -379,8 +393,7 @@ open class BaseWatchActivity : ComponentActivity() {
     private fun animateBackCommit(root: View) {
         swipeCommitted = true
         val now = SystemClock.elapsedRealtime()
-        lastNavigationAt = now
-        globalNavigationAt = now
+        markNavigation(now)
         root.removeCallbacks(resetRunnable)
         val target = root.width.toFloat().coerceAtLeast(1f)
         root.animate()
@@ -397,8 +410,7 @@ open class BaseWatchActivity : ComponentActivity() {
     private fun commitBack(root: View) {
         swipeCommitted = true
         val now = SystemClock.elapsedRealtime()
-        lastNavigationAt = now
-        globalNavigationAt = now
+        markNavigation(now)
         root.removeCallbacks(resetRunnable)
         root.translationX = 0f
         onBackPressedDispatcher.onBackPressed()
@@ -430,6 +442,61 @@ open class BaseWatchActivity : ComponentActivity() {
         swipeLastDx = 0f
     }
 
+    private fun allowActivityStart(intent: Intent, minIntervalMs: Long = NAVIGATION_THROTTLE_MS): Boolean {
+        if (!hasResumedOnce) {
+            return true
+        }
+        val now = SystemClock.elapsedRealtime()
+        if (consumePendingActivityStartAllowance(now)) {
+            return true
+        }
+        val allowed = tryMarkNavigation(
+            now = now,
+            minIntervalMs = minIntervalMs,
+            reserveActivityStart = false
+        )
+        if (!allowed) {
+            val target = intent.component?.shortClassName ?: intent.action ?: "unknown"
+            AppLogger.d(
+                "Navigation",
+                "拦截连续页面启动: ${javaClass.simpleName} -> $target"
+            )
+        }
+        return allowed
+    }
+
+    private fun consumePendingActivityStartAllowance(now: Long): Boolean {
+        val allowanceAt = pendingActivityStartAllowanceAt
+        if (allowanceAt == 0L) {
+            return false
+        }
+        if (now - allowanceAt > ACTIVITY_START_ALLOWANCE_WINDOW_MS) {
+            pendingActivityStartAllowanceAt = 0L
+            return false
+        }
+        pendingActivityStartAllowanceAt = 0L
+        return true
+    }
+
+    private fun tryMarkNavigation(
+        now: Long,
+        minIntervalMs: Long,
+        reserveActivityStart: Boolean
+    ): Boolean {
+        val latestNavigationAt = max(lastNavigationAt, globalNavigationAt)
+        if (now - latestNavigationAt < minIntervalMs) {
+            return false
+        }
+        markNavigation(now)
+        pendingActivityStartAllowanceAt = if (reserveActivityStart) now else 0L
+        return true
+    }
+
+    private fun markNavigation(now: Long) {
+        lastNavigationAt = now
+        globalNavigationAt = now
+    }
+
     @Suppress("DEPRECATION")
     private fun clearPendingTransitionAnimation() {
         overridePendingTransition(0, 0)
@@ -442,6 +509,7 @@ open class BaseWatchActivity : ComponentActivity() {
         private const val SWIPE_START_RATIO = 0.65f
         private const val SWIPE_COMMIT_RATIO = 0.35f
         private const val SWIPE_ANIM_DURATION_MS = 200L
+        private const val ACTIVITY_START_ALLOWANCE_WINDOW_MS = 150L
         private const val NAVIGATION_THROTTLE_MS = 600L
     }
 }

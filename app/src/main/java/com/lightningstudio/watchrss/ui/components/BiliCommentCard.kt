@@ -15,7 +15,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ThumbUp
-import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -41,7 +40,7 @@ fun BiliCommentCard(
     onReplyClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
+    WatchCard(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onReplyClick),
@@ -89,12 +88,14 @@ fun BiliCommentCard(
                             Spacer(modifier = Modifier.width(4.dp))
                             Surface(
                                 color = MaterialTheme.colorScheme.primary,
-                                shape = RoundedCornerShape(4.dp)
+                                contentColor = MaterialTheme.colorScheme.onPrimary,
+                                shape = RoundedCornerShape(4.dp),
+                                tonalElevation = 0.dp,
+                                shadowElevation = 0.dp
                             ) {
                                 Text(
                                     text = "UP",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onPrimary,
                                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                                 )
                             }
@@ -104,12 +105,14 @@ fun BiliCommentCard(
                             Spacer(modifier = Modifier.width(4.dp))
                             Surface(
                                 color = MaterialTheme.colorScheme.tertiary,
-                                shape = RoundedCornerShape(4.dp)
+                                contentColor = MaterialTheme.colorScheme.onTertiary,
+                                shape = RoundedCornerShape(4.dp),
+                                tonalElevation = 0.dp,
+                                shadowElevation = 0.dp
                             ) {
                                 Text(
                                     text = "置顶",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onTertiary,
                                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
                                 )
                             }
@@ -186,7 +189,10 @@ fun BiliCommentCard(
                     Spacer(modifier = Modifier.height(8.dp))
                     Surface(
                         color = MaterialTheme.colorScheme.surfaceVariant,
-                        shape = RoundedCornerShape(8.dp)
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                        shape = RoundedCornerShape(8.dp),
+                        tonalElevation = 0.dp,
+                        shadowElevation = 0.dp
                     ) {
                         Column(modifier = Modifier.padding(8.dp)) {
                             replies.forEach { reply ->
@@ -201,6 +207,7 @@ fun BiliCommentCard(
                                     Text(
                                         text = reply.content?.message ?: "",
                                         style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurface,
                                         maxLines = 2,
                                         overflow = TextOverflow.Ellipsis
                                     )

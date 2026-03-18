@@ -1,31 +1,36 @@
 package com.lightningstudio.watchrss.ui.screen.bili
 
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.res.colorResource
-import androidx.compose.ui.res.dimensionResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.WatchSwitch
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.input.InstallRotaryScrollHandler
+import com.lightningstudio.watchrss.ui.theme.watchColorResource
+import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 
 @Composable
 fun BiliSettingsScreen(
@@ -37,7 +42,7 @@ fun BiliSettingsScreen(
     onDelete: () -> Unit,
     onLogout: () -> Unit
 ) {
-    val safePadding = dimensionResource(R.dimen.watch_safe_padding)
+    val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
     val titleSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_6dp
     val infoSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_4dp
     val sectionSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_content_horizontal_distance
@@ -94,6 +99,7 @@ fun BiliSettingsScreen(
 
             SettingsDangerRow(
                 label = "退出登录",
+                iconRes = R.drawable.ic_action_logout,
                 enabled = isLoggedIn,
                 onClick = onLogout
             )
@@ -102,6 +108,7 @@ fun BiliSettingsScreen(
 
             SettingsDangerRow(
                 label = "删除频道",
+                iconRes = R.drawable.ic_action_delete_outline,
                 enabled = deleteEnabled,
                 onClick = onDelete
             )
@@ -117,7 +124,7 @@ private fun SettingsPillRow(
     endPaddingMultiplier: Float = 1f,
     content: @Composable RowScope.() -> Unit
 ) {
-    val pillColor = colorResource(R.color.watch_pill_background)
+    val pillColor = watchColorResource(R.color.watch_pill_background)
     val pillRadius = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_button_default_radius
     val pillHeight = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_multiple_item_height
     val startPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_10dp
@@ -151,17 +158,20 @@ private fun SettingsPillRow(
 @Composable
 private fun SettingsDangerRow(
     label: String,
+    @DrawableRes iconRes: Int,
     enabled: Boolean,
     onClick: () -> Unit
 ) {
-    val pillColor = colorResource(R.color.watch_pill_background)
+    val pillColor = watchColorResource(R.color.watch_pill_background)
     val pillRadius = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_button_default_radius
     val pillHeight = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_multiple_item_height
     val startPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_10dp
     val endPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_10dp
     val verticalPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_8dp
     val background = pillColor
-    val textColor = colorResource(R.color.danger_red).copy(alpha = if (enabled) 1f else 0.6f)
+    val textColor = watchColorResource(R.color.danger_red).copy(alpha = if (enabled) 1f else 0.6f)
+    val iconSize = watchDimensionResource(R.dimen.hey_listitem_lefticon_height_width)
+    val iconSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_8dp
 
     Row(
         modifier = Modifier
@@ -181,7 +191,15 @@ private fun SettingsDangerRow(
         Text(
             text = label,
             style = MaterialTheme.typography.bodyLarge,
-            color = textColor
+            color = textColor,
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(modifier = Modifier.width(iconSpacing))
+        Icon(
+            painter = painterResource(id = iconRes),
+            contentDescription = null,
+            tint = textColor,
+            modifier = Modifier.size(iconSize)
         )
     }
 }

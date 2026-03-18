@@ -3,24 +3,22 @@ package com.lightningstudio.watchrss.ui.components
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.graphics.Color
 
 @Composable
 fun SearchInputBar(
@@ -36,11 +34,10 @@ fun SearchInputBar(
         onSearch?.invoke(keyword)
         focusManager.clearFocus()
     }
-    val textStyle = TextStyle(
+    val textStyle = MaterialTheme.typography.titleMedium.copy(
         color = MaterialTheme.colorScheme.onSurface,
         fontSize = 17.sp,
-        fontWeight = FontWeight.Medium,
-        fontFamily = MaterialTheme.typography.titleMedium.fontFamily
+        fontWeight = FontWeight.Medium
     )
     val placeholderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
 
@@ -58,7 +55,7 @@ fun SearchInputBar(
             )
         },
         trailingIcon = {
-            IconButton(
+            WatchIconButton(
                 enabled = onSearch != null,
                 onClick = submitSearch
             ) {

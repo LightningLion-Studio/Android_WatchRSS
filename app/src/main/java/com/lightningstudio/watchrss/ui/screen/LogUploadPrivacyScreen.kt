@@ -19,7 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.res.dimensionResource
+import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -32,12 +32,12 @@ import com.lightningstudio.watchrss.ui.theme.ActionButtonTextStyle
 fun LogUploadPrivacyScreen(
     onStartUploadClick: () -> Unit
 ) {
-    val safePadding = dimensionResource(R.dimen.watch_safe_padding)
+    val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
     val sectionSpacing = 12.dp
-    val buttonHeight = dimensionResource(R.dimen.hey_button_height)
-    val buttonRadius = dimensionResource(R.dimen.hey_button_default_radius)
-    val buttonHorizontalPadding = dimensionResource(R.dimen.hey_button_mergin_horizontal)
-    val buttonVerticalPadding = dimensionResource(R.dimen.hey_button_padding_vertical)
+    val buttonHeight = watchDimensionResource(R.dimen.hey_button_height)
+    val buttonRadius = watchDimensionResource(R.dimen.hey_button_default_radius)
+    val buttonHorizontalPadding = watchDimensionResource(R.dimen.hey_button_mergin_horizontal)
+    val buttonVerticalPadding = watchDimensionResource(R.dimen.hey_button_padding_vertical)
     val buttonColor = MaterialTheme.colorScheme.surfaceVariant
     val scrollState = rememberScrollState()
 

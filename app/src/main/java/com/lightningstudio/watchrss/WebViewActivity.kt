@@ -15,10 +15,18 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.addCallback
 import androidx.activity.compose.setContent
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
 import com.lightningstudio.watchrss.ui.screen.WebViewScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
+import com.lightningstudio.watchrss.ui.util.getWebViewUnavailableMessage
+import com.lightningstudio.watchrss.ui.util.warnWebViewUnavailable
 import com.lightningstudio.watchrss.ui.widget.ProgressRingView
+import com.lightningstudio.watchrss.util.AppLogger
 import java.io.File
 
 class WebViewActivity : BaseWatchActivity() {
@@ -40,16 +48,39 @@ class WebViewActivity : BaseWatchActivity() {
             return
         }
 
+        val initialWebViewError = getWebViewUnavailableMessage(this)
         setContent {
             WatchRSSTheme {
+                var errorMessage by remember { mutableStateOf(initialWebViewError) }
+                var warningMessage by remember { mutableStateOf(initialWebViewError) }
+
+                LaunchedEffect(warningMessage) {
+                    val message = warningMessage ?: return@LaunchedEffect
+                    warnWebViewUnavailable(this@WebViewActivity, message)
+                    warningMessage = null
+                }
+
                 WebViewScreen(
+                    errorMessage = errorMessage,
                     onWebViewReady = { view ->
                         if (!webViewInitialized) {
                             webViewInitialized = true
                             webView = view
-                            setupWebView()
-                            webView.loadUrl(url)
+                            try {
+                                setupWebView()
+                                webView.loadUrl(url)
+                            } catch (throwable: Throwable) {
+                                AppLogger.e("WebViewActivity", "Failed to load WebView url: $url", throwable)
+                                val message = getWebViewUnavailableMessage(this@WebViewActivity)
+                                    ?: "当前设备无法初始化 WebView，无法打开此页面"
+                                errorMessage = message
+                                warningMessage = message
+                            }
                         }
+                    },
+                    onWebViewInitFailed = { message ->
+                        errorMessage = message
+                        warningMessage = message
                     },
                     onProgressRingReady = { ring ->
                         if (!ringInitialized) {
@@ -179,6 +210,16 @@ class WebViewActivity : BaseWatchActivity() {
 
     companion object {
         private const val EXTRA_URL = "url"
+
+        fun open(context: Context, link: String): Boolean {
+            val unavailableMessage = getWebViewUnavailableMessage(context)
+            if (unavailableMessage != null) {
+                warnWebViewUnavailable(context, unavailableMessage)
+                return false
+            }
+            context.startActivity(createIntent(context, link))
+            return true
+        }
 
         fun createIntent(context: Context, link: String): Intent {
             val trimmed = link.trim()

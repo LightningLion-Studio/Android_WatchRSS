@@ -25,8 +25,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.colorResource
-import androidx.compose.ui.res.dimensionResource
+import com.lightningstudio.watchrss.ui.theme.watchColorResource
+import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
@@ -37,6 +37,7 @@ import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.input.InstallRotaryScrollHandler
 import com.lightningstudio.watchrss.ui.theme.ActionButtonTextStyle
 import com.lightningstudio.watchrss.ui.util.formatTime
+import com.lightningstudio.watchrss.ui.util.normalizeWatchTitleWhitespace
 import kotlin.math.min
 
 @Composable
@@ -50,21 +51,21 @@ fun DouyinChannelInfoScreen(
     onMarkReadClick: () -> Unit,
     markReadEnabled: Boolean
 ) {
-    val safePadding = dimensionResource(R.dimen.watch_safe_padding)
+    val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
     val titleSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_6dp
     val infoSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_4dp
     val buttonSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_4dp
-    val buttonWidth = dimensionResource(R.dimen.watch_action_button_width)
-    val buttonHeight = dimensionResource(R.dimen.watch_action_button_height)
+    val buttonWidth = watchDimensionResource(R.dimen.watch_action_button_width)
+    val buttonHeight = watchDimensionResource(R.dimen.watch_action_button_height)
     val titleSize = textSize(R.dimen.hey_s_title)
     val context = LocalContext.current
     val density = LocalDensity.current
-    val titleSizePx = with(density) { dimensionResource(R.dimen.hey_s_title).toPx() }
+    val titleSizePx = with(density) { watchDimensionResource(R.dimen.hey_s_title).toPx() }
     val firstLimitPx = with(density) {
-        dimensionResource(R.dimen.detail_title_first_line_max_width).toPx()
+        watchDimensionResource(R.dimen.detail_title_first_line_max_width).toPx()
     }
     val secondLimitPx = with(density) {
-        dimensionResource(R.dimen.detail_title_second_line_max_width).toPx()
+        watchDimensionResource(R.dimen.detail_title_second_line_max_width).toPx()
     }
     val typeface = remember(context) { ResourcesCompat.getFont(context, R.font.watch_sans) }
     val paint = remember(typeface, titleSizePx) {
@@ -205,7 +206,7 @@ private fun ActionButton(
     height: Dp,
     onClick: () -> Unit
 ) {
-    val pillColor = colorResource(R.color.watch_pill_background)
+    val pillColor = watchColorResource(R.color.watch_pill_background)
     val pillRadius = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_button_default_radius
     val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.6f)
 
@@ -230,7 +231,7 @@ private fun ActionButton(
 @Composable
 private fun textSize(id: Int): TextUnit {
     val density = LocalDensity.current
-    return with(density) { dimensionResource(id).toSp() }
+    return with(density) { watchDimensionResource(id).toSp() }
 }
 
 private fun formatTitleForWidthLimits(
@@ -240,7 +241,7 @@ private fun formatTitleForWidthLimits(
     firstLimitPx: Float,
     secondLimitPx: Float
 ): String {
-    val normalized = title.trim().replace('\n', ' ')
+    val normalized = normalizeWatchTitleWhitespace(title)
     if (normalized.isEmpty()) {
         return title
     }

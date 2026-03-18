@@ -70,10 +70,11 @@ class DouyinPlayerActivity : BaseWatchActivity() {
                                     onOpenWeb = {
                                         val link = item.awemeId?.let { "https://www.douyin.com/video/$it" }
                                             ?: return@BiliPlayerScreen
-                                        startActivity(WebViewActivity.createIntent(this@DouyinPlayerActivity, link))
+                                        WebViewActivity.open(this@DouyinPlayerActivity, link)
                                     },
                                     onPanStateChange = { _, _ -> },
-                                    allowPan = false
+                                    allowPan = false,
+                                    rotaryVolumeEnabled = page == pagerState.currentPage
                                 )
                             }
                         }

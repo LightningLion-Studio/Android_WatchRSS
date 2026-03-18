@@ -22,7 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.dimensionResource
+import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.style.TextAlign
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.douyin.DouyinStreamItem
@@ -42,8 +42,8 @@ fun DouyinFeedScreen(
     onLoginClick: () -> Unit = {},
     onHeaderClick: () -> Unit = {}
 ) {
-    val safePadding = dimensionResource(R.dimen.watch_safe_padding)
-    val itemSpacing = dimensionResource(R.dimen.hey_distance_8dp)
+    val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
+    val itemSpacing = watchDimensionResource(R.dimen.hey_distance_8dp)
     val listState = rememberLazyListState()
     InstallRotaryLazyListHandler(listState)
     val isAtTop = remember(listState) {
@@ -116,7 +116,7 @@ private fun DouyinFeedHeader(
     onLoginClick: () -> Unit = {},
     onHeaderClick: () -> Unit = {}
 ) {
-    val headerPadding = dimensionResource(R.dimen.hey_distance_6dp)
+    val headerPadding = watchDimensionResource(R.dimen.hey_distance_6dp)
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -130,7 +130,7 @@ private fun DouyinFeedHeader(
             color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Center
         )
-        Spacer(modifier = Modifier.height(dimensionResource(R.dimen.hey_distance_2dp)))
+        Spacer(modifier = Modifier.height(watchDimensionResource(R.dimen.hey_distance_2dp)))
         Text(
             text = if (isLoggedIn) "已登录" else "未登录",
             style = MaterialTheme.typography.bodySmall,
@@ -138,7 +138,7 @@ private fun DouyinFeedHeader(
             textAlign = TextAlign.Center
         )
         if (!isLoggedIn) {
-            Spacer(modifier = Modifier.height(dimensionResource(R.dimen.hey_distance_4dp)))
+            Spacer(modifier = Modifier.height(watchDimensionResource(R.dimen.hey_distance_4dp)))
             Text(
                 text = "登录",
                 style = MaterialTheme.typography.bodySmall,

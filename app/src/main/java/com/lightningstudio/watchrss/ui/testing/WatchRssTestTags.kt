@@ -57,6 +57,7 @@ object AddRssTestTags {
 
 object SettingsTestTags {
     const val ROOT = "settings/root"
+    const val ADVANCED_ENTRY = "settings/advanced_entry"
     const val CACHE_DECREASE_BUTTON = "settings/cache_decrease_button"
     const val CACHE_VALUE = "settings/cache_value"
     const val CACHE_INCREASE_BUTTON = "settings/cache_increase_button"

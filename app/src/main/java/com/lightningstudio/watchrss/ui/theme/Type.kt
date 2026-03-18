@@ -14,54 +14,92 @@ private val WatchFontFamily = FontFamily(
     Font(R.font.watch_sans, weight = FontWeight.SemiBold)
 )
 
+private fun watchTextStyle(
+    fontWeight: FontWeight,
+    fontSize: Int,
+    lineHeight: Int
+) = TextStyle(
+    fontFamily = WatchFontFamily,
+    fontWeight = fontWeight,
+    fontSize = fontSize.sp,
+    lineHeight = lineHeight.sp
+)
+
 val Typography = Typography(
-    headlineLarge = TextStyle(
-        fontFamily = WatchFontFamily,
+    displayLarge = watchTextStyle(
         fontWeight = FontWeight.SemiBold,
-        fontSize = 31.sp,
-        lineHeight = 38.sp
+        fontSize = 38,
+        lineHeight = 44
     ),
-    headlineMedium = TextStyle(
-        fontFamily = WatchFontFamily,
+    displayMedium = watchTextStyle(
         fontWeight = FontWeight.SemiBold,
-        fontSize = 26.sp,
-        lineHeight = 31.sp
+        fontSize = 34,
+        lineHeight = 40
     ),
-    headlineSmall = TextStyle(
-        fontFamily = WatchFontFamily,
+    displaySmall = watchTextStyle(
         fontWeight = FontWeight.SemiBold,
-        fontSize = 24.sp,
-        lineHeight = 29.sp
+        fontSize = 29,
+        lineHeight = 35
     ),
-    titleMedium = TextStyle(
-        fontFamily = WatchFontFamily,
+    headlineLarge = watchTextStyle(
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 31,
+        lineHeight = 38
+    ),
+    headlineMedium = watchTextStyle(
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 26,
+        lineHeight = 31
+    ),
+    headlineSmall = watchTextStyle(
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 24,
+        lineHeight = 29
+    ),
+    titleLarge = watchTextStyle(
         fontWeight = FontWeight.Medium,
-        fontSize = 21.sp,
-        lineHeight = 26.sp
+        fontSize = 23,
+        lineHeight = 28
     ),
-    bodyLarge = TextStyle(
-        fontFamily = WatchFontFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 17.sp,
-        lineHeight = 21.sp
-    ),
-    bodyMedium = TextStyle(
-        fontFamily = WatchFontFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 14.sp,
-        lineHeight = 17.sp
-    ),
-    bodySmall = TextStyle(
-        fontFamily = WatchFontFamily,
-        fontWeight = FontWeight.Normal,
-        fontSize = 12.sp,
-        lineHeight = 14.sp
-    ),
-    labelSmall = TextStyle(
-        fontFamily = WatchFontFamily,
+    titleMedium = watchTextStyle(
         fontWeight = FontWeight.Medium,
-        fontSize = 9.sp,
-        lineHeight = 11.sp
+        fontSize = 21,
+        lineHeight = 26
+    ),
+    titleSmall = watchTextStyle(
+        fontWeight = FontWeight.Medium,
+        fontSize = 18,
+        lineHeight = 22
+    ),
+    bodyLarge = watchTextStyle(
+        fontWeight = FontWeight.Normal,
+        fontSize = 17,
+        lineHeight = 21
+    ),
+    bodyMedium = watchTextStyle(
+        fontWeight = FontWeight.Normal,
+        fontSize = 14,
+        lineHeight = 17
+    ),
+    bodySmall = watchTextStyle(
+        fontWeight = FontWeight.Normal,
+        fontSize = 12,
+        lineHeight = 14
+    ),
+    labelLarge = watchTextStyle(
+        fontWeight = FontWeight.Medium,
+        fontSize = 14,
+        lineHeight = 17
+    ),
+    labelMedium = watchTextStyle(
+        fontWeight = FontWeight.Medium,
+        fontSize = 12,
+        lineHeight = 14
+    ),
+    labelSmall = watchTextStyle(
+        fontWeight = FontWeight.Medium,
+        fontSize = 9,
+        lineHeight = 11
     )
 )
 

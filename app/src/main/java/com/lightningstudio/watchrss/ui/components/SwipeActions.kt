@@ -30,8 +30,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.colorResource
-import androidx.compose.ui.res.dimensionResource
+import com.lightningstudio.watchrss.ui.theme.watchColorResource
+import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -48,12 +48,12 @@ fun SwipeActionButton(
     onClick: () -> Unit,
     @DrawableRes iconRes: Int? = null
 ) {
-    val radius = dimensionResource(R.dimen.hey_card_normal_bg_radius)
+    val radius = watchDimensionResource(R.dimen.hey_card_normal_bg_radius)
     val textSize = textSize(R.dimen.feed_card_action_text_size)
-    val textPadding = dimensionResource(R.dimen.hey_distance_8dp)
-    val iconSize = dimensionResource(R.dimen.hey_distance_16dp)
-    val iconSpacing = dimensionResource(R.dimen.hey_distance_4dp)
-    val dangerColor = colorResource(R.color.danger_red)
+    val textPadding = watchDimensionResource(R.dimen.hey_distance_8dp)
+    val iconSize = watchDimensionResource(R.dimen.hey_distance_16dp)
+    val iconSpacing = watchDimensionResource(R.dimen.hey_distance_4dp)
+    val dangerColor = watchColorResource(R.color.danger_red)
     val actionColor = if (text.contains("删除")) dangerColor else MaterialTheme.colorScheme.onSurface
 
     Box(
@@ -183,7 +183,7 @@ fun SwipeActionRow(
 @Composable
 private fun textSize(id: Int): TextUnit {
     val density = LocalDensity.current
-    return with(density) { dimensionResource(id).toSp() }
+    return with(density) { watchDimensionResource(id).toSp() }
 }
 
 @Composable

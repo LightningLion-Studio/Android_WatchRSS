@@ -30,7 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.res.dimensionResource
+import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -62,8 +62,8 @@ fun DouyinRssFeedScreen(
     onLoginClick: () -> Unit,
     onHeaderClick: () -> Unit
 ) {
-    val safePadding = dimensionResource(R.dimen.watch_safe_padding)
-    val itemSpacing = dimensionResource(R.dimen.hey_distance_8dp)
+    val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
+    val itemSpacing = watchDimensionResource(R.dimen.hey_distance_8dp)
     val listState = rememberLazyListState()
     InstallRotaryLazyListHandler(listState)
     val isAtTop = rememberTopState(listState)
@@ -164,7 +164,7 @@ private fun DouyinRssFeedHeader(
 ) {
     val titleSize = textSize(R.dimen.hey_m_title)
     val captionSize = textSize(R.dimen.hey_caption)
-    val spacing = dimensionResource(R.dimen.hey_distance_6dp)
+    val spacing = watchDimensionResource(R.dimen.hey_distance_6dp)
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -211,13 +211,13 @@ private fun DouyinRssTextCard(
 ) {
     val background = MaterialTheme.colorScheme.surface
     val shape = androidx.compose.foundation.shape.RoundedCornerShape(
-        dimensionResource(R.dimen.hey_card_normal_bg_radius)
+        watchDimensionResource(R.dimen.hey_card_normal_bg_radius)
     )
-    val padding = dimensionResource(R.dimen.hey_content_horizontal_distance)
+    val padding = watchDimensionResource(R.dimen.hey_content_horizontal_distance)
     val titleSize = textSize(R.dimen.feed_card_title_text_size)
     val summarySize = textSize(R.dimen.feed_card_summary_text_size)
     val summaryLineHeight = summarySize * 1.1f
-    val summaryTop = dimensionResource(R.dimen.hey_distance_2dp)
+    val summaryTop = watchDimensionResource(R.dimen.hey_distance_2dp)
 
     Column(
         modifier = Modifier
@@ -280,7 +280,7 @@ private fun channelTitleWithStyledHint(
 @Composable
 private fun textSize(id: Int): TextUnit {
     return LocalDensity.current.run {
-        dimensionResource(id).toSp()
+        watchDimensionResource(id).toSp()
     }
 }
 

@@ -130,9 +130,9 @@ Activity 场景推荐做法：
 - 复杂导航链路放到后续集成测试，不把所有职责堆进单个 UI 用例。
 
 ### 当前稳定性策略
-- `connectedDebugAndroidTest` 已切到 `Android Test Orchestrator`
-- instrumentation 运行时开启 `clearPackageData=true`
-- 真实设备全量回归不再共享同一个测试进程，避免前序用例污染后续 Activity/Compose 状态
+- 本地默认 `connectedDebugAndroidTest` 不启用 `Android Test Orchestrator`，也不主动清空应用数据
+- CI 通过 Gradle 属性开启 `Android Test Orchestrator` 与 `clearPackageData=true`
+- 真实设备全量回归仍保持隔离执行，避免前序用例污染后续 Activity/Compose 状态
 
 ## 运行方式
 
@@ -147,7 +147,10 @@ Activity 场景推荐做法：
   - `./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.lightningstudio.watchrss.ui.screen.rss.SettingsScreenTest`
 
 说明：
-- 当前 `connectedDebugAndroidTest` 由 orchestrator 隔离执行，速度比共享进程更慢，但真机稳定性明显更高。
+- 本地直接运行 `connectedDebugAndroidTest` 会保留现有应用数据。
+- 若要复现 CI 隔离模式，可追加：
+  - `-Pwatchrss.instrumentation.orchestrator=true`
+  - `-Pwatchrss.instrumentation.clearPackageData=true`
 
 ## 后续扩展建议
 

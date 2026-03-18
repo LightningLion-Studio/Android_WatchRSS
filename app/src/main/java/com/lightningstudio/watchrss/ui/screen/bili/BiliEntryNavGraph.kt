@@ -147,7 +147,13 @@ fun BiliEntryNavGraph(repository: BiliRepositoryContract, rssRepository: RssRepo
                 factory = factory,
                 onNavigateBack = { navController.popBackStack() },
                 onReplyClick = { commentOid, root ->
-                    navController.navigate(BiliRoutes.replyDetail(commentOid, root, uploaderMid))
+                    val hostActivity = context as? BaseWatchActivity
+                    if (hostActivity != null && !hostActivity.tryAllowNavigation()) {
+                        return@BiliCommentScreen
+                    }
+                    navController.navigate(BiliRoutes.replyDetail(commentOid, root, uploaderMid)) {
+                        launchSingleTop = true
+                    }
                 }
             )
         }

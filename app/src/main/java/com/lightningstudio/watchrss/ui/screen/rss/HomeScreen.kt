@@ -16,7 +16,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -31,6 +30,7 @@ import com.lightningstudio.watchrss.data.rss.RssChannel
 import com.lightningstudio.watchrss.ui.components.EmptyStateCard
 import com.lightningstudio.watchrss.ui.components.PullRefreshBox
 import com.lightningstudio.watchrss.ui.components.ToastMessage
+import com.lightningstudio.watchrss.ui.components.WatchTextButton
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.input.InstallRotaryLazyListHandler
 import com.lightningstudio.watchrss.ui.theme.BrandOrange
@@ -88,7 +88,7 @@ fun HomeScreen(
                         style = MaterialTheme.typography.headlineSmall,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    TextButton(onClick = onOpenSettings) {
+                    WatchTextButton(onClick = onOpenSettings) {
                         Text(text = "设置", color = BrandOrange)
                     }
                 }
@@ -143,7 +143,9 @@ private fun ChannelCard(
 ) {
     Surface(
         onClick = onClick,
+        contentColor = MaterialTheme.colorScheme.onSurface,
         tonalElevation = 2.dp,
+        shadowElevation = 0.dp,
         shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surfaceVariant
     ) {
@@ -181,7 +183,9 @@ private fun ChannelCard(
 private fun AddRssCard(onAdd: () -> Unit) {
     Surface(
         onClick = onAdd,
+        contentColor = MaterialTheme.colorScheme.onSurface,
         tonalElevation = 0.dp,
+        shadowElevation = 0.dp,
         shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surface
     ) {

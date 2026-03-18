@@ -4,6 +4,8 @@ import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.webkit.WebView
+import android.content.Context
+import android.content.Intent
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -12,6 +14,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.lightningstudio.watchrss.ui.screen.LogUploadScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
+import com.lightningstudio.watchrss.ui.util.getWebViewUnavailableMessage
+import com.lightningstudio.watchrss.ui.util.warnWebViewUnavailable
 import com.lightningstudio.watchrss.util.AppLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -21,13 +25,18 @@ class LogUploadActivity : BaseWatchActivity() {
         super.onCreate(savedInstanceState)
         setupSystemBars()
 
+        val initialWebViewError = getWebViewUnavailableMessage(this)
         setContent {
             WatchRSSTheme {
                 var logText by remember { mutableStateOf<String?>(null) }
-                var isLoading by remember { mutableStateOf(true) }
-                var errorMessage by remember { mutableStateOf<String?>(null) }
+                var isLoading by remember { mutableStateOf(initialWebViewError == null) }
+                var errorMessage by remember { mutableStateOf(initialWebViewError) }
+                var warningMessage by remember { mutableStateOf(initialWebViewError) }
 
                 LaunchedEffect(Unit) {
+                    if (initialWebViewError != null) {
+                        return@LaunchedEffect
+                    }
                     withContext(Dispatchers.IO) {
                         try {
                             val logs = AppLogger.readLogs()
@@ -48,12 +57,23 @@ class LogUploadActivity : BaseWatchActivity() {
                     }
                 }
 
+                LaunchedEffect(warningMessage) {
+                    val message = warningMessage ?: return@LaunchedEffect
+                    warnWebViewUnavailable(this@LogUploadActivity, message)
+                    warningMessage = null
+                }
+
                 LogUploadScreen(
                     logText = logText,
                     isLoading = isLoading,
                     errorMessage = errorMessage,
                     onWebViewCreated = { webView ->
                         setupWebView(webView, logText)
+                    },
+                    onWebViewInitFailed = { message ->
+                        errorMessage = message
+                        warningMessage = message
+                        isLoading = false
                     }
                 )
             }
@@ -98,5 +118,16 @@ class LogUploadActivity : BaseWatchActivity() {
         // 加载本地HTML文件
         webView.loadUrl("file:///android_asset/log_upload/index.html")
     }
-}
 
+    companion object {
+        fun open(context: Context): Boolean {
+            val unavailableMessage = getWebViewUnavailableMessage(context)
+            if (unavailableMessage != null) {
+                warnWebViewUnavailable(context, unavailableMessage)
+                return false
+            }
+            context.startActivity(Intent(context, LogUploadActivity::class.java))
+            return true
+        }
+    }
+}

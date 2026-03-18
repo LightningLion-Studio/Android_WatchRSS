@@ -13,7 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.dimensionResource
+import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -40,7 +40,7 @@ fun BiliSearchResultScreen(
     val searchText by viewModel.draftQuery.collectAsState()
     val activeQuery by viewModel.activeQuery.collectAsState()
     val searchResults = viewModel.searchResultFlow.collectAsLazyPagingItems()
-    val safePadding = dimensionResource(R.dimen.watch_safe_padding)
+    val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
     val titleSize = textSize(R.dimen.hey_s_title)
     val listSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_6dp
     val listState = rememberLazyListState()
@@ -145,6 +145,6 @@ private fun buildVideoSummary(video: BiliSearchedVideo): String {
 @Composable
 private fun textSize(id: Int): TextUnit {
     return androidx.compose.ui.platform.LocalDensity.current.run {
-        dimensionResource(id).toSp()
+        watchDimensionResource(id).toSp()
     }
 }

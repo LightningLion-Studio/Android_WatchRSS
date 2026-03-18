@@ -22,7 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.colorResource
+import com.lightningstudio.watchrss.ui.theme.watchColorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -143,7 +143,7 @@ private fun DialogButtons(
             scaleDp = scaleDp
         )
         RoundIconButton(
-            background = colorResource(R.color.danger_red),
+            background = watchColorResource(R.color.danger_red),
             iconRes = R.drawable.ic_delete_confirm,
             onClick = onConfirm,
             scaleDp = scaleDp

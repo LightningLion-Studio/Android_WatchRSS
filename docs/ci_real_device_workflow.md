@@ -20,12 +20,13 @@
 
 这条流程面向 `GitHub Actions + self-hosted runner + 专用真机`，目标不是模拟器兼容，而是真机回归闭环。
 
-当前仓库的 instrumentation 已启用：
-- `Android Test Orchestrator`
-- `clearPackageData=true`
-- `animationsDisabled=true`
+当前仓库的 instrumentation 策略分为两种模式：
+- 本地默认只开启 `animationsDisabled=true`，不强制 `Android Test Orchestrator`，也不清应用数据
+- CI workflow 通过 Gradle 属性显式开启：
+  - `Android Test Orchestrator`
+  - `clearPackageData=true`
 
-也就是说 `connectedDebugAndroidTest` 会以隔离进程方式执行每条用例，优先保证真机稳定性而不是最短执行时间。
+也就是说本地直接执行 `connectedDebugAndroidTest` 时不会主动清空应用数据；`Android Real Device` workflow 仍会以隔离进程方式执行每条用例，优先保证真机稳定性而不是最短执行时间。
 
 ## Runner 要求
 
@@ -92,7 +93,7 @@
 
 ### `scripts/ci/device_smoke.sh`
 
-- 清空目标应用与测试包数据
+- 可选清空目标应用与测试包数据（CI 默认开启，`WATCHRSS_CLEAR_APP_DATA=true`）
 - 安装 `debug` 和 `debugAndroidTest` APK
 - 启动 `MainActivity`
 - 校验应用进程是否存在、顶层窗口是否进入应用
@@ -178,7 +179,7 @@ Workflow 最终上传整个 `artifacts/` 目录，常用内容如下：
 
 ### instrumentation 运行很慢
 
-- 当前是 orchestrator 模式，每条用例会独立拉起 instrumentation
+- CI 默认是 orchestrator 模式，每条用例会独立拉起 instrumentation
 - 这会比共享单进程测试更慢，但能显著降低真机上的状态污染和偶发进程崩溃
 - 如果只想排查某一组用例，优先使用 `instrumentation_class`
 

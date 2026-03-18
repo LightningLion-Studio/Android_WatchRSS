@@ -23,8 +23,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.res.colorResource
-import androidx.compose.ui.res.dimensionResource
+import com.lightningstudio.watchrss.ui.theme.watchColorResource
+import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -32,22 +32,23 @@ import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.input.InstallRotaryScrollHandler
+import com.lightningstudio.watchrss.ui.theme.WatchDimens
 
 @Composable
 fun ContactDeveloperScreen(
     onJoinGroupClick: () -> Unit,
     onUploadLogClick: () -> Unit
 ) {
-    val safePadding = dimensionResource(R.dimen.watch_safe_padding)
-    val sectionSpacing = 12.dp
-    val entrySpacing = 8.dp
-    val pillHeight = 48.dp
-    val pillRadius = 24.dp
-    val pillColor = colorResource(R.color.watch_pill_background)
-    val pillHorizontalPadding = 10.dp
-    val pillVerticalPadding = 8.dp
-    val iconSize = 20.dp
-    val iconSpacing = 12.dp
+    val safePadding = WatchDimens.watch_safe_padding
+    val sectionSpacing = WatchDimens.hey_distance_12dp
+    val entrySpacing = WatchDimens.hey_distance_8dp
+    val pillHeight = WatchDimens.watch_action_button_height
+    val pillRadius = WatchDimens.hey_button_default_radius
+    val pillColor = watchColorResource(R.color.watch_pill_background)
+    val pillHorizontalPadding = WatchDimens.hey_content_horizontal_distance
+    val pillVerticalPadding = WatchDimens.hey_distance_8dp
+    val iconSize = watchDimensionResource(R.dimen.hey_listitem_widget_size)
+    val iconSpacing = WatchDimens.hey_distance_12dp
     val scrollState = rememberScrollState()
 
     InstallRotaryScrollHandler(scrollState)

@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -44,6 +43,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
+import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.util.RssImageLoader
 import kotlinx.coroutines.Job
@@ -134,7 +134,7 @@ fun ImagePreviewScreen(
             }
 
             if (bitmap == null) {
-                CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                WatchCircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                 return@BoxWithConstraints
             }
 
