@@ -25,6 +25,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.WatchSurface
+import com.lightningstudio.watchrss.ui.input.InstallRotaryScrollHandler
 import com.lightningstudio.watchrss.ui.theme.ActionButtonTextStyle
 
 data class ActionItem(
@@ -44,12 +45,15 @@ fun ActionDialogScreen(items: List<ActionItem>) {
     val buttonHeight = dimensionResource(R.dimen.watch_action_button_height)
     val buttonRadius = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_button_default_radius
     val buttonColor = colorResource(R.color.watch_pill_background)
+    val scrollState = rememberScrollState()
+
+    InstallRotaryScrollHandler(scrollState)
 
     WatchSurface {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
                 .padding(
                     start = horizontalPadding,
                     end = horizontalPadding,

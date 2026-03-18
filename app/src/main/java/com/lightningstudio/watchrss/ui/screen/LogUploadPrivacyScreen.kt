@@ -25,6 +25,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.WatchSurface
+import com.lightningstudio.watchrss.ui.input.InstallRotaryScrollHandler
 import com.lightningstudio.watchrss.ui.theme.ActionButtonTextStyle
 
 @Composable
@@ -38,12 +39,15 @@ fun LogUploadPrivacyScreen(
     val buttonHorizontalPadding = dimensionResource(R.dimen.hey_button_mergin_horizontal)
     val buttonVerticalPadding = dimensionResource(R.dimen.hey_button_padding_vertical)
     val buttonColor = MaterialTheme.colorScheme.surfaceVariant
+    val scrollState = rememberScrollState()
+
+    InstallRotaryScrollHandler(scrollState)
 
     WatchSurface(pureBlack = true) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
                 .padding(safePadding),
             verticalArrangement = Arrangement.Top,
             horizontalAlignment = Alignment.CenterHorizontally

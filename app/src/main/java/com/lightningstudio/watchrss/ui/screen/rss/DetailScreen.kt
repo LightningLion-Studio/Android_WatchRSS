@@ -88,6 +88,7 @@ import androidx.core.content.FileProvider
 import androidx.core.content.res.ResourcesCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import com.lightningstudio.watchrss.ui.input.InstallRotaryLazyListHandler
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ImagePreviewActivity
@@ -184,6 +185,7 @@ internal fun DetailContent(
     val coroutineScope = rememberCoroutineScope()
     val density = LocalDensity.current
     val listState = rememberLazyListState()
+    InstallRotaryLazyListHandler(listState)
     val safePadding = dimensionResource(R.dimen.watch_safe_padding)
     val pagePadding = dimensionResource(R.dimen.detail_page_horizontal_padding)
     val blockSpacing = dimensionResource(R.dimen.detail_block_spacing)

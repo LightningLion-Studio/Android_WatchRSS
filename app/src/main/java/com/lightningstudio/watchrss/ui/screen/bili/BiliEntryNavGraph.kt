@@ -23,6 +23,7 @@ import com.lightningstudio.watchrss.ui.viewmodel.BiliViewModelFactory
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.lightningstudio.watchrss.BaseWatchActivity
 import com.lightningstudio.watchrss.ui.viewmodel.BiliListType
 import kotlinx.coroutines.flow.map
 
@@ -106,6 +107,10 @@ fun BiliEntryNavGraph(repository: BiliRepositoryContract, rssRepository: RssRepo
                         )
                     },
                     onSearchClick = {
+                        val hostActivity = context as? BaseWatchActivity
+                        if (hostActivity != null && !hostActivity.tryAllowNavigation()) {
+                            return@BiliFeedScreen
+                        }
                         context.startActivity(BiliSearchActivity.createIntent(context))
                     }
                 )

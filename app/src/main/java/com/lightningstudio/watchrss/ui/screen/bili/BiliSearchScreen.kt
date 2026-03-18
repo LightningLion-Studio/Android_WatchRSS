@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
@@ -18,44 +19,42 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.SearchInputBar
 import com.lightningstudio.watchrss.ui.components.WatchSurface
-import com.lightningstudio.watchrss.ui.utils.BiliFormatUtils
+import com.lightningstudio.watchrss.ui.input.InstallRotaryLazyListHandler
+import com.lightningstudio.watchrss.ui.viewmodel.BiliSearchSubmitAction
 import com.lightningstudio.watchrss.ui.viewmodel.BiliSearchViewModel
-import com.lightningstudio.watchrss.ui.viewmodel.BiliViewModelFactory
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun BiliSearchScreen(
-    factory: BiliViewModelFactory,
+    viewModel: BiliSearchViewModel,
     onNavigateBack: () -> Unit,
-    onSearch: (String) -> Unit,
-    modifier: Modifier = Modifier,
-    viewModel: BiliSearchViewModel = viewModel(factory = factory)
+    onSearch: (BiliSearchSubmitAction) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    var searchText by remember { mutableStateOf("") }
+    val searchText by viewModel.draftQuery.collectAsState()
     val hotSearchWords by viewModel.hotSearchWords.collectAsState()
     val searchHistory by viewModel.searchHistory.collectAsState()
     val safePadding = dimensionResource(R.dimen.watch_safe_padding)
     val titleSize = textSize(R.dimen.hey_s_title)
     val listSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_6dp
+    val listState = rememberLazyListState()
 
     BackHandler(onBack = onNavigateBack)
+    InstallRotaryLazyListHandler(listState)
 
     WatchSurface {
         LazyColumn(
             modifier = modifier.fillMaxSize(),
+            state = listState,
             contentPadding = androidx.compose.foundation.layout.PaddingValues(
                 start = safePadding,
                 top = safePadding,
@@ -77,16 +76,9 @@ fun BiliSearchScreen(
             item {
                 SearchInputBar(
                     keyword = searchText,
-                    onKeywordChange = { searchText = it },
-                    onSearch = {
-                        if (searchText.isNotBlank()) {
-                            if (BiliFormatUtils.isVideoId(searchText)) {
-                                // Handle video ID navigation
-                            } else {
-                                viewModel.addSearchHistory(searchText)
-                                onSearch(searchText)
-                            }
-                        }
+                    onKeywordChange = viewModel::updateDraftQuery,
+                    onSearch = { query ->
+                        onSearch(viewModel.submitSearch(query))
                     },
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -117,8 +109,7 @@ fun BiliSearchScreen(
                             searchHistory.forEach { keyword ->
                                 SuggestionChip(
                                     onClick = {
-                                        viewModel.addSearchHistory(keyword)
-                                        onSearch(keyword)
+                                        onSearch(viewModel.submitSearch(keyword))
                                     },
                                     label = { Text(keyword) }
                                 )
@@ -144,8 +135,7 @@ fun BiliSearchScreen(
                             hotSearchWords.forEach { word ->
                                 SuggestionChip(
                                     onClick = {
-                                        viewModel.addSearchHistory(word.keyword)
-                                        onSearch(word.keyword)
+                                        onSearch(viewModel.submitSearch(word.keyword))
                                     },
                                     label = { Text(word.showName ?: word.keyword) }
                                 )

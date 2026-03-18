@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -46,6 +47,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.rss.SavedItem
+import com.lightningstudio.watchrss.ui.input.InstallRotaryLazyListHandler
 import com.lightningstudio.watchrss.ui.util.formatTime
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -65,6 +67,9 @@ fun SavedItemsScreen(
 ) {
     val safePadding = dimensionResource(R.dimen.watch_safe_padding)
     val itemSpacing = dimensionResource(R.dimen.hey_distance_6dp)
+    val listState = rememberLazyListState()
+
+    InstallRotaryLazyListHandler(listState)
 
     Box(
         modifier = Modifier
@@ -73,6 +78,7 @@ fun SavedItemsScreen(
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
+            state = listState,
             contentPadding = PaddingValues(safePadding)
         ) {
             item {

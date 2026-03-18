@@ -34,6 +34,7 @@ import android.text.TextPaint
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.rss.RssChannel
 import com.lightningstudio.watchrss.ui.components.WatchSurface
+import com.lightningstudio.watchrss.ui.input.InstallRotaryScrollHandler
 import com.lightningstudio.watchrss.ui.theme.ActionButtonTextStyle
 import kotlin.math.min
 
@@ -68,12 +69,15 @@ fun ChannelDetailScreen(
             this.typeface = typeface
         }
     }
+    val scrollState = rememberScrollState()
+
+    InstallRotaryScrollHandler(scrollState)
 
     WatchSurface(pureBlack = true) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
                 .padding(safePadding),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {

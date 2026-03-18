@@ -60,6 +60,8 @@ import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.douyin.DouyinStreamItem
 import com.lightningstudio.watchrss.ui.components.ToastMessage
 import com.lightningstudio.watchrss.ui.components.WatchSurface
+import com.lightningstudio.watchrss.ui.input.InstallRotaryPagerHandler
+import com.lightningstudio.watchrss.ui.input.InstallRotaryVolumeHandler
 import com.lightningstudio.watchrss.ui.viewmodel.DouyinFeedUiState
 import com.lightningstudio.watchrss.util.AppLogger
 import okhttp3.OkHttpClient
@@ -80,6 +82,12 @@ fun DouyinImmersiveScreen(
     )
     var controlsVisible by rememberSaveable { mutableStateOf(true) }
     var isFullscreen by rememberSaveable { mutableStateOf(true) }
+
+    InstallRotaryPagerHandler(
+        pagerState = pagerState,
+        enabled = pagerState.currentPage == 0 && pageCount > 1
+    )
+    InstallRotaryVolumeHandler(enabled = pagerState.currentPage > 0)
 
     LaunchedEffect(pagerState.currentPage) {
         onPageSettled(pagerState.currentPage)

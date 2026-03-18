@@ -65,6 +65,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.lightningstudio.watchrss.R
+import com.lightningstudio.watchrss.ui.input.InstallRotaryVolumeHandler
 import com.lightningstudio.watchrss.ui.viewmodel.BiliPlayerUiState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -346,6 +347,8 @@ fun BiliPlayerScreen(
             delay(400)
         }
     }
+
+    InstallRotaryVolumeHandler()
 
     Box(
         modifier = Modifier

@@ -67,4 +67,87 @@ class BiliLoginAndSearchViewModelTest {
         advanceUntilIdle()
         assertEquals(emptyList<String>(), viewModel.searchHistory.value)
     }
+
+    @Test
+    fun searchViewModel_submitSearch_normalizesQuery_updatesActiveQuery_and_persistsHistory() = runTest {
+        val repo = TestBiliRepository()
+        val viewModel = BiliSearchViewModel(repo)
+        advanceUntilIdle()
+
+        viewModel.updateDraftQuery("  Kotlin  ")
+        val action = viewModel.submitSearch()
+        advanceUntilIdle()
+
+        assertEquals(BiliSearchSubmitAction.OpenResults, action)
+        assertEquals("Kotlin", viewModel.draftQuery.value)
+        assertEquals("Kotlin", viewModel.activeQuery.value)
+        assertEquals(listOf("Kotlin", "Compose"), viewModel.searchHistory.value)
+    }
+
+    @Test
+    fun searchViewModel_submitSearch_collapsesInternalWhitespace_beforeSearching() = runTest {
+        val repo = TestBiliRepository()
+        val viewModel = BiliSearchViewModel(repo)
+        advanceUntilIdle()
+
+        viewModel.updateDraftQuery("  hello\u3000 world   compose  ")
+        val action = viewModel.submitSearch()
+        advanceUntilIdle()
+
+        assertEquals(BiliSearchSubmitAction.OpenResults, action)
+        assertEquals("hello world compose", viewModel.draftQuery.value)
+        assertEquals("hello world compose", viewModel.activeQuery.value)
+        assertEquals(listOf("hello world compose", "Compose"), viewModel.searchHistory.value)
+    }
+
+    @Test
+    fun searchViewModel_submitSearch_usesExplicitQuery_whenInputStateHasNotSyncedYet() = runTest {
+        val repo = TestBiliRepository()
+        val viewModel = BiliSearchViewModel(repo)
+        advanceUntilIdle()
+
+        viewModel.updateDraftQuery("world")
+        val action = viewModel.submitSearch("hello world")
+        advanceUntilIdle()
+
+        assertEquals(BiliSearchSubmitAction.OpenResults, action)
+        assertEquals("hello world", viewModel.draftQuery.value)
+        assertEquals("hello world", viewModel.activeQuery.value)
+        assertEquals(listOf("hello world", "Compose"), viewModel.searchHistory.value)
+    }
+
+    @Test
+    fun searchViewModel_submitSearch_videoId_returnsOpenVideo_withoutChangingActiveQuery() = runTest {
+        val repo = TestBiliRepository()
+        val viewModel = BiliSearchViewModel(repo)
+        advanceUntilIdle()
+
+        viewModel.updateDraftQuery("  bv1xx411c7md  ")
+        val action = viewModel.submitSearch()
+        advanceUntilIdle()
+
+        assertEquals(
+            BiliSearchSubmitAction.OpenVideo(aid = null, bvid = "BV1xx411c7md"),
+            action
+        )
+        assertEquals("BV1xx411c7md", viewModel.draftQuery.value)
+        assertEquals("", viewModel.activeQuery.value)
+        assertEquals(listOf("Compose"), viewModel.searchHistory.value)
+    }
+
+    @Test
+    fun searchViewModel_resetSearchSession_clearsDraftAndActiveQuery() = runTest {
+        val repo = TestBiliRepository()
+        val viewModel = BiliSearchViewModel(repo)
+        advanceUntilIdle()
+
+        viewModel.submitSearch("  Kotlin Compose  ")
+        advanceUntilIdle()
+
+        viewModel.resetSearchSession()
+
+        assertEquals("", viewModel.draftQuery.value)
+        assertEquals("", viewModel.activeQuery.value)
+        assertEquals(listOf("Kotlin Compose", "Compose"), viewModel.searchHistory.value)
+    }
 }

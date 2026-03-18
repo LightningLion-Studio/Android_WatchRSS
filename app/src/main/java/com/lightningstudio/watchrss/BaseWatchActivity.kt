@@ -1,8 +1,10 @@
 package com.lightningstudio.watchrss
 
 import android.content.Context
+import android.hardware.input.InputManager
 import android.os.Bundle
 import android.os.SystemClock
+import android.view.InputDevice
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
@@ -27,6 +29,8 @@ open class BaseWatchActivity : ComponentActivity() {
     private var swipeLastDx = 0f
     private var swipeCommitted = false
     private var lastNavigationAt = 0L
+    private var nextRotaryHandlerId = 0
+    private val rotaryHandlers = LinkedHashMap<Int, (Float) -> Boolean>()
     private val swipeSlop by lazy { ViewConfiguration.get(this).scaledTouchSlop.toFloat() }
     private val minSwipeDistance by lazy {
         max(swipeSlop * 2f, resources.displayMetrics.density * 48f)
@@ -131,6 +135,24 @@ open class BaseWatchActivity : ComponentActivity() {
             root.postDelayed(resetRunnable, RESET_DELAY_MS)
         }
         return handled
+    }
+
+    override fun dispatchGenericMotionEvent(ev: MotionEvent): Boolean {
+        if (
+            ev.actionMasked == MotionEvent.ACTION_SCROLL &&
+            ev.isFromSource(InputDevice.SOURCE_ROTARY_ENCODER)
+        ) {
+            val delta = ev.getAxisValue(MotionEvent.AXIS_SCROLL)
+            if (delta != 0f) {
+                val handlers = rotaryHandlers.values.toList().asReversed()
+                for (handler in handlers) {
+                    if (handler(delta)) {
+                        return true
+                    }
+                }
+            }
+        }
+        return super.dispatchGenericMotionEvent(ev)
     }
 
     override fun onPause() {
@@ -262,13 +284,29 @@ open class BaseWatchActivity : ComponentActivity() {
 
     protected open fun isSwipeBackEnabled(): Boolean = true
 
+    fun registerRotaryHandler(handler: (Float) -> Boolean): Int {
+        val id = ++nextRotaryHandlerId
+        rotaryHandlers[id] = handler
+        return id
+    }
+
+    fun unregisterRotaryHandler(id: Int) {
+        rotaryHandlers.remove(id)
+    }
+
     protected fun allowNavigation(minIntervalMs: Long = NAVIGATION_THROTTLE_MS): Boolean {
         val now = SystemClock.elapsedRealtime()
-        if (now - lastNavigationAt < minIntervalMs) {
+        val latestNavigationAt = max(lastNavigationAt, globalNavigationAt)
+        if (now - latestNavigationAt < minIntervalMs) {
             return false
         }
         lastNavigationAt = now
+        globalNavigationAt = now
         return true
+    }
+
+    fun tryAllowNavigation(minIntervalMs: Long = NAVIGATION_THROTTLE_MS): Boolean {
+        return allowNavigation(minIntervalMs)
     }
 
     private fun shouldStartSwipe(root: View, ev: MotionEvent): Boolean {
@@ -288,6 +326,9 @@ open class BaseWatchActivity : ComponentActivity() {
 
     private fun animateBackCommit(root: View) {
         swipeCommitted = true
+        val now = SystemClock.elapsedRealtime()
+        lastNavigationAt = now
+        globalNavigationAt = now
         root.removeCallbacks(resetRunnable)
         val target = root.width.toFloat().coerceAtLeast(1f)
         root.animate()
@@ -319,6 +360,8 @@ open class BaseWatchActivity : ComponentActivity() {
     }
 
     companion object {
+        @Volatile
+        private var globalNavigationAt = 0L
         private const val RESET_DELAY_MS = 350L
         private const val SWIPE_START_RATIO = 0.65f
         private const val SWIPE_COMMIT_RATIO = 0.35f

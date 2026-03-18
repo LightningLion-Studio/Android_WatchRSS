@@ -25,6 +25,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.WatchSurface
+import com.lightningstudio.watchrss.ui.input.InstallRotaryScrollHandler
 
 @Composable
 fun AboutScreen(
@@ -44,12 +45,15 @@ fun AboutScreen(
     val pillVerticalPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_8dp
     val pillRadius = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_button_default_radius
     val pillColor = colorResource(R.color.watch_pill_background)
+    val scrollState = rememberScrollState()
+
+    InstallRotaryScrollHandler(scrollState)
 
     WatchSurface(pureBlack = true) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
                 .padding(safePadding),
             verticalArrangement = Arrangement.Top,
             horizontalAlignment = Alignment.CenterHorizontally

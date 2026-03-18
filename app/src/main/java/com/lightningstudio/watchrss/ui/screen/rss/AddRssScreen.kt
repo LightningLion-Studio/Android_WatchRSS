@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.data.rss.RssChannel
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.R
+import com.lightningstudio.watchrss.ui.input.InstallRotaryScrollHandler
 import com.lightningstudio.watchrss.ui.theme.ActionButtonTextStyle
 import com.lightningstudio.watchrss.ui.testing.AddRssTestTags
 import com.lightningstudio.watchrss.ui.util.QrCodeGenerator
@@ -71,6 +72,7 @@ fun AddRssScreen(
 
     WatchSurface {
         val scrollState = rememberScrollState()
+        InstallRotaryScrollHandler(scrollState)
         val actionShape = RoundedCornerShape(dimensionResource(R.dimen.hey_button_default_radius))
         val actionWidth = dimensionResource(R.dimen.watch_action_button_width)
         val actionHeight = dimensionResource(R.dimen.watch_action_button_height)
@@ -212,7 +214,9 @@ fun AddRssScreen(
                     ) {
                         Text(
                             text = preview?.title ?: "频道预览",
-                            style = MaterialTheme.typography.titleMedium,
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontSize = MaterialTheme.typography.titleMedium.fontSize / 2
+                            ),
                             color = MaterialTheme.colorScheme.onSurface,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.fillMaxWidth()

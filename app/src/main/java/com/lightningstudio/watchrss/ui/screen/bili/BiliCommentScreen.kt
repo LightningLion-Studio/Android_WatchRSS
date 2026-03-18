@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -29,6 +30,7 @@ import com.lightningstudio.watchrss.ui.components.BiliCommentCard
 import com.lightningstudio.watchrss.ui.components.EmptyCommentState
 import com.lightningstudio.watchrss.ui.components.LoadingIndicator
 import com.lightningstudio.watchrss.ui.components.PullRefreshBox
+import com.lightningstudio.watchrss.ui.input.InstallRotaryLazyListHandler
 import com.lightningstudio.watchrss.ui.viewmodel.BiliCommentViewModel
 import com.lightningstudio.watchrss.ui.viewmodel.BiliViewModelFactory
 import kotlinx.coroutines.launch
@@ -46,7 +48,9 @@ fun BiliCommentScreen(
 ) {
     val comments = viewModel.commentFlow.collectAsLazyPagingItems()
     val scope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
     var isRefreshing by remember { mutableStateOf(false) }
+    InstallRotaryLazyListHandler(listState)
 
     Scaffold(
         topBar = {
@@ -87,6 +91,7 @@ fun BiliCommentScreen(
                 else -> {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
+                        state = listState,
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(comments.itemCount) { index ->

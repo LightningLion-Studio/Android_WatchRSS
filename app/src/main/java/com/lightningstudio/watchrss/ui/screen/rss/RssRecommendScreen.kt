@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -31,6 +32,7 @@ import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.rss.RssRecommendChannel
 import com.lightningstudio.watchrss.data.rss.RssRecommendGroup
 import com.lightningstudio.watchrss.ui.components.WatchSurface
+import com.lightningstudio.watchrss.ui.input.InstallRotaryLazyListHandler
 
 @Composable
 fun RssRecommendScreen(
@@ -39,10 +41,14 @@ fun RssRecommendScreen(
 ) {
     val safePadding = dimensionResource(R.dimen.watch_safe_padding)
     val spacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_4dp
+    val listState = rememberLazyListState()
+
+    InstallRotaryLazyListHandler(listState)
 
     WatchSurface {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
+            state = listState,
             contentPadding = PaddingValues(safePadding),
             verticalArrangement = Arrangement.spacedBy(spacing)
         ) {
@@ -64,10 +70,14 @@ fun RssRecommendGroupScreen(
     val safePadding = dimensionResource(R.dimen.watch_safe_padding)
     val spacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_6dp
     val startIndent = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_content_horizontal_distance
+    val listState = rememberLazyListState()
+
+    InstallRotaryLazyListHandler(listState)
 
     WatchSurface {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
+            state = listState,
             contentPadding = PaddingValues(safePadding),
             verticalArrangement = Arrangement.spacedBy(spacing)
         ) {

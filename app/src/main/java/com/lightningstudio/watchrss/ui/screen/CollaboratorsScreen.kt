@@ -30,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.lightningstudio.watchrss.ui.input.InstallRotaryScrollHandler
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 
 @Composable
@@ -37,6 +38,9 @@ fun CollaboratorsScreen(
     circleMaskEnabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
+    val scrollState = rememberScrollState()
+
+    InstallRotaryScrollHandler(scrollState)
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val bgOuter1 = Color.Black
         val bgOuter2 = Color.Black
@@ -70,7 +74,7 @@ fun CollaboratorsScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
+                        .verticalScroll(scrollState)
                         .padding(horizontal = 18.dp)
                         .padding(top = 14.dp, bottom = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally

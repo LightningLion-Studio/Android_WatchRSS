@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.sdk.bili.QrPollStatus
 import com.lightningstudio.watchrss.ui.components.PullRefreshBox
+import com.lightningstudio.watchrss.ui.input.InstallRotaryScrollHandler
 import com.lightningstudio.watchrss.ui.util.QrCodeGenerator
 import com.lightningstudio.watchrss.ui.viewmodel.BiliLoginUiState
 import kotlin.math.roundToInt
@@ -37,8 +38,11 @@ fun BiliLoginScreen(
 ) {
     val safePadding = dimensionResource(R.dimen.watch_safe_padding)
     val spacing = dimensionResource(R.dimen.hey_distance_6dp)
+    val topPadding = safePadding / 4
+    val titleSpacing = spacing / 4
     val qrSize = 180.dp
     val scrollState = rememberScrollState()
+    InstallRotaryScrollHandler(scrollState)
 
     LaunchedEffect(uiState.isSuccess) {
         if (uiState.isSuccess) {
@@ -59,16 +63,15 @@ fun BiliLoginScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(scrollState)
-                .padding(safePadding),
+                .padding(start = safePadding, top = topPadding, end = safePadding, bottom = safePadding),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+            verticalArrangement = Arrangement.spacedBy(titleSpacing, Alignment.Top)
         ) {
             Text(
                 text = "扫码登录",
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            Spacer(modifier = Modifier.height(spacing))
             val sizePx = with(androidx.compose.ui.platform.LocalDensity.current) {
                 qrSize.toPx().roundToInt().coerceAtLeast(1)
             }
@@ -88,7 +91,7 @@ fun BiliLoginScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            Spacer(modifier = Modifier.height(spacing))
+            Spacer(modifier = Modifier.height(titleSpacing))
             Text(
                 text = statusText(uiState.status),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

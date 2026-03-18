@@ -41,6 +41,7 @@ import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.settings.CACHE_LIMIT_OPTIONS_MB
 import com.lightningstudio.watchrss.ui.components.WatchSwitch
 import com.lightningstudio.watchrss.ui.components.WatchSurface
+import com.lightningstudio.watchrss.ui.input.InstallRotaryScrollHandler
 import com.lightningstudio.watchrss.ui.testing.SettingsTestTags
 import kotlinx.coroutines.flow.StateFlow
 
@@ -86,12 +87,15 @@ fun SettingsScreen(
     val stepperValueWidth = dimensionResource(R.dimen.watch_action_button_height)
     val valueIndent = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_content_horizontal_distance_6_0
     val pillHeight = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_multiple_item_height
+    val scrollState = rememberScrollState()
+
+    InstallRotaryScrollHandler(scrollState)
 
     WatchSurface(pureBlack = true) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
                 .padding(safePadding)
                 .testTag(SettingsTestTags.ROOT)
         ) {

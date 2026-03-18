@@ -65,6 +65,7 @@ class BiliChannelInfoActivity : BaseWatchActivity() {
                     lastRefreshAt = uiState.lastRefreshAt,
                     onLoginClick = { context.startActivity(BiliLoginActivity.createIntent(context)) },
                     onSearchClick = {
+                        if (!allowNavigation()) return@BiliChannelInfoScreen
                         context.startActivity(BiliSearchActivity.createIntent(context))
                     },
                     onOpenWatchLater = {

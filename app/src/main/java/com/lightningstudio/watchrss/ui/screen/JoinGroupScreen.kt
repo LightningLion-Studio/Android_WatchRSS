@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.WatchSurface
+import com.lightningstudio.watchrss.ui.input.InstallRotaryScrollHandler
 import com.lightningstudio.watchrss.ui.util.QrCodeGenerator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -38,6 +39,7 @@ fun JoinGroupScreen(
 ) {
     val safePadding = dimensionResource(R.dimen.watch_safe_padding)
     val sectionSpacing = 12.dp
+    val scrollState = rememberScrollState()
 
     var qrCodeBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
 
@@ -47,11 +49,13 @@ fun JoinGroupScreen(
         }
     }
 
+    InstallRotaryScrollHandler(scrollState)
+
     WatchSurface(pureBlack = true) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
                 .padding(safePadding),
             verticalArrangement = Arrangement.Top,
             horizontalAlignment = Alignment.CenterHorizontally

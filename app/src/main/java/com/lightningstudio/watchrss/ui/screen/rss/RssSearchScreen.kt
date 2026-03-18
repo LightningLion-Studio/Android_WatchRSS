@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -28,6 +29,7 @@ import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.rss.RssItem
 import com.lightningstudio.watchrss.ui.components.SearchInputBar
 import com.lightningstudio.watchrss.ui.components.WatchSurface
+import com.lightningstudio.watchrss.ui.input.InstallRotaryLazyListHandler
 
 @Composable
 fun RssSearchScreen(
@@ -39,11 +41,15 @@ fun RssSearchScreen(
     val safePadding = dimensionResource(R.dimen.watch_safe_padding)
     val titleSize = textSize(R.dimen.hey_s_title)
     val listSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_6dp
+    val listState = rememberLazyListState()
+
+    InstallRotaryLazyListHandler(listState)
 
     WatchSurface {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize(),
+            state = listState,
             contentPadding = androidx.compose.foundation.layout.PaddingValues(
                 start = safePadding,
                 top = safePadding,

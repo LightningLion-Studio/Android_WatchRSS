@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.WatchSurface
+import com.lightningstudio.watchrss.ui.input.InstallRotaryScrollHandler
 import com.lightningstudio.watchrss.ui.testing.ProfileTestTags
 
 @Composable
@@ -50,12 +51,15 @@ fun ProfileScreen(
     val pillVerticalPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_8dp
     val iconSize = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_listitem_lefticon_height_width
     val iconSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_content_horizontal_distance
+    val scrollState = rememberScrollState()
+
+    InstallRotaryScrollHandler(scrollState)
 
     WatchSurface(pureBlack = true) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
                 .padding(safePadding)
                 .testTag(ProfileTestTags.ROOT),
             verticalArrangement = Arrangement.Top,

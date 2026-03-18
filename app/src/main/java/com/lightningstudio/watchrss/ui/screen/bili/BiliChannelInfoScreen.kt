@@ -26,13 +26,15 @@ import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.dp
 import androidx.core.content.res.ResourcesCompat
 import android.graphics.Paint
 import android.text.TextPaint
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.WatchSurface
-import com.lightningstudio.watchrss.ui.util.formatTime
+import com.lightningstudio.watchrss.ui.input.InstallRotaryScrollHandler
 import com.lightningstudio.watchrss.ui.theme.ActionButtonTextStyle
+import com.lightningstudio.watchrss.ui.util.formatTime
 import kotlin.math.min
 
 @Composable
@@ -50,6 +52,7 @@ fun BiliChannelInfoScreen(
     val titleSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_6dp
     val infoSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_4dp
     val buttonSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_4dp
+    val loginTopSpacing = (buttonSpacing / 2) - 5.dp
     val buttonWidth = dimensionResource(R.dimen.watch_action_button_width)
     val buttonHeight = dimensionResource(R.dimen.watch_action_button_height)
     val titleSize = textSize(R.dimen.hey_s_title)
@@ -76,12 +79,15 @@ fun BiliChannelInfoScreen(
     }
     val url = "https://www.bilibili.com"
     val updatedText = lastRefreshAt?.let { formatTime(it) } ?: "--"
+    val scrollState = rememberScrollState()
+
+    InstallRotaryScrollHandler(scrollState)
 
     WatchSurface(pureBlack = true) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
                 .padding(safePadding),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -151,6 +157,7 @@ fun BiliChannelInfoScreen(
             Spacer(modifier = Modifier.height(buttonSpacing))
 
             if (!isLoggedIn) {
+                Spacer(modifier = Modifier.height(loginTopSpacing))
                 ActionButton(
                     label = "登录",
                     enabled = true,
@@ -198,6 +205,8 @@ fun BiliChannelInfoScreen(
                 height = buttonHeight,
                 onClick = onOpenFavorites
             )
+
+            Spacer(modifier = Modifier.height(3.dp))
         }
     }
 }

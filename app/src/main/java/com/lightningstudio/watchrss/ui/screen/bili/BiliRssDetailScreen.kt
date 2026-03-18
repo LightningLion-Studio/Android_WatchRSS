@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.res.ResourcesCompat
 import com.lightningstudio.watchrss.R
+import com.lightningstudio.watchrss.ui.input.InstallRotaryLazyListHandler
 import com.lightningstudio.watchrss.ui.theme.WatchBackgroundDeep
 import com.lightningstudio.watchrss.ui.theme.WatchReadingBackgroundLight
 import com.lightningstudio.watchrss.ui.theme.WatchReadingTextLight
@@ -72,6 +73,7 @@ fun BiliRssDetailScreen(
     val pagePadding = dimensionResource(R.dimen.detail_page_horizontal_padding)
     val blockSpacing = dimensionResource(R.dimen.detail_block_spacing)
     val listState = rememberLazyListState()
+    InstallRotaryLazyListHandler(listState)
     val isScrolling by remember(listState) {
         derivedStateOf { listState.isScrollInProgress }
     }

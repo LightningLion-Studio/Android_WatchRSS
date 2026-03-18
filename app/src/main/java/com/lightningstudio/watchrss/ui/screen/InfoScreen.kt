@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -28,6 +29,7 @@ import com.lightningstudio.watchrss.ui.theme.WatchBackgroundDeep
 import com.lightningstudio.watchrss.ui.theme.WatchReadingBackgroundLight
 import com.lightningstudio.watchrss.ui.theme.WatchReadingTextLight
 import com.lightningstudio.watchrss.ui.theme.WatchTextPrimary
+import com.lightningstudio.watchrss.ui.input.InstallRotaryLazyListHandler
 import com.lightningstudio.watchrss.ui.util.ContentBlock
 import com.lightningstudio.watchrss.ui.util.TextStyle as ContentTextStyle
 import androidx.compose.material3.MaterialTheme
@@ -60,11 +62,15 @@ fun InfoScreen(
     }
     val textBlocks = remember(content) { buildInfoBlocks(content) }
     val showProjectInfoAction = title == "开源许可与清单"
+    val listState = rememberLazyListState()
+
+    InstallRotaryLazyListHandler(listState)
 
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .background(backgroundColor),
+        state = listState,
         contentPadding = PaddingValues(horizontal = pagePadding)
     ) {
         item(key = "topSpacer") {

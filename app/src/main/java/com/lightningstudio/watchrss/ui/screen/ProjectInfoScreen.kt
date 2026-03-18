@@ -26,21 +26,25 @@ import com.google.zxing.BarcodeFormat
 import com.google.zxing.qrcode.QRCodeWriter
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.WatchSurface
+import com.lightningstudio.watchrss.ui.input.InstallRotaryScrollHandler
 
 @Composable
 fun ProjectInfoScreen() {
     val safePadding = dimensionResource(R.dimen.watch_safe_padding)
     val githubUrl = "https://github.com/LightningLion-Studio/WatchRSS"
+    val scrollState = rememberScrollState()
 
     val qrBitmap = remember {
         generateQRCode(githubUrl, 200, 200)
     }
 
+    InstallRotaryScrollHandler(scrollState)
+
     WatchSurface(pureBlack = true) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
                 .padding(safePadding),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {

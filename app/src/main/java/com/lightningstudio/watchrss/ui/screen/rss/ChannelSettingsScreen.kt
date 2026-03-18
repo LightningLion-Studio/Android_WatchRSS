@@ -25,6 +25,7 @@ import androidx.compose.ui.res.dimensionResource
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.WatchSwitch
 import com.lightningstudio.watchrss.ui.components.WatchSurface
+import com.lightningstudio.watchrss.ui.input.InstallRotaryScrollHandler
 
 @Composable
 fun ChannelSettingsScreen(
@@ -40,12 +41,15 @@ fun ChannelSettingsScreen(
     val valueSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_4dp
     val valueIndent = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_content_horizontal_distance_6_0
     val spacerHeight = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_20dp
+    val scrollState = rememberScrollState()
+
+    InstallRotaryScrollHandler(scrollState)
 
     WatchSurface {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
                 .padding(safePadding)
         ) {
             SettingsHeader()

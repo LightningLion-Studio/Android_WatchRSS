@@ -22,3 +22,4 @@ keystore.properties
 *.jks
 **/build/**
 .gradle_user/*
+java_pid13968.hprof

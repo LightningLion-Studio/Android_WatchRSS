@@ -30,9 +30,11 @@ import androidx.compose.ui.res.dimensionResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.dp
 import androidx.core.content.res.ResourcesCompat
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.WatchSurface
+import com.lightningstudio.watchrss.ui.input.InstallRotaryScrollHandler
 import com.lightningstudio.watchrss.ui.theme.ActionButtonTextStyle
 import com.lightningstudio.watchrss.ui.util.formatTime
 import kotlin.math.min
@@ -78,12 +80,15 @@ fun DouyinChannelInfoScreen(
     }
     val url = "https://www.douyin.com"
     val updatedText = lastRefreshAt?.let { formatTime(it) } ?: "--"
+    val scrollState = rememberScrollState()
+
+    InstallRotaryScrollHandler(scrollState)
 
     WatchSurface(pureBlack = true) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
                 .padding(safePadding),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -186,6 +191,8 @@ fun DouyinChannelInfoScreen(
                     onClick = onLoginClick
                 )
             }
+
+            Spacer(modifier = Modifier.height(3.dp))
         }
     }
 }
