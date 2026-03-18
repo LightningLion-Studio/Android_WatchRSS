@@ -52,6 +52,7 @@ import com.lightningstudio.watchrss.data.settings.CACHE_LIMIT_OPTIONS_MB
 import com.lightningstudio.watchrss.ui.components.WatchSwitch
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.input.InstallRotaryScrollHandler
+import com.lightningstudio.watchrss.ui.settings.MainSettingsCatalog
 import com.lightningstudio.watchrss.ui.testing.SettingsTestTags
 import kotlinx.coroutines.flow.StateFlow
 
@@ -68,12 +69,14 @@ fun SettingsScreen(
     shareUseSystem: StateFlow<Boolean>,
     readingFontSizeSp: StateFlow<Int>,
     phoneConnectionEnabled: StateFlow<Boolean>,
+    mediaVolumeGuardEnabled: StateFlow<Boolean>,
     showPerformanceTools: Boolean,
     onSelectCacheLimit: (Long) -> Unit,
     onToggleReadingTheme: () -> Unit,
     onToggleShareMode: () -> Unit,
     onSelectFontSize: (Int) -> Unit,
     onTogglePhoneConnection: () -> Unit,
+    onToggleMediaVolumeGuard: () -> Unit,
     onOpenOobe: () -> Unit,
     onOpenPerfLargeList: () -> Unit,
     onOpenPerfLargeArticle: () -> Unit,
@@ -85,6 +88,7 @@ fun SettingsScreen(
     val useSystemShare by shareUseSystem.collectAsState()
     val fontSizeSp by readingFontSizeSp.collectAsState()
     val phoneConnection by phoneConnectionEnabled.collectAsState()
+    val mediaVolumeGuard by mediaVolumeGuardEnabled.collectAsState()
     var currentPage by rememberSaveable { mutableStateOf(SettingsPage.Main) }
 
     BackHandler(enabled = currentPage == SettingsPage.Advanced) {
@@ -96,10 +100,12 @@ fun SettingsScreen(
             readingThemeDark = themeDark,
             readingFontSizeSp = fontSizeSp,
             phoneConnectionEnabled = phoneConnection,
+            mediaVolumeGuardEnabled = mediaVolumeGuard,
             showPerformanceTools = showPerformanceTools,
             onToggleReadingTheme = onToggleReadingTheme,
             onSelectFontSize = onSelectFontSize,
             onTogglePhoneConnection = onTogglePhoneConnection,
+            onToggleMediaVolumeGuard = onToggleMediaVolumeGuard,
             onOpenAdvanced = { currentPage = SettingsPage.Advanced },
             onOpenOobe = onOpenOobe,
             onOpenPerfLargeList = onOpenPerfLargeList,
@@ -121,10 +127,12 @@ private fun MainSettingsPage(
     readingThemeDark: Boolean,
     readingFontSizeSp: Int,
     phoneConnectionEnabled: Boolean,
+    mediaVolumeGuardEnabled: Boolean,
     showPerformanceTools: Boolean,
     onToggleReadingTheme: () -> Unit,
     onSelectFontSize: (Int) -> Unit,
     onTogglePhoneConnection: () -> Unit,
+    onToggleMediaVolumeGuard: () -> Unit,
     onOpenAdvanced: () -> Unit,
     onOpenOobe: () -> Unit,
     onOpenPerfLargeList: () -> Unit,
@@ -143,6 +151,9 @@ private fun MainSettingsPage(
     val valueIndent = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_10dp
     val pillHeight = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_multiple_item_height
     val scrollState = rememberScrollState()
+    val readingThemeInfo = remember { MainSettingsCatalog.readingTheme }
+    val fontSizeInfo = remember { MainSettingsCatalog.fontSize }
+    val mediaVolumeGuardInfo = remember { MainSettingsCatalog.mediaVolumeGuard }
 
     InstallRotaryScrollHandler(scrollState)
 
@@ -158,7 +169,7 @@ private fun MainSettingsPage(
 
             Spacer(modifier = Modifier.height(sectionSpacing))
 
-            SettingsPillRow(label = "阅读主题", endPaddingMultiplier = 1.5f) {
+            SettingsPillRow(label = readingThemeInfo.title, endPaddingMultiplier = 1.5f) {
                 ReadingThemeToggle(
                     isDark = readingThemeDark,
                     modifier = Modifier.testTag(SettingsTestTags.THEME_SWITCH),
@@ -171,10 +182,16 @@ private fun MainSettingsPage(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
             )
+            Text(
+                text = readingThemeInfo.description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+            )
 
             Spacer(modifier = Modifier.height(entrySpacing))
 
-            SettingsPillRow(label = "字体大小") {
+            SettingsPillRow(label = fontSizeInfo.title) {
                 RoundIconButtonIcon(
                     iconRes = R.drawable.ic_action_minus,
                     contentDescription = "减小字体",
@@ -198,7 +215,39 @@ private fun MainSettingsPage(
                 )
             }
             Text(
-                text = "正文阅读字号",
+                text = fontSizeInfo.description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+            )
+
+            Spacer(modifier = Modifier.height(entrySpacing))
+
+            SettingsPillRow(label = mediaVolumeGuardInfo.title, endPaddingMultiplier = 1.5f) {
+                WatchSwitch(
+                    checked = mediaVolumeGuardEnabled,
+                    modifier = Modifier.testTag(SettingsTestTags.MEDIA_VOLUME_GUARD_SWITCH),
+                    onCheckedChange = { onToggleMediaVolumeGuard() }
+                )
+            }
+            Text(
+                text = if (mediaVolumeGuardEnabled) {
+                    "播放前若音量超过15%，会先压到约7%"
+                } else {
+                    "关闭后播放时不再自动压低音量"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+            )
+            Text(
+                text = mediaVolumeGuardInfo.description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+            )
+            Text(
+                text = "滚轮连续上调时会先停在约16%，停一下再滚可继续升高",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = valueIndent, top = valueSpacing)

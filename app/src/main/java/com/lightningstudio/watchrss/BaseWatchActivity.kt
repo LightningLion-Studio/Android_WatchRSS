@@ -170,12 +170,20 @@ open class BaseWatchActivity : ComponentActivity() {
     }
 
     override fun onPause() {
+        buildResumeIntent()?.let { AppResumeStateStore.save(this, it) }
         window.decorView.removeCallbacks(resetRunnable)
         if (!swipeCommitted) {
             resetViewState(window.decorView)
         }
         pendingActivityStartAllowanceAt = 0L
         super.onPause()
+    }
+
+    override fun onDestroy() {
+        if (isFinishing) {
+            buildResumeIntent()?.let { AppResumeStateStore.clearIfMatches(this, it) }
+        }
+        super.onDestroy()
     }
 
     override fun startActivity(intent: Intent) {
@@ -317,6 +325,8 @@ open class BaseWatchActivity : ComponentActivity() {
     protected open fun isSwipeBackEnabled(): Boolean = true
 
     protected open fun shouldAnimateSwipeBackGesture(): Boolean = true
+
+    protected open fun buildResumeIntent(): Intent? = null
 
     protected open fun shouldMapHardwareBackKey(event: KeyEvent): Boolean {
         return when (event.keyCode) {

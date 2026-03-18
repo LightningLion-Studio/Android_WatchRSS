@@ -61,6 +61,12 @@ class MainActivity : BaseWatchActivity() {
         closeOpenSwipe()
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        maybeResumeLastContent(intent)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen().setKeepOnScreenCondition { keepSplashOnScreen }
         super.onCreate(savedInstanceState)
@@ -75,6 +81,7 @@ class MainActivity : BaseWatchActivity() {
                 finish()
                 return@launch
             }
+            maybeResumeLastContent(intent)
             setupSystemBars()
             renderHomeContent()
         }
@@ -153,6 +160,21 @@ class MainActivity : BaseWatchActivity() {
 
     private fun usesSystemBackGesture(): Boolean {
         return Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
+    }
+
+    private fun maybeResumeLastContent(sourceIntent: Intent?) {
+        if (!isLauncherEntry(sourceIntent)) return
+        val resumeIntent = AppResumeStateStore.load(this) ?: return
+        val component = resumeIntent.component ?: return
+        if (component.className == MainActivity::class.java.name) return
+        startActivity(
+            resumeIntent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+        )
+    }
+
+    private fun isLauncherEntry(intent: Intent?): Boolean {
+        if (intent?.action != Intent.ACTION_MAIN) return false
+        return intent.categories?.contains(Intent.CATEGORY_LAUNCHER) == true
     }
 
     private fun showChannelActions(channel: RssChannel, quick: Boolean) {

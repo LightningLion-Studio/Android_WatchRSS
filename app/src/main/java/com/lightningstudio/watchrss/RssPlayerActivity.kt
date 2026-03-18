@@ -9,12 +9,14 @@ import androidx.activity.viewModels
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.core.content.FileProvider
+import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
 import com.lightningstudio.watchrss.ui.screen.bili.BiliPlayerScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.RssPlayerViewModel
 import java.io.File
 
 class RssPlayerActivity : BaseWatchActivity() {
+    private val settingsRepository by lazy { (application as WatchRssApplication).container.settingsRepository }
     private val viewModel: RssPlayerViewModel by viewModels()
     private var panOffsetX = 0f
     private var panRangeX = 0f
@@ -26,6 +28,9 @@ class RssPlayerActivity : BaseWatchActivity() {
         setContent {
             WatchRSSTheme {
                 val uiState by viewModel.uiState.collectAsState()
+                val volumeGuardEnabled by settingsRepository.mediaVolumeGuardEnabled.collectAsState(
+                    initial = DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
+                )
                 BiliPlayerScreen(
                     uiState = uiState,
                     onRetry = viewModel::loadPlayUrl,
@@ -40,7 +45,8 @@ class RssPlayerActivity : BaseWatchActivity() {
                     onPanStateChange = { offsetX, rangeX ->
                         panOffsetX = offsetX
                         panRangeX = rangeX
-                    }
+                    },
+                    volumeGuardEnabled = volumeGuardEnabled
                 )
             }
         }
@@ -50,6 +56,17 @@ class RssPlayerActivity : BaseWatchActivity() {
         if (dx <= 0f) return false
         if (panRangeX <= 0f) return false
         return panOffsetX < panRangeX - 1f
+    }
+
+    override fun buildResumeIntent(): Intent? {
+        val playUrl = intent.getStringExtra(RssPlayerViewModel.KEY_PLAY_URL)?.trim().orEmpty()
+        if (playUrl.isBlank()) return null
+        val webUrl = intent.getStringExtra(RssPlayerViewModel.KEY_WEB_URL)
+        return createIntent(
+            context = this,
+            playUrl = playUrl,
+            webUrl = webUrl
+        )
     }
 
     companion object {

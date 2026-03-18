@@ -41,6 +41,15 @@ class DetailActivity : BaseWatchActivity() {
         finish()
     }
 
+    override fun buildResumeIntent(): Intent? {
+        val itemId = intent.getLongExtra(EXTRA_ITEM_ID, 0L)
+        if (itemId <= 0L) return null
+        return Intent(this, DetailActivity::class.java).apply {
+            putExtra(EXTRA_ITEM_ID, itemId)
+            putExtra(EXTRA_FROM_WATCH_LATER, fromWatchLater)
+        }
+    }
+
     companion object {
         const val EXTRA_ITEM_ID = "itemId"
         const val EXTRA_FROM_WATCH_LATER = "fromWatchLater"

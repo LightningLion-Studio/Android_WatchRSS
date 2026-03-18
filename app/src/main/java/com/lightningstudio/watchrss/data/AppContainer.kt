@@ -10,6 +10,8 @@ import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
 import com.lightningstudio.watchrss.data.douyin.DouyinRepository
 import com.lightningstudio.watchrss.data.douyin.DouyinRepositoryContract
 import com.lightningstudio.watchrss.data.db.WatchRssDatabase
+import com.lightningstudio.watchrss.data.network.DefaultInternetAvailabilityMonitor
+import com.lightningstudio.watchrss.data.network.InternetAvailabilityMonitor
 import com.lightningstudio.watchrss.data.rss.DefaultRssRepository
 import com.lightningstudio.watchrss.data.rss.RssReadableService
 import com.lightningstudio.watchrss.data.rss.RssFetchService
@@ -28,6 +30,7 @@ interface AppContainer {
     val managedCacheService: ManagedCacheService
     val biliRepository: BiliRepositoryContract
     val douyinRepository: DouyinRepositoryContract
+    val internetAvailabilityMonitor: InternetAvailabilityMonitor
 }
 
 class DefaultAppContainer(context: Context) : AppContainer {
@@ -71,6 +74,10 @@ class DefaultAppContainer(context: Context) : AppContainer {
 
     override val douyinRepository: DouyinRepositoryContract by lazy {
         DouyinRepository(appContext, managedCacheService)
+    }
+
+    override val internetAvailabilityMonitor: InternetAvailabilityMonitor by lazy {
+        DefaultInternetAvailabilityMonitor(appContext)
     }
 
     override val rssRepository: RssRepository by lazy {

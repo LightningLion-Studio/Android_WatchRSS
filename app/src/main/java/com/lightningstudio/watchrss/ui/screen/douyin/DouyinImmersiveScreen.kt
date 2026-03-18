@@ -60,6 +60,7 @@ import com.lightningstudio.watchrss.ui.components.ToastMessage
 import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.components.WatchIconButton
 import com.lightningstudio.watchrss.ui.components.WatchSurface
+import com.lightningstudio.watchrss.ui.components.PlayerVolumeState
 import com.lightningstudio.watchrss.ui.components.PlayerVolumeOverlay
 import com.lightningstudio.watchrss.ui.components.rememberPlayerVolumeState
 import com.lightningstudio.watchrss.ui.input.InstallRotaryPagerHandler
@@ -72,12 +73,12 @@ import kotlin.math.min
 @Composable
 fun DouyinImmersiveScreen(
     uiState: DouyinFeedUiState,
+    volumeGuardEnabled: Boolean,
     onPageSettled: (Int) -> Unit,
     onEnterFlow: () -> Unit,
     onMessageShown: () -> Unit,
     onHeaderClick: () -> Unit
 ) {
-    val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
     val pageCount = uiState.items.size + 1
     val pagerState = rememberPagerState(
         initialPage = uiState.currentPage.coerceIn(0, (pageCount - 1).coerceAtLeast(0)),
@@ -85,7 +86,7 @@ fun DouyinImmersiveScreen(
     )
     var controlsVisible by rememberSaveable { mutableStateOf(true) }
     var isFullscreen by rememberSaveable { mutableStateOf(true) }
-    val volumeState = rememberPlayerVolumeState()
+    val volumeState = rememberPlayerVolumeState(guardEnabled = volumeGuardEnabled)
 
     InstallRotaryPagerHandler(
         pagerState = pagerState,
@@ -94,6 +95,7 @@ fun DouyinImmersiveScreen(
     InstallRotaryVolumeHandler(
         enabled = pagerState.currentPage > 0,
         showSystemUi = false,
+        reverseDirection = true,
         onVolumeStep = volumeState::adjustBySteps
     )
 
@@ -131,6 +133,7 @@ fun DouyinImmersiveScreen(
                     item = item,
                     headers = uiState.playHeaders,
                     localPlayPath = uiState.localPlayPaths[item.awemeId],
+                    volumeState = volumeState,
                     isActive = pagerState.currentPage == page,
                     controlsVisible = controlsVisible,
                     isFullscreen = isFullscreen,
@@ -161,9 +164,7 @@ fun DouyinImmersiveScreen(
 
         PlayerVolumeOverlay(
             state = volumeState,
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .padding(end = safePadding)
+            modifier = Modifier.align(Alignment.Center)
         )
     }
 }
@@ -233,6 +234,7 @@ private fun DouyinVideoPage(
     item: DouyinStreamItem,
     headers: Map<String, String>,
     localPlayPath: String?,
+    volumeState: PlayerVolumeState,
     isActive: Boolean,
     controlsVisible: Boolean,
     isFullscreen: Boolean,
@@ -259,6 +261,7 @@ private fun DouyinVideoPage(
     var pausedByGesture by remember(item.awemeId) { mutableStateOf(false) }
     var isBuffering by remember(item.awemeId) { mutableStateOf(false) }
     var hasError by remember(item.awemeId) { mutableStateOf(false) }
+    var playbackStartGuardPending by remember(item.awemeId) { mutableStateOf(true) }
 
     LaunchedEffect(item.awemeId, localPlayPath, remoteUri) {
         if (mediaUri.isNullOrBlank()) {
@@ -344,6 +347,10 @@ private fun DouyinVideoPage(
         val shouldPlay = isActive && !pausedByGesture && !hasError
         player.playWhenReady = shouldPlay
         if (shouldPlay) {
+            if (playbackStartGuardPending) {
+                volumeState.enforcePlaybackStartGuard()
+                playbackStartGuardPending = false
+            }
             player.play()
         } else {
             player.pause()

@@ -8,6 +8,7 @@ import com.lightningstudio.watchrss.data.DefaultAppContainer
 import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
 import com.lightningstudio.watchrss.data.cache.ManagedCacheService
 import com.lightningstudio.watchrss.data.douyin.DouyinRepositoryContract
+import com.lightningstudio.watchrss.data.network.InternetAvailabilityMonitor
 import com.lightningstudio.watchrss.data.rss.RssRepository
 import com.lightningstudio.watchrss.data.settings.SettingsRepository
 import androidx.test.platform.app.InstrumentationRegistry
@@ -20,7 +21,8 @@ class TestAppContainer(
     override val rssRepository: RssRepository,
     override val settingsRepository: SettingsRepository,
     private val biliRepositoryOverride: BiliRepositoryContract? = null,
-    private val douyinRepositoryOverride: DouyinRepositoryContract? = null
+    private val douyinRepositoryOverride: DouyinRepositoryContract? = null,
+    private val internetAvailabilityMonitorOverride: InternetAvailabilityMonitor? = null
 ) : AppContainer {
     private val fallback by lazy { DefaultAppContainer(context.applicationContext) }
 
@@ -32,6 +34,9 @@ class TestAppContainer(
 
     override val douyinRepository: DouyinRepositoryContract
         get() = douyinRepositoryOverride ?: fallback.douyinRepository
+
+    override val internetAvailabilityMonitor: InternetAvailabilityMonitor
+        get() = internetAvailabilityMonitorOverride ?: fallback.internetAvailabilityMonitor
 }
 
 class TestAppContainerRule(

@@ -48,7 +48,7 @@ fun DeleteConfirmDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background.copy(alpha = 0.9f))
+                .background(Color.Black.copy(alpha = 0.92f))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -65,7 +65,7 @@ fun DeleteConfirmDialog(
                 modifier = Modifier
                     .size(containerSize)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surface)
+                    .background(Color.Black)
                     .padding(top = scaleDp(96.dp), bottom = scaleDp(30.dp)),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(scaleDp(32.dp))

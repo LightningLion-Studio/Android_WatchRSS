@@ -16,13 +16,15 @@ private val READING_THEME_DARK = booleanPreferencesKey("reading_theme_dark")
 private val READING_FONT_SIZE_SP = intPreferencesKey("reading_font_size_sp")
 private val SHARE_USE_SYSTEM = booleanPreferencesKey("share_use_system")
 private val PHONE_CONNECTION_ENABLED = booleanPreferencesKey("phone_connection_enabled")
+private val MEDIA_VOLUME_GUARD_ENABLED = booleanPreferencesKey("media_volume_guard_enabled")
 const val MIN_CACHE_LIMIT_MB: Long = 512
 const val MAX_CACHE_LIMIT_MB: Long = 4 * 1024
 const val DEFAULT_CACHE_LIMIT_MB: Long = MIN_CACHE_LIMIT_MB
 val CACHE_LIMIT_OPTIONS_MB: List<Long> = listOf(512L, 768L, 1024L, 1536L, 2048L, 2560L, 3072L, 4096L)
 const val MB_BYTES: Long = 1024 * 1024
 const val DEFAULT_READING_FONT_SIZE_SP: Int = 14
-const val CURRENT_OOBE_VERSION: Int = 1
+const val CURRENT_OOBE_VERSION: Int = 3
+const val DEFAULT_MEDIA_VOLUME_GUARD_ENABLED: Boolean = true
 
 class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     val cacheLimitBytes: Flow<Long> = dataStore.data.map { preferences ->
@@ -45,6 +47,9 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     }
     val phoneConnectionEnabled: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[PHONE_CONNECTION_ENABLED] ?: false
+    }
+    val mediaVolumeGuardEnabled: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[MEDIA_VOLUME_GUARD_ENABLED] ?: DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
     }
 
     suspend fun setCacheLimitBytes(bytes: Long) {
@@ -86,6 +91,12 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     suspend fun setPhoneConnectionEnabled(value: Boolean) {
         dataStore.edit { preferences ->
             preferences[PHONE_CONNECTION_ENABLED] = value
+        }
+    }
+
+    suspend fun setMediaVolumeGuardEnabled(value: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[MEDIA_VOLUME_GUARD_ENABLED] = value
         }
     }
 

@@ -44,12 +44,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.sdk.bili.BiliPage
 import com.lightningstudio.watchrss.ui.input.InstallRotaryLazyListHandler
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
 import com.lightningstudio.watchrss.ui.util.RssImageLoader
 import com.lightningstudio.watchrss.ui.viewmodel.BiliDetailUiState
+import kotlin.math.max
 
 @Composable
 fun BiliDetailScreen(
@@ -221,6 +223,11 @@ private fun BiliMetaCard(
     val radius = watchDimensionResource(R.dimen.hey_card_normal_bg_radius)
     val spacing = watchDimensionResource(R.dimen.hey_distance_6dp)
     val cardColor = MaterialTheme.colorScheme.surface
+    val titleSize = textSize(R.dimen.hey_m_title)
+    val titleLineHeight = max(
+        MaterialTheme.typography.titleMedium.lineHeight.value,
+        titleSize.value * 1.24f
+    ).sp
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -231,9 +238,12 @@ private fun BiliMetaCard(
     ) {
         Text(
             text = title,
+            style = MaterialTheme.typography.titleMedium.copy(
+                fontSize = titleSize,
+                lineHeight = titleLineHeight,
+                fontWeight = FontWeight.SemiBold
+            ),
             color = MaterialTheme.colorScheme.onSurface,
-            fontSize = textSize(R.dimen.hey_m_title),
-            fontWeight = FontWeight.SemiBold,
             maxLines = 3,
             overflow = TextOverflow.Ellipsis
         )

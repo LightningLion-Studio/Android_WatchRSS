@@ -2,6 +2,8 @@ package com.lightningstudio.watchrss.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.lightningstudio.watchrss.data.network.InternetAvailabilityMonitor
+import com.lightningstudio.watchrss.data.network.InternetAvailabilityStatus
 import com.lightningstudio.watchrss.data.settings.CURRENT_OOBE_VERSION
 import com.lightningstudio.watchrss.data.settings.SettingsRepository
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -14,7 +16,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class OobeUiState(
-    val introPage: Int = 0
+    val introPage: Int = 0,
+    val internetAvailabilityStatus: InternetAvailabilityStatus = InternetAvailabilityStatus.Checking
 )
 
 sealed interface OobeEvent {
@@ -22,13 +25,24 @@ sealed interface OobeEvent {
 }
 
 class OobeViewModel(
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    internetAvailabilityMonitor: InternetAvailabilityMonitor
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(OobeUiState())
     val uiState: StateFlow<OobeUiState> = _uiState.asStateFlow()
 
     private val _events = MutableSharedFlow<OobeEvent>()
     val events: SharedFlow<OobeEvent> = _events.asSharedFlow()
+
+    init {
+        viewModelScope.launch {
+            internetAvailabilityMonitor.internetAvailability.collect { status ->
+                _uiState.update { state ->
+                    state.copy(internetAvailabilityStatus = status)
+                }
+            }
+        }
+    }
 
     fun setIntroPage(page: Int) {
         _uiState.update { state ->
@@ -44,6 +58,6 @@ class OobeViewModel(
     }
 
     companion object {
-        const val INTRO_PAGE_COUNT = 2
+        const val INTRO_PAGE_COUNT = 4
     }
 }

@@ -3,11 +3,22 @@ package com.lightningstudio.watchrss.ui.testing
 object OobeTestTags {
     const val ROOT = "oobe/root"
     const val INTRO_PAGE = "oobe/intro_page"
+    const val CUSTOM_PAGE = "oobe/custom_page"
+    const val CUSTOM_THEME_TOGGLE = "oobe/custom_theme_toggle"
+    const val CUSTOM_FONT_VALUE = "oobe/custom_font_value"
+    const val CUSTOM_MEDIA_GUARD_SWITCH = "oobe/custom_media_guard_switch"
+    const val INTERNET_PAGE = "oobe/internet_page"
     const val AGREEMENT_CHECKBOX = "oobe/agreement_checkbox"
     const val LEGAL_TEXT = "oobe/legal_text"
     const val NEXT_BUTTON = "oobe/next_button"
     const val CONTINUE_BUTTON = "oobe/continue_button"
     const val ERROR_TEXT = "oobe/error_text"
+    const val INTERNET_STATUS_CHECKING = "oobe/internet_status_checking"
+    const val INTERNET_STATUS_UNAVAILABLE = "oobe/internet_status_unavailable"
+    const val INTERNET_STATUS_AVAILABLE = "oobe/internet_status_available"
+    const val OFFLINE_WARNING_DIALOG = "oobe/offline_warning_dialog"
+    const val OFFLINE_WARNING_CONFIRM_BUTTON = "oobe/offline_warning_confirm_button"
+    const val OFFLINE_WARNING_CANCEL_BUTTON = "oobe/offline_warning_cancel_button"
 }
 
 object HomeTestTags {
@@ -68,5 +79,6 @@ object SettingsTestTags {
     const val FONT_INCREASE_BUTTON = "settings/font_increase_button"
     const val OPEN_OOBE_ENTRY = "settings/open_oobe_entry"
     const val PHONE_CONNECTION_SWITCH = "settings/phone_connection_switch"
+    const val MEDIA_VOLUME_GUARD_SWITCH = "settings/media_volume_guard_switch"
     const val BEIAN_ENTRY = "settings/beian_entry"
 }

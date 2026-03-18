@@ -33,7 +33,7 @@ class AppViewModelFactory(private val container: AppContainer) : ViewModelProvid
                 SettingsViewModel(container.settingsRepository, container.rssRepository)
             }
             modelClass.isAssignableFrom(OobeViewModel::class.java) -> {
-                OobeViewModel(container.settingsRepository)
+                OobeViewModel(container.settingsRepository, container.internetAvailabilityMonitor)
             }
             modelClass.isAssignableFrom(ChannelDetailViewModel::class.java) -> {
                 ChannelDetailViewModel(savedStateHandle, container.rssRepository)

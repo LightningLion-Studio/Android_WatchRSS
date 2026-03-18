@@ -27,12 +27,14 @@ class SettingsActivity : BaseWatchActivity() {
                     shareUseSystem = viewModel.shareUseSystem,
                     readingFontSizeSp = viewModel.readingFontSizeSp,
                     phoneConnectionEnabled = viewModel.phoneConnectionEnabled,
+                    mediaVolumeGuardEnabled = viewModel.mediaVolumeGuardEnabled,
                     showPerformanceTools = false,
                     onSelectCacheLimit = viewModel::updateCacheLimitMb,
                     onToggleReadingTheme = viewModel::toggleReadingTheme,
                     onToggleShareMode = viewModel::toggleShareUseSystem,
                     onSelectFontSize = viewModel::updateReadingFontSizeSp,
                     onTogglePhoneConnection = viewModel::togglePhoneConnection,
+                    onToggleMediaVolumeGuard = viewModel::toggleMediaVolumeGuard,
                     onOpenOobe = {
                         startActivity(OobeActivity.createIntent(this, returnHomeOnFinish = false))
                     },

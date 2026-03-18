@@ -98,6 +98,7 @@ fun InstallRotaryPagerHandler(
 fun InstallRotaryVolumeHandler(
     enabled: Boolean = true,
     showSystemUi: Boolean = true,
+    reverseDirection: Boolean = false,
     onVolumeStep: ((Int) -> Unit)? = null
 ) {
     val context = LocalContext.current
@@ -106,12 +107,12 @@ fun InstallRotaryVolumeHandler(
     }
     var accumulatedDelta by remember { mutableFloatStateOf(0f) }
     InstallRotaryHandler(enabled = enabled) { delta ->
-        accumulatedDelta += delta
+        accumulatedDelta += normalizeRotaryVolumeDelta(delta, reverseDirection)
         if (abs(accumulatedDelta) < ROTARY_VOLUME_THRESHOLD) {
             return@InstallRotaryHandler true
         }
         val steps = abs(accumulatedDelta).toInt().coerceAtLeast(1)
-        val direction = if (accumulatedDelta > 0f) 1 else -1
+        val direction = rotaryVolumeDirection(accumulatedDelta)
         accumulatedDelta = 0f
         if (onVolumeStep != null) {
             onVolumeStep(direction * steps)
@@ -125,6 +126,18 @@ fun InstallRotaryVolumeHandler(
             }
         }
         true
+    }
+}
+
+internal fun normalizeRotaryVolumeDelta(delta: Float, reverseDirection: Boolean): Float {
+    return if (reverseDirection) -delta else delta
+}
+
+internal fun rotaryVolumeDirection(accumulatedDelta: Float): Int {
+    return when {
+        accumulatedDelta > 0f -> 1
+        accumulatedDelta < 0f -> -1
+        else -> 0
     }
 }
 

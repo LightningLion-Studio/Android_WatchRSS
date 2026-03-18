@@ -33,10 +33,10 @@
             android:exported="false" />
         <activity
             android:name=".MainActivity"
+            android:alwaysRetainTaskState="true"
             android:enableOnBackInvokedCallback="true"
             android:exported="true"
             android:label="@string/app_name"
-            android:launchMode="singleTask"
             android:theme="@style/Theme.WatchRSS.Splash">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

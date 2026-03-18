@@ -7,6 +7,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -54,6 +56,8 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
@@ -62,6 +66,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
 import android.graphics.Paint
@@ -75,13 +80,12 @@ import com.lightningstudio.watchrss.ui.components.PullRefreshBox
 import com.lightningstudio.watchrss.ui.components.SwipeActionButton
 import com.lightningstudio.watchrss.ui.components.SwipeActionRow
 import com.lightningstudio.watchrss.ui.input.InstallRotaryLazyListHandler
+import com.lightningstudio.watchrss.ui.util.formatWatchTitleForWidthLimits
 import com.lightningstudio.watchrss.ui.util.RssImageLoader
-import com.lightningstudio.watchrss.ui.util.normalizeWatchTitleWhitespace
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
-import kotlin.math.min
 import kotlin.math.roundToInt
 
 private const val FEED_PREFETCH_BEFORE = 2
@@ -349,12 +353,14 @@ private fun FeedHeader(
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
             val availableWidthPx = with(density) { maxWidth.toPx() }
             val formattedTitle = remember(title, availableWidthPx, titleSizePx, typeface) {
-                formatTitleForWidthLimits(
+                formatWatchTitleForWidthLimits(
                     title = "$title $CHANNEL_TITLE_CLICK_HINT_SYMBOL",
                     paint = paint,
                     availableWidthPx = availableWidthPx,
                     firstLimitPx = firstLimitPx,
-                    secondLimitPx = secondLimitPx
+                    secondLimitPx = secondLimitPx,
+                    protectedSuffix = CHANNEL_TITLE_CLICK_HINT_SYMBOL,
+                    minPrefixCharsBeforeSuffixOnLastLine = 2
                 )
             }
             Text(
@@ -634,6 +640,55 @@ private fun FeedItemEntry(
 }
 
 @Composable
+private fun FeedCardTitle(
+    title: String,
+    isRead: Boolean,
+    fontSize: TextUnit,
+    modifier: Modifier = Modifier
+) {
+    val unreadIndicatorId = "feed_unread_indicator"
+    val text = remember(title, isRead) {
+        buildAnnotatedString {
+            if (!isRead) {
+                appendInlineContent(unreadIndicatorId, "[unread]")
+                append(' ')
+            }
+            append(title)
+        }
+    }
+    val inlineContent = if (!isRead) {
+        mapOf(
+            unreadIndicatorId to InlineTextContent(
+                placeholder = Placeholder(
+                    width = 0.5.em,
+                    height = 0.5.em,
+                    placeholderVerticalAlign = PlaceholderVerticalAlign.Center
+                )
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary)
+                )
+            }
+        )
+    } else {
+        emptyMap()
+    }
+
+    Text(
+        text = text,
+        color = MaterialTheme.colorScheme.onSurface,
+        fontSize = fontSize,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+        inlineContent = inlineContent,
+        modifier = modifier
+    )
+}
+
+@Composable
 private fun FeedTextCard(
     item: RssItem,
     pressState: PressScaleState,
@@ -650,8 +705,6 @@ private fun FeedTextCard(
     val summarySize = textSize(R.dimen.feed_card_summary_text_size)
     val summaryLineHeight = summarySize * 1.1f
     val summaryTop = watchDimensionResource(R.dimen.hey_distance_2dp)
-    val unreadSize = watchDimensionResource(R.dimen.hey_distance_8dp)
-    val unreadMargin = watchDimensionResource(R.dimen.hey_distance_6dp)
     val summary = remember(item.id, item.summary, item.content, useOriginalContent) {
         val baseSummary = item.summary ?: "暂无摘要"
         if (useOriginalContent && item.content.isNullOrBlank()) {
@@ -675,12 +728,10 @@ private fun FeedTextCard(
             .padding(padding)
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            Text(
-                text = item.title,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontSize = titleSize,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+            FeedCardTitle(
+                title = item.title,
+                isRead = item.isRead,
+                fontSize = titleSize
             )
             Text(
                 text = summary,
@@ -690,16 +741,6 @@ private fun FeedTextCard(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(top = summaryTop)
-            )
-        }
-        if (!item.isRead) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = unreadMargin, end = unreadMargin)
-                    .size(unreadSize)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary)
             )
         }
     }
@@ -726,8 +767,6 @@ private fun FeedImageCard(
     val summarySize = textSize(R.dimen.feed_card_summary_text_size)
     val summaryLineHeight = summarySize * 1.1f
     val summaryTop = watchDimensionResource(R.dimen.hey_distance_2dp)
-    val unreadSize = watchDimensionResource(R.dimen.hey_distance_8dp)
-    val unreadMargin = watchDimensionResource(R.dimen.hey_distance_6dp)
     val summary = remember(item.id, item.summary, item.content, useOriginalContent) {
         val baseSummary = item.summary ?: "暂无摘要"
         if (useOriginalContent && item.content.isNullOrBlank()) {
@@ -771,12 +810,10 @@ private fun FeedImageCard(
                 .align(Alignment.BottomStart)
                 .padding(padding)
         ) {
-            Text(
-                text = item.title,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontSize = titleSize,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+            FeedCardTitle(
+                title = item.title,
+                isRead = item.isRead,
+                fontSize = titleSize
             )
             Text(
                 text = summary,
@@ -786,16 +823,6 @@ private fun FeedImageCard(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(top = summaryTop)
-            )
-        }
-        if (!item.isRead) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = unreadMargin, end = unreadMargin)
-                    .size(unreadSize)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary)
             )
         }
     }
@@ -909,105 +936,4 @@ private fun Modifier.clickableWithoutRipple(
 private fun resolveThumbUrl(item: RssItem): String? {
     val candidate = item.imageUrl?.takeIf { it.isNotBlank() }
     return RssUrlResolver.resolveMediaUrl(candidate, item.link)
-}
-
-private fun formatTitleForWidthLimits(
-    title: String,
-    paint: TextPaint,
-    availableWidthPx: Float,
-    firstLimitPx: Float,
-    secondLimitPx: Float
-): String {
-    val normalized = normalizeWatchTitleWhitespace(title)
-    if (normalized.isEmpty()) {
-        return title
-    }
-    val firstLimit = min(firstLimitPx, availableWidthPx)
-    val secondLimit = min(secondLimitPx, availableWidthPx)
-    val lines = mutableListOf<String>()
-    var start = 0
-    var lineIndex = 0
-    while (start < normalized.length) {
-        val limit = if (lineIndex == 0) firstLimit else secondLimit
-        val end = breakTextIndex(normalized, start, limit, paint)
-        if (end <= start) {
-            lines.add(normalized.substring(start, start + 1))
-            start += 1
-        } else {
-            lines.add(normalized.substring(start, end))
-            start = end
-        }
-        lineIndex++
-    }
-    balanceSingleCharLines(lines, paint, firstLimit, secondLimit)
-    return lines.joinToString("\n")
-}
-
-private fun breakTextIndex(text: String, start: Int, widthPx: Float, paint: TextPaint): Int {
-    var low = start
-    var high = text.length
-    while (low < high) {
-        val mid = (low + high + 1) / 2
-        val current = text.substring(start, mid)
-        if (paint.measureText(current) <= widthPx) {
-            low = mid
-        } else {
-            high = mid - 1
-        }
-    }
-    return low
-}
-
-private fun balanceSingleCharLines(
-    lines: MutableList<String>,
-    paint: TextPaint,
-    firstLimitPx: Float,
-    otherLimitPx: Float
-) {
-    var index = 1
-    while (index < lines.size) {
-        val current = lines[index]
-        if (current.length == 1) {
-            val prevIndex = index - 1
-            val prev = lines[prevIndex]
-            val prevLimit = if (prevIndex == 0) firstLimitPx else otherLimitPx
-            val mergedPrev = prev + current
-            if (paint.measureText(mergedPrev) <= prevLimit) {
-                lines[prevIndex] = mergedPrev
-                lines.removeAt(index)
-                continue
-            }
-            if (prev.length > 1) {
-                val shiftedPrev = prev.dropLast(1)
-                val shiftedCurrent = prev.takeLast(1) + current
-                val currentLimit = if (index == 0) firstLimitPx else otherLimitPx
-                if (paint.measureText(shiftedCurrent) <= currentLimit) {
-                    lines[prevIndex] = shiftedPrev
-                    lines[index] = shiftedCurrent
-                    if (prevIndex > 0) {
-                        index--
-                        continue
-                    }
-                }
-            }
-            if (index + 1 < lines.size) {
-                val next = lines[index + 1]
-                if (next.isNotEmpty()) {
-                    val mergedCurrent = current + next.first()
-                    val currentLimit = if (index == 0) firstLimitPx else otherLimitPx
-                    if (paint.measureText(mergedCurrent) <= currentLimit) {
-                        lines[index] = mergedCurrent
-                        val remaining = next.substring(1)
-                        if (remaining.isEmpty()) {
-                            lines.removeAt(index + 1)
-                            continue
-                        } else {
-                            lines[index + 1] = remaining
-                        }
-                    }
-                }
-            }
-        }
-        index++
-    }
 }

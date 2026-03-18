@@ -7,22 +7,30 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
+import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
 import com.lightningstudio.watchrss.ui.screen.PlatformEntryScreen
 import com.lightningstudio.watchrss.ui.screen.bili.BiliPlayerScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.BiliPlayerUiState
+import kotlinx.coroutines.flow.collectLatest
 
 class DouyinPlayerActivity : BaseWatchActivity() {
-    private val repository by lazy { (application as WatchRssApplication).container.douyinRepository }
+    private val container by lazy { (application as WatchRssApplication).container }
+    private val repository by lazy { container.douyinRepository }
+    private val settingsRepository by lazy { container.settingsRepository }
+    private var currentPageIndex: Int = 0
 
     @OptIn(ExperimentalFoundationApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -31,11 +39,15 @@ class DouyinPlayerActivity : BaseWatchActivity() {
 
         val items = parseItems(intent)
         val startIndex = intent.getIntExtra(EXTRA_INDEX, 0).coerceIn(0, (items.size - 1).coerceAtLeast(0))
+        currentPageIndex = startIndex
 
         setContent {
             WatchRSSTheme {
                 val baseDensity = LocalDensity.current
                 CompositionLocalProvider(LocalDensity provides Density(2f, baseDensity.fontScale)) {
+                    val volumeGuardEnabled by settingsRepository.mediaVolumeGuardEnabled.collectAsState(
+                        initial = DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
+                    )
                     if (items.isEmpty()) {
                         PlatformEntryScreen(title = "抖音", message = "暂无可播放内容")
                     } else {
@@ -47,6 +59,11 @@ class DouyinPlayerActivity : BaseWatchActivity() {
                             initialPage = startIndex,
                             pageCount = { items.size }
                         )
+
+                        LaunchedEffect(pagerState) {
+                            snapshotFlow { pagerState.currentPage }
+                                .collectLatest { page -> currentPageIndex = page }
+                        }
 
                         VerticalPager(state = pagerState) { page ->
                             val item = items[page]
@@ -74,13 +91,27 @@ class DouyinPlayerActivity : BaseWatchActivity() {
                                     },
                                     onPanStateChange = { _, _ -> },
                                     allowPan = false,
-                                    rotaryVolumeEnabled = page == pagerState.currentPage
+                                    rotaryVolumeEnabled = page == pagerState.currentPage,
+                                    volumeGuardEnabled = volumeGuardEnabled
                                 )
                             }
                         }
                     }
                 }
             }
+        }
+    }
+
+    override fun buildResumeIntent(): Intent? {
+        val playUrls = ArrayList(intent.getStringArrayListExtra(EXTRA_PLAY_URLS).orEmpty())
+        if (playUrls.isEmpty()) return null
+        return Intent(this, DouyinPlayerActivity::class.java).apply {
+            putExtra(EXTRA_INDEX, currentPageIndex.coerceIn(0, (playUrls.size - 1).coerceAtLeast(0)))
+            putStringArrayListExtra(EXTRA_AWEME_IDS, ArrayList(intent.getStringArrayListExtra(EXTRA_AWEME_IDS).orEmpty()))
+            putStringArrayListExtra(EXTRA_PLAY_URLS, playUrls)
+            putStringArrayListExtra(EXTRA_COVERS, ArrayList(intent.getStringArrayListExtra(EXTRA_COVERS).orEmpty()))
+            putStringArrayListExtra(EXTRA_TITLES, ArrayList(intent.getStringArrayListExtra(EXTRA_TITLES).orEmpty()))
+            putStringArrayListExtra(EXTRA_AUTHORS, ArrayList(intent.getStringArrayListExtra(EXTRA_AUTHORS).orEmpty()))
         }
     }
 

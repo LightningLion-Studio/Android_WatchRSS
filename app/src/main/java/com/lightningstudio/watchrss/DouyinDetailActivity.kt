@@ -89,6 +89,21 @@ class DouyinDetailActivity : BaseWatchActivity() {
         }
     }
 
+    override fun buildResumeIntent(): Intent? {
+        val awemeId = intent.getStringExtra(EXTRA_AWEME_ID)?.trim().orEmpty()
+        val playUrl = intent.getStringExtra(EXTRA_PLAY_URL)?.trim().orEmpty()
+        if (awemeId.isBlank() && playUrl.isBlank()) return null
+        return createIntent(
+            context = this,
+            awemeId = awemeId,
+            title = intent.getStringExtra(EXTRA_TITLE),
+            author = intent.getStringExtra(EXTRA_AUTHOR),
+            summary = intent.getStringExtra(EXTRA_SUMMARY),
+            playUrl = playUrl,
+            coverUrl = intent.getStringExtra(EXTRA_COVER_URL)
+        )
+    }
+
     companion object {
         private const val EXTRA_AWEME_ID = "awemeId"
         private const val EXTRA_TITLE = "title"

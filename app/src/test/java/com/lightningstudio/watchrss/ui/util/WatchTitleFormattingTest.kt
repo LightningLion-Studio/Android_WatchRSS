@@ -21,4 +21,19 @@ class WatchTitleFormattingTest {
 
         assertEquals(raw, normalizeWatchTitleWhitespace(raw))
     }
+
+    @Test
+    fun formatWatchTitleForWidthLimitsKeepsTwoContentCharsBeforeTrailingHint() {
+        val formatted = formatWatchTitleForWidthLimitsWithMeasurer(
+            title = "中新网即时新闻ⓘ",
+            availableWidthPx = 6f,
+            firstLimitPx = 6f,
+            secondLimitPx = 3f,
+            protectedSuffix = "ⓘ",
+            minPrefixCharsBeforeSuffixOnLastLine = 2,
+            measureText = { it.length.toFloat() }
+        )
+
+        assertEquals("中新网即时\n新闻ⓘ", formatted)
+    }
 }

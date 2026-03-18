@@ -109,6 +109,20 @@ class BiliDetailActivity : BaseWatchActivity() {
         }
     }
 
+    override fun buildResumeIntent(): Intent? {
+        val aid = intent.getStringExtra(EXTRA_AID)?.toLongOrNull()
+        val bvid = intent.getStringExtra(EXTRA_BVID)?.takeIf { it.isNotBlank() }
+        if (aid == null && bvid.isNullOrBlank()) return null
+        return createIntent(
+            context = this,
+            aid = aid,
+            bvid = bvid,
+            cid = viewModel.selectedCid() ?: intent.getStringExtra(EXTRA_CID)?.toLongOrNull(),
+            rssItemId = intent.getStringExtra(EXTRA_RSS_ITEM_ID)?.toLongOrNull(),
+            rssMode = intent.getBooleanExtra(EXTRA_RSS_MODE, false)
+        )
+    }
+
     companion object {
         private const val EXTRA_AID = "aid"
         private const val EXTRA_BVID = "bvid"

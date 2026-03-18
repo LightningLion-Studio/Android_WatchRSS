@@ -4,30 +4,34 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,25 +39,48 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
-import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
-import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.lightningstudio.watchrss.R
+import com.lightningstudio.watchrss.data.network.InternetAvailabilityStatus
+import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
+import com.lightningstudio.watchrss.data.settings.DEFAULT_READING_FONT_SIZE_SP
 import com.lightningstudio.watchrss.ui.components.WatchCheckbox
+import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.components.WatchSurface
+import com.lightningstudio.watchrss.ui.components.WatchSwitch
+import com.lightningstudio.watchrss.ui.input.InstallRotaryScrollHandler
+import com.lightningstudio.watchrss.ui.settings.MainSettingsCatalog
+import com.lightningstudio.watchrss.ui.settings.MainSettingInfo
+import com.lightningstudio.watchrss.ui.settings.WatchReadingThemeToggle
+import com.lightningstudio.watchrss.ui.settings.WatchRoundIconButtonIcon
+import com.lightningstudio.watchrss.ui.settings.WatchSettingsPillRow
+import com.lightningstudio.watchrss.ui.settings.WatchStepperValue
 import com.lightningstudio.watchrss.ui.testing.OobeTestTags
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
+import com.lightningstudio.watchrss.ui.theme.watchColorResource
+import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import com.lightningstudio.watchrss.ui.viewmodel.OobeUiState
+
+private val OobeOrange = Color(0xFFFF8A3D)
+private val OobeGreen = Color(0xFF41C96B)
+private const val OOBE_WELCOME_PAGE = 0
+private const val OOBE_AGREEMENT_PAGE = 1
+private const val OOBE_CUSTOM_PAGE = 2
+private const val OOBE_INTERNET_PAGE = 3
 
 private data class IntroPageContent(
     val label: String,
@@ -76,7 +103,7 @@ fun OobeScreen(
 
     WatchSurface {
         OobeIntroStep(
-            currentPage = uiState.introPage,
+            uiState = uiState,
             onSetIntroPage = onSetIntroPage,
             onContinue = onContinueFromIntro,
             onOpenUserAgreement = onOpenUserAgreement,
@@ -87,7 +114,7 @@ fun OobeScreen(
 
 @Composable
 private fun OobeIntroStep(
-    currentPage: Int,
+    uiState: OobeUiState,
     onSetIntroPage: (Int) -> Unit,
     onContinue: () -> Unit,
     onOpenUserAgreement: () -> Unit,
@@ -96,140 +123,669 @@ private fun OobeIntroStep(
     val horizontalSafePadding = WatchDimens.watch_safe_padding
     val topSafePadding = WatchDimens.hey_distance_8dp
     val bottomSafePadding = WatchDimens.hey_distance_8dp
-    val introPage = currentPage.coerceAtLeast(0)
-    val introContent = remember {
-        IntroPageContent(
-            label = "腕上RSS",
-            title = "腕上RSS",
-            badgeText = "RSS",
-            accentColor = Color(0xFFFF8A3D)
+    val introPages = remember {
+        listOf(
+            IntroPageContent(
+                label = "欢迎使用",
+                title = "腕上RSS",
+                badgeText = "RSS",
+                accentColor = OobeOrange
+            ),
+            IntroPageContent(
+                label = "腕上RSS",
+                title = "腕上RSS",
+                badgeText = "RSS",
+                accentColor = OobeOrange
+            )
         )
     }
+    val introPage = uiState.introPage.coerceIn(OOBE_WELCOME_PAGE, OOBE_INTERNET_PAGE)
 
-    var isAgreed by remember { mutableStateOf(false) }
-    var showError by remember { mutableStateOf(false) }
+    var isAgreed by rememberSaveable { mutableStateOf(false) }
+    var showAgreementError by rememberSaveable { mutableStateOf(false) }
+    var showOfflineWarning by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(uiState.internetAvailabilityStatus) {
+        if (uiState.internetAvailabilityStatus == InternetAvailabilityStatus.Available) {
+            showOfflineWarning = false
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(
+                    start = horizontalSafePadding,
+                    end = horizontalSafePadding,
+                    top = topSafePadding,
+                    bottom = bottomSafePadding
+                )
+                .testTag(OobeTestTags.ROOT),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            when (introPage) {
+                OOBE_INTERNET_PAGE -> {
+                    OobeInternetStep(
+                        status = uiState.internetAvailabilityStatus,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .testTag(OobeTestTags.INTERNET_PAGE),
+                        onContinue = {
+                            when (uiState.internetAvailabilityStatus) {
+                                InternetAvailabilityStatus.Available -> onContinue()
+                                InternetAvailabilityStatus.Unavailable -> showOfflineWarning = true
+                                InternetAvailabilityStatus.Checking -> Unit
+                            }
+                        }
+                    )
+                }
+
+                OOBE_CUSTOM_PAGE -> {
+                    OobeCustomizationStep(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .testTag(OobeTestTags.CUSTOM_PAGE),
+                        onNext = { onSetIntroPage(OOBE_INTERNET_PAGE) }
+                    )
+                }
+
+                else -> {
+                    Spacer(modifier = Modifier.height(if (introPage == OOBE_WELCOME_PAGE) 2.dp else 0.dp))
+
+                    IntroPage(
+                        page = introPages[introPage],
+                        showTitle = introPage != OOBE_AGREEMENT_PAGE,
+                        compact = introPage > OOBE_WELCOME_PAGE,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .testTag(OobeTestTags.INTRO_PAGE)
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
+
+            when (introPage) {
+                OOBE_WELCOME_PAGE -> {
+                    OobePrimaryButton(
+                        text = "下一页",
+                        enabled = true,
+                        testTag = OobeTestTags.NEXT_BUTTON,
+                        onClick = { onSetIntroPage(OOBE_AGREEMENT_PAGE) }
+                    )
+                }
+
+                OOBE_AGREEMENT_PAGE -> {
+                    OobeAgreementStep(
+                        isAgreed = isAgreed,
+                        showError = showAgreementError,
+                        onAgreementChange = {
+                            isAgreed = it
+                            if (it) {
+                                showAgreementError = false
+                            }
+                        },
+                        onOpenUserAgreement = onOpenUserAgreement,
+                        onOpenPrivacy = onOpenPrivacy,
+                        onNext = {
+                            if (isAgreed) {
+                                showAgreementError = false
+                                onSetIntroPage(OOBE_CUSTOM_PAGE)
+                            } else {
+                                showAgreementError = true
+                            }
+                        }
+                    )
+                }
+                else -> Unit
+            }
+        }
+
+        if (showOfflineWarning) {
+            BackHandler(enabled = true) {
+                showOfflineWarning = false
+            }
+            OobeOfflineWarningDialog(
+                onConfirm = {
+                    showOfflineWarning = false
+                    onContinue()
+                },
+                onCancel = {
+                    showOfflineWarning = false
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun OobeAgreementStep(
+    isAgreed: Boolean,
+    showError: Boolean,
+    onAgreementChange: (Boolean) -> Unit,
+    onOpenUserAgreement: () -> Unit,
+    onOpenPrivacy: () -> Unit,
+    onNext: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        if (showError) {
+            Text(
+                text = "请勾选\"同意《用户协议》与《隐私政策》\"",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier
+                    .padding(bottom = 2.dp)
+                    .testTag(OobeTestTags.ERROR_TEXT)
+            )
+        }
+
+        Row(
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            WatchCheckbox(
+                checked = isAgreed,
+                onCheckedChange = onAgreementChange,
+                modifier = Modifier
+                    .size(18.dp)
+                    .testTag(OobeTestTags.AGREEMENT_CHECKBOX)
+            )
+
+            Spacer(modifier = Modifier.size(4.dp))
+
+            val linkStyle = TextLinkStyles(
+                style = SpanStyle(
+                    color = MaterialTheme.colorScheme.primary,
+                    textDecoration = TextDecoration.Underline
+                )
+            )
+            val annotatedText = buildAnnotatedString {
+                append("同意")
+                withLink(
+                    LinkAnnotation.Clickable(
+                        tag = "user_agreement",
+                        styles = linkStyle,
+                        linkInteractionListener = { onOpenUserAgreement() }
+                    )
+                ) {
+                    append("《用户协议》")
+                }
+                append("与")
+                withLink(
+                    LinkAnnotation.Clickable(
+                        tag = "privacy",
+                        styles = linkStyle,
+                        linkInteractionListener = { onOpenPrivacy() }
+                    )
+                ) {
+                    append("《隐私政策》")
+                }
+                append("。")
+            }
+
+            Text(
+                text = annotatedText,
+                style = MaterialTheme.typography.labelMedium.copy(
+                    color = MaterialTheme.colorScheme.onSurface
+                ),
+                modifier = Modifier.testTag(OobeTestTags.LEGAL_TEXT)
+            )
+        }
+
+        OobePrimaryButton(
+            text = "下一页",
+            enabled = true,
+            testTag = OobeTestTags.NEXT_BUTTON,
+            onClick = onNext
+        )
+    }
+}
+
+@Composable
+private fun OobeCustomizationStep(
+    modifier: Modifier = Modifier,
+    onNext: () -> Unit
+) {
+    val scrollState = rememberScrollState()
+    val readingThemeInfo = remember { MainSettingsCatalog.readingTheme }
+    val fontSizeInfo = remember { MainSettingsCatalog.fontSize }
+    val mediaVolumeGuardInfo = remember { MainSettingsCatalog.mediaVolumeGuard }
+    val fontOptions = remember { (12..32 step 2).toList() }
+    val entrySpacing = WatchDimens.hey_distance_8dp
+    val pillHeight = WatchDimens.hey_multiple_item_height
+    val stepperSpacing = WatchDimens.hey_distance_6dp
+    val stepperValueWidth = watchDimensionResource(R.dimen.watch_action_button_height)
+    var previewReadingThemeDark by rememberSaveable { mutableStateOf(true) }
+    var previewFontSizeSp by rememberSaveable { mutableStateOf(DEFAULT_READING_FONT_SIZE_SP) }
+    var previewMediaVolumeGuardEnabled by rememberSaveable {
+        mutableStateOf(DEFAULT_MEDIA_VOLUME_GUARD_ENABLED)
+    }
+    val lowerFont = fontOptions.lastOrNull { it < previewFontSizeSp }
+    val higherFont = fontOptions.firstOrNull { it > previewFontSizeSp }
+
+    InstallRotaryScrollHandler(scrollState)
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
-            .padding(
-                start = horizontalSafePadding,
-                end = horizontalSafePadding,
-                top = topSafePadding,
-                bottom = bottomSafePadding
-            )
-            .testTag(OobeTestTags.ROOT),
+            .verticalScroll(scrollState),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(modifier = Modifier.height(if (introPage == 0) 2.dp else 0.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
-        IntroPage(
-            page = introContent,
-            showTitle = introPage == 0,
-            compact = introPage > 0,
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .testTag(OobeTestTags.INTRO_PAGE)
+        Text(
+            text = "自定义",
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center
         )
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        if (introPage > 0) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                if (showError) {
-                    Text(
-                        text = "请勾选\"同意《用户协议》与《隐私政策》\"",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier
-                            .padding(bottom = 2.dp)
-                            .testTag(OobeTestTags.ERROR_TEXT)
-                    )
-                }
+        Text(
+            text = "这些项目都能在设置中随时调整",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.widthIn(max = 208.dp)
+        )
 
-                Row(
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    WatchCheckbox(
-                        checked = isAgreed,
-                        onCheckedChange = {
-                            isAgreed = it
-                            if (isAgreed) showError = false
-                        },
-                        modifier = Modifier
-                            .size(18.dp)
-                            .testTag(OobeTestTags.AGREEMENT_CHECKBOX)
-                    )
+        Spacer(modifier = Modifier.height(12.dp))
 
-                    Spacer(modifier = Modifier.size(4.dp))
-
-                    val linkStyle = TextLinkStyles(
-                        style = SpanStyle(
-                            color = MaterialTheme.colorScheme.primary,
-                            textDecoration = TextDecoration.Underline
-                        )
-                    )
-
-                    val annotatedText = buildAnnotatedString {
-                        append("同意")
-                        withLink(
-                            LinkAnnotation.Clickable(
-                                tag = "user_agreement",
-                                styles = linkStyle,
-                                linkInteractionListener = { onOpenUserAgreement() }
-                            )
-                        ) {
-                            append("《用户协议》")
-                        }
-                        append("与")
-                        withLink(
-                            LinkAnnotation.Clickable(
-                                tag = "privacy",
-                                styles = linkStyle,
-                                linkInteractionListener = { onOpenPrivacy() }
-                            )
-                        ) {
-                            append("《隐私政策》")
-                        }
-                    }
-
-                    Text(
-                        text = annotatedText,
-                        style = MaterialTheme.typography.labelMedium.copy(
-                            color = MaterialTheme.colorScheme.onSurface
-                        ),
-                        modifier = Modifier.testTag(OobeTestTags.LEGAL_TEXT)
-                    )
-                }
-
-                OobePrimaryButton(
-                    text = "继续",
-                    enabled = true,
-                    testTag = OobeTestTags.CONTINUE_BUTTON,
-                    onClick = {
-                        if (isAgreed) {
-                            showError = false
-                            onContinue()
-                        } else {
-                            showError = true
-                        }
-                    }
-                )
-            }
-        } else {
-            OobePrimaryButton(
-                text = "下一页",
-                enabled = true,
-                testTag = OobeTestTags.NEXT_BUTTON,
-                onClick = { onSetIntroPage(1) }
+        OobeCustomizationSetting(
+            info = readingThemeInfo,
+            endPaddingMultiplier = 1.5f
+        ) {
+            WatchReadingThemeToggle(
+                isDark = previewReadingThemeDark,
+                modifier = Modifier.testTag(OobeTestTags.CUSTOM_THEME_TOGGLE),
+                onToggle = { previewReadingThemeDark = !previewReadingThemeDark }
             )
         }
+
+        Spacer(modifier = Modifier.height(entrySpacing))
+
+        OobeCustomizationSetting(info = fontSizeInfo) {
+            WatchRoundIconButtonIcon(
+                iconRes = R.drawable.ic_action_minus,
+                contentDescription = "减小字体",
+                enabled = lowerFont != null,
+                onClick = { lowerFont?.let { previewFontSizeSp = it } }
+            )
+            Spacer(modifier = Modifier.width(stepperSpacing))
+            WatchStepperValue(
+                text = "${previewFontSizeSp}sp",
+                width = stepperValueWidth,
+                modifier = Modifier.testTag(OobeTestTags.CUSTOM_FONT_VALUE)
+            )
+            Spacer(modifier = Modifier.width(stepperSpacing))
+            WatchRoundIconButtonIcon(
+                iconRes = R.drawable.ic_action_plus,
+                contentDescription = "增大字体",
+                enabled = higherFont != null,
+                onClick = { higherFont?.let { previewFontSizeSp = it } }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(entrySpacing))
+
+        OobeCustomizationSetting(
+            info = mediaVolumeGuardInfo,
+            endPaddingMultiplier = 1.5f
+        ) {
+            WatchSwitch(
+                checked = previewMediaVolumeGuardEnabled,
+                modifier = Modifier.testTag(OobeTestTags.CUSTOM_MEDIA_GUARD_SWITCH),
+                onCheckedChange = { previewMediaVolumeGuardEnabled = it }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        OobePrimaryButton(
+            text = "下一页",
+            enabled = true,
+            testTag = OobeTestTags.NEXT_BUTTON,
+            onClick = onNext
+        )
+
+        Spacer(modifier = Modifier.height(pillHeight))
+    }
+}
+
+@Composable
+private fun OobeCustomizationSetting(
+    info: MainSettingInfo,
+    endPaddingMultiplier: Float = 1f,
+    content: @Composable RowScope.() -> Unit
+) {
+    val valueSpacing = WatchDimens.hey_distance_4dp
+    val valueIndent = WatchDimens.hey_distance_10dp
+
+    WatchSettingsPillRow(
+        label = info.title,
+        endPaddingMultiplier = endPaddingMultiplier,
+        content = content
+    )
+    Text(
+        text = info.description,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = valueIndent, top = valueSpacing)
+    )
+}
+
+@Composable
+private fun OobeInternetStep(
+    status: InternetAvailabilityStatus,
+    modifier: Modifier = Modifier,
+    onContinue: () -> Unit
+) {
+    val continueEnabled = status != InternetAvailabilityStatus.Checking
+    val statusMessage = when (status) {
+        InternetAvailabilityStatus.Checking -> "正在检测互联网状态…"
+        InternetAvailabilityStatus.Unavailable -> "未检测到可用互联网"
+        InternetAvailabilityStatus.Available -> "已检测到互联网，可以继续"
+    }
+
+    BoxWithConstraints(modifier = modifier) {
+        val textWidth = (maxWidth * 0.92f).coerceAtMost(208.dp)
+
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Spacer(modifier = Modifier.height(18.dp))
+
+            Text(
+                text = "互联网",
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = "请连接Wi-Fi或蜂窝移动网络后使用本应用",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.widthIn(max = textWidth)
+            )
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            OobeInternetStatusBar(
+                status = status,
+                modifier = Modifier.widthIn(max = textWidth)
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Text(
+                text = statusMessage,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.widthIn(max = textWidth)
+            )
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            OobePrimaryButton(
+                text = "继续",
+                enabled = continueEnabled,
+                testTag = OobeTestTags.CONTINUE_BUTTON,
+                onClick = onContinue
+            )
+
+            Spacer(modifier = Modifier.height(4.dp))
+        }
+    }
+}
+
+@Composable
+private fun OobeInternetStatusBar(
+    status: InternetAvailabilityStatus,
+    modifier: Modifier = Modifier
+) {
+    val statusTag: String
+
+    when (status) {
+        InternetAvailabilityStatus.Checking -> {
+            statusTag = OobeTestTags.INTERNET_STATUS_CHECKING
+        }
+
+        InternetAvailabilityStatus.Unavailable -> {
+            statusTag = OobeTestTags.INTERNET_STATUS_UNAVAILABLE
+        }
+
+        InternetAvailabilityStatus.Available -> {
+            statusTag = OobeTestTags.INTERNET_STATUS_AVAILABLE
+        }
+    }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f))
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f),
+                shape = RoundedCornerShape(22.dp)
+            )
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "互联网可用状态",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(modifier = Modifier.size(12.dp))
+        OobeInternetStatusIndicator(
+            status = status,
+            modifier = Modifier.testTag(statusTag)
+        )
+    }
+}
+
+@Composable
+private fun OobeInternetStatusIndicator(
+    status: InternetAvailabilityStatus,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier.size(18.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        when (status) {
+            InternetAvailabilityStatus.Checking -> {
+                WatchCircularProgressIndicator(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            InternetAvailabilityStatus.Unavailable -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(CircleShape)
+                        .background(watchColorResource(R.color.danger_red))
+                )
+            }
+
+            InternetAvailabilityStatus.Available -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(CircleShape)
+                        .background(OobeGreen)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun OobeOfflineWarningDialog(
+    onConfirm: () -> Unit,
+    onCancel: () -> Unit
+) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.92f))
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = {}
+                )
+        )
+
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val maxSize = minOf(maxWidth, maxHeight)
+            val containerSize = minOf(maxSize, 466.dp)
+            val scale = (containerSize.value / 466f).coerceAtMost(1f)
+            val scaleDp: (Dp) -> Dp = { value -> (value.value * scale).dp }
+
+            Column(
+                modifier = Modifier
+                    .size(containerSize)
+                    .clip(CircleShape)
+                    .background(Color.Black)
+                    .padding(top = scaleDp(96.dp), bottom = scaleDp(30.dp))
+                    .testTag(OobeTestTags.OFFLINE_WARNING_DIALOG),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(scaleDp(32.dp))
+            ) {
+                OobeOfflineWarningDialogContent(
+                    scale = scale,
+                    scaleDp = scaleDp
+                )
+                OobeOfflineWarningDialogButtons(
+                    scaleDp = scaleDp,
+                    onConfirm = onConfirm,
+                    onCancel = onCancel
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun OobeOfflineWarningDialogContent(
+    scale: Float,
+    scaleDp: (Dp) -> Dp
+) {
+    val fontFamily = FontFamily(Font(R.font.watch_sans))
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = scaleDp(40.dp))
+            .height(scaleDp(204.dp)),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(scaleDp(8.dp), Alignment.CenterVertically)
+    ) {
+        Text(
+            text = "警告",
+            fontFamily = fontFamily,
+            fontWeight = FontWeight.Medium,
+            fontSize = (34f * scale).sp,
+            lineHeight = (46f * scale).sp,
+            color = MaterialTheme.colorScheme.onSurface,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
+        Text(
+            text = "你没有连接到互联网，确定要继续吗",
+            fontFamily = fontFamily,
+            fontWeight = FontWeight.Normal,
+            fontSize = (34f * scale).sp,
+            lineHeight = (46f * scale).sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+}
+
+@Composable
+private fun OobeOfflineWarningDialogButtons(
+    scaleDp: (Dp) -> Dp,
+    onConfirm: () -> Unit,
+    onCancel: () -> Unit
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(scaleDp(32.dp)),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        OobeDialogIconButton(
+            background = MaterialTheme.colorScheme.surfaceVariant,
+            iconRes = R.drawable.ic_action_cancel,
+            iconTint = MaterialTheme.colorScheme.onSurface,
+            testTag = OobeTestTags.OFFLINE_WARNING_CANCEL_BUTTON,
+            scaleDp = scaleDp,
+            onClick = onCancel
+        )
+        OobeDialogIconButton(
+            background = MaterialTheme.colorScheme.primary,
+            iconRes = R.drawable.ic_action_confirm,
+            iconTint = MaterialTheme.colorScheme.onPrimary,
+            testTag = OobeTestTags.OFFLINE_WARNING_CONFIRM_BUTTON,
+            scaleDp = scaleDp,
+            onClick = onConfirm
+        )
+    }
+}
+
+@Composable
+private fun OobeDialogIconButton(
+    background: Color,
+    iconRes: Int,
+    iconTint: Color,
+    testTag: String,
+    scaleDp: (Dp) -> Dp,
+    onClick: () -> Unit
+) {
+    val size = scaleDp(104.dp)
+    val iconSize = scaleDp(48.dp)
+
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(CircleShape)
+            .background(background)
+            .clickable(onClick = onClick)
+            .testTag(testTag),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            painter = painterResource(id = iconRes),
+            contentDescription = null,
+            tint = iconTint,
+            modifier = Modifier.size(iconSize)
+        )
     }
 }
 
