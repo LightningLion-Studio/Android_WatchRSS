@@ -104,7 +104,6 @@ import com.lightningstudio.watchrss.data.rss.OfflineMedia
 import com.lightningstudio.watchrss.data.rss.RssItem
 import com.lightningstudio.watchrss.data.rss.RssUrlResolver
 import com.lightningstudio.watchrss.data.settings.DEFAULT_READING_FONT_SIZE_SP
-import com.lightningstudio.watchrss.ui.theme.WatchBackgroundDeep
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
 import com.lightningstudio.watchrss.ui.theme.WatchReadingBackgroundLight
 import com.lightningstudio.watchrss.ui.theme.WatchReadingTextLight
@@ -204,7 +203,7 @@ internal fun DetailContent(
     val actionIconPadding = watchDimensionResource(R.dimen.hey_distance_6dp)
     val extraSafePadding = 0.dp
 
-    val backgroundColor = if (readingThemeDark) WatchBackgroundDeep else WatchReadingBackgroundLight
+    val backgroundColor = if (readingThemeDark) Color.Black else WatchReadingBackgroundLight
     val textColor = if (readingThemeDark) WatchTextPrimary else WatchReadingTextLight
     val activeColor = MaterialTheme.colorScheme.primary
     val normalIconColor = textColor

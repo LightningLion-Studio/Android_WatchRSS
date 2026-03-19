@@ -86,6 +86,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
+import kotlin.math.max
 import kotlin.math.roundToInt
 
 private const val FEED_PREFETCH_BEFORE = 2
@@ -324,6 +325,10 @@ private fun FeedHeader(
     val verticalPadding = watchDimensionResource(R.dimen.hey_content_horizontal_distance)
     val hintSize = textSize(R.dimen.hey_caption)
     val titleSize = textSize(R.dimen.hey_m_title)
+    val titleLineHeight = max(
+        MaterialTheme.typography.titleMedium.lineHeight.value,
+        titleSize.value * 1.24f
+    ).sp
     val context = LocalContext.current
     val density = LocalDensity.current
     val titleSizePx = with(density) { watchDimensionResource(R.dimen.hey_m_title).toPx() }
@@ -367,6 +372,7 @@ private fun FeedHeader(
                 text = channelTitleWithStyledHint(formattedTitle, titleSize),
                 color = MaterialTheme.colorScheme.onSurface,
                 fontSize = titleSize,
+                lineHeight = titleLineHeight,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
             )

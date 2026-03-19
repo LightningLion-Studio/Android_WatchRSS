@@ -21,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.Dp
 import com.lightningstudio.watchrss.ui.theme.watchColorResource
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.style.TextAlign
@@ -39,7 +40,10 @@ data class ActionItem(
 )
 
 @Composable
-fun ActionDialogScreen(items: List<ActionItem>) {
+fun ActionDialogScreen(
+    items: List<ActionItem>,
+    extraTopPadding: Dp = 0.dp
+) {
     val safePadding = WatchDimens.watch_safe_padding
     val horizontalPadding = WatchDimens.hey_content_horizontal_distance
     val bottomPadding = WatchDimens.hey_content_horizontal_distance
@@ -52,7 +56,7 @@ fun ActionDialogScreen(items: List<ActionItem>) {
 
     InstallRotaryScrollHandler(scrollState)
 
-    WatchSurface {
+    WatchSurface(pureBlack = true) {
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
@@ -60,7 +64,7 @@ fun ActionDialogScreen(items: List<ActionItem>) {
                 .padding(
                     start = horizontalPadding,
                     end = horizontalPadding,
-                    top = safePadding,
+                    top = safePadding + extraTopPadding,
                     bottom = bottomPadding
                 ),
         ) {

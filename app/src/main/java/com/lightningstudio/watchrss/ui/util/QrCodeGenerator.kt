@@ -13,7 +13,7 @@ object QrCodeGenerator {
             // 使用字节模式（Byte Mode）确保 UTF-8 中文正确编码
             val hints = mapOf(
                 EncodeHintType.CHARACTER_SET to "UTF-8",
-                EncodeHintType.MARGIN to 1
+                EncodeHintType.MARGIN to 0
             )
             val matrix = QRCodeWriter().encode(text, BarcodeFormat.QR_CODE, size, size, hints)
             val pixels = IntArray(size * size)

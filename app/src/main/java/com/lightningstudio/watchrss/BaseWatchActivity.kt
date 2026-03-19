@@ -17,6 +17,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.lightningstudio.watchrss.debug.PerformanceMonitor
+import com.lightningstudio.watchrss.ui.input.PointerWheelScrollTracker
 import com.lightningstudio.watchrss.ui.widget.WatchMaskLayout
 import com.lightningstudio.watchrss.util.AppLogger
 import kotlin.math.abs
@@ -145,18 +146,19 @@ open class BaseWatchActivity : ComponentActivity() {
     }
 
     override fun dispatchGenericMotionEvent(ev: MotionEvent): Boolean {
-        if (
-            ev.actionMasked == MotionEvent.ACTION_SCROLL &&
-            ev.isFromSource(InputDevice.SOURCE_ROTARY_ENCODER)
-        ) {
-            val delta = ev.getAxisValue(MotionEvent.AXIS_SCROLL)
-            if (delta != 0f) {
-                val handlers = rotaryHandlers.values.toList().asReversed()
-                for (handler in handlers) {
-                    if (handler(delta)) {
-                        return true
+        if (ev.actionMasked == MotionEvent.ACTION_SCROLL) {
+            if (ev.isFromSource(InputDevice.SOURCE_ROTARY_ENCODER)) {
+                val delta = ev.getAxisValue(MotionEvent.AXIS_SCROLL)
+                if (delta != 0f) {
+                    val handlers = rotaryHandlers.values.toList().asReversed()
+                    for (handler in handlers) {
+                        if (handler(delta)) {
+                            return true
+                        }
                     }
                 }
+            } else if (ev.isFromSource(InputDevice.SOURCE_CLASS_POINTER)) {
+                PointerWheelScrollTracker.onScrollEvent(ev.eventTime)
             }
         }
         return super.dispatchGenericMotionEvent(ev)

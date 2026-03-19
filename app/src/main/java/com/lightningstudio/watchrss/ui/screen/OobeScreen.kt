@@ -101,7 +101,7 @@ fun OobeScreen(
         onSetIntroPage(uiState.introPage - 1)
     }
 
-    WatchSurface {
+    WatchSurface(pureBlack = uiState.introPage == OOBE_CUSTOM_PAGE) {
         OobeIntroStep(
             uiState = uiState,
             onSetIntroPage = onSetIntroPage,

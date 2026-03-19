@@ -30,6 +30,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.Velocity
+import com.lightningstudio.watchrss.ui.input.PointerWheelScrollTracker
 import kotlin.math.abs
 import kotlin.math.sign
 import kotlinx.coroutines.Job
@@ -167,6 +168,12 @@ private fun RubberBandOverscrollContainer(content: @Composable () -> Unit) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                 if (source != NestedScrollSource.UserInput) return Offset.Zero
+                if (PointerWheelScrollTracker.isRecentPointerWheelScroll()) {
+                    if (abs(rawOverscrollY) >= 0.5f) {
+                        startRebound()
+                    }
+                    return Offset.Zero
+                }
                 if (abs(rawOverscrollY) < 0.5f) return Offset.Zero
 
                 val delta = available.y
@@ -188,6 +195,12 @@ private fun RubberBandOverscrollContainer(content: @Composable () -> Unit) {
                 if (available.y == 0f) return Offset.Zero
 
                 if (source == NestedScrollSource.UserInput) {
+                    if (PointerWheelScrollTracker.isRecentPointerWheelScroll()) {
+                        if (abs(rawOverscrollY) >= 0.5f) {
+                            startRebound()
+                        }
+                        return Offset.Zero
+                    }
                     flingImpactLocked = false
                     cancelRebound()
                     updateOverscroll(rawOverscrollY + available.y)

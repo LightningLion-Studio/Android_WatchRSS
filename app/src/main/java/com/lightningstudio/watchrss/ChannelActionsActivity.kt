@@ -12,6 +12,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.ui.screen.ActionDialogScreen
 import com.lightningstudio.watchrss.ui.screen.ActionItem
@@ -93,7 +94,10 @@ class ChannelActionsActivity : BaseWatchActivity() {
                 }
 
                 Box(modifier = Modifier.fillMaxSize()) {
-                    ActionDialogScreen(items = items)
+                    ActionDialogScreen(
+                        items = items,
+                        extraTopPadding = 4.dp
+                    )
                     if (showDeleteConfirm) {
                         DeleteConfirmDialog(
                             title = "删除频道",

@@ -5,6 +5,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.ui.screen.ActionDialogScreen
 import com.lightningstudio.watchrss.ui.screen.ActionItem
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
@@ -52,7 +53,10 @@ class ItemActionsActivity : BaseWatchActivity() {
                     )
                 )
 
-                ActionDialogScreen(items = items)
+                ActionDialogScreen(
+                    items = items,
+                    extraTopPadding = 4.dp
+                )
             }
         }
     }

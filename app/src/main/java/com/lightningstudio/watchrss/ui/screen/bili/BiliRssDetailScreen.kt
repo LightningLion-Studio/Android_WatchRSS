@@ -55,7 +55,6 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.res.ResourcesCompat
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.input.InstallRotaryLazyListHandler
-import com.lightningstudio.watchrss.ui.theme.WatchBackgroundDeep
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
 import com.lightningstudio.watchrss.ui.theme.WatchReadingBackgroundLight
 import com.lightningstudio.watchrss.ui.theme.WatchReadingTextLight
@@ -84,7 +83,7 @@ fun BiliRssDetailScreen(
     val isScrolling by remember(listState) {
         derivedStateOf { listState.isScrollInProgress }
     }
-    val backgroundColor = if (readingThemeDark) WatchBackgroundDeep else WatchReadingBackgroundLight
+    val backgroundColor = if (readingThemeDark) Color.Black else WatchReadingBackgroundLight
     val textColor = if (readingThemeDark) WatchTextPrimary else WatchReadingTextLight
     val bodySize = readingFontSizeSp.sp
     val titleSize = textSize(R.dimen.hey_m_title)
