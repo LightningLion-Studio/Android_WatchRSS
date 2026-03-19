@@ -6,6 +6,7 @@ import android.animation.ValueAnimator
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
@@ -15,12 +16,15 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.addCallback
 import androidx.activity.compose.setContent
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.core.content.ContextCompat
+import androidx.compose.ui.graphics.Color as ComposeColor
+import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewFeature
 import com.lightningstudio.watchrss.ui.screen.WebViewScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.util.getWebViewUnavailableMessage
@@ -28,8 +32,11 @@ import com.lightningstudio.watchrss.ui.util.warnWebViewUnavailable
 import com.lightningstudio.watchrss.ui.widget.ProgressRingView
 import com.lightningstudio.watchrss.util.AppLogger
 import java.io.File
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 
 class WebViewActivity : BaseWatchActivity() {
+    private val settingsRepository by lazy { (application as WatchRssApplication).container.settingsRepository }
     private lateinit var webView: WebView
     private lateinit var loadingRing: ProgressRingView
     private var progressAnimator: ValueAnimator? = null
@@ -37,8 +44,17 @@ class WebViewActivity : BaseWatchActivity() {
     private val progressInterpolator = DecelerateInterpolator()
     private var webViewInitialized = false
     private var ringInitialized = false
+    private var activityReadingThemeDark = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        activityReadingThemeDark = runBlocking { settingsRepository.readingThemeDark.first() }
+        setTheme(
+            if (activityReadingThemeDark) {
+                R.style.Theme_WatchRSS_Translucent_Dark
+            } else {
+                R.style.Theme_WatchRSS_Translucent_Light
+            }
+        )
         super.onCreate(savedInstanceState)
         setupSystemBars()
 
@@ -50,7 +66,9 @@ class WebViewActivity : BaseWatchActivity() {
 
         val initialWebViewError = getWebViewUnavailableMessage(this)
         setContent {
-            WatchRSSTheme {
+            val readingThemeDark by settingsRepository.readingThemeDark.collectAsState(initial = activityReadingThemeDark)
+
+            WatchRSSTheme(darkTheme = readingThemeDark) {
                 var errorMessage by remember { mutableStateOf(initialWebViewError) }
                 var warningMessage by remember { mutableStateOf(initialWebViewError) }
 
@@ -60,7 +78,20 @@ class WebViewActivity : BaseWatchActivity() {
                     warningMessage = null
                 }
 
+                LaunchedEffect(readingThemeDark) {
+                    if (readingThemeDark != activityReadingThemeDark) {
+                        if (webViewInitialized) {
+                            val currentUrl = webView.url
+                            if (!currentUrl.isNullOrBlank()) {
+                                intent.putExtra(EXTRA_URL, currentUrl)
+                            }
+                        }
+                        recreate()
+                    }
+                }
+
                 WebViewScreen(
+                    backgroundColor = if (readingThemeDark) ComposeColor.Black else ComposeColor.White,
                     errorMessage = errorMessage,
                     onWebViewReady = { view ->
                         if (!webViewInitialized) {
@@ -68,6 +99,7 @@ class WebViewActivity : BaseWatchActivity() {
                             webView = view
                             try {
                                 setupWebView()
+                                applyWebThemePreference(readingThemeDark)
                                 webView.loadUrl(url)
                             } catch (throwable: Throwable) {
                                 AppLogger.e("WebViewActivity", "Failed to load WebView url: $url", throwable)
@@ -103,8 +135,32 @@ class WebViewActivity : BaseWatchActivity() {
         }
     }
 
+    @Suppress("DEPRECATION")
+    private fun applyWebThemePreference(readingThemeDark: Boolean) {
+        webView.setBackgroundColor(if (readingThemeDark) Color.BLACK else Color.WHITE)
+        val settings = webView.settings
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK_STRATEGY)) {
+            WebSettingsCompat.setForceDarkStrategy(
+                settings,
+                WebSettingsCompat.DARK_STRATEGY_PREFER_WEB_THEME_OVER_USER_AGENT_DARKENING
+            )
+        }
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
+            WebSettingsCompat.setForceDark(
+                settings,
+                if (readingThemeDark) {
+                    WebSettingsCompat.FORCE_DARK_ON
+                } else {
+                    WebSettingsCompat.FORCE_DARK_OFF
+                }
+            )
+        }
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
+            WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, readingThemeDark)
+        }
+    }
+
     private fun setupWebView() {
-        webView.setBackgroundColor(ContextCompat.getColor(this, R.color.watch_background_deep))
         webView.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true

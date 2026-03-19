@@ -22,6 +22,7 @@ import com.lightningstudio.watchrss.util.AppLogger
 
 @Composable
 fun WebViewScreen(
+    backgroundColor: Color,
     errorMessage: String?,
     onWebViewReady: (WebView) -> Unit,
     onWebViewInitFailed: (String) -> Unit,
@@ -33,7 +34,7 @@ fun WebViewScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(backgroundColor)
     ) {
         if (!errorMessage.isNullOrBlank()) {
             Box(
