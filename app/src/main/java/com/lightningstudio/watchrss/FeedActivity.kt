@@ -37,7 +37,6 @@ class FeedActivity : BaseWatchActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        setTheme(R.style.Theme_WatchRSS_PureBlack)
         super.onCreate(savedInstanceState)
         setupSystemBars()
         setContent {

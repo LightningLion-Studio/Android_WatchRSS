@@ -103,8 +103,10 @@ fun HomeComposeScreen(
         val itemSpacing = watchDimensionResource(R.dimen.hey_distance_6dp)
         val listState = rememberLazyListState()
         InstallRotaryLazyListHandler(listState)
-        // 目的：纵向滚动时关闭频道项的点击与横向手势，避免和列表滚动互相抢占。
-        // 保持频道项结构稳定，减少 isScrollInProgress 高频变化带来的整行重组成本。
+        // 目的：解决纵向滚动与卡片横向滑动（HomeSwipeRow）之间的手势冲突。
+        // 滚动时将 HomeSwipeRow 替换为普通 Box，彻底移除横向手势，避免误触左滑操作。
+        // 代价：isScrollInProgress 在滚动过程中高频变化，会导致列表所有可见卡片频繁重组。
+        // 手表场景下列表条目有限，重组开销可接受。
         val isScrolling by remember(listState) {
             derivedStateOf { listState.isScrollInProgress }
         }
@@ -362,7 +364,7 @@ private fun HomeChannelEntry(
                 .then(offsetModifier)
                 .testTag(HomeTestTags.channelRow(channel.id))
                 .onSizeChanged { size ->
-                    if (cardHeightPx != size.height) {
+                    if (!isScrolling) {
                         cardHeightPx = size.height
                     }
                 }
@@ -395,64 +397,67 @@ private fun HomeChannelEntry(
         }
     }
 
-    HomeSwipeRow(
-        itemId = channel.id,
-        enabled = !isScrolling,
-        openSwipeId = openSwipeId,
-        onOpenSwipe = onOpenSwipe,
-        onCloseSwipe = onCloseSwipe,
-        draggingSwipeId = draggingSwipeId,
-        onDragStart = onDragStart,
-        onDragEnd = onDragEnd,
-        onSwipeBack = onSwipeBack,
-        actionsWidthPx = actionsWidthPx,
-        revealGapPx = revealGapPx
-    ) { offsetModifier ->
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-        ) {
-            Row(
+    if (isScrolling) {
+        Box(modifier = Modifier.fillMaxWidth()) {
+            cardContent(Modifier)
+        }
+    } else {
+        HomeSwipeRow(
+            itemId = channel.id,
+            enabled = true,
+            openSwipeId = openSwipeId,
+            onOpenSwipe = onOpenSwipe,
+            onCloseSwipe = onCloseSwipe,
+            draggingSwipeId = draggingSwipeId,
+            onDragStart = onDragStart,
+            onDragEnd = onDragEnd,
+            onSwipeBack = onSwipeBack,
+            actionsWidthPx = actionsWidthPx,
+            revealGapPx = revealGapPx
+        ) { offsetModifier ->
+            Box(
                 modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .then(cardHeightModifier)
-                    .padding(start = 0.dp, end = actionPadding)
-                    .onSizeChanged { size ->
-                        val width = size.width.toFloat()
-                        if (actionsWidthPx != width) {
-                            actionsWidthPx = width
-                        }
-                    },
-                horizontalArrangement = Arrangement.spacedBy(actionPadding),
-                verticalAlignment = Alignment.CenterVertically
+                    .fillMaxWidth()
             ) {
-                HomeSwipeActionButton(
-                    text = "移到顶",
-                    width = actionWidth,
-                    testTag = HomeTestTags.moveTopAction(channel.id),
-                    onClick = {
-                        onCloseSwipe()
-                        onMoveTopClick()
-                    },
-                    iconRes = R.drawable.ic_action_move_top
-                )
-                val isBuiltin = BuiltinChannelType.fromUrl(channel.url) != null
-                val canMarkRead = channel.unreadCount > 0 && !isBuiltin
-                HomeSwipeActionButton(
-                    text = "标记已读",
-                    width = actionWidth,
-                    alpha = if (canMarkRead) 1f else 0.5f,
-                    testTag = HomeTestTags.markReadAction(channel.id),
-                    onClick = {
-                        onCloseSwipe()
-                        if (canMarkRead) {
-                            onMarkReadClick()
-                        }
-                    },
-                    iconRes = R.drawable.ic_action_mark_read
-                )
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .then(cardHeightModifier)
+                        .padding(start = 0.dp, end = actionPadding)
+                        .onSizeChanged { size ->
+                            actionsWidthPx = size.width.toFloat()
+                        },
+                    horizontalArrangement = Arrangement.spacedBy(actionPadding),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    HomeSwipeActionButton(
+                        text = "移到顶",
+                        width = actionWidth,
+                        testTag = HomeTestTags.moveTopAction(channel.id),
+                        onClick = {
+                            onCloseSwipe()
+                            onMoveTopClick()
+                        },
+                        iconRes = R.drawable.ic_action_move_top
+                    )
+                    val isBuiltin = BuiltinChannelType.fromUrl(channel.url) != null
+                    val canMarkRead = channel.unreadCount > 0 && !isBuiltin
+                    HomeSwipeActionButton(
+                        text = "标记已读",
+                        width = actionWidth,
+                        alpha = if (canMarkRead) 1f else 0.5f,
+                        testTag = HomeTestTags.markReadAction(channel.id),
+                        onClick = {
+                            onCloseSwipe()
+                            if (canMarkRead) {
+                                onMarkReadClick()
+                            }
+                        },
+                        iconRes = R.drawable.ic_action_mark_read
+                    )
+                }
+                cardContent(offsetModifier)
             }
-            cardContent(offsetModifier)
         }
     }
 }
