@@ -1,7 +1,11 @@
 package com.lightningstudio.watchrss.ui.screen.douyin
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.graphics.Paint
 import android.text.TextPaint
+import android.view.WindowManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -39,6 +43,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
@@ -243,6 +248,7 @@ private fun DouyinVideoPage(
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
+    val view = LocalView.current
     val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
     val topPadding = watchDimensionResource(R.dimen.hey_distance_6dp)
     val bottomPadding = watchDimensionResource(R.dimen.hey_distance_8dp)
@@ -262,6 +268,10 @@ private fun DouyinVideoPage(
     var isBuffering by remember(item.awemeId) { mutableStateOf(false) }
     var hasError by remember(item.awemeId) { mutableStateOf(false) }
     var playbackStartGuardPending by remember(item.awemeId) { mutableStateOf(true) }
+    val shouldKeepScreenOn = isActive &&
+        !pausedByGesture &&
+        !hasError &&
+        !mediaUri.isNullOrBlank()
 
     LaunchedEffect(item.awemeId, localPlayPath, remoteUri) {
         if (mediaUri.isNullOrBlank()) {
@@ -324,6 +334,20 @@ private fun DouyinVideoPage(
     DisposableEffect(player) {
         onDispose {
             player.release()
+        }
+    }
+
+    DisposableEffect(shouldKeepScreenOn, view) {
+        val window = view.context.findActivity()?.window
+        var applied = false
+        if (shouldKeepScreenOn) {
+            window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            applied = true
+        }
+        onDispose {
+            if (applied) {
+                window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
         }
     }
 
@@ -606,6 +630,15 @@ private fun ellipsizeToWidth(text: String, widthPx: Float, paint: TextPaint): St
         }
     }
     return if (low <= 0) ellipsis else text.substring(0, low) + ellipsis
+}
+
+private fun Context.findActivity(): Activity? {
+    var current = this
+    while (current is ContextWrapper) {
+        if (current is Activity) return current
+        current = current.baseContext
+    }
+    return null
 }
 
 private const val TITLE_ORIGINAL_FIRST_LINE_RATIO = 0.68f
