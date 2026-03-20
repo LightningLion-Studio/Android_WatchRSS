@@ -230,12 +230,12 @@ internal fun DetailContent(
     val mediaCardContainerColor = if (readingThemeDark) {
         MaterialTheme.colorScheme.surface
     } else {
-        Color.White.copy(alpha = 0.96f)
+        Color.White
     }
     val mediaCardBorderColor = if (readingThemeDark) {
         Color.Transparent
     } else {
-        Color(0xFFD9CFC3)
+        Color.Transparent
     }
     val prefetchScope = rememberCoroutineScope()
 
@@ -943,18 +943,23 @@ private fun DetailVideoBlock(
     val coverRatio = coverState.value?.let { it.width.toFloat() / it.height.toFloat() }
         ?: poster?.let { RssImageLoader.getCachedAspectRatio(it) }
         ?: ratioState.value
-    val shape = RoundedCornerShape(WatchDimens.hey_card_normal_bg_radius)
+    val useDecoratedCard = borderColor.alpha > 0f
+    val cardShape = RoundedCornerShape(WatchDimens.hey_card_normal_bg_radius)
+    val cardModifier = if (useDecoratedCard) {
+        Modifier
+            .clip(cardShape)
+            .border(1.dp, borderColor, cardShape)
+    } else {
+        Modifier
+    }
     val coverHeight = watchDimensionResource(R.dimen.hey_card_large_height)
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = topPadding)
-            .clip(shape)
+            .then(cardModifier)
             .background(containerColor)
-            .then(
-                if (borderColor.alpha > 0f) Modifier.border(1.dp, borderColor, shape) else Modifier
-            )
             .clickableWithoutRipple(enabled = !isScrolling, onClick = onClick)
             .scrollSemanticsDisabled(isScrolling)
             .debugTraceLayout("DetailVideoBlock/layout")
