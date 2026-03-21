@@ -33,6 +33,7 @@ fun LogUploadPrivacyScreen(
     onStartUploadClick: () -> Unit
 ) {
     val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
+    val topPadding = safePadding + watchDimensionResource(R.dimen.hey_distance_2dp)
     val sectionSpacing = 12.dp
     val buttonHeight = watchDimensionResource(R.dimen.hey_button_height)
     val buttonRadius = watchDimensionResource(R.dimen.hey_button_default_radius)
@@ -48,7 +49,12 @@ fun LogUploadPrivacyScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(scrollState)
-                .padding(safePadding),
+                .padding(
+                    start = safePadding,
+                    top = topPadding,
+                    end = safePadding,
+                    bottom = safePadding
+                ),
             verticalArrangement = Arrangement.Top,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {

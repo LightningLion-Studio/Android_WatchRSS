@@ -38,6 +38,7 @@ fun JoinGroupScreen(
     groupNumber: String
 ) {
     val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
+    val topPadding = watchDimensionResource(R.dimen.hey_distance_4dp)
     val sectionSpacing = 12.dp
     val scrollState = rememberScrollState()
 
@@ -56,7 +57,12 @@ fun JoinGroupScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(scrollState)
-                .padding(safePadding),
+                .padding(
+                    start = safePadding,
+                    top = topPadding,
+                    end = safePadding,
+                    bottom = safePadding
+                ),
             verticalArrangement = Arrangement.Top,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
