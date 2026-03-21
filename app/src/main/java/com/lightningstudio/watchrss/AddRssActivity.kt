@@ -8,28 +8,16 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.lifecycle.lifecycleScope
+import com.lightningstudio.watchrss.phoneconnection.PhoneConnectionFeature
 import com.lightningstudio.watchrss.ui.screen.rss.AddRssScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.AddRssViewModel
 import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
-import com.lightningstudio.watchrss.util.AppLogger
-import com.lightningstudio.watchrss.util.LocalHttpServer
-import com.lightningstudio.watchrss.util.NetworkUtils
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class AddRssActivity : BaseWatchActivity() {
     private val viewModel: AddRssViewModel by viewModels {
         AppViewModelFactory((application as WatchRssApplication).container)
     }
-
-    private val settingsRepository by lazy {
-        (application as WatchRssApplication).container.settingsRepository
-    }
-
-    private var server: LocalHttpServer? = null
 
     private val remoteInputLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -44,6 +32,7 @@ class AddRssActivity : BaseWatchActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setupSystemBars()
+        val settingsRepository = (application as WatchRssApplication).container.settingsRepository
 
         val presetUrl = intent.getStringExtra(EXTRA_URL)?.trim().orEmpty()
         if (presetUrl.isNotEmpty()) {
@@ -52,10 +41,12 @@ class AddRssActivity : BaseWatchActivity() {
 
         setContent {
             WatchRSSTheme {
-                val phoneConnectionEnabled by settingsRepository.phoneConnectionEnabled.collectAsState(initial = true)
+                val phoneConnectionEnabled by settingsRepository.phoneConnectionEnabled.collectAsState(
+                    initial = PhoneConnectionFeature.isDebugBuild
+                )
                 AddRssScreen(
                     uiState = viewModel.uiState,
-                    showRemoteInputButton = phoneConnectionEnabled,
+                    showRemoteInputButton = PhoneConnectionFeature.isEnabled(phoneConnectionEnabled),
                     onUrlChange = viewModel::updateUrl,
                     onSubmit = viewModel::submit,
                     onConfirm = viewModel::confirmAdd,
@@ -76,48 +67,15 @@ class AddRssActivity : BaseWatchActivity() {
     }
 
     private fun startRemoteInput() {
+        if (!PhoneConnectionFeature.isDebugBuild) return
         if (!allowNavigation()) return
-
-        lifecycleScope.launch {
-            try {
-                val app = application as WatchRssApplication
-                server = LocalHttpServer.createRemoteInputServer(app.container) { url ->
-                    handleRemoteInput(url)
-                }
-                server?.start()
-                val port = server?.listeningPort ?: 0
-
-                if (port > 0) {
-                    val ipAddress = withContext(Dispatchers.IO) {
-                        NetworkUtils.getLocalIpAddress(this@AddRssActivity)
-                    }
-                    if (ipAddress != null) {
-                        val serverAddress = "$ipAddress:$port"
-                        viewModel.showQrCode(serverAddress)
-                    } else {
-                        AppLogger.e("AddRssActivity", "Failed to get local IP address")
-                    }
-                }
-            } catch (e: Exception) {
-                AppLogger.e("AddRssActivity", "Failed to start local server", e)
-            }
-        }
-    }
-
-    private fun handleRemoteInput(url: String) {
-        lifecycleScope.launch {
-            withContext(Dispatchers.Main) {
-                viewModel.updateUrl(url)
-                viewModel.backToInput()
-                server?.stop()
-                server = null
-            }
-        }
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        server?.stop()
+        remoteInputLauncher.launch(
+            PhoneConnectionActivity.createIntent(
+                context = this,
+                preferredAbility = com.lightningstudio.watchrss.phoneconnection.PhoneConnectionAbility.REMOTE_INPUT,
+                returnRemoteUrl = true
+            )
+        )
     }
 
     private fun openChannel(url: String?, channelId: Long) {

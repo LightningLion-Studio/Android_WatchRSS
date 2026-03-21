@@ -92,6 +92,25 @@ class BiliChannelInfoActivityTest {
         waitForResumedActivity(BiliSettingsActivity::class.java)
     }
 
+    @Test
+    fun logoutFromSettings_finishesChannelInfoActivity() {
+        composeRule.onNodeWithText("设置", useUnmergedTree = true)
+            .assertExists()
+            .performClick()
+
+        waitForResumedActivity(BiliSettingsActivity::class.java)
+
+        composeRule.onNodeWithText("退出登录", useUnmergedTree = true)
+            .assertExists()
+            .performClick()
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            fakeBiliRepository.logoutCount == 1 &&
+                (composeRule.activity.isFinishing || composeRule.activity.isDestroyed)
+        }
+    }
+
     private fun waitForResumedActivity(expectedClass: Class<out Activity>) {
         composeRule.waitUntil(timeoutMillis = 5_000) {
             InstrumentationRegistry.getInstrumentation().waitForIdleSync()

@@ -3,6 +3,7 @@ package com.lightningstudio.watchrss.debug
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.FrameMetrics
 import android.view.Window
 import androidx.activity.ComponentActivity
@@ -20,6 +21,7 @@ import java.util.WeakHashMap
 private const val PERF_TAG = "perf"
 private const val FRAME_TAG = "frame"
 private const val FRAME_BUDGET_MS = 16f
+private const val EXTRA_ENABLE_FRAME_METRICS_LOGGING = "debug_enable_frame_metrics_logging"
 
 object PerformanceMonitor {
     private val statsMap = Collections.synchronizedMap(WeakHashMap<ComponentActivity, FrameStats>())
@@ -35,7 +37,7 @@ object PerformanceMonitor {
         val jankStats = JankStats.createAndTrack(window) { frameData ->
             stats.onFrame(frameData)
         }
-        val frameLogger = if (activity is DetailActivity) {
+        val frameLogger = if (shouldCaptureDetailedFrames(activity)) {
             FrameMetricsLogger(activity)
         } else {
             null
@@ -86,6 +88,11 @@ object PerformanceMonitor {
         DebugLogBuffer.log(PERF_TAG, message)
         AppLogger.d(PERF_TAG, message)
     }
+
+    private fun shouldCaptureDetailedFrames(activity: ComponentActivity): Boolean {
+        if (activity !is DetailActivity) return false
+        return activity.intent?.getBooleanExtra(EXTRA_ENABLE_FRAME_METRICS_LOGGING, false) == true
+    }
 }
 
 private class FrameMetricsLogger(private val activity: ComponentActivity) {
@@ -118,7 +125,7 @@ private class FrameMetricsLogger(private val activity: ComponentActivity) {
             append("drop=").append(dropCount)
         }
         DebugLogBuffer.log(FRAME_TAG, message)
-        AppLogger.d(FRAME_TAG, message)
+        Log.d(FRAME_TAG, message)
     }
 
     fun start() {

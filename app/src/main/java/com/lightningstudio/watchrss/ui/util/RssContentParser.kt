@@ -4,10 +4,23 @@ import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import org.jsoup.nodes.Node
 import org.jsoup.nodes.TextNode
+import kotlin.math.roundToInt
 
 sealed class ContentBlock {
     data class Text(val text: String, val style: TextStyle) : ContentBlock()
-    data class Image(val url: String, val alt: String?) : ContentBlock()
+    data class Image(
+        val url: String,
+        val alt: String?,
+        val width: Int? = null,
+        val height: Int? = null
+    ) : ContentBlock() {
+        val aspectRatio: Float?
+            get() = if (width != null && height != null && width > 0 && height > 0) {
+                width.toFloat() / height.toFloat()
+            } else {
+                null
+            }
+    }
     data class Video(val url: String, val poster: String?) : ContentBlock()
 }
 
@@ -22,6 +35,27 @@ enum class TextStyle {
 object RssContentParser {
     private const val MAX_TEXT_BLOCK_CHARS = 2000
     private const val MAX_MERGED_TEXT_BLOCK_CHARS = 4000
+    private val CONTENT_ROOT_SELECTORS = listOf(
+        ".article__main__content",
+        ".article-body",
+        ".entry-content",
+        ".post-content",
+        ".article-content",
+        ".article__content",
+        ".markdown-body",
+        ".rich-text",
+        ".richtext",
+        "main article",
+        "article"
+    )
+    private const val NON_CONTENT_SELECTORS = "script,style,noscript,template," +
+        "header,footer,nav,aside," +
+        "[role=tooltip],[aria-hidden=true],[style*=display:none]," +
+        ".el-popover,.article-header,.article-author,.article-side," +
+        ".comments__feed,.common__comment__dialog,.article-actionBar,.article-tag," +
+        ".download-guide-container,.comp__Directory,.prime__story__directory__wrapper," +
+        ".benefits__statement__wrapper,.corner,.corner_img," +
+        ".ss__user__card__wrapper,.ss__user__card,.ss__user__card__intro,.bio"
 
     fun parse(raw: String): List<ContentBlock> {
         if (raw.isBlank()) {
@@ -29,13 +63,26 @@ object RssContentParser {
         }
         val doc = Jsoup.parseBodyFragment(raw)
         doc.outputSettings().prettyPrint(false)
-        doc.select("script,style").remove()
+        doc.select(NON_CONTENT_SELECTORS).remove()
 
+        val contentRoot = selectContentRoot(doc.body())
         val blocks = mutableListOf<ContentBlock>()
-        doc.body().childNodes().forEach { node ->
+        contentRoot.childNodes().forEach { node ->
             appendNode(node, blocks)
         }
         return mergeAdjacentTextBlocks(splitLongTextBlocks(blocks))
+    }
+
+    private fun selectContentRoot(body: Element): Element {
+        CONTENT_ROOT_SELECTORS.forEach { selector ->
+            body.selectFirst(selector)?.let { candidate ->
+                candidate.select(NON_CONTENT_SELECTORS).remove()
+                if (candidate.text().isNotBlank() || candidate.select("img,video,iframe").isNotEmpty()) {
+                    return candidate
+                }
+            }
+        }
+        return body
     }
 
     private fun appendNode(node: Node, blocks: MutableList<ContentBlock>) {
@@ -127,8 +174,21 @@ object RssContentParser {
         val url = element.attr("src").trim()
         if (url.isNotEmpty()) {
             val alt = element.attr("alt").trim().ifBlank { null }
-            blocks.add(ContentBlock.Image(url, alt))
+            val width = extractDimension(element, "width")
+            val height = extractDimension(element, "height")
+            blocks.add(ContentBlock.Image(url, alt, width, height))
         }
+    }
+
+    private fun extractDimension(element: Element, name: String): Int? {
+        element.attr(name).trim().toIntOrNull()?.let { value ->
+            if (value > 0) return value
+        }
+        val style = element.attr("style")
+        if (style.isBlank()) return null
+        val match = Regex("""$name\s*:\s*(\d+(?:\.\d+)?)px""", RegexOption.IGNORE_CASE).find(style)
+            ?: return null
+        return match.groupValues.getOrNull(1)?.toFloatOrNull()?.roundToInt()?.takeIf { it > 0 }
     }
 
     private fun addVideo(blocks: MutableList<ContentBlock>, element: Element) {

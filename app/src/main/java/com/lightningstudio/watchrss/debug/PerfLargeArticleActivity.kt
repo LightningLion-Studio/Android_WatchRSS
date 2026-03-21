@@ -9,6 +9,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import com.lightningstudio.watchrss.BaseWatchActivity
 import com.lightningstudio.watchrss.BuildConfig
+import com.lightningstudio.watchrss.data.settings.DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE
 import com.lightningstudio.watchrss.ui.screen.rss.DetailContent
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.util.ContentBlock
@@ -53,6 +54,7 @@ class PerfLargeArticleActivity : BaseWatchActivity() {
                         readingThemeDark = true,
                         readingFontSizeSp = 18,
                         shareUseSystem = true,
+                        rssInlineImagePrefetchMode = DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE,
                         onToggleFavorite = {},
                         onRetryOfflineMedia = {},
                         onSaveReadingProgress = {},

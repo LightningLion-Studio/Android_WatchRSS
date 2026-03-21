@@ -92,6 +92,8 @@ import androidx.core.content.FileProvider
 import androidx.core.content.res.ResourcesCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import coil.compose.AsyncImagePainter
+import coil.compose.rememberAsyncImagePainter
 import com.lightningstudio.watchrss.ui.input.InstallRotaryLazyListHandler
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.lightningstudio.watchrss.R
@@ -104,6 +106,7 @@ import com.lightningstudio.watchrss.data.rss.OfflineMedia
 import com.lightningstudio.watchrss.data.rss.RssItem
 import com.lightningstudio.watchrss.data.rss.RssUrlResolver
 import com.lightningstudio.watchrss.data.settings.DEFAULT_READING_FONT_SIZE_SP
+import com.lightningstudio.watchrss.data.settings.RssInlineImagePrefetchMode
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
 import com.lightningstudio.watchrss.ui.theme.WatchReadingBackgroundLight
 import com.lightningstudio.watchrss.ui.theme.WatchReadingTextLight
@@ -111,18 +114,19 @@ import com.lightningstudio.watchrss.ui.theme.WatchTextPrimary
 import com.lightningstudio.watchrss.ui.theme.rememberWatchTitleLineLimitsPx
 import com.lightningstudio.watchrss.ui.util.ContentBlock
 import com.lightningstudio.watchrss.ui.util.RssImageLoader
+import com.lightningstudio.watchrss.ui.util.RssInlineImageLoader
 import com.lightningstudio.watchrss.ui.util.formatWatchTitleForWidthLimits
+import com.lightningstudio.watchrss.ui.util.isSystemShareSettingSupported
 import com.lightningstudio.watchrss.ui.util.normalizeWatchTitleWhitespace
 import com.lightningstudio.watchrss.ui.util.TextStyle as ContentTextStyle
 import com.lightningstudio.watchrss.ui.viewmodel.DetailViewModel
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.sample
-import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.withContext
@@ -144,6 +148,7 @@ fun DetailScreen(
     val readingThemeDark by viewModel.readingThemeDark.collectAsState()
     val readingFontSizeSp by viewModel.readingFontSizeSp.collectAsState()
     val shareUseSystem by viewModel.shareUseSystem.collectAsState(initial = false)
+    val rssInlineImagePrefetchMode by viewModel.rssInlineImagePrefetchMode.collectAsState()
 
     val hasOfflineFailures = remember(offlineMedia) { offlineMedia.any { it.localPath == null } }
     val offlineMap = remember(offlineMedia) { offlineMedia.associateBy { it.originUrl } }
@@ -162,6 +167,7 @@ fun DetailScreen(
             readingThemeDark = readingThemeDark,
             readingFontSizeSp = readingFontSizeSp,
             shareUseSystem = shareUseSystem,
+            rssInlineImagePrefetchMode = rssInlineImagePrefetchMode,
             onToggleFavorite = viewModel::toggleFavorite,
             onRetryOfflineMedia = viewModel::retryOfflineMedia,
             onSaveReadingProgress = viewModel::updateReadingProgress,
@@ -183,14 +189,17 @@ internal fun DetailContent(
     readingThemeDark: Boolean,
     readingFontSizeSp: Int,
     shareUseSystem: Boolean,
+    rssInlineImagePrefetchMode: RssInlineImagePrefetchMode,
     onToggleFavorite: () -> Unit,
     onRetryOfflineMedia: () -> Unit,
     onSaveReadingProgress: (Float) -> Unit,
     onBack: (Long, Boolean, Boolean) -> Unit
 ) {
     val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
     val density = LocalDensity.current
+    val useSystemShare = remember(context, shareUseSystem) {
+        shareUseSystem && isSystemShareSettingSupported(context)
+    }
     val listState = rememberLazyListState()
     InstallRotaryLazyListHandler(listState)
     val safePadding = WatchDimens.watch_safe_padding
@@ -292,27 +301,20 @@ internal fun DetailContent(
         hasRestoredPosition = true
     }
 
-    val readingProgressFlow = remember(listState) {
-        snapshotFlow { calculateReadingProgress(listState) }
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress }
             .distinctUntilChanged()
-            .shareIn(coroutineScope, SharingStarted.WhileSubscribed(5_000), replay = 1)
-    }
-
-    LaunchedEffect(readingProgressFlow) {
-        readingProgressFlow
-            .sample(400)
-            .collectLatest { readingProgress ->
-                if (hasRestoredPositionState.value) {
-                    maybeSaveReadingProgress(
-                        readingProgress = readingProgress,
-                        force = false,
-                        lastSavedProgress = { lastSavedProgress },
-                        lastProgressSavedAt = { lastProgressSavedAt },
-                        updateLastSavedProgress = { lastSavedProgress = it },
-                        updateLastProgressSavedAt = { lastProgressSavedAt = it },
-                        onSave = onSaveReadingProgressState.value
-                    )
-                }
+            .collectLatest { isScrolling ->
+                if (isScrolling || !hasRestoredPositionState.value) return@collectLatest
+                maybeSaveReadingProgress(
+                    readingProgress = calculateReadingProgress(listState),
+                    force = false,
+                    lastSavedProgress = { lastSavedProgress },
+                    lastProgressSavedAt = { lastProgressSavedAt },
+                    updateLastSavedProgress = { lastSavedProgress = it },
+                    updateLastProgressSavedAt = { lastProgressSavedAt = it },
+                    onSave = onSaveReadingProgressState.value
+                )
             }
     }
 
@@ -404,13 +406,40 @@ internal fun DetailContent(
             4 + (if (link.isNotEmpty()) 1 else 0) + (if (hasOfflineFailures) 1 else 0)
         }
         val prefetchedUrls = remember(item?.id) { mutableSetOf<String>() }
+        val articlePrefetchedUrls = remember(item?.id) { mutableSetOf<String>() }
         val blockPrefetchTargets = remember(contentBlocks) {
             contentBlocks.map { block ->
                 buildPrefetchTargets(block)
             }
         }
+        val articleInlineImageUrls = remember(contentBlocks, offlineMedia, baseLink) {
+            contentBlocks.asSequence()
+                .filterIsInstance<ContentBlock.Image>()
+                .map { block -> resolveMediaUrl(block.url, offlineMedia, baseLink) }
+                .filter { url -> url.isNotBlank() && !isLocalMedia(url) }
+                .distinct()
+                .toList()
+        }
 
-        LaunchedEffect(blockPrefetchTargets, maxImageWidthPx) {
+        LaunchedEffect(item?.id, articleInlineImageUrls, rssInlineImagePrefetchMode, maxImageWidthPx) {
+            val prefetchCount = rssInlineImagePrefetchMode.prefetchCount
+            if (prefetchCount == 0 || articleInlineImageUrls.isEmpty()) return@LaunchedEffect
+            val targets = if (prefetchCount == null) {
+                articleInlineImageUrls
+            } else {
+                articleInlineImageUrls.take(prefetchCount)
+            }
+            targets.forEach { url ->
+                val key = "$url@$maxImageWidthPx"
+                if (!articlePrefetchedUrls.add(key)) return@forEach
+                launch {
+                    RssInlineImageLoader.prefetch(context, url, maxImageWidthPx)
+                }
+            }
+        }
+
+        LaunchedEffect(blockPrefetchTargets, maxImageWidthPx, isScrolling) {
+            if (isScrolling) return@LaunchedEffect
             if (blockPrefetchTargets.isEmpty()) return@LaunchedEffect
             val targets = withContext(Dispatchers.Default) {
                 collectPrefetchTargets(
@@ -430,7 +459,7 @@ internal fun DetailContent(
                 val resolvedUrl = resolveMediaUrl(target.url, offlineMediaState.value, baseLink)
                 when (target.type) {
                     PrefetchType.Image ->
-                        if (resolvedUrl.isNotBlank()) {
+                        if (resolvedUrl.isNotBlank() && isLocalMedia(resolvedUrl)) {
                             RssImageLoader.preload(context, resolvedUrl, prefetchScope, maxImageWidthPx)
                         }
                     PrefetchType.VideoFrame -> {
@@ -442,7 +471,8 @@ internal fun DetailContent(
             }
         }
 
-        LaunchedEffect(listState, blockPrefetchTargets, baseItemCount, maxImageWidthPx) {
+        LaunchedEffect(listState, blockPrefetchTargets, baseItemCount, maxImageWidthPx, isScrolling) {
+            if (isScrolling) return@LaunchedEffect
             if (blockPrefetchTargets.isEmpty()) return@LaunchedEffect
             val maxIndex = blockPrefetchTargets.lastIndex
             snapshotFlow {
@@ -470,7 +500,7 @@ internal fun DetailContent(
                         val resolvedUrl = resolveMediaUrl(target.url, offlineMediaState.value, baseLink)
                         when (target.type) {
                             PrefetchType.Image ->
-                                if (resolvedUrl.isNotBlank()) {
+                                if (resolvedUrl.isNotBlank() && isLocalMedia(resolvedUrl)) {
                                     RssImageLoader.preload(
                                         context,
                                         resolvedUrl,
@@ -610,6 +640,7 @@ internal fun DetailContent(
                             DetailImageBlock(
                                 url = resolvedUrl,
                                 alt = block.alt,
+                                initialAspectRatio = block.aspectRatio,
                                 maxWidthPx = maxImageWidthPx,
                                 containerColor = mediaCardContainerColor,
                                 borderColor = mediaCardBorderColor,
@@ -672,7 +703,7 @@ internal fun DetailContent(
                             onClick = {
                                 val title = item?.title.orEmpty()
                                 val shareLink = item?.link?.trim().orEmpty().ifBlank { null }
-                                if (shareUseSystem) {
+                                if (useSystemShare) {
                                     shareCurrent(context, title, shareLink)
                                 } else {
                                     showShareQr(context, title, shareLink)
@@ -784,7 +815,7 @@ internal fun DetailTextBlock(
     topPadding: Dp,
     isScrolling: Boolean
 ) {
-    if (BuildConfig.DEBUG) {
+    if (isDetailTracingEnabled()) {
         Trace.beginSection("DetailTextBlock:${style.name}")
     }
     val lineHeight = fontSizeSp * 1.2f
@@ -812,7 +843,7 @@ internal fun DetailTextBlock(
             .debugTraceLayout("DetailTextBlock/layout")
             .debugTraceDraw("DetailTextBlock/draw")
     )
-    if (BuildConfig.DEBUG) {
+    if (isDetailTracingEnabled()) {
         Trace.endSection()
     }
 }
@@ -821,6 +852,7 @@ internal fun DetailTextBlock(
 private fun DetailImageBlock(
     url: String,
     alt: String?,
+    initialAspectRatio: Float?,
     maxWidthPx: Int,
     containerColor: Color,
     borderColor: Color,
@@ -828,46 +860,52 @@ private fun DetailImageBlock(
     isScrolling: Boolean,
     onClick: () -> Unit
 ) {
-    if (BuildConfig.DEBUG) {
+    if (isDetailTracingEnabled()) {
         Trace.beginSection("DetailImageBlock")
     }
     val context = LocalContext.current
-    val bitmapState = remember(url, maxWidthPx) { mutableStateOf<android.graphics.Bitmap?>(null) }
-    LaunchedEffect(url, maxWidthPx, isScrolling) {
-        if (isScrolling) return@LaunchedEffect
-        if (bitmapState.value != null) return@LaunchedEffect
-        if (url.isBlank()) return@LaunchedEffect
-        decodeSemaphore.acquire()
-        try {
-            if (bitmapState.value == null) {
-                bitmapState.value = RssImageLoader.loadBitmap(context, url, maxWidthPx)
-            }
-        } finally {
-            decodeSemaphore.release()
-        }
+    val imageLoader = remember(context) { RssInlineImageLoader.get(context) }
+    var ratio by remember(url, initialAspectRatio) {
+        mutableStateOf(RssImageLoader.getCachedAspectRatio(url) ?: initialAspectRatio)
     }
-    val safeBitmap = bitmapState.value
-    val imageBitmap = remember(safeBitmap) { safeBitmap?.asImageBitmap() }
-    val ratio = safeBitmap?.let { it.width.toFloat() / it.height.toFloat() }
-        ?: RssImageLoader.getCachedAspectRatio(url)
-    if (imageBitmap != null && ratio != null) {
+    val request = remember(url, maxWidthPx, context) {
+        RssInlineImageLoader.buildRequest(context, url, maxWidthPx)
+    }
+    val painter = rememberAsyncImagePainter(
+        model = request,
+        imageLoader = imageLoader,
+        onSuccess = { success ->
+            RssInlineImageLoader.cacheAspectRatio(url, success.result)
+            val width = success.result.drawable.intrinsicWidth
+            val height = success.result.drawable.intrinsicHeight
+            ratio = if (width > 0 && height > 0) {
+                width.toFloat() / height.toFloat()
+            } else {
+                RssImageLoader.getCachedAspectRatio(url) ?: ratio
+            }
+        },
+        contentScale = ContentScale.Fit,
+        filterQuality = FilterQuality.None
+    )
+    val painterState = painter.state
+    val aspectRatio: Float? = ratio
+    if (painterState is AsyncImagePainter.State.Success && aspectRatio != null) {
         Image(
-            bitmap = imageBitmap,
-            contentDescription = alt,
-            contentScale = ContentScale.Fit,
-            filterQuality = FilterQuality.None,
-            modifier = Modifier
+            painter,
+            alt,
+            Modifier
                 .fillMaxWidth()
                 .padding(top = topPadding)
-                .aspectRatio(ratio)
+                .aspectRatio(aspectRatio)
                 .clickableWithoutRipple(enabled = !isScrolling, onClick = onClick)
                 .scrollSemanticsDisabled(isScrolling)
                 .debugTraceLayout("DetailImageBlock/layout")
-                .debugTraceDraw("DetailImageBlock/draw")
+                .debugTraceDraw("DetailImageBlock/draw"),
+            contentScale = ContentScale.Fit
         )
     } else {
-        val placeholderModifier = if (ratio != null && ratio > 0f) {
-            Modifier.aspectRatio(ratio)
+        val placeholderModifier = if (aspectRatio != null && aspectRatio > 0f) {
+            Modifier.aspectRatio(aspectRatio)
         } else {
             Modifier.height(watchDimensionResource(R.dimen.hey_card_large_height))
         }
@@ -889,7 +927,7 @@ private fun DetailImageBlock(
                 .debugTraceDraw("DetailImageBlock/placeholder/draw")
         )
     }
-    if (BuildConfig.DEBUG) {
+    if (isDetailTracingEnabled()) {
         Trace.endSection()
     }
 }
@@ -905,7 +943,7 @@ private fun DetailVideoBlock(
     isScrolling: Boolean,
     onClick: () -> Unit
 ) {
-    if (BuildConfig.DEBUG) {
+    if (isDetailTracingEnabled()) {
         Trace.beginSection("DetailVideoBlock")
     }
     val context = LocalContext.current
@@ -916,6 +954,7 @@ private fun DetailVideoBlock(
         if (isScrolling) return@LaunchedEffect
         if (coverState.value != null) return@LaunchedEffect
         if (poster.isNullOrBlank() && !canExtractVideoFrame(videoUrl)) return@LaunchedEffect
+        delay(MEDIA_LOAD_IDLE_DELAY_MS)
         decodeSemaphore.acquire()
         try {
             if (coverState.value == null) {
@@ -929,12 +968,18 @@ private fun DetailVideoBlock(
             decodeSemaphore.release()
         }
     }
-    LaunchedEffect(poster, videoUrl, maxWidthPx) {
+    LaunchedEffect(poster, videoUrl, maxWidthPx, isScrolling) {
+        if (isScrolling) return@LaunchedEffect
         if (ratioState.value != null) return@LaunchedEffect
+        delay(MEDIA_LOAD_IDLE_DELAY_MS)
         ratioState.value = when {
             !poster.isNullOrBlank() -> {
                 RssImageLoader.getCachedAspectRatio(poster)
-                    ?: RssImageLoader.preloadAndCacheRatio(context, poster, maxWidthPx)
+                    ?: if (isLocalMedia(poster)) {
+                        RssImageLoader.preloadAndCacheRatio(context, poster, maxWidthPx)
+                    } else {
+                        null
+                    }
             }
             canExtractVideoFrame(videoUrl) -> loadCachedVideoRatio(context, videoUrl)
             else -> null
@@ -1004,7 +1049,7 @@ private fun DetailVideoBlock(
                 .size(watchDimensionResource(R.dimen.hey_listitem_widget_size))
         )
     }
-    if (BuildConfig.DEBUG) {
+    if (isDetailTracingEnabled()) {
         Trace.endSection()
     }
 }
@@ -1384,11 +1429,12 @@ private fun resolveRemoteUrl(url: String, baseLink: String?): String? {
     return RssUrlResolver.resolveMediaUrl(url, baseLink)
 }
 
-private const val PREFETCH_MEDIA_COUNT = 8
+private const val PREFETCH_MEDIA_COUNT = 2
 private const val PREFETCH_SCAN_LIMIT = 120
 private const val VIDEO_FRAME_CACHE_BYTES = 4 * 1024 * 1024
+private const val MEDIA_LOAD_IDLE_DELAY_MS = 600L
 
-private val decodeSemaphore = Semaphore(permits = 2)
+private val decodeSemaphore = Semaphore(permits = 1)
 
 private val videoFrameCache = object : LruCache<String, Bitmap>(VIDEO_FRAME_CACHE_BYTES) {
     override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
@@ -1488,19 +1534,19 @@ private fun cacheVideoAspectRatio(url: String, width: Int, height: Int, rotation
 }
 
 private fun calculateReadingProgress(listState: androidx.compose.foundation.lazy.LazyListState): Float {
-    if (BuildConfig.DEBUG) {
+    if (isDetailTracingEnabled()) {
         Trace.beginSection("ReadingProgress")
     }
     val layoutInfo = listState.layoutInfo
     val totalItems = layoutInfo.totalItemsCount
     if (totalItems == 0) {
-        if (BuildConfig.DEBUG) {
+        if (isDetailTracingEnabled()) {
             Trace.endSection()
         }
         return 1f
     }
     if (layoutInfo.visibleItemsInfo.isNotEmpty() && !listState.canScrollForward) {
-        if (BuildConfig.DEBUG) {
+        if (isDetailTracingEnabled()) {
             Trace.endSection()
         }
         return 1f
@@ -1512,14 +1558,14 @@ private fun calculateReadingProgress(listState: androidx.compose.foundation.lazy
     val denominator = (totalItems - 1).coerceAtLeast(1)
     val rawProgress = (firstIndex + offsetProgress) / denominator.toFloat()
     val clamped = rawProgress.coerceIn(0f, 1f)
-    if (BuildConfig.DEBUG) {
+    if (isDetailTracingEnabled()) {
         Trace.endSection()
     }
     return clamped
 }
 
 private fun Modifier.debugTraceLayout(name: String): Modifier {
-    if (!BuildConfig.DEBUG) return this
+    if (!isDetailTracingEnabled()) return this
     return this.layout { measurable, constraints ->
         Trace.beginSection(name)
         try {
@@ -1540,7 +1586,7 @@ private fun Modifier.scrollSemanticsDisabled(isScrolling: Boolean): Modifier {
 }
 
 private fun Modifier.debugTraceDraw(name: String): Modifier {
-    if (!BuildConfig.DEBUG) return this
+    if (!isDetailTracingEnabled()) return this
     return this.drawWithContent {
         Trace.beginSection(name)
         try {
@@ -1557,6 +1603,12 @@ private fun View.captureAccessibilityDelegate(): View.AccessibilityDelegate? {
         field.isAccessible = true
         field.get(this) as? View.AccessibilityDelegate
     }.getOrNull()
+}
+
+private fun isDetailTracingEnabled(): Boolean {
+    return BuildConfig.DEBUG &&
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+        Trace.isEnabled()
 }
 
 private fun isReachedBottom(
@@ -1616,7 +1668,14 @@ private fun showShareQr(context: Context, title: String, link: String?) {
         com.lightningstudio.watchrss.ui.util.showAppToast(context, "暂无可分享链接", android.widget.Toast.LENGTH_SHORT)
         return
     }
-    context.startActivity(ShareQrActivity.createIntent(context, title, trimmed))
+    context.startActivity(
+        ShareQrActivity.createIntent(
+            context = context,
+            title = title,
+            link = trimmed,
+            qrWidthRatio = DETAIL_SHARE_QR_WIDTH_RATIO
+        )
+    )
 }
 
 private fun openExternalLink(context: Context, link: String) {
@@ -1643,3 +1702,5 @@ private fun openRssVideo(context: Context, playUrl: String, webUrl: String?) {
     if (trimmed.isEmpty()) return
     context.startActivity(RssPlayerActivity.createIntent(context, trimmed, webUrl))
 }
+
+private const val DETAIL_SHARE_QR_WIDTH_RATIO = 0.7f

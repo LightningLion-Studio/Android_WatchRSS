@@ -18,6 +18,7 @@ class ProfileActivityTest {
     fun profileActivity_rendersKeyEntries() {
         composeRule.onNodeWithTag(ProfileTestTags.ROOT).assertExists()
         composeRule.onNodeWithTag(ProfileTestTags.FAVORITES_ENTRY).assertExists()
+        composeRule.onNodeWithTag(ProfileTestTags.PHONE_CONNECTION_ENTRY).assertExists()
         composeRule.onNodeWithTag(ProfileTestTags.SETTINGS_ENTRY).assertExists()
     }
 }

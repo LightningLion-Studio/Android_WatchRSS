@@ -55,6 +55,7 @@ private val SEARCH_HISTORY_JSON = stringPreferencesKey("bili_search_history")
 private const val FEED_CACHE_LIMIT = 50
 private const val PREVIEW_CACHE_QN = 32
 private const val PREVIEW_CACHE_MS = 30 * 60 * 1000L
+private const val DETAIL_PREVIEW_CACHE_MS = 60 * 1000L
 
 class BiliRepository(
     context: Context,
@@ -155,6 +156,47 @@ class BiliRepository(
             bvid = bvid,
             qn = qn
         )
+    }
+
+    override suspend fun warmupDetailPreview(aid: Long?, bvid: String?, cid: Long?): Result<Unit> {
+        if (cachedPreviewUri(aid, bvid, cid) != null) {
+            return Result.success(Unit)
+        }
+        val safeCid = cid ?: return Result.failure(IllegalArgumentException("missing_cid"))
+        val result = fetchPlayUrlMp4(
+            cid = safeCid,
+            aid = aid,
+            bvid = bvid,
+            qn = PREVIEW_CACHE_QN
+        )
+        if (!result.isSuccess) {
+            return Result.failure(IllegalStateException(result.message ?: "fetch_failed"))
+        }
+        return downloadPreviewClip(
+            aid = aid,
+            bvid = bvid,
+            cid = safeCid,
+            playUrl = result.data,
+            maxPreviewMs = DETAIL_PREVIEW_CACHE_MS
+        ).map { Unit }
+    }
+
+    override suspend fun ensureInteractionReady(aid: Long?, bvid: String?, cid: Long?): Result<Unit> {
+        if (cachedPreviewUri(aid, bvid, cid) != null) {
+            return Result.success(Unit)
+        }
+        val safeCid = cid ?: return Result.failure(IllegalArgumentException("missing_cid"))
+        val result = fetchPlayUrlMp4(
+            cid = safeCid,
+            aid = aid,
+            bvid = bvid,
+            qn = PREVIEW_CACHE_QN
+        )
+        return if (result.isSuccess) {
+            Result.success(Unit)
+        } else {
+            Result.failure(IllegalStateException(result.message ?: "fetch_failed"))
+        }
     }
 
     override suspend fun like(aid: Long, like: Boolean): BiliResult<Unit> {
@@ -310,6 +352,18 @@ class BiliRepository(
         aid: Long?,
         bvid: String?,
         cid: Long?
+    ): Result<String> = cachePreviewClipInternal(
+        aid = aid,
+        bvid = bvid,
+        cid = cid,
+        maxPreviewMs = PREVIEW_CACHE_MS
+    )
+
+    private suspend fun cachePreviewClipInternal(
+        aid: Long?,
+        bvid: String?,
+        cid: Long?,
+        maxPreviewMs: Long
     ): Result<String> = withContext(Dispatchers.IO) {
         val file = previewCacheFile(aid, bvid, cid)
             ?: return@withContext Result.failure(IllegalArgumentException("missing_video_id"))
@@ -327,7 +381,29 @@ class BiliRepository(
         if (!result.isSuccess) {
             return@withContext Result.failure(IllegalStateException(result.message ?: "fetch_failed"))
         }
-        val durl = result.data?.durl?.firstOrNull()
+        downloadPreviewClip(
+            aid = aid,
+            bvid = bvid,
+            cid = safeCid,
+            playUrl = result.data,
+            maxPreviewMs = maxPreviewMs
+        )
+    }
+
+    private suspend fun downloadPreviewClip(
+        aid: Long?,
+        bvid: String?,
+        cid: Long,
+        playUrl: BiliPlayUrl?,
+        maxPreviewMs: Long
+    ): Result<String> = withContext(Dispatchers.IO) {
+        val file = previewCacheFile(aid, bvid, cid)
+            ?: return@withContext Result.failure(IllegalArgumentException("missing_video_id"))
+        if (file.exists() && file.length() > 0) {
+            touchPreviewFile(file)
+            return@withContext Result.success(file.absolutePath)
+        }
+        val durl = playUrl?.durl?.firstOrNull()
             ?: return@withContext Result.failure(IllegalStateException("empty_play_url"))
         val url = durl.url
             ?: return@withContext Result.failure(IllegalStateException("empty_play_url"))
@@ -338,7 +414,7 @@ class BiliRepository(
         if (size <= 0 || lengthMs <= 0) {
             return@withContext Result.failure(IllegalStateException("invalid_length"))
         }
-        val targetMs = min(PREVIEW_CACHE_MS, lengthMs)
+        val targetMs = min(maxPreviewMs, lengthMs)
         val bytes = max(1L, size * targetMs / lengthMs) - 1L
         val headers = buildPlayHeaders()
         val request = Request.Builder()

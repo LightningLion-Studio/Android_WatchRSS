@@ -17,7 +17,7 @@ class RssFetchService(
     override fun downloadToFile(url: String, file: File): String? {
         return try {
             val tempFile = File(file.parentFile, "${file.name}.tmp")
-            downloadClient.newCall(Request.Builder().url(url).build()).execute().use { response ->
+            downloadClient.newCall(RssRemoteRequestPolicy.newRequestBuilder(url).build()).execute().use { response ->
                 if (!response.isSuccessful) {
                     return null
                 }
@@ -61,11 +61,12 @@ class RssFetchService(
         }
 
         private fun buildDownloadClient(): OkHttpClient {
-            return OkHttpClient.Builder()
-                .callTimeout(30, TimeUnit.SECONDS)
-                .connectTimeout(15, TimeUnit.SECONDS)
-                .readTimeout(20, TimeUnit.SECONDS)
-                .build()
+            return RssRemoteRequestPolicy.configure(
+                OkHttpClient.Builder()
+                    .callTimeout(30, TimeUnit.SECONDS)
+                    .connectTimeout(15, TimeUnit.SECONDS)
+                    .readTimeout(20, TimeUnit.SECONDS)
+            ).build()
         }
     }
 }

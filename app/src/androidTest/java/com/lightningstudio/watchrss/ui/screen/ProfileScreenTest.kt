@@ -23,6 +23,7 @@ class ProfileScreenTest {
             ProfileScreen(
                 onFavoritesClick = {},
                 onWatchLaterClick = {},
+                onPhoneConnectionClick = {},
                 onSettingsClick = {},
                 onAboutClick = {},
                 onContactDeveloperClick = {}
@@ -31,6 +32,7 @@ class ProfileScreenTest {
 
         composeRule.onNodeWithTag(ProfileTestTags.FAVORITES_ENTRY).assertExists()
         composeRule.onNodeWithTag(ProfileTestTags.WATCH_LATER_ENTRY).assertExists()
+        composeRule.onNodeWithTag(ProfileTestTags.PHONE_CONNECTION_ENTRY).performScrollTo().assertExists()
         composeRule.onNodeWithTag(ProfileTestTags.SETTINGS_ENTRY).assertExists()
         composeRule.onNodeWithTag(ProfileTestTags.ABOUT_ENTRY).performScrollTo().assertExists()
         composeRule.onNodeWithTag(ProfileTestTags.CONTACT_DEVELOPER_ENTRY).performScrollTo().assertExists()
@@ -40,6 +42,7 @@ class ProfileScreenTest {
     fun profileScreen_clickCallbacksAreInvoked() {
         var favoritesClicks = 0
         var watchLaterClicks = 0
+        var phoneConnectionClicks = 0
         var settingsClicks = 0
         var aboutClicks = 0
         var contactClicks = 0
@@ -48,6 +51,7 @@ class ProfileScreenTest {
             ProfileScreen(
                 onFavoritesClick = { favoritesClicks++ },
                 onWatchLaterClick = { watchLaterClicks++ },
+                onPhoneConnectionClick = { phoneConnectionClicks++ },
                 onSettingsClick = { settingsClicks++ },
                 onAboutClick = { aboutClicks++ },
                 onContactDeveloperClick = { contactClicks++ }
@@ -56,6 +60,7 @@ class ProfileScreenTest {
 
         composeRule.onNodeWithTag(ProfileTestTags.FAVORITES_ENTRY).performClick()
         composeRule.onNodeWithTag(ProfileTestTags.WATCH_LATER_ENTRY).performClick()
+        composeRule.onNodeWithTag(ProfileTestTags.PHONE_CONNECTION_ENTRY).performScrollTo().performClick()
         composeRule.onNodeWithTag(ProfileTestTags.SETTINGS_ENTRY).performClick()
         composeRule.onNodeWithTag(ProfileTestTags.ABOUT_ENTRY).performScrollTo().performClick()
         composeRule.onNodeWithTag(ProfileTestTags.CONTACT_DEVELOPER_ENTRY).performScrollTo().performClick()
@@ -63,6 +68,7 @@ class ProfileScreenTest {
         composeRule.runOnIdle {
             assertEquals(1, favoritesClicks)
             assertEquals(1, watchLaterClicks)
+            assertEquals(1, phoneConnectionClicks)
             assertEquals(1, settingsClicks)
             assertEquals(1, aboutClicks)
             assertEquals(1, contactClicks)

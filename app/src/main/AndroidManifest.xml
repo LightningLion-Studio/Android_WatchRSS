@@ -5,6 +5,12 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission
+        android:name="android.permission.NEARBY_WIFI_DEVICES"
+        android:usesPermissionFlags="neverForLocation" />
 
     <application
         android:name=".WatchRssApplication"
@@ -102,6 +108,18 @@
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".ProfileActivity"
+            android:exported="false"
+            android:theme="@style/Theme.WatchRSS.Translucent" />
+        <activity
+            android:name=".PhoneConnectionActivity"
+            android:exported="false"
+            android:theme="@style/Theme.WatchRSS.Translucent" />
+        <activity
+            android:name=".AcousticConnectionActivity"
+            android:exported="false"
+            android:theme="@style/Theme.WatchRSS.Translucent" />
+        <activity
+            android:name=".PhoneConnectionUnavailableActivity"
             android:exported="false"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity

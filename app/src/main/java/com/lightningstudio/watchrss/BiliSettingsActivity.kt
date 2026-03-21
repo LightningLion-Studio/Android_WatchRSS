@@ -68,6 +68,15 @@ class BiliSettingsActivity : BaseWatchActivity() {
                             viewModel.clearMessage()
                         }
                     }
+                    LaunchedEffect(uiState.shouldExitToFeed) {
+                        if (uiState.shouldExitToFeed) {
+                            setResult(
+                                RESULT_OK,
+                                Intent().putExtra(EXTRA_EXIT_TO_FEED, true)
+                            )
+                            finish()
+                        }
+                    }
 
                     Box(modifier = Modifier.fillMaxSize()) {
                         BiliSettingsScreen(
@@ -103,6 +112,8 @@ class BiliSettingsActivity : BaseWatchActivity() {
     }
 
     companion object {
+        const val EXTRA_EXIT_TO_FEED = "extra_exit_to_feed"
+
         fun createIntent(context: Context): Intent {
             return Intent(context, BiliSettingsActivity::class.java)
         }

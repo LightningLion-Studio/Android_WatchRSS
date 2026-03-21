@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lightningstudio.watchrss.data.rss.RssRepository
 import com.lightningstudio.watchrss.data.rss.SavedState
+import com.lightningstudio.watchrss.data.settings.DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE
 import com.lightningstudio.watchrss.data.settings.SettingsRepository
 import com.lightningstudio.watchrss.data.settings.DEFAULT_READING_FONT_SIZE_SP
 import com.lightningstudio.watchrss.ui.util.RssContentCache
@@ -64,6 +65,13 @@ class DetailViewModel(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DEFAULT_READING_FONT_SIZE_SP)
 
     val shareUseSystem = settingsRepository.shareUseSystem
+
+    val rssInlineImagePrefetchMode = settingsRepository.rssInlineImagePrefetchMode
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE
+        )
 
     private val requestedOriginalIds = mutableSetOf<Long>()
 

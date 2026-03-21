@@ -57,7 +57,6 @@ import androidx.compose.ui.platform.LocalViewConfiguration
 import com.lightningstudio.watchrss.ui.theme.watchColorResource
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -486,6 +485,7 @@ fun BiliPlayerScreen(
         enabled = rotaryVolumeEnabled,
         showSystemUi = false,
         reverseDirection = true,
+        supportsPointerWheel = true,
         onVolumeStep = volumeState::adjustBySteps
     )
 
@@ -678,12 +678,6 @@ fun BiliPlayerScreen(
                             )
                             .padding(horizontal = safePadding, vertical = spacing)
                     ) {
-                        val badgeText = if (uiState.playUrl?.startsWith("file:") == true) "缓存预览" else null
-                        if (!badgeText.isNullOrBlank()) {
-                            Box(modifier = Modifier.align(Alignment.CenterStart)) {
-                                PlayerBadge(text = badgeText)
-                            }
-                        }
                         Row(
                             modifier = Modifier.align(Alignment.Center),
                             horizontalArrangement = Arrangement.spacedBy(spacing),
@@ -802,26 +796,6 @@ private fun PlayerIconButton(
             painter = painterResource(iconRes),
             contentDescription = contentDescription,
             modifier = Modifier.size(iconSize)
-        )
-    }
-}
-
-@Composable
-private fun PlayerBadge(text: String) {
-    val radius = watchDimensionResource(R.dimen.hey_button_default_radius)
-    val padding = watchDimensionResource(R.dimen.hey_distance_4dp)
-    Box(
-        modifier = Modifier
-            .clip(androidx.compose.foundation.shape.RoundedCornerShape(radius))
-            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.6f))
-            .padding(horizontal = padding, vertical = padding / 2)
-    ) {
-        Text(
-            text = text,
-            color = MaterialTheme.colorScheme.onSurface,
-            fontSize = textSize(R.dimen.hey_caption),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
         )
     }
 }

@@ -74,12 +74,14 @@ import com.lightningstudio.watchrss.data.rss.RssChannel
 import com.lightningstudio.watchrss.ui.input.InstallRotaryLazyListHandler
 import com.lightningstudio.watchrss.ui.testing.HomeTestTags
 import com.lightningstudio.watchrss.ui.util.formatTime
+import com.lightningstudio.watchrss.ui.viewmodel.HomePlatformLoginState
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 @Composable
 fun HomeComposeScreen(
     channels: List<RssChannel>,
+    platformLoginState: HomePlatformLoginState = HomePlatformLoginState(),
     openSwipeId: Long?,
     onOpenSwipe: (Long) -> Unit,
     onCloseSwipe: () -> Unit,
@@ -166,6 +168,7 @@ fun HomeComposeScreen(
                         is HomeEntry.Channel -> {
                             HomeChannelEntry(
                                 channel = entry.channel,
+                                platformLoginState = platformLoginState,
                                 isScrolling = isScrolling,
                                 openSwipeId = openSwipeId,
                                 onOpenSwipe = onOpenSwipe,
@@ -300,6 +303,7 @@ private fun HomeAddEntry(onAddRssClick: () -> Unit) {
 @Composable
 private fun HomeChannelEntry(
     channel: RssChannel,
+    platformLoginState: HomePlatformLoginState,
     isScrolling: Boolean,
     openSwipeId: Long?,
     onOpenSwipe: (Long) -> Unit,
@@ -352,9 +356,10 @@ private fun HomeChannelEntry(
         channel.url,
         channel.isPinned,
         channel.unreadCount,
-        channel.lastFetchedAt
+        channel.lastFetchedAt,
+        platformLoginState
     ) {
-        buildChannelSummary(channel)
+        buildChannelSummary(channel, platformLoginState)
     }
 
     val cardContent: @Composable (Modifier) -> Unit = { offsetModifier ->
@@ -713,12 +718,31 @@ private fun HomeDefaultItem(
     }
 }
 
-private fun buildChannelSummary(channel: RssChannel): String {
-    val summary = channel.description?.takeIf { it.isNotBlank() } ?: channel.url
+private fun buildChannelSummary(
+    channel: RssChannel,
+    platformLoginState: HomePlatformLoginState
+): String {
+    val builtinType = BuiltinChannelType.fromUrl(channel.url)
+    val isRealtime = when (builtinType) {
+        BuiltinChannelType.BILI -> platformLoginState.isBiliLoggedIn
+        BuiltinChannelType.DOUYIN -> platformLoginState.isDouyinLoggedIn
+        null -> false
+    }
+    val summary = when {
+        builtinType == BuiltinChannelType.BILI && platformLoginState.isBiliLoggedIn ->
+            "进入以获取推荐内容"
+        builtinType == BuiltinChannelType.DOUYIN && platformLoginState.isDouyinLoggedIn ->
+            "进入以获取推荐内容"
+        else -> channel.description?.takeIf { it.isNotBlank() } ?: channel.url
+    }
     val pinLabel = if (channel.isPinned) "置顶 · " else ""
     val unreadLabel = if (channel.unreadCount > 0) "未读 ${channel.unreadCount} · " else ""
-    val timeText = formatTime(channel.lastFetchedAt)
-    return "$pinLabel$summary\n${unreadLabel}更新: $timeText"
+    val updateLabel = if (isRealtime) {
+        "更新：实时"
+    } else {
+        "更新: ${formatTime(channel.lastFetchedAt)}"
+    }
+    return "$pinLabel$summary\n${unreadLabel}$updateLabel"
 }
 
 @Composable

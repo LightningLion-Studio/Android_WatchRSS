@@ -37,6 +37,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import com.lightningstudio.watchrss.ui.theme.watchColorResource
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
@@ -46,14 +47,17 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import com.lightningstudio.watchrss.BuildConfig
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.settings.CACHE_LIMIT_OPTIONS_MB
+import com.lightningstudio.watchrss.data.settings.RssInlineImagePrefetchMode
 import com.lightningstudio.watchrss.ui.components.WatchSwitch
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.input.InstallRotaryScrollHandler
 import com.lightningstudio.watchrss.ui.settings.MainSettingsCatalog
 import com.lightningstudio.watchrss.ui.testing.SettingsTestTags
+import com.lightningstudio.watchrss.ui.util.isSystemShareSettingSupported
 import kotlinx.coroutines.flow.StateFlow
 
 private enum class SettingsPage {
@@ -70,6 +74,7 @@ fun SettingsScreen(
     readingFontSizeSp: StateFlow<Int>,
     phoneConnectionEnabled: StateFlow<Boolean>,
     mediaVolumeGuardEnabled: StateFlow<Boolean>,
+    rssInlineImagePrefetchMode: StateFlow<RssInlineImagePrefetchMode>,
     showPerformanceTools: Boolean,
     onSelectCacheLimit: (Long) -> Unit,
     onToggleReadingTheme: () -> Unit,
@@ -77,11 +82,14 @@ fun SettingsScreen(
     onSelectFontSize: (Int) -> Unit,
     onTogglePhoneConnection: () -> Unit,
     onToggleMediaVolumeGuard: () -> Unit,
+    onSelectRssInlineImagePrefetchMode: (RssInlineImagePrefetchMode) -> Unit,
     onOpenOobe: () -> Unit,
     onOpenPerfLargeList: () -> Unit,
     onOpenPerfLargeArticle: () -> Unit,
+    onOpenDouyinCookieInput: () -> Unit,
     onBeianClick: () -> Unit
 ) {
+    val context = LocalContext.current
     val cacheLimit by cacheLimitMb.collectAsState()
     val usage by cacheUsageMb.collectAsState()
     val themeDark by readingThemeDark.collectAsState()
@@ -89,6 +97,10 @@ fun SettingsScreen(
     val fontSizeSp by readingFontSizeSp.collectAsState()
     val phoneConnection by phoneConnectionEnabled.collectAsState()
     val mediaVolumeGuard by mediaVolumeGuardEnabled.collectAsState()
+    val imagePrefetchMode by rssInlineImagePrefetchMode.collectAsState()
+    val showSystemShareSetting = remember(context) {
+        isSystemShareSettingSupported(context)
+    }
     var currentPage by rememberSaveable { mutableStateOf(SettingsPage.Main) }
 
     BackHandler(enabled = currentPage == SettingsPage.Advanced) {
@@ -110,14 +122,18 @@ fun SettingsScreen(
             onOpenOobe = onOpenOobe,
             onOpenPerfLargeList = onOpenPerfLargeList,
             onOpenPerfLargeArticle = onOpenPerfLargeArticle,
+            onOpenDouyinCookieInput = onOpenDouyinCookieInput,
             onBeianClick = onBeianClick
         )
         SettingsPage.Advanced -> AdvancedSettingsPage(
             cacheLimit = cacheLimit,
             cacheUsage = usage,
             shareUseSystem = useSystemShare,
+            rssInlineImagePrefetchMode = imagePrefetchMode,
+            showSystemShareSetting = showSystemShareSetting,
             onSelectCacheLimit = onSelectCacheLimit,
-            onToggleShareMode = onToggleShareMode
+            onToggleShareMode = onToggleShareMode,
+            onSelectRssInlineImagePrefetchMode = onSelectRssInlineImagePrefetchMode
         )
     }
 }
@@ -137,6 +153,7 @@ private fun MainSettingsPage(
     onOpenOobe: () -> Unit,
     onOpenPerfLargeList: () -> Unit,
     onOpenPerfLargeArticle: () -> Unit,
+    onOpenDouyinCookieInput: () -> Unit,
     onBeianClick: () -> Unit
 ) {
     val fontOptions = remember { (12..32 step 2).toList() }
@@ -262,7 +279,7 @@ private fun MainSettingsPage(
                 onClick = onOpenAdvanced
             )
             Text(
-                text = "管理分享方式和缓存上限",
+                text = "管理高级选项",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
@@ -303,6 +320,20 @@ private fun MainSettingsPage(
                 }
                 Text(
                     text = "会在添加RSS页面和收藏及稍后再看页面显示有关手机互联的按钮",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+                )
+
+                Spacer(modifier = Modifier.height(entrySpacing))
+
+                SettingsPillRow(
+                    label = "抖音登录 Cookie",
+                    testTag = SettingsTestTags.DOUYIN_COOKIE_ENTRY,
+                    onClick = onOpenDouyinCookieInput
+                )
+                Text(
+                    text = "手动输入或替换抖音登录请求头 Cookie",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
@@ -361,18 +392,26 @@ private fun AdvancedSettingsPage(
     cacheLimit: Long,
     cacheUsage: Long,
     shareUseSystem: Boolean,
+    rssInlineImagePrefetchMode: RssInlineImagePrefetchMode,
+    showSystemShareSetting: Boolean,
     onSelectCacheLimit: (Long) -> Unit,
-    onToggleShareMode: () -> Unit
+    onToggleShareMode: () -> Unit,
+    onSelectRssInlineImagePrefetchMode: (RssInlineImagePrefetchMode) -> Unit
 ) {
     val cacheOptions = remember { CACHE_LIMIT_OPTIONS_MB }
+    val imagePrefetchOptions = remember { RssInlineImagePrefetchMode.values().toList() }
     val lowerCache = cacheOptions.lastOrNull { it < cacheLimit }
     val higherCache = cacheOptions.firstOrNull { it > cacheLimit }
+    val imagePrefetchIndex = imagePrefetchOptions.indexOf(rssInlineImagePrefetchMode)
+    val lowerImagePrefetchMode = imagePrefetchOptions.getOrNull(imagePrefetchIndex - 1)
+    val higherImagePrefetchMode = imagePrefetchOptions.getOrNull(imagePrefetchIndex + 1)
     val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
     val sectionSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_content_horizontal_distance
     val entrySpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_8dp
     val valueSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_4dp
     val stepperSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_6dp
     val stepperValueWidth = watchDimensionResource(R.dimen.watch_action_button_height)
+    val textStepperValueWidth = stepperValueWidth
     val valueIndent = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_10dp
     val pillHeight = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_multiple_item_height
     val scrollState = rememberScrollState()
@@ -429,31 +468,71 @@ private fun AdvancedSettingsPage(
 
             Spacer(modifier = Modifier.height(entrySpacing))
 
-            SettingsPillRow(label = "使用系统分享方式", endPaddingMultiplier = 1.5f) {
-                WatchSwitch(
-                    checked = shareUseSystem,
-                    modifier = Modifier.testTag(SettingsTestTags.SHARE_SWITCH),
-                    onCheckedChange = { onToggleShareMode() }
+            SettingsPillRow(label = "媒体缓存") {
+                RoundIconButtonIcon(
+                    iconRes = R.drawable.ic_action_minus,
+                    contentDescription = "减少媒体缓存",
+                    enabled = lowerImagePrefetchMode != null,
+                    testTag = SettingsTestTags.IMAGE_PREFETCH_DECREASE_BUTTON,
+                    onClick = { lowerImagePrefetchMode?.let(onSelectRssInlineImagePrefetchMode) }
+                )
+                Spacer(modifier = Modifier.width(stepperSpacing))
+                StepperValue(
+                    text = rssInlineImagePrefetchMode.label,
+                    width = textStepperValueWidth,
+                    testTag = SettingsTestTags.IMAGE_PREFETCH_VALUE
+                )
+                Spacer(modifier = Modifier.width(stepperSpacing))
+                RoundIconButtonIcon(
+                    iconRes = R.drawable.ic_action_plus,
+                    contentDescription = "增加媒体缓存",
+                    enabled = higherImagePrefetchMode != null,
+                    testTag = SettingsTestTags.IMAGE_PREFETCH_INCREASE_BUTTON,
+                    onClick = { higherImagePrefetchMode?.let(onSelectRssInlineImagePrefetchMode) }
                 )
             }
             Text(
-                text = if (shareUseSystem) "当前：系统分享" else "当前：二维码分享",
+                text = rssInlineImagePrefetchMode.summary,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
             )
             Text(
-                text = "开启后直接调用系统分享面板；关闭后显示二维码供扫码分享",
+                text = "用于原文媒体内容；默认推荐保留前 4 项",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
             )
-            Text(
-                text = "便于配合其他第三方应用使用",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
-            )
+
+            if (showSystemShareSetting) {
+                Spacer(modifier = Modifier.height(entrySpacing))
+
+                SettingsPillRow(label = "使用系统分享方式", endPaddingMultiplier = 1.5f) {
+                    WatchSwitch(
+                        checked = shareUseSystem,
+                        modifier = Modifier.testTag(SettingsTestTags.SHARE_SWITCH),
+                        onCheckedChange = { onToggleShareMode() }
+                    )
+                }
+                Text(
+                    text = if (shareUseSystem) "当前：系统分享" else "当前：二维码分享",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+                )
+                Text(
+                    text = "开启后直接调用系统分享面板；关闭后显示二维码供扫码分享",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+                )
+                Text(
+                    text = "便于配合其他第三方应用使用",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+                )
+            }
 
             Spacer(modifier = Modifier.height(pillHeight))
         }
@@ -567,6 +646,8 @@ private fun SettingsPillRow(
             text = label,
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f)
         )
         content()

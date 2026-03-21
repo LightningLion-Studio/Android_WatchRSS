@@ -1,6 +1,8 @@
 package com.lightningstudio.watchrss.ui.viewmodel
 
 import com.lightningstudio.watchrss.testutil.MainDispatcherRule
+import com.lightningstudio.watchrss.testutil.TestBiliRepository
+import com.lightningstudio.watchrss.testutil.TestDouyinRepository
 import com.lightningstudio.watchrss.testutil.TestRssRepository
 import com.lightningstudio.watchrss.testutil.collectFlow
 import com.lightningstudio.watchrss.testutil.sampleRssChannel
@@ -23,7 +25,7 @@ class HomeViewModelTest {
             initialChannels = listOf(sampleRssChannel(id = 1L), sampleRssChannel(id = 2L))
         )
 
-        val viewModel = HomeViewModel(repo)
+        val viewModel = HomeViewModel(repo, TestBiliRepository(), TestDouyinRepository())
         val collection = collectFlow(viewModel.channels)
         advanceUntilIdle()
 
@@ -38,7 +40,7 @@ class HomeViewModelTest {
             initialChannels = listOf(sampleRssChannel(id = 11L), sampleRssChannel(id = 22L))
         )
         repo.refreshResults[22L] = Result.failure(IllegalStateException("第二个频道刷新失败"))
-        val viewModel = HomeViewModel(repo)
+        val viewModel = HomeViewModel(repo, TestBiliRepository(), TestDouyinRepository())
         val collection = collectFlow(viewModel.channels)
         advanceUntilIdle()
 
@@ -56,7 +58,7 @@ class HomeViewModelTest {
         val first = sampleRssChannel(id = 1L, title = "第一个")
         val second = sampleRssChannel(id = 2L, title = "第二个")
         val repo = TestRssRepository(initialChannels = listOf(first, second))
-        val viewModel = HomeViewModel(repo)
+        val viewModel = HomeViewModel(repo, TestBiliRepository(), TestDouyinRepository())
         val collection = collectFlow(viewModel.channels)
         advanceUntilIdle()
 

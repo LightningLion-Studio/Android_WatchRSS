@@ -127,8 +127,7 @@ class RssReadableService(
 
     companion object {
         private const val DEFAULT_ORIGINAL_CONTENT_UA =
-            "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 " +
-                "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+            RssRemoteRequestPolicy.DEFAULT_USER_AGENT
 
         private fun buildClient(): OkHttpClient {
             return OkHttpClient.Builder()

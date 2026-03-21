@@ -59,6 +59,7 @@ class MainActivity : BaseWatchActivity() {
     override fun onResume() {
         super.onResume()
         closeOpenSwipe()
+        viewModel.refreshPlatformLoginState()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -93,6 +94,7 @@ class MainActivity : BaseWatchActivity() {
                 val context = LocalContext.current
                 val channels by viewModel.channels.collectAsState()
                 val message by viewModel.message.collectAsState()
+                val platformLoginState by viewModel.platformLoginState.collectAsState()
 
                 LaunchedEffect(message) {
                     if (message != null) {
@@ -103,6 +105,7 @@ class MainActivity : BaseWatchActivity() {
 
                 HomeComposeScreen(
                     channels = channels,
+                    platformLoginState = platformLoginState,
                     openSwipeId = openSwipeKey,
                     onOpenSwipe = { openSwipeKey = it },
                     onCloseSwipe = { openSwipeKey = null },

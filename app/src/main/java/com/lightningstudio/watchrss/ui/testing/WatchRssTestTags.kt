@@ -43,9 +43,17 @@ object ProfileTestTags {
     const val ROOT = "profile/root"
     const val FAVORITES_ENTRY = "profile/favorites_entry"
     const val WATCH_LATER_ENTRY = "profile/watch_later_entry"
+    const val PHONE_CONNECTION_ENTRY = "profile/phone_connection_entry"
     const val SETTINGS_ENTRY = "profile/settings_entry"
     const val ABOUT_ENTRY = "profile/about_entry"
     const val CONTACT_DEVELOPER_ENTRY = "profile/contact_developer_entry"
+}
+
+object PhoneConnectionTestTags {
+    const val ROOT = "phone_connection/root"
+    const val PURE_SOUND_ENTRY = "phone_connection/pure_sound_entry"
+    const val SOUND_GUIDED_WIFI_ENTRY = "phone_connection/sound_guided_wifi_entry"
+    const val MANUAL_WIFI_ENTRY = "phone_connection/manual_wifi_entry"
 }
 
 object AddRssTestTags {
@@ -79,6 +87,10 @@ object SettingsTestTags {
     const val FONT_INCREASE_BUTTON = "settings/font_increase_button"
     const val OPEN_OOBE_ENTRY = "settings/open_oobe_entry"
     const val PHONE_CONNECTION_SWITCH = "settings/phone_connection_switch"
+    const val DOUYIN_COOKIE_ENTRY = "settings/douyin_cookie_entry"
     const val MEDIA_VOLUME_GUARD_SWITCH = "settings/media_volume_guard_switch"
+    const val IMAGE_PREFETCH_DECREASE_BUTTON = "settings/image_prefetch_decrease_button"
+    const val IMAGE_PREFETCH_VALUE = "settings/image_prefetch_value"
+    const val IMAGE_PREFETCH_INCREASE_BUTTON = "settings/image_prefetch_increase_button"
     const val BEIAN_ENTRY = "settings/beian_entry"
 }

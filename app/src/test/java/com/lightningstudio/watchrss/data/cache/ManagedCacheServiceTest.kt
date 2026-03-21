@@ -57,12 +57,12 @@ class ManagedCacheServiceTest {
             )
 
             val imageA = createSizedFile(
-                File(env.roots.rssImagesDir, "a.jpg"),
+                File(env.roots.rssImagesDir, "coil/a.jpg"),
                 sizeBytes = mb(80),
                 lastModified = 60L
             )
             val imageB = createSizedFile(
-                File(env.roots.rssImagesDir, "b.jpg"),
+                File(env.roots.rssImagesDir, "coil/b.jpg"),
                 sizeBytes = mb(80),
                 lastModified = 70L
             )

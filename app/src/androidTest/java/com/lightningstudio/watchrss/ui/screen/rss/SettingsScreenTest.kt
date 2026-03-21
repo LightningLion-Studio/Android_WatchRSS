@@ -4,9 +4,12 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.lightningstudio.watchrss.data.settings.DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE
 import com.lightningstudio.watchrss.testutil.setWatchContent
 import com.lightningstudio.watchrss.ui.testing.SettingsTestTags
+import com.lightningstudio.watchrss.ui.util.isSystemShareSettingSupported
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -17,6 +20,10 @@ import org.junit.runner.RunWith
 class SettingsScreenTest {
     @get:Rule
     val composeRule = createComposeRule()
+
+    private val showSystemShareSetting = isSystemShareSettingSupported(
+        ApplicationProvider.getApplicationContext()
+    )
 
     @Test
     fun settingsScreen_rendersCoreControls() {
@@ -29,6 +36,7 @@ class SettingsScreenTest {
                 readingFontSizeSp = MutableStateFlow(14),
                 phoneConnectionEnabled = MutableStateFlow(true),
                 mediaVolumeGuardEnabled = MutableStateFlow(true),
+                rssInlineImagePrefetchMode = MutableStateFlow(DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE),
                 showPerformanceTools = false,
                 onSelectCacheLimit = {},
                 onToggleReadingTheme = {},
@@ -36,9 +44,11 @@ class SettingsScreenTest {
                 onSelectFontSize = {},
                 onTogglePhoneConnection = {},
                 onToggleMediaVolumeGuard = {},
+                onSelectRssInlineImagePrefetchMode = {},
                 onOpenOobe = {},
                 onOpenPerfLargeList = {},
                 onOpenPerfLargeArticle = {},
+                onOpenDouyinCookieInput = {},
                 onBeianClick = {}
             )
         }
@@ -50,12 +60,15 @@ class SettingsScreenTest {
         composeRule.onNodeWithTag(SettingsTestTags.ADVANCED_ENTRY, useUnmergedTree = true).assertExists()
         composeRule.onNodeWithTag(SettingsTestTags.OPEN_OOBE_ENTRY, useUnmergedTree = true).performScrollTo().assertExists()
         composeRule.onNodeWithTag(SettingsTestTags.PHONE_CONNECTION_SWITCH, useUnmergedTree = true).performScrollTo().assertExists()
+        composeRule.onNodeWithTag(SettingsTestTags.DOUYIN_COOKIE_ENTRY, useUnmergedTree = true).performScrollTo().assertExists()
         composeRule.onNodeWithTag(SettingsTestTags.BEIAN_ENTRY, useUnmergedTree = true).performScrollTo().assertExists()
 
         composeRule.onNodeWithTag(SettingsTestTags.ADVANCED_ENTRY, useUnmergedTree = true).performScrollTo().performClick()
 
         composeRule.onNodeWithTag(SettingsTestTags.CACHE_VALUE, useUnmergedTree = true).assertExists()
-        composeRule.onNodeWithTag(SettingsTestTags.SHARE_SWITCH, useUnmergedTree = true).assertExists()
+        if (showSystemShareSetting) {
+            composeRule.onNodeWithTag(SettingsTestTags.SHARE_SWITCH, useUnmergedTree = true).assertExists()
+        }
     }
 
     @Test
@@ -63,7 +76,6 @@ class SettingsScreenTest {
         val cacheSelections = mutableListOf<Long>()
         val fontSelections = mutableListOf<Int>()
         var themeToggleCount = 0
-        var shareToggleCount = 0
         var mediaVolumeGuardToggleCount = 0
 
         composeRule.setWatchContent {
@@ -75,16 +87,19 @@ class SettingsScreenTest {
                 readingFontSizeSp = MutableStateFlow(14),
                 phoneConnectionEnabled = MutableStateFlow(true),
                 mediaVolumeGuardEnabled = MutableStateFlow(true),
+                rssInlineImagePrefetchMode = MutableStateFlow(DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE),
                 showPerformanceTools = false,
                 onSelectCacheLimit = { cacheSelections += it },
                 onToggleReadingTheme = { themeToggleCount += 1 },
-                onToggleShareMode = { shareToggleCount += 1 },
+                onToggleShareMode = {},
                 onSelectFontSize = { fontSelections += it },
                 onTogglePhoneConnection = {},
                 onToggleMediaVolumeGuard = { mediaVolumeGuardToggleCount += 1 },
+                onSelectRssInlineImagePrefetchMode = {},
                 onOpenOobe = {},
                 onOpenPerfLargeList = {},
                 onOpenPerfLargeArticle = {},
+                onOpenDouyinCookieInput = {},
                 onBeianClick = {}
             )
         }
@@ -96,13 +111,11 @@ class SettingsScreenTest {
         composeRule.onNodeWithTag(SettingsTestTags.ADVANCED_ENTRY, useUnmergedTree = true).performScrollTo().performClick()
         composeRule.onNodeWithTag(SettingsTestTags.CACHE_DECREASE_BUTTON, useUnmergedTree = true).performClick()
         composeRule.onNodeWithTag(SettingsTestTags.CACHE_INCREASE_BUTTON, useUnmergedTree = true).performClick()
-        composeRule.onNodeWithTag(SettingsTestTags.SHARE_SWITCH, useUnmergedTree = true).performClick()
 
         composeRule.runOnIdle {
             assertEquals(listOf(768L, 1536L), cacheSelections)
             assertEquals(listOf(12, 16), fontSelections)
             assertEquals(1, themeToggleCount)
-            assertEquals(1, shareToggleCount)
             assertEquals(1, mediaVolumeGuardToggleCount)
         }
     }

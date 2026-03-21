@@ -69,6 +69,7 @@ fun SavedItemsScreen(
     onSyncToPhone: () -> Unit
 ) {
     val safePadding = WatchDimens.watch_safe_padding
+    val extraBottomPadding = 40.dp
     val itemSpacing = watchDimensionResource(R.dimen.hey_distance_6dp)
     val listState = rememberLazyListState()
 
@@ -82,7 +83,12 @@ fun SavedItemsScreen(
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             state = listState,
-            contentPadding = PaddingValues(safePadding)
+            contentPadding = PaddingValues(
+                start = safePadding,
+                top = safePadding,
+                end = safePadding,
+                bottom = safePadding + extraBottomPadding
+            )
         ) {
             item {
                 SavedHeader(title = title, hint = hint)

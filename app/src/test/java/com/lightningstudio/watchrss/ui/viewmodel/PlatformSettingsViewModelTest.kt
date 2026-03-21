@@ -43,6 +43,7 @@ class PlatformSettingsViewModelTest {
         advanceUntilIdle()
         assertEquals(1, biliRepo.logoutCalls)
         assertEquals("已退出登录", viewModel.uiState.value.message)
+        assertEquals(true, viewModel.uiState.value.shouldExitToFeed)
 
         viewModel.deleteChannel()
         advanceUntilIdle()

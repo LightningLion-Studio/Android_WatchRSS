@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import com.lightningstudio.watchrss.data.rss.RssItem
+import com.lightningstudio.watchrss.data.settings.DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE
 import com.lightningstudio.watchrss.ui.screen.rss.DetailContent
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.util.ContentBlock
@@ -72,6 +73,7 @@ class DouyinDetailActivity : BaseWatchActivity() {
                         readingThemeDark = readingThemeDark,
                         readingFontSizeSp = readingFontSizeSp,
                         shareUseSystem = shareUseSystem,
+                        rssInlineImagePrefetchMode = DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE,
                         onToggleFavorite = {
                             isFavorite = !isFavorite
                             com.lightningstudio.watchrss.ui.util.showAppToast(

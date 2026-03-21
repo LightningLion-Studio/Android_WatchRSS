@@ -2,6 +2,8 @@ package com.lightningstudio.watchrss.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
+import com.lightningstudio.watchrss.data.douyin.DouyinRepositoryContract
 import com.lightningstudio.watchrss.data.rss.RssChannel
 import com.lightningstudio.watchrss.data.rss.RssRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -11,7 +13,16 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.launch
 
-class HomeViewModel(private val repository: RssRepository) : ViewModel() {
+data class HomePlatformLoginState(
+    val isBiliLoggedIn: Boolean = false,
+    val isDouyinLoggedIn: Boolean = false
+)
+
+class HomeViewModel(
+    private val repository: RssRepository,
+    private val biliRepository: BiliRepositoryContract,
+    private val douyinRepository: DouyinRepositoryContract
+) : ViewModel() {
     val channels = repository.observeChannels()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -21,9 +32,22 @@ class HomeViewModel(private val repository: RssRepository) : ViewModel() {
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
 
+    private val _platformLoginState = MutableStateFlow(HomePlatformLoginState())
+    val platformLoginState: StateFlow<HomePlatformLoginState> = _platformLoginState.asStateFlow()
+
     init {
         viewModelScope.launch {
             repository.ensureBuiltinChannels()
+        }
+        refreshPlatformLoginState()
+    }
+
+    fun refreshPlatformLoginState() {
+        viewModelScope.launch {
+            _platformLoginState.value = HomePlatformLoginState(
+                isBiliLoggedIn = biliRepository.isLoggedIn(),
+                isDouyinLoggedIn = douyinRepository.isLoggedIn()
+            )
         }
     }
 

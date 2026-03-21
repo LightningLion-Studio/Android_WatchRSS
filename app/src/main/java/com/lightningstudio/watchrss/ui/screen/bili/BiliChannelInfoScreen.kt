@@ -70,12 +70,17 @@ fun BiliChannelInfoScreen(
         }
     }
     val description = if (isLoggedIn) {
-        "已登录，可查看推荐内容"
+        "进入以获取推荐内容"
     } else {
         "未登录，登录后获取推荐内容"
     }
     val url = "https://www.bilibili.com"
     val updatedText = lastRefreshAt?.let { formatTime(it) } ?: "--"
+    val updateLabel = if (isLoggedIn) {
+        "更新：实时"
+    } else {
+        "更新: $updatedText"
+    }
     val scrollState = rememberScrollState()
 
     InstallRotaryScrollHandler(scrollState)
@@ -129,7 +134,7 @@ fun BiliChannelInfoScreen(
             )
             Spacer(modifier = Modifier.height(infoSpacing))
             Text(
-                text = "更新: $updatedText",
+                text = updateLabel,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth(),

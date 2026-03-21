@@ -37,7 +37,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import com.lightningstudio.watchrss.R
-import com.lightningstudio.watchrss.ServerActivity
 import com.lightningstudio.watchrss.ui.components.WatchButton
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.theme.ActionButtonTextStyle
@@ -50,7 +49,8 @@ import kotlinx.coroutines.withContext
 fun ServerScreen(
     port: Int,
     synced: Boolean,
-    serverType: ServerActivity.ServerType,
+    title: String,
+    hint: String,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -98,12 +98,6 @@ fun ServerScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            val title = when (serverType) {
-                ServerActivity.ServerType.REMOTE_INPUT -> "从手机输入"
-                ServerActivity.ServerType.SYNC_FAVORITES -> "同步收藏"
-                ServerActivity.ServerType.SYNC_WATCH_LATER -> "同步稍后再看"
-            }
-
             Text(
                 text = title,
                 style = MaterialTheme.typography.headlineSmall,
@@ -134,7 +128,7 @@ fun ServerScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "此功能需要手表和手机\n在同一WiFi网络下使用",
+                        text = hint,
                         style = MaterialTheme.typography.bodySmall,
                         color = textColor.copy(alpha = 0.7f),
                         textAlign = TextAlign.Center
@@ -197,6 +191,13 @@ fun ServerScreen(
                     } else {
                         Text(
                             text = "请使用手机版扫码",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = textColor.copy(alpha = 0.7f),
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = hint,
                             style = MaterialTheme.typography.bodySmall,
                             color = textColor.copy(alpha = 0.7f),
                             textAlign = TextAlign.Center

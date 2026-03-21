@@ -11,9 +11,7 @@
         <item name="android:windowBackground">@drawable/splash_screen</item>
     </style>
 
-    <style name="Theme.WatchRSS.Translucent" parent="@style/Theme.WatchRSS.Translucent.Dark" />
-
-    <style name="Theme.WatchRSS.Translucent.Dark" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+    <style name="Theme.WatchRSS.Translucent" parent="@android:style/Theme.DeviceDefault.NoActionBar">
         <item name="android:isLightTheme">false</item>
         <item name="isLightTheme">false</item>
         <item name="android:windowIsTranslucent">true</item>
@@ -21,6 +19,8 @@
         <item name="android:windowContentOverlay">@null</item>
         <item name="android:backgroundDimEnabled">false</item>
     </style>
+
+    <style name="Theme.WatchRSS.Translucent.Dark" parent="@style/Theme.WatchRSS.Translucent" />
 
     <style name="Theme.WatchRSS.Translucent.Light" parent="@android:style/Theme.DeviceDefault.Light.NoActionBar">
         <item name="android:isLightTheme">true</item>

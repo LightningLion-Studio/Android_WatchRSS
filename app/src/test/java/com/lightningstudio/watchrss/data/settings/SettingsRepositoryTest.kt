@@ -2,6 +2,7 @@ package com.lightningstudio.watchrss.data.settings
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -98,6 +99,39 @@ class SettingsRepositoryTest {
         try {
             env.repository.setMediaVolumeGuardEnabled(false)
             assertEquals(false, env.repository.mediaVolumeGuardEnabled.first())
+        } finally {
+            env.scope.cancel()
+        }
+    }
+
+    @Test
+    fun rssInlineImagePrefetchMode_defaultsToFirstFew() = runBlocking {
+        val env = createRepository("rss-inline-prefetch-default.preferences_pb")
+        try {
+            assertEquals(
+                DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE,
+                env.repository.rssInlineImagePrefetchMode.first()
+            )
+        } finally {
+            env.scope.cancel()
+        }
+    }
+
+    @Test
+    fun rssInlineImagePrefetchMode_fallsBackForUnknownStoredValue_andPersistsUpdates() = runBlocking {
+        val env = createRepository("rss-inline-prefetch-updated.preferences_pb")
+        val key = intPreferencesKey("rss_inline_image_prefetch_mode")
+        try {
+            env.dataStore.edit { preferences ->
+                preferences[key] = 99
+            }
+            assertEquals(
+                DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE,
+                env.repository.rssInlineImagePrefetchMode.first()
+            )
+
+            env.repository.setRssInlineImagePrefetchMode(RssInlineImagePrefetchMode.ALL)
+            assertEquals(RssInlineImagePrefetchMode.ALL, env.repository.rssInlineImagePrefetchMode.first())
         } finally {
             env.scope.cancel()
         }

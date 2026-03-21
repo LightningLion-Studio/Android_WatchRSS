@@ -14,6 +14,8 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
 import com.lightningstudio.watchrss.data.rss.SaveType
 import com.lightningstudio.watchrss.data.rss.SavedItem
+import com.lightningstudio.watchrss.phoneconnection.PhoneConnectionAbility
+import com.lightningstudio.watchrss.phoneconnection.PhoneConnectionFeature
 import com.lightningstudio.watchrss.ui.screen.rss.SavedItemsScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
@@ -25,10 +27,6 @@ import kotlinx.coroutines.launch
 class SavedItemsActivity : BaseWatchActivity() {
     private val viewModel: SavedItemsViewModel by viewModels {
         AppViewModelFactory((application as WatchRssApplication).container)
-    }
-
-    private val settingsRepository by lazy {
-        (application as WatchRssApplication).container.settingsRepository
     }
 
     private var lastRemoved by mutableStateOf<SavedItem?>(null)
@@ -47,10 +45,13 @@ class SavedItemsActivity : BaseWatchActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setupSystemBars()
+        val settingsRepository = (application as WatchRssApplication).container.settingsRepository
         setContent {
             WatchRSSTheme {
                 val items by viewModel.items.collectAsState()
-                val phoneConnectionEnabled by settingsRepository.phoneConnectionEnabled.collectAsState(initial = true)
+                val phoneConnectionEnabled by settingsRepository.phoneConnectionEnabled.collectAsState(
+                    initial = PhoneConnectionFeature.isDebugBuild
+                )
                 val title = if (viewModel.saveType == SaveType.FAVORITE) "我的收藏" else "稍后再看"
                 val hint = "保存在本地，离线可读"
                 val emptyMessage = if (viewModel.saveType == SaveType.FAVORITE) "暂无收藏" else "暂无稍后再看"
@@ -61,7 +62,7 @@ class SavedItemsActivity : BaseWatchActivity() {
                     emptyMessage = emptyMessage,
                     items = items,
                     undoVisible = lastRemoved != null,
-                    showSyncButton = phoneConnectionEnabled,
+                    showSyncButton = PhoneConnectionFeature.isEnabled(phoneConnectionEnabled),
                     onUndoClick = { handleUndo() },
                     onItemClick = { savedItem ->
                         if (!allowNavigation()) return@SavedItemsScreen
@@ -125,15 +126,18 @@ class SavedItemsActivity : BaseWatchActivity() {
     }
 
     private fun startSyncToPhone() {
+        if (!PhoneConnectionFeature.isDebugBuild) return
         if (!allowNavigation()) return
-        val intent = Intent(this, ServerActivity::class.java)
-        val serverType = if (viewModel.saveType == SaveType.FAVORITE) {
-            ServerActivity.ServerType.SYNC_FAVORITES
-        } else {
-            ServerActivity.ServerType.SYNC_WATCH_LATER
-        }
-        intent.putExtra(ServerActivity.EXTRA_SERVER_TYPE, serverType.name)
-        startActivity(intent)
+        startActivity(
+            PhoneConnectionActivity.createIntent(
+                context = this,
+                preferredAbility = if (viewModel.saveType == SaveType.FAVORITE) {
+                    PhoneConnectionAbility.SYNC_FAVORITES
+                } else {
+                    PhoneConnectionAbility.SYNC_WATCH_LATER
+                }
+            )
+        )
     }
 
     companion object {

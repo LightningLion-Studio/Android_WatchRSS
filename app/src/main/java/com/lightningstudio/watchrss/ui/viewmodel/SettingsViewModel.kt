@@ -6,7 +6,9 @@ import com.lightningstudio.watchrss.data.rss.RssRepository
 import com.lightningstudio.watchrss.data.settings.DEFAULT_CACHE_LIMIT_MB
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
 import com.lightningstudio.watchrss.data.settings.DEFAULT_READING_FONT_SIZE_SP
+import com.lightningstudio.watchrss.data.settings.DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE
 import com.lightningstudio.watchrss.data.settings.MB_BYTES
+import com.lightningstudio.watchrss.data.settings.RssInlineImagePrefetchMode
 import com.lightningstudio.watchrss.data.settings.SettingsRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -47,6 +49,14 @@ class SettingsViewModel(
             DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
         )
 
+    val rssInlineImagePrefetchMode: StateFlow<RssInlineImagePrefetchMode> =
+        settingsRepository.rssInlineImagePrefetchMode
+            .stateIn(
+                viewModelScope,
+                SharingStarted.WhileSubscribed(5_000),
+                DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE
+            )
+
     fun updateCacheLimitMb(value: Long) {
         viewModelScope.launch {
             settingsRepository.setCacheLimitBytes(value * MB_BYTES)
@@ -85,6 +95,12 @@ class SettingsViewModel(
         viewModelScope.launch {
             val current = mediaVolumeGuardEnabled.value
             settingsRepository.setMediaVolumeGuardEnabled(!current)
+        }
+    }
+
+    fun updateRssInlineImagePrefetchMode(value: RssInlineImagePrefetchMode) {
+        viewModelScope.launch {
+            settingsRepository.setRssInlineImagePrefetchMode(value)
         }
     }
 }

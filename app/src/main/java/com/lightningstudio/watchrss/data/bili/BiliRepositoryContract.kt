@@ -45,6 +45,10 @@ interface BiliRepositoryContract {
         bvid: String? = null,
         qn: Int = 32
     ): BiliResult<BiliPlayUrl> = unsupportedBiliRepositoryMethod()
+    suspend fun warmupDetailPreview(aid: Long?, bvid: String?, cid: Long?): Result<Unit> =
+        unsupportedBiliRepositoryMethod()
+    suspend fun ensureInteractionReady(aid: Long?, bvid: String?, cid: Long?): Result<Unit> =
+        unsupportedBiliRepositoryMethod()
     suspend fun like(aid: Long, like: Boolean): BiliResult<Unit> = unsupportedBiliRepositoryMethod()
     suspend fun coin(
         aid: Long,

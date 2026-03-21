@@ -28,11 +28,13 @@ import com.lightningstudio.watchrss.OobeActivity
 import com.lightningstudio.watchrss.WatchRssApplication
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.debug.PerfEntryActivity
+import com.lightningstudio.watchrss.phoneconnection.PhoneConnectionFeature
 import com.lightningstudio.watchrss.ui.screen.rss.AddRssScreen
 import com.lightningstudio.watchrss.ui.screen.rss.DetailScreen
 import com.lightningstudio.watchrss.ui.screen.rss.FeedScreen
 import com.lightningstudio.watchrss.ui.screen.rss.HomeScreen
 import com.lightningstudio.watchrss.ui.screen.rss.SettingsScreen
+import com.lightningstudio.watchrss.ui.screen.rss.SettingsScreenHost
 import com.lightningstudio.watchrss.ui.viewmodel.AddRssViewModel
 import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
 import com.lightningstudio.watchrss.ui.viewmodel.DetailViewModel
@@ -110,10 +112,12 @@ fun AppNavGraph(modifier: Modifier = Modifier) {
         }
         composable(Routes.ADD_RSS) {
             val viewModel: AddRssViewModel = viewModel(factory = factory)
-            val phoneConnectionEnabled by settingsRepository.phoneConnectionEnabled.collectAsState(initial = true)
+            val phoneConnectionEnabled by settingsRepository.phoneConnectionEnabled.collectAsState(
+                initial = PhoneConnectionFeature.isDebugBuild
+            )
             AddRssScreen(
                 uiState = viewModel.uiState,
-                showRemoteInputButton = phoneConnectionEnabled,
+                showRemoteInputButton = PhoneConnectionFeature.isEnabled(phoneConnectionEnabled),
                 onUrlChange = viewModel::updateUrl,
                 onSubmit = viewModel::submit,
                 onConfirm = viewModel::confirmAdd,
@@ -221,21 +225,11 @@ fun AppNavGraph(modifier: Modifier = Modifier) {
         }
         composable(Routes.SETTINGS) {
             val viewModel: SettingsViewModel = viewModel(factory = factory)
-            SettingsScreen(
-                cacheLimitMb = viewModel.cacheLimitMb,
-                cacheUsageMb = viewModel.cacheUsageMb,
-                readingThemeDark = viewModel.readingThemeDark,
-                shareUseSystem = viewModel.shareUseSystem,
-                readingFontSizeSp = viewModel.readingFontSizeSp,
-                phoneConnectionEnabled = viewModel.phoneConnectionEnabled,
-                mediaVolumeGuardEnabled = viewModel.mediaVolumeGuardEnabled,
+            SettingsScreenHost(
+                viewModel = viewModel,
+                douyinRepository = container.douyinRepository,
+                rssRepository = container.rssRepository,
                 showPerformanceTools = false,
-                onSelectCacheLimit = viewModel::updateCacheLimitMb,
-                onToggleReadingTheme = viewModel::toggleReadingTheme,
-                onToggleShareMode = viewModel::toggleShareUseSystem,
-                onSelectFontSize = viewModel::updateReadingFontSizeSp,
-                onTogglePhoneConnection = viewModel::togglePhoneConnection,
-                onToggleMediaVolumeGuard = viewModel::toggleMediaVolumeGuard,
                 onOpenOobe = {
                     context.startActivity(OobeActivity.createIntent(context, returnHomeOnFinish = false))
                 },
@@ -255,9 +249,7 @@ fun AppNavGraph(modifier: Modifier = Modifier) {
                         )
                     )
                 },
-                onBeianClick = {
-                    context.startActivity(BeianActivity.createIntent(context))
-                }
+                onBeianClick = { context.startActivity(BeianActivity.createIntent(context)) }
             )
         }
     }

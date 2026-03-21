@@ -15,6 +15,7 @@ import com.lightningstudio.watchrss.InfoActivity
 import com.lightningstudio.watchrss.JoinGroupActivity
 import com.lightningstudio.watchrss.LogUploadPrivacyActivity
 import com.lightningstudio.watchrss.OobeActivity
+import com.lightningstudio.watchrss.PhoneConnectionActivity
 import com.lightningstudio.watchrss.ServerActivity
 import com.lightningstudio.watchrss.ShareQrActivity
 import com.lightningstudio.watchrss.WebViewActivity
@@ -122,6 +123,11 @@ class CommonActivitySmokeTest {
     @Test
     fun serverActivity_launches() {
         launchAndAssertResumed(ServerActivity::class.java)
+    }
+
+    @Test
+    fun phoneConnectionActivity_launches() {
+        launchAndAssertResumed(PhoneConnectionActivity::class.java)
     }
 
     private fun context(): Context = ApplicationProvider.getApplicationContext()

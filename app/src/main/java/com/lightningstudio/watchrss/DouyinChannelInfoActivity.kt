@@ -47,10 +47,8 @@ class DouyinChannelInfoActivity : BaseWatchActivity() {
                         isLoggedIn = isLoggedIn,
                         lastRefreshAt = channel?.lastFetchedAt,
                         onLoginClick = { DouyinLoginActivity.open(context) },
-                        onOpenSettings = { context.startActivity(DouyinSettingsActivity.createIntent(context)) },
-                        onSearchClick = { },
-                        onShareClick = {
-                            shareDouyinChannel(context)
+                        onOpenSettings = {
+                            context.startActivity(DouyinSettingsActivity.createIntent(context))
                         },
                         onMarkReadClick = {
                             val channelId = channel?.id ?: return@DouyinChannelInfoScreen
@@ -71,13 +69,4 @@ class DouyinChannelInfoActivity : BaseWatchActivity() {
             return Intent(context, DouyinChannelInfoActivity::class.java)
         }
     }
-}
-
-private fun shareDouyinChannel(context: Context) {
-    val text = "抖音\nhttps://www.douyin.com"
-    val intent = Intent(Intent.ACTION_SEND).apply {
-        type = "text/plain"
-        putExtra(Intent.EXTRA_TEXT, text)
-    }
-    context.startActivity(Intent.createChooser(intent, "分享"))
 }

@@ -16,6 +16,7 @@ import com.lightningstudio.watchrss.sdk.bili.BiliItem
 import com.lightningstudio.watchrss.sdk.bili.BiliOwner
 import com.lightningstudio.watchrss.sdk.bili.BiliPage
 import com.lightningstudio.watchrss.sdk.bili.BiliVideoDetail
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collect
@@ -45,6 +46,8 @@ class BiliDetailViewModel(
     private val bvid: String? = savedStateHandle.get<String>("bvid")?.takeIf { it.isNotBlank() }
     private val cidArg: Long? = savedStateHandle.get<String>("cid")?.toLongOrNull()
     private val rssItemId: Long? = savedStateHandle.get<String>("rssItemId")?.toLongOrNull()
+    private var warmupJob: Job? = null
+    private var warmupTarget: BiliTarget? = null
 
     init {
         observeLocalItem()
@@ -66,6 +69,7 @@ class BiliDetailViewModel(
                         message = null
                     )
                 }
+                scheduleWarmupForSelection()
             } else {
                 _uiState.update {
                     it.copy(
@@ -79,41 +83,58 @@ class BiliDetailViewModel(
 
     fun selectPage(index: Int) {
         _uiState.update { it.copy(selectedPageIndex = index) }
+        scheduleWarmupForSelection()
     }
 
     fun like() {
-        val safeAid = aid ?: return
+        val safeAid = currentAid() ?: return
+        val target = currentInteractionTarget()
+        if (_uiState.value.isLiked) {
+            viewModelScope.launch {
+                val result = repository.like(safeAid, like = false)
+                if (result.isSuccess) {
+                    _uiState.update { it.copy(isLiked = false, message = null) }
+                } else {
+                    _uiState.update { it.copy(message = formatBiliError(result.code)) }
+                }
+            }
+            return
+        }
+        _uiState.update { it.copy(isLiked = true, message = null) }
         viewModelScope.launch {
-            val result = repository.like(safeAid, like = !_uiState.value.isLiked)
-            if (result.isSuccess) {
-                _uiState.update { it.copy(isLiked = !it.isLiked, message = null) }
-            } else {
-                _uiState.update { it.copy(message = formatBiliError(result.code)) }
+            val ready = repository.ensureInteractionReady(
+                aid = target?.aid ?: safeAid,
+                bvid = target?.bvid,
+                cid = target?.cid
+            )
+            if (ready.isSuccess) {
+                repository.like(safeAid, like = true)
             }
         }
     }
 
     fun coin() {
         if (_uiState.value.isCoined) return
-        val safeAid = aid ?: return
+        val safeAid = currentAid() ?: return
+        val target = currentInteractionTarget()
+        _uiState.update { it.copy(isCoined = true, message = null) }
         viewModelScope.launch {
-            val result = repository.coin(safeAid)
-            if (result.isSuccess) {
-                _uiState.update {
-                    it.copy(
-                        isCoined = true,
-                        isLiked = if (result.data == true) true else it.isLiked,
-                        message = null
-                    )
+            val ready = repository.ensureInteractionReady(
+                aid = target?.aid ?: safeAid,
+                bvid = target?.bvid,
+                cid = target?.cid
+            )
+            if (ready.isSuccess) {
+                val result = repository.coin(safeAid)
+                if (result.isSuccess && result.data == true) {
+                    _uiState.update { it.copy(isLiked = true) }
                 }
-            } else {
-                _uiState.update { it.copy(message = formatBiliError(result.code)) }
             }
         }
     }
 
     fun favorite() {
-        val safeAid = aid ?: return
+        val safeAid = currentAid() ?: return
         viewModelScope.launch {
             val nextFavorited = !_uiState.value.isFavorited
             val result = repository.favorite(safeAid, add = nextFavorited)
@@ -132,8 +153,9 @@ class BiliDetailViewModel(
     }
 
     fun addToWatchLater() {
+        val target = currentInteractionTarget()
         viewModelScope.launch {
-            val result = repository.addToView(aid = aid, bvid = bvid)
+            val result = repository.addToView(aid = target?.aid ?: aid, bvid = target?.bvid ?: bvid)
             if (result.isSuccess) {
                 _uiState.update { it.copy(isWatchLater = true, message = "已加入稍后再看") }
                 syncLocalSaved(SaveType.WATCH_LATER, true)
@@ -173,11 +195,11 @@ class BiliDetailViewModel(
     private suspend fun syncLocalSaved(saveType: SaveType, saved: Boolean) {
         val external = buildExternalSavedItem() ?: return
         rssRepository.syncExternalSavedItem(external, saveType, saved)
-        val safeCid = selectedCid()
+        val target = currentInteractionTarget()
         if (saved) {
-            repository.cachePreviewClip(aid = aid, bvid = bvid, cid = safeCid)
+            repository.cachePreviewClip(aid = target?.aid ?: aid, bvid = target?.bvid ?: bvid, cid = target?.cid)
         } else {
-            repository.clearCachedPreview(aid = aid, bvid = bvid, cid = safeCid)
+            repository.clearCachedPreview(aid = target?.aid ?: aid, bvid = target?.bvid ?: bvid, cid = target?.cid)
         }
     }
 
@@ -223,11 +245,52 @@ class BiliDetailViewModel(
             rssRepository.observeItem(itemId).collect { item ->
                 if (item == null) return@collect
                 val fallback = buildLocalDetail(item)
+                var shouldWarmup = false
                 _uiState.update { current ->
-                    if (current.detail != null) current else current.copy(detail = fallback)
+                    if (current.detail != null) {
+                        current
+                    } else {
+                        shouldWarmup = true
+                        current.copy(detail = fallback)
+                    }
+                }
+                if (shouldWarmup) {
+                    scheduleWarmupForSelection()
                 }
             }
         }
+    }
+
+    private fun scheduleWarmupForSelection() {
+        val target = currentInteractionTarget() ?: return
+        if (warmupTarget == target && warmupJob?.isActive == true) {
+            return
+        }
+        warmupTarget = target
+        warmupJob?.cancel()
+        warmupJob = viewModelScope.launch {
+            repository.warmupDetailPreview(
+                aid = target.aid,
+                bvid = target.bvid,
+                cid = target.cid
+            )
+        }
+    }
+
+    private fun currentAid(): Long? = _uiState.value.detail?.item?.aid ?: aid
+
+    private fun currentBvid(): String? = _uiState.value.detail?.item?.bvid ?: bvid
+
+    private fun currentInteractionTarget(): BiliTarget? {
+        val safeAid = currentAid()
+        val safeBvid = currentBvid()
+        val safeCid = selectedCid()
+        if (safeAid == null && safeBvid.isNullOrBlank()) return null
+        return BiliTarget(
+            aid = safeAid,
+            bvid = safeBvid,
+            cid = safeCid
+        )
     }
 
     private fun buildLocalDetail(item: RssItem): BiliVideoDetail {

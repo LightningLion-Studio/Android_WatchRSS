@@ -174,8 +174,12 @@ class FakeBiliRepository(
     var cachedPreviewUriValue: String? = null
     var cachedPreviewUriAnyValue: String? = null
     var cachePreviewClipResult: Result<String> = Result.success("/tmp/fake-preview.mp4")
+    var warmupDetailResult: Result<Unit> = Result.success(Unit)
+    var ensureInteractionReadyResult: Result<Unit> = Result.success(Unit)
     val clearedPreviewRequests = mutableListOf<Triple<Long?, String?, Long?>>()
     val cachedPreviewRequests = mutableListOf<Triple<Long?, String?, Long?>>()
+    val warmupDetailRequests = mutableListOf<Triple<Long?, String?, Long?>>()
+    val ensureInteractionRequests = mutableListOf<Triple<Long?, String?, Long?>>()
     val addToViewRequests = mutableListOf<Pair<Long?, String?>>()
     val favoriteRequests = mutableListOf<Pair<Long, Boolean>>()
     val likeRequests = mutableListOf<Pair<Long, Boolean>>()
@@ -239,6 +243,16 @@ class FakeBiliRepository(
         bvid: String?,
         qn: Int
     ): BiliResult<BiliPlayUrl> = playUrlResult
+
+    override suspend fun warmupDetailPreview(aid: Long?, bvid: String?, cid: Long?): Result<Unit> {
+        warmupDetailRequests += Triple(aid, bvid, cid)
+        return warmupDetailResult
+    }
+
+    override suspend fun ensureInteractionReady(aid: Long?, bvid: String?, cid: Long?): Result<Unit> {
+        ensureInteractionRequests += Triple(aid, bvid, cid)
+        return ensureInteractionReadyResult
+    }
 
     override suspend fun like(aid: Long, like: Boolean): BiliResult<Unit> {
         likeRequests += aid to like

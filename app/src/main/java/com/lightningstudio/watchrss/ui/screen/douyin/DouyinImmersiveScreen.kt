@@ -36,18 +36,22 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.layout.onSizeChanged
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -59,6 +63,9 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.douyin.DouyinStreamItem
 import com.lightningstudio.watchrss.ui.components.ToastMessage
@@ -74,6 +81,26 @@ import com.lightningstudio.watchrss.ui.viewmodel.DouyinFeedUiState
 import com.lightningstudio.watchrss.util.AppLogger
 import okhttp3.OkHttpClient
 import kotlin.math.min
+import kotlin.math.sqrt
+
+internal enum class DouyinPlayerScaleMode {
+    Standard,
+    Expanded,
+    Shrunk;
+
+    fun next(): DouyinPlayerScaleMode {
+        return when (this) {
+            Standard -> Expanded
+            Expanded -> Shrunk
+            Shrunk -> Standard
+        }
+    }
+}
+
+private data class DouyinPlayerScaleToggleAction(
+    val iconRes: Int,
+    val contentDescription: String
+)
 
 @Composable
 fun DouyinImmersiveScreen(
@@ -90,7 +117,7 @@ fun DouyinImmersiveScreen(
         pageCount = { pageCount.coerceAtLeast(1) }
     )
     var controlsVisible by rememberSaveable { mutableStateOf(true) }
-    var isFullscreen by rememberSaveable { mutableStateOf(true) }
+    var scaleMode by rememberSaveable { mutableStateOf(DouyinPlayerScaleMode.Standard) }
     val volumeState = rememberPlayerVolumeState(guardEnabled = volumeGuardEnabled)
 
     InstallRotaryPagerHandler(
@@ -101,6 +128,7 @@ fun DouyinImmersiveScreen(
         enabled = pagerState.currentPage > 0,
         showSystemUi = false,
         reverseDirection = true,
+        supportsPointerWheel = true,
         onVolumeStep = volumeState::adjustBySteps
     )
 
@@ -141,9 +169,9 @@ fun DouyinImmersiveScreen(
                     volumeState = volumeState,
                     isActive = pagerState.currentPage == page,
                     controlsVisible = controlsVisible,
-                    isFullscreen = isFullscreen,
+                    scaleMode = scaleMode,
                     onToggleControls = { controlsVisible = !controlsVisible },
-                    onToggleFullscreen = { isFullscreen = !isFullscreen }
+                    onToggleScaleMode = { scaleMode = scaleMode.next() }
                 )
             }
         }
@@ -242,13 +270,14 @@ private fun DouyinVideoPage(
     volumeState: PlayerVolumeState,
     isActive: Boolean,
     controlsVisible: Boolean,
-    isFullscreen: Boolean,
+    scaleMode: DouyinPlayerScaleMode,
     onToggleControls: () -> Unit,
-    onToggleFullscreen: () -> Unit
+    onToggleScaleMode: () -> Unit
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
     val view = LocalView.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
     val topPadding = watchDimensionResource(R.dimen.hey_distance_6dp)
     val bottomPadding = watchDimensionResource(R.dimen.hey_distance_8dp)
@@ -266,12 +295,31 @@ private fun DouyinVideoPage(
     var retryCount by remember(item.awemeId) { mutableIntStateOf(0) }
     var pausedByGesture by remember(item.awemeId) { mutableStateOf(false) }
     var isBuffering by remember(item.awemeId) { mutableStateOf(false) }
+    var isPlaying by remember(item.awemeId) { mutableStateOf(false) }
     var hasError by remember(item.awemeId) { mutableStateOf(false) }
     var playbackStartGuardPending by remember(item.awemeId) { mutableStateOf(true) }
-    val shouldKeepScreenOn = isActive &&
-        !pausedByGesture &&
-        !hasError &&
-        !mediaUri.isNullOrBlank()
+    var viewSize by remember(item.awemeId) { mutableStateOf(IntSize.Zero) }
+    var videoSize by remember(item.awemeId) { mutableStateOf(IntSize.Zero) }
+    val shouldKeepScreenOn = isActive && !hasError && (isPlaying || isBuffering)
+    val shrinkFactor = remember(scaleMode, viewSize, videoSize) {
+        if (scaleMode == DouyinPlayerScaleMode.Shrunk) {
+            calculateDouyinPlayerShrinkFactor(
+                viewWidth = viewSize.width.toFloat(),
+                viewHeight = viewSize.height.toFloat(),
+                videoWidth = videoSize.width.toFloat(),
+                videoHeight = videoSize.height.toFloat()
+            )
+        } else {
+            1f
+        }
+    }
+    val playerResizeMode = remember(scaleMode) {
+        if (scaleMode == DouyinPlayerScaleMode.Expanded) {
+            AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+        } else {
+            AspectRatioFrameLayout.RESIZE_MODE_FIT
+        }
+    }
 
     LaunchedEffect(item.awemeId, localPlayPath, remoteUri) {
         if (mediaUri.isNullOrBlank()) {
@@ -296,6 +344,40 @@ private fun DouyinVideoPage(
             }
     }
 
+    fun retryPlayback() {
+        val targetUri = mediaUri?.trim()?.takeIf { it.isNotBlank() }
+            ?: localUri?.trim()?.takeIf { it.isNotBlank() }
+            ?: remoteUri?.trim()?.takeIf { it.isNotBlank() }
+        if (targetUri.isNullOrBlank()) {
+            hasError = true
+            return
+        }
+        mediaUri = targetUri
+        preparedUri = targetUri
+        retryCount = 0
+        hasError = false
+        isBuffering = true
+        pausedByGesture = false
+        player.stop()
+        player.setMediaItem(MediaItem.fromUri(targetUri))
+        player.prepare()
+        if (isActive) {
+            player.playWhenReady = true
+            player.play()
+        }
+    }
+
+    fun stopPlayback() {
+        player.playWhenReady = false
+        player.pause()
+        isPlaying = false
+        isBuffering = false
+    }
+
+    val latestHasError = rememberUpdatedState(hasError)
+    val latestIsActive = rememberUpdatedState(isActive)
+    val latestRetryPlayback = rememberUpdatedState(newValue = { retryPlayback() })
+
     DisposableEffect(player, item.awemeId, remoteUri) {
         val listener = object : Player.Listener {
             override fun onIsLoadingChanged(isLoading: Boolean) {
@@ -304,9 +386,20 @@ private fun DouyinVideoPage(
 
             override fun onPlaybackStateChanged(playbackState: Int) {
                 isBuffering = playbackState == Player.STATE_BUFFERING
+                if (playbackState == Player.STATE_IDLE || playbackState == Player.STATE_ENDED) {
+                    isPlaying = false
+                }
                 if (playbackState == Player.STATE_READY) {
                     hasError = false
                 }
+            }
+
+            override fun onIsPlayingChanged(isPlayingNow: Boolean) {
+                isPlaying = isPlayingNow
+            }
+
+            override fun onVideoSizeChanged(videoSizeNow: androidx.media3.common.VideoSize) {
+                videoSize = IntSize(videoSizeNow.width, videoSizeNow.height)
             }
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
@@ -337,15 +430,25 @@ private fun DouyinVideoPage(
         }
     }
 
-    DisposableEffect(shouldKeepScreenOn, view) {
+    DisposableEffect(lifecycleOwner, player) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_PAUSE || event == Lifecycle.Event.ON_STOP) {
+                stopPlayback()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    DisposableEffect(shouldKeepScreenOn, isActive, view) {
         val window = view.context.findActivity()?.window
-        var applied = false
         if (shouldKeepScreenOn) {
             window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            applied = true
         }
         onDispose {
-            if (applied) {
+            if (isActive) {
                 window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             }
         }
@@ -377,7 +480,7 @@ private fun DouyinVideoPage(
             }
             player.play()
         } else {
-            player.pause()
+            stopPlayback()
         }
     }
 
@@ -389,12 +492,14 @@ private fun DouyinVideoPage(
                 detectTapGestures(
                     onTap = { onToggleControls() },
                     onDoubleTap = {
-                        if (player.isPlaying) {
+                        if (latestHasError.value) {
+                            latestRetryPlayback.value()
+                        } else if (player.isPlaying) {
                             pausedByGesture = true
                             player.pause()
                         } else {
                             pausedByGesture = false
-                            if (isActive && !hasError) {
+                            if (latestIsActive.value && !latestHasError.value) {
                                 player.playWhenReady = true
                                 player.play()
                             }
@@ -404,26 +509,21 @@ private fun DouyinVideoPage(
             }
     ) {
         AndroidView(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .onSizeChanged { viewSize = it }
+                .scale(shrinkFactor),
             factory = { ctx ->
                 PlayerView(ctx).apply {
                     useController = false
-                    resizeMode = if (isFullscreen) {
-                        AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                    } else {
-                        AspectRatioFrameLayout.RESIZE_MODE_FIT
-                    }
+                    resizeMode = playerResizeMode
                     this.player = player
                     setShutterBackgroundColor(android.graphics.Color.BLACK)
                 }
             },
             update = {
                 it.player = player
-                it.resizeMode = if (isFullscreen) {
-                    AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                } else {
-                    AspectRatioFrameLayout.RESIZE_MODE_FIT
-                }
+                it.resizeMode = playerResizeMode
             }
         )
 
@@ -455,20 +555,16 @@ private fun DouyinVideoPage(
                     )
                     .padding(top = topPadding, bottom = topPadding)
             ) {
-                val fullscreenIcon = if (isFullscreen) {
-                    R.drawable.ic_player_fullscreen_exit
-                } else {
-                    R.drawable.ic_player_fullscreen
-                }
+                val scaleToggleAction = scaleMode.toggleAction()
                 WatchIconButton(
-                    onClick = onToggleFullscreen,
+                    onClick = onToggleScaleMode,
                     modifier = Modifier
                         .align(Alignment.Center)
                         .size(controlsSize)
                 ) {
                     Icon(
-                        painter = painterResource(id = fullscreenIcon),
-                        contentDescription = if (isFullscreen) "退出全屏" else "全屏",
+                        painter = painterResource(id = scaleToggleAction.iconRes),
+                        contentDescription = scaleToggleAction.contentDescription,
                         tint = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.size(controlsIconSize)
                     )
@@ -542,6 +638,15 @@ private fun DouyinVideoPage(
             }
         }
     }
+}
+
+private fun Context.findActivity(): Activity? {
+    var current = this
+    while (current is ContextWrapper) {
+        if (current is Activity) return current
+        current = current.baseContext
+    }
+    return null
 }
 
 private fun buildInfoText(author: String?, likeCount: Long): String {
@@ -632,13 +737,49 @@ private fun ellipsizeToWidth(text: String, widthPx: Float, paint: TextPaint): St
     return if (low <= 0) ellipsis else text.substring(0, low) + ellipsis
 }
 
-private fun Context.findActivity(): Activity? {
-    var current = this
-    while (current is ContextWrapper) {
-        if (current is Activity) return current
-        current = current.baseContext
+internal fun calculateDouyinPlayerShrinkFactor(
+    viewWidth: Float,
+    viewHeight: Float,
+    videoWidth: Float,
+    videoHeight: Float
+): Float {
+    if (viewWidth <= 0f || viewHeight <= 0f || videoWidth <= 0f || videoHeight <= 0f) {
+        return 1f
     }
-    return null
+    val viewAspect = viewWidth / viewHeight
+    val videoAspect = videoWidth / videoHeight
+    val contentWidth: Float
+    val contentHeight: Float
+    if (videoAspect > viewAspect) {
+        contentWidth = viewWidth
+        contentHeight = viewWidth / videoAspect
+    } else {
+        contentWidth = viewHeight * videoAspect
+        contentHeight = viewHeight
+    }
+    val diagonal = sqrt(contentWidth * contentWidth + contentHeight * contentHeight)
+    return if (diagonal > 0f) {
+        (viewWidth / diagonal).coerceAtMost(1f)
+    } else {
+        1f
+    }
+}
+
+private fun DouyinPlayerScaleMode.toggleAction(): DouyinPlayerScaleToggleAction {
+    return when (this) {
+        DouyinPlayerScaleMode.Standard -> DouyinPlayerScaleToggleAction(
+            iconRes = R.drawable.ic_player_fullscreen,
+            contentDescription = "放大"
+        )
+        DouyinPlayerScaleMode.Expanded -> DouyinPlayerScaleToggleAction(
+            iconRes = R.drawable.ic_player_shrink,
+            contentDescription = "缩小"
+        )
+        DouyinPlayerScaleMode.Shrunk -> DouyinPlayerScaleToggleAction(
+            iconRes = R.drawable.ic_player_fullscreen_exit,
+            contentDescription = "标准"
+        )
+    }
 }
 
 private const val TITLE_ORIGINAL_FIRST_LINE_RATIO = 0.68f

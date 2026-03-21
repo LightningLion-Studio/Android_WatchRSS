@@ -198,7 +198,7 @@ class ManagedCacheService internal constructor(
         ensureRoots()
         val result = mutableListOf<CacheFileEntry>()
         result += scanFlatDirectory(roots.douyinPreloadDir, ManagedCacheBucket.DOUYIN_PRELOAD)
-        result += scanFlatDirectory(roots.rssImagesDir, ManagedCacheBucket.RSS_IMAGES)
+        result += scanRecursiveDirectory(roots.rssImagesDir, ManagedCacheBucket.RSS_IMAGES)
         result += scanFlatDirectory(roots.biliPreviewDir, ManagedCacheBucket.BILI_PREVIEW)
         result += scanRecursiveDirectory(roots.rssOfflineDir, ManagedCacheBucket.RSS_OFFLINE)
         cleanupEmptyDirectories(roots.rssOfflineDir)

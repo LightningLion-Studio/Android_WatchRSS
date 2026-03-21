@@ -7,11 +7,16 @@ import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import com.lightningstudio.watchrss.ui.screen.rss.ChannelDetailScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
+import com.lightningstudio.watchrss.ui.util.isSystemShareSettingSupported
 import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
 import com.lightningstudio.watchrss.ui.viewmodel.ChannelDetailViewModel
+
+private const val CHANNEL_SHARE_QR_HINT =
+    "请在扫码后选择分享给RSS阅读器\n或复制链接粘贴到RSS阅读器里"
 
 class ChannelDetailActivity : BaseWatchActivity() {
     private val settingsRepository by lazy { (application as WatchRssApplication).container.settingsRepository }
@@ -30,6 +35,9 @@ class ChannelDetailActivity : BaseWatchActivity() {
                 val context = LocalContext.current
                 val channel by viewModel.channel.collectAsState()
                 val shareUseSystem by settingsRepository.shareUseSystem.collectAsState(initial = false)
+                val useSystemShare = remember(context, shareUseSystem) {
+                    shareUseSystem && isSystemShareSettingSupported(context)
+                }
                 ChannelDetailScreen(
                     channel = channel,
                     onOpenSettings = {
@@ -47,7 +55,7 @@ class ChannelDetailActivity : BaseWatchActivity() {
                     onShare = {
                         val title = channel?.title
                         val link = channel?.url
-                        if (shareUseSystem) {
+                        if (useSystemShare) {
                             shareCurrent(context, title, link)
                         } else {
                             showShareQr(context, title, link)
@@ -88,5 +96,12 @@ private fun showShareQr(context: Context, title: String?, link: String?) {
         com.lightningstudio.watchrss.ui.util.showAppToast(context, "暂无可分享链接", android.widget.Toast.LENGTH_SHORT)
         return
     }
-    context.startActivity(ShareQrActivity.createIntent(context, safeTitle, safeLink))
+    context.startActivity(
+        ShareQrActivity.createIntent(
+            context = context,
+            title = safeTitle,
+            link = safeLink,
+            topHint = CHANNEL_SHARE_QR_HINT
+        )
+    )
 }

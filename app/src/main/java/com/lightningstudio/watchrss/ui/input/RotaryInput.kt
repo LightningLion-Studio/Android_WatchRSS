@@ -9,7 +9,6 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
@@ -32,7 +31,7 @@ fun InstallRotaryScrollHandler(
 ) {
     val scope = rememberCoroutineScope()
     val stepPx = with(LocalDensity.current) { ROTARY_SCROLL_STEP.dp.toPx() }
-    InstallRotaryHandler(enabled = enabled) { delta ->
+    InstallRotaryHandler(enabled = enabled, supportsPointerWheel = true) { delta ->
         val amount = delta.toScrollAmount(stepPx, reverseDirection)
         if (amount == 0f) {
             false
@@ -53,7 +52,7 @@ fun InstallRotaryLazyListHandler(
 ) {
     val scope = rememberCoroutineScope()
     val stepPx = with(LocalDensity.current) { ROTARY_SCROLL_STEP.dp.toPx() }
-    InstallRotaryHandler(enabled = enabled) { delta ->
+    InstallRotaryHandler(enabled = enabled, supportsPointerWheel = true) { delta ->
         val amount = delta.toScrollAmount(stepPx, reverseDirection)
         if (amount == 0f) {
             false
@@ -99,6 +98,7 @@ fun InstallRotaryVolumeHandler(
     enabled: Boolean = true,
     showSystemUi: Boolean = true,
     reverseDirection: Boolean = false,
+    supportsPointerWheel: Boolean = false,
     onVolumeStep: ((Int) -> Unit)? = null
 ) {
     val context = LocalContext.current
@@ -106,7 +106,10 @@ fun InstallRotaryVolumeHandler(
         context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     }
     var accumulatedDelta by remember { mutableFloatStateOf(0f) }
-    InstallRotaryHandler(enabled = enabled) { delta ->
+    InstallRotaryHandler(
+        enabled = enabled,
+        supportsPointerWheel = supportsPointerWheel
+    ) { delta ->
         accumulatedDelta += normalizeRotaryVolumeDelta(delta, reverseDirection)
         if (abs(accumulatedDelta) < ROTARY_VOLUME_THRESHOLD) {
             return@InstallRotaryHandler true
@@ -144,6 +147,7 @@ internal fun rotaryVolumeDirection(accumulatedDelta: Float): Int {
 @Composable
 fun InstallRotaryHandler(
     enabled: Boolean = true,
+    supportsPointerWheel: Boolean = false,
     onRotaryInput: (Float) -> Boolean
 ) {
     val context = LocalContext.current
@@ -154,7 +158,7 @@ fun InstallRotaryHandler(
         if (!enabled || activity == null) {
             onDispose { }
         } else {
-            val id = activity.registerRotaryHandler { delta ->
+            val id = activity.registerRotaryHandler(supportsPointerWheel = supportsPointerWheel) { delta ->
                 latestHandler(delta)
             }
             onDispose {
@@ -162,6 +166,11 @@ fun InstallRotaryHandler(
             }
         }
     }
+}
+
+internal fun normalizePointerWheelScrollDelta(delta: Float): Float {
+    if (delta == 0f) return 0f
+    return delta.coerceIn(-MAX_POINTER_WHEEL_SCROLL_DELTA, MAX_POINTER_WHEEL_SCROLL_DELTA)
 }
 
 private fun Float.toScrollAmount(stepPx: Float, reverseDirection: Boolean): Float {
@@ -182,3 +191,4 @@ private fun Context.findBaseWatchActivity(): BaseWatchActivity? {
 private const val ROTARY_SCROLL_STEP = 56
 private const val ROTARY_PAGER_THRESHOLD = 0.8f
 private const val ROTARY_VOLUME_THRESHOLD = 0.8f
+private const val MAX_POINTER_WHEEL_SCROLL_DELTA = 1f

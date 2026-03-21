@@ -2,6 +2,8 @@ package com.lightningstudio.watchrss.util
 
 import com.lightningstudio.watchrss.data.AppContainer
 import com.lightningstudio.watchrss.data.rss.SaveType
+import com.lightningstudio.watchrss.phoneconnection.PhoneConnectionAbility
+import com.lightningstudio.watchrss.phoneconnection.SavedItemsSyncPayload
 import fi.iki.elonen.NanoHTTPD
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -14,6 +16,7 @@ class LocalHttpServer private constructor(
     port: Int,
     private val container: AppContainer,
     private val serverType: ServerType,
+    private val preferredAbility: PhoneConnectionAbility? = null,
     private val onRemoteInput: ((String) -> Unit)? = null,
     private val onSyncComplete: (() -> Unit)? = null
 ) : NanoHTTPD(port) {
@@ -21,7 +24,15 @@ class LocalHttpServer private constructor(
     enum class ServerType {
         REMOTE_INPUT,
         SYNC_FAVORITES,
-        SYNC_WATCH_LATER
+        SYNC_WATCH_LATER,
+        CONNECTION_HUB
+    }
+
+    private val abilities: Set<PhoneConnectionAbility> = when (serverType) {
+        ServerType.REMOTE_INPUT -> setOf(PhoneConnectionAbility.REMOTE_INPUT)
+        ServerType.SYNC_FAVORITES -> setOf(PhoneConnectionAbility.SYNC_FAVORITES)
+        ServerType.SYNC_WATCH_LATER -> setOf(PhoneConnectionAbility.SYNC_WATCH_LATER)
+        ServerType.CONNECTION_HUB -> PhoneConnectionAbility.orderedValues.toSet()
     }
 
     // 手机端会使用版本号来检查是否匹配手表端App，如果手表端更加新，手机端会提示需要升级，如果手机端更加新，手机端会提示需要升级手表端。
@@ -37,13 +48,13 @@ class LocalHttpServer private constructor(
             uri == "/getAbilities" -> {
                 handleGetAbilities()
             }
-            uri == "/remoteEnterRSSURL" && serverType == ServerType.REMOTE_INPUT -> {
+            uri == "/remoteEnterRSSURL" && supports(PhoneConnectionAbility.REMOTE_INPUT) -> {
                 handleRemoteInput(session)
             }
-            uri == "/getFavorites" && serverType == ServerType.SYNC_FAVORITES -> {
+            uri == "/getFavorites" && supports(PhoneConnectionAbility.SYNC_FAVORITES) -> {
                 handleGetFavorites()
             }
-            uri == "/getWatchlaterList" && serverType == ServerType.SYNC_WATCH_LATER -> {
+            uri == "/getWatchlaterList" && supports(PhoneConnectionAbility.SYNC_WATCH_LATER) -> {
                 handleGetWatchLater()
             }
             else -> {
@@ -51,6 +62,8 @@ class LocalHttpServer private constructor(
             }
         }
     }
+
+    private fun supports(ability: PhoneConnectionAbility): Boolean = ability in abilities
 
     private fun handleHealth(): Response {
         return newFixedLengthResponse(
@@ -63,10 +76,11 @@ class LocalHttpServer private constructor(
     }
 
     private fun handleGetCurrentActivationAbility(): Response {
-        val (code, name) = when (serverType) {
-            ServerType.REMOTE_INPUT -> "dc40517c-a09c-419c-8c4d-d3883258992e" to "RSS订阅输入"
-            ServerType.SYNC_FAVORITES -> "c4bf141f-b0de-46f7-a661-0a3ad0716bce" to "收藏夹"
-            ServerType.SYNC_WATCH_LATER -> "f1aa43bd-0fe3-4771-ae6b-d4799ecf84b5" to "稍后阅读"
+        val current = preferredAbility ?: abilities.singleOrNull()
+        val (code, name) = if (current != null) {
+            current.wireCode to current.displayName
+        } else {
+            "watchrss-connection-hub" to "连接手机"
         }
 
         return newFixedLengthResponse(
@@ -82,21 +96,15 @@ class LocalHttpServer private constructor(
 
     private fun handleGetAbilities(): Response {
         val abilities = JSONArray().apply {
-            put(JSONObject().apply {
-                put("code", "dc40517c-a09c-419c-8c4d-d3883258992e")
-                put("name", "RSS订阅输入")
-                put("version", "0.0.1")
-            })
-            put(JSONObject().apply {
-                put("code", "c4bf141f-b0de-46f7-a661-0a3ad0716bce")
-                put("name", "收藏夹")
-                put("version", "0.0.1")
-            })
-            put(JSONObject().apply {
-                put("code", "f1aa43bd-0fe3-4771-ae6b-d4799ecf84b5")
-                put("name", "稍后阅读")
-                put("version", "0.0.1")
-            })
+            PhoneConnectionAbility.orderedValues
+                .filter { it in this@LocalHttpServer.abilities }
+                .forEach { ability ->
+                    put(JSONObject().apply {
+                        put("code", ability.wireCode)
+                        put("name", ability.displayName)
+                        put("version", "0.0.1")
+                    })
+                }
         }
 
         return newFixedLengthResponse(
@@ -168,15 +176,9 @@ class LocalHttpServer private constructor(
             val scope = CoroutineScope(Dispatchers.IO)
             val job = scope.launch {
                 val items = container.rssRepository.observeSavedItems(SaveType.FAVORITE).first()
-                items.forEach { savedItem ->
-                    jsonArray.put(JSONObject().apply {
-                        put("id", savedItem.item.id)
-                        put("title", savedItem.item.title)
-                        put("link", savedItem.item.link ?: "")
-                        put("summary", savedItem.item.summary ?: "")
-                        put("channelTitle", savedItem.channelTitle)
-                        put("pubDate", savedItem.item.pubDate ?: "")
-                    })
+                val payload = SavedItemsSyncPayload.buildLinksOnly(items)
+                for (index in 0 until payload.length()) {
+                    jsonArray.put(payload.getJSONObject(index))
                 }
             }
 
@@ -213,15 +215,9 @@ class LocalHttpServer private constructor(
             val scope = CoroutineScope(Dispatchers.IO)
             val job = scope.launch {
                 val items = container.rssRepository.observeSavedItems(SaveType.WATCH_LATER).first()
-                items.forEach { savedItem ->
-                    jsonArray.put(JSONObject().apply {
-                        put("id", savedItem.item.id)
-                        put("title", savedItem.item.title)
-                        put("link", savedItem.item.link ?: "")
-                        put("summary", savedItem.item.summary ?: "")
-                        put("channelTitle", savedItem.channelTitle)
-                        put("pubDate", savedItem.item.pubDate ?: "")
-                    })
+                val payload = SavedItemsSyncPayload.buildLinksOnly(items)
+                for (index in 0 until payload.length()) {
+                    jsonArray.put(payload.getJSONObject(index))
                 }
             }
 
@@ -263,6 +259,7 @@ class LocalHttpServer private constructor(
                 DEFAULT_PORT,
                 container,
                 ServerType.REMOTE_INPUT,
+                preferredAbility = PhoneConnectionAbility.REMOTE_INPUT,
                 onRemoteInput = onRemoteInput
             )
         }
@@ -275,6 +272,7 @@ class LocalHttpServer private constructor(
                 DEFAULT_PORT,
                 container,
                 ServerType.SYNC_FAVORITES,
+                preferredAbility = PhoneConnectionAbility.SYNC_FAVORITES,
                 onSyncComplete = onSyncComplete
             )
         }
@@ -287,6 +285,23 @@ class LocalHttpServer private constructor(
                 DEFAULT_PORT,
                 container,
                 ServerType.SYNC_WATCH_LATER,
+                preferredAbility = PhoneConnectionAbility.SYNC_WATCH_LATER,
+                onSyncComplete = onSyncComplete
+            )
+        }
+
+        fun createConnectionHubServer(
+            container: AppContainer,
+            preferredAbility: PhoneConnectionAbility? = null,
+            onRemoteInput: ((String) -> Unit)? = null,
+            onSyncComplete: (() -> Unit)? = null
+        ): LocalHttpServer {
+            return LocalHttpServer(
+                DEFAULT_PORT,
+                container,
+                ServerType.CONNECTION_HUB,
+                preferredAbility = preferredAbility,
+                onRemoteInput = onRemoteInput,
                 onSyncComplete = onSyncComplete
             )
         }

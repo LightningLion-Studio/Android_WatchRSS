@@ -12,7 +12,11 @@ class AppViewModelFactory(private val container: AppContainer) : ViewModelProvid
         val savedStateHandle = extras.createSavedStateHandle()
         return when {
             modelClass.isAssignableFrom(HomeViewModel::class.java) -> {
-                HomeViewModel(container.rssRepository)
+                HomeViewModel(
+                    repository = container.rssRepository,
+                    biliRepository = container.biliRepository,
+                    douyinRepository = container.douyinRepository
+                )
             }
             modelClass.isAssignableFrom(AddRssViewModel::class.java) -> {
                 AddRssViewModel(container.rssRepository)

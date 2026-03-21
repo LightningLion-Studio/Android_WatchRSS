@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
+import com.lightningstudio.watchrss.BuildConfig
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -17,6 +18,7 @@ private val READING_FONT_SIZE_SP = intPreferencesKey("reading_font_size_sp")
 private val SHARE_USE_SYSTEM = booleanPreferencesKey("share_use_system")
 private val PHONE_CONNECTION_ENABLED = booleanPreferencesKey("phone_connection_enabled")
 private val MEDIA_VOLUME_GUARD_ENABLED = booleanPreferencesKey("media_volume_guard_enabled")
+private val RSS_INLINE_IMAGE_PREFETCH_MODE = intPreferencesKey("rss_inline_image_prefetch_mode")
 const val MIN_CACHE_LIMIT_MB: Long = 512
 const val MAX_CACHE_LIMIT_MB: Long = 4 * 1024
 const val DEFAULT_CACHE_LIMIT_MB: Long = MIN_CACHE_LIMIT_MB
@@ -46,10 +48,16 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         preferences[SHARE_USE_SYSTEM] ?: false
     }
     val phoneConnectionEnabled: Flow<Boolean> = dataStore.data.map { preferences ->
-        preferences[PHONE_CONNECTION_ENABLED] ?: false
+        preferences[PHONE_CONNECTION_ENABLED] ?: BuildConfig.DEBUG
     }
     val mediaVolumeGuardEnabled: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[MEDIA_VOLUME_GUARD_ENABLED] ?: DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
+    }
+    val rssInlineImagePrefetchMode: Flow<RssInlineImagePrefetchMode> = dataStore.data.map { preferences ->
+        RssInlineImagePrefetchMode.fromPersistedValue(
+            preferences[RSS_INLINE_IMAGE_PREFETCH_MODE]
+                ?: DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE.persistedValue
+        )
     }
 
     suspend fun setCacheLimitBytes(bytes: Long) {
@@ -97,6 +105,12 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     suspend fun setMediaVolumeGuardEnabled(value: Boolean) {
         dataStore.edit { preferences ->
             preferences[MEDIA_VOLUME_GUARD_ENABLED] = value
+        }
+    }
+
+    suspend fun setRssInlineImagePrefetchMode(value: RssInlineImagePrefetchMode) {
+        dataStore.edit { preferences ->
+            preferences[RSS_INLINE_IMAGE_PREFETCH_MODE] = value.persistedValue
         }
     }
 

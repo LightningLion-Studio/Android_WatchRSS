@@ -18,6 +18,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.lightningstudio.watchrss.debug.PerformanceMonitor
 import com.lightningstudio.watchrss.ui.input.PointerWheelScrollTracker
+import com.lightningstudio.watchrss.ui.input.normalizePointerWheelScrollDelta
 import com.lightningstudio.watchrss.ui.widget.WatchMaskLayout
 import com.lightningstudio.watchrss.util.AppLogger
 import kotlin.math.abs
@@ -36,7 +37,7 @@ open class BaseWatchActivity : ComponentActivity() {
     private var hasResumedOnce = false
     private var pendingHardwareBackKeyCode: Int? = null
     private var nextRotaryHandlerId = 0
-    private val rotaryHandlers = LinkedHashMap<Int, (Float) -> Boolean>()
+    private val rotaryHandlers = LinkedHashMap<Int, RotaryHandlerRegistration>()
     private val swipeSlop by lazy { ViewConfiguration.get(this).scaledTouchSlop.toFloat() }
     private val minSwipeDistance by lazy {
         max(swipeSlop * 2f, resources.displayMetrics.density * 48f)
@@ -149,16 +150,15 @@ open class BaseWatchActivity : ComponentActivity() {
         if (ev.actionMasked == MotionEvent.ACTION_SCROLL) {
             if (ev.isFromSource(InputDevice.SOURCE_ROTARY_ENCODER)) {
                 val delta = ev.getAxisValue(MotionEvent.AXIS_SCROLL)
-                if (delta != 0f) {
-                    val handlers = rotaryHandlers.values.toList().asReversed()
-                    for (handler in handlers) {
-                        if (handler(delta)) {
-                            return true
-                        }
-                    }
+                if (delta != 0f && dispatchRotaryHandlers(delta)) {
+                    return true
                 }
             } else if (ev.isFromSource(InputDevice.SOURCE_CLASS_POINTER)) {
                 PointerWheelScrollTracker.onScrollEvent(ev.eventTime)
+                val delta = normalizePointerWheelScrollDelta(ev.getAxisValue(MotionEvent.AXIS_VSCROLL))
+                if (delta != 0f && dispatchRotaryHandlers(delta, pointerWheel = true)) {
+                    return true
+                }
             }
         }
         return super.dispatchGenericMotionEvent(ev)
@@ -338,9 +338,15 @@ open class BaseWatchActivity : ComponentActivity() {
         }
     }
 
-    fun registerRotaryHandler(handler: (Float) -> Boolean): Int {
+    fun registerRotaryHandler(
+        supportsPointerWheel: Boolean = false,
+        handler: (Float) -> Boolean
+    ): Int {
         val id = ++nextRotaryHandlerId
-        rotaryHandlers[id] = handler
+        rotaryHandlers[id] = RotaryHandlerRegistration(
+            supportsPointerWheel = supportsPointerWheel,
+            handler = handler
+        )
         return id
     }
 
@@ -400,6 +406,19 @@ open class BaseWatchActivity : ComponentActivity() {
         cancelEvent.action = MotionEvent.ACTION_CANCEL
         super.dispatchTouchEvent(cancelEvent)
         cancelEvent.recycle()
+    }
+
+    private fun dispatchRotaryHandlers(delta: Float, pointerWheel: Boolean = false): Boolean {
+        val handlers = rotaryHandlers.values.toList().asReversed()
+        for (registration in handlers) {
+            if (pointerWheel && !registration.supportsPointerWheel) {
+                continue
+            }
+            if (registration.handler(delta)) {
+                return true
+            }
+        }
+        return false
     }
 
     private fun animateBackCommit(root: View) {
@@ -525,3 +544,8 @@ open class BaseWatchActivity : ComponentActivity() {
         private const val NAVIGATION_THROTTLE_MS = 600L
     }
 }
+
+private data class RotaryHandlerRegistration(
+    val supportsPointerWheel: Boolean,
+    val handler: (Float) -> Boolean
+)

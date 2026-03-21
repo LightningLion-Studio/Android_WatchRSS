@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -27,6 +28,15 @@ class BiliChannelInfoActivity : BaseWatchActivity() {
     private val viewModel: BiliFeedViewModel by viewModels {
         BiliViewModelFactory(repository)
     }
+    private val settingsLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            val shouldExitToFeed = result.data
+                ?.getBooleanExtra(BiliSettingsActivity.EXTRA_EXIT_TO_FEED, false)
+                ?: false
+            if (result.resultCode == RESULT_OK && shouldExitToFeed) {
+                finish()
+            }
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -78,7 +88,7 @@ class BiliChannelInfoActivity : BaseWatchActivity() {
                         context.startActivity(BiliListActivity.createIntent(context, BiliListType.FAVORITE))
                     },
                     onOpenSettings = {
-                        context.startActivity(BiliSettingsActivity.createIntent(context))
+                        settingsLauncher.launch(BiliSettingsActivity.createIntent(context))
                     }
                 )
                 }

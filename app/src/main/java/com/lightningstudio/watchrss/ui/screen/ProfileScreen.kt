@@ -35,8 +35,10 @@ import com.lightningstudio.watchrss.ui.testing.ProfileTestTags
 
 @Composable
 fun ProfileScreen(
+    showPhoneConnectionEntry: Boolean = true,
     onFavoritesClick: () -> Unit,
     onWatchLaterClick: () -> Unit,
+    onPhoneConnectionClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onAboutClick: () -> Unit,
     onContactDeveloperClick: () -> Unit
@@ -104,6 +106,24 @@ fun ProfileScreen(
                 iconSize = iconSize,
                 iconSpacing = iconSpacing
             )
+
+            if (showPhoneConnectionEntry) {
+                Spacer(modifier = Modifier.height(entrySpacing))
+
+                ProfileEntry(
+                    title = "连接手机",
+                    iconRes = R.drawable.ic_action_share,
+                    onClick = onPhoneConnectionClick,
+                    testTag = ProfileTestTags.PHONE_CONNECTION_ENTRY,
+                    pillHeight = pillHeight,
+                    pillRadius = pillRadius,
+                    pillColor = pillColor,
+                    pillHorizontalPadding = pillHorizontalPadding,
+                    pillVerticalPadding = pillVerticalPadding,
+                    iconSize = iconSize,
+                    iconSpacing = iconSpacing
+                )
+            }
 
             Spacer(modifier = Modifier.height(entrySpacing))
 
