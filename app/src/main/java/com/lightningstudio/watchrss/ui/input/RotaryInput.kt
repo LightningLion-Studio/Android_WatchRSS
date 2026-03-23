@@ -188,7 +188,8 @@ private fun Context.findBaseWatchActivity(): BaseWatchActivity? {
     return null
 }
 
-private const val ROTARY_SCROLL_STEP = 56
+// 基于 OPPO Watch X2 实测，0.2 是自然滚动速度
+private const val ROTARY_SCROLL_STEP = 0.2
 private const val ROTARY_PAGER_THRESHOLD = 0.8f
 private const val ROTARY_VOLUME_THRESHOLD = 0.8f
 private const val MAX_POINTER_WHEEL_SCROLL_DELTA = 1f

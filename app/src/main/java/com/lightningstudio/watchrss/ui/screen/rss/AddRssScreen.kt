@@ -229,23 +229,24 @@ fun AddRssScreen(
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            WatchButton(
-                                onClick = onSubmit,
-                                enabled = !state.isSubmitting && !state.isLoadingPreview,
-                                shape = CircleShape,
-                                modifier = Modifier
-                                    .size(44.dp)
-                                    .testTag(AddRssTestTags.SUBMIT_BUTTON),
-                                contentPadding = PaddingValues(0.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = actionColor)
-                            ) {
-                                Text(
-                                    text = "+",
-                                    color = actionTextColor,
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                            }
-                            if (showRemoteInputButton) {
+                            if (state.url.isNotEmpty()) {
+                                WatchButton(
+                                    onClick = onSubmit,
+                                    enabled = !state.isSubmitting && !state.isLoadingPreview,
+                                    shape = CircleShape,
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .testTag(AddRssTestTags.SUBMIT_BUTTON),
+                                    contentPadding = PaddingValues(0.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = actionColor)
+                                ) {
+                                    Text(
+                                        text = "+",
+                                        color = actionTextColor,
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+                                }
+                            } else if (showRemoteInputButton) {
                                 WatchButton(
                                     onClick = onRemoteInput,
                                     colors = ButtonDefaults.buttonColors(containerColor = actionColor),

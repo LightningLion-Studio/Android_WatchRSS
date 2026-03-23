@@ -17,9 +17,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -117,7 +118,7 @@ fun ProfileScreen(
 
                 ProfileEntry(
                     title = "连接手机",
-                    icon = Icons.Outlined.Share,
+                    icon = Icons.Outlined.PhoneAndroid,
                     onClick = onPhoneConnectionClick,
                     testTag = ProfileTestTags.PHONE_CONNECTION_ENTRY,
                     pillHeight = pillHeight,
@@ -150,7 +151,7 @@ fun ProfileScreen(
 
             ProfileEntry(
                 title = "关于",
-                icon = Icons.Outlined.Share,
+                icon = Icons.Outlined.Info,
                 onClick = onAboutClick,
                 testTag = ProfileTestTags.ABOUT_ENTRY,
                 pillHeight = pillHeight,

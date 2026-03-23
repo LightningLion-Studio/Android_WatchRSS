@@ -16,8 +16,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.Groups
+import androidx.compose.material.icons.outlined.Upload
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -76,7 +76,7 @@ fun ContactDeveloperScreen(
 
             ContactEntry(
                 title = "加群",
-                icon = Icons.Outlined.Share,
+                icon = Icons.Outlined.Groups,
                 onClick = onJoinGroupClick,
                 pillHeight = pillHeight,
                 pillRadius = pillRadius,
@@ -91,7 +91,7 @@ fun ContactDeveloperScreen(
 
             ContactEntry(
                 title = "上传日志",
-                icon = Icons.Outlined.Settings,
+                icon = Icons.Outlined.Upload,
                 onClick = onUploadLogClick,
                 pillHeight = pillHeight,
                 pillRadius = pillRadius,
