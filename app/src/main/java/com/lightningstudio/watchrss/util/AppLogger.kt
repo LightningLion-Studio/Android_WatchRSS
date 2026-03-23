@@ -20,6 +20,9 @@ object AppLogger {
     private var logFile: File? = null
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault())
 
+    // 用于去重的缓存：存储每个 tag 的最后一条日志内容
+    private val lastLogCache = mutableMapOf<String, String>()
+
     /**
      * 初始化日志系统
      * 应在Application.onCreate()中调用
@@ -38,6 +41,28 @@ object AppLogger {
      */
     fun log(tag: String, message: String) {
         d(tag, message)
+    }
+
+    /**
+     * 只在日志内容发生变化时才记录
+     * 适用于轮询场景，避免重复输出相同的日志
+     *
+     * @param userId 调用者标识符，用于区分不同的调用位置（如 "loginPanel", "qrCode"）
+     * @param tag 日志标签
+     * @param message 日志内容
+     * @return true 如果日志被输出（内容发生了变化），false 如果被跳过（内容未变化）
+     */
+    fun logOnChange(userId: String, tag: String, message: String): Boolean {
+        val cacheKey = "$userId:$tag"
+        val lastMessage = lastLogCache[cacheKey]
+
+        return if (lastMessage != message) {
+            lastLogCache[cacheKey] = message
+            d(tag, message)
+            true
+        } else {
+            false
+        }
     }
 
     fun v(tag: String, message: String) {
