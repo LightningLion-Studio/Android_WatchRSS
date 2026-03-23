@@ -1,6 +1,5 @@
 package com.lightningstudio.watchrss.ui.screen.rss
 
-import androidx.annotation.DrawableRes
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -23,6 +22,10 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Remove
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -45,6 +48,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.annotation.DrawableRes
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -54,6 +58,7 @@ import com.lightningstudio.watchrss.data.settings.CACHE_LIMIT_OPTIONS_MB
 import com.lightningstudio.watchrss.data.settings.RssInlineImagePrefetchMode
 import com.lightningstudio.watchrss.ui.components.WatchSwitch
 import com.lightningstudio.watchrss.ui.components.WatchSurface
+import com.lightningstudio.watchrss.ui.settings.WatchSettingsPillRow
 import com.lightningstudio.watchrss.ui.input.InstallRotaryScrollHandler
 import com.lightningstudio.watchrss.ui.settings.MainSettingsCatalog
 import com.lightningstudio.watchrss.ui.testing.SettingsTestTags
@@ -186,7 +191,7 @@ private fun MainSettingsPage(
 
             Spacer(modifier = Modifier.height(sectionSpacing))
 
-            SettingsPillRow(label = readingThemeInfo.title, endPaddingMultiplier = 1.5f) {
+            WatchSettingsPillRow(label = readingThemeInfo.title, endPaddingMultiplier = 1.5f) {
                 ReadingThemeToggle(
                     isDark = readingThemeDark,
                     modifier = Modifier.testTag(SettingsTestTags.THEME_SWITCH),
@@ -208,9 +213,9 @@ private fun MainSettingsPage(
 
             Spacer(modifier = Modifier.height(entrySpacing))
 
-            SettingsPillRow(label = fontSizeInfo.title) {
+            WatchSettingsPillRow(label = fontSizeInfo.title) {
                 RoundIconButtonIcon(
-                    iconRes = R.drawable.ic_action_minus,
+                    icon = Icons.Outlined.Remove,
                     contentDescription = "减小字体",
                     enabled = lowerFont != null,
                     testTag = SettingsTestTags.FONT_DECREASE_BUTTON,
@@ -224,7 +229,7 @@ private fun MainSettingsPage(
                 )
                 Spacer(modifier = Modifier.width(stepperSpacing))
                 RoundIconButtonIcon(
-                    iconRes = R.drawable.ic_action_plus,
+                    icon = Icons.Outlined.Add,
                     contentDescription = "增大字体",
                     enabled = higherFont != null,
                     testTag = SettingsTestTags.FONT_INCREASE_BUTTON,
@@ -240,7 +245,7 @@ private fun MainSettingsPage(
 
             Spacer(modifier = Modifier.height(entrySpacing))
 
-            SettingsPillRow(label = mediaVolumeGuardInfo.title, endPaddingMultiplier = 1.5f) {
+            WatchSettingsPillRow(label = mediaVolumeGuardInfo.title, endPaddingMultiplier = 1.5f) {
                 WatchSwitch(
                     checked = mediaVolumeGuardEnabled,
                     modifier = Modifier.testTag(SettingsTestTags.MEDIA_VOLUME_GUARD_SWITCH),
@@ -272,9 +277,9 @@ private fun MainSettingsPage(
 
             Spacer(modifier = Modifier.height(entrySpacing))
 
-            SettingsPillRow(
+            WatchSettingsPillRow(
                 label = "高级",
-                leadingIconRes = R.drawable.ic_settings,
+                leadingIcon = Icons.Outlined.Settings,
                 testTag = SettingsTestTags.ADVANCED_ENTRY,
                 onClick = onOpenAdvanced
             )
@@ -288,7 +293,7 @@ private fun MainSettingsPage(
             Spacer(modifier = Modifier.height(entrySpacing))
 
             if (BuildConfig.DEBUG) {
-                SettingsPillRow(
+                WatchSettingsPillRow(
                     label = "新手引导",
                     testTag = SettingsTestTags.OPEN_OOBE_ENTRY,
                     onClick = onOpenOobe
@@ -311,7 +316,7 @@ private fun MainSettingsPage(
 
                 Spacer(modifier = Modifier.height(entrySpacing))
 
-                SettingsPillRow(label = "手机互联", endPaddingMultiplier = 1.5f) {
+                WatchSettingsPillRow(label = "手机互联", endPaddingMultiplier = 1.5f) {
                     WatchSwitch(
                         checked = phoneConnectionEnabled,
                         modifier = Modifier.testTag(SettingsTestTags.PHONE_CONNECTION_SWITCH),
@@ -327,7 +332,7 @@ private fun MainSettingsPage(
 
                 Spacer(modifier = Modifier.height(entrySpacing))
 
-                SettingsPillRow(
+                WatchSettingsPillRow(
                     label = "抖音登录 Cookie",
                     testTag = SettingsTestTags.DOUYIN_COOKIE_ENTRY,
                     onClick = onOpenDouyinCookieInput
@@ -348,7 +353,7 @@ private fun MainSettingsPage(
                         modifier = Modifier.padding(start = valueIndent)
                     )
                     Spacer(modifier = Modifier.height(entrySpacing))
-                    SettingsPillRow(label = "超大列表") {
+                    WatchSettingsPillRow(label = "超大列表") {
                         RoundIconButton(
                             text = "进入",
                             enabled = true,
@@ -356,7 +361,7 @@ private fun MainSettingsPage(
                         )
                     }
                     Spacer(modifier = Modifier.height(entrySpacing))
-                    SettingsPillRow(label = "超大文章") {
+                    WatchSettingsPillRow(label = "超大文章") {
                         RoundIconButton(
                             text = "进入",
                             enabled = true,
@@ -430,9 +435,9 @@ private fun AdvancedSettingsPage(
 
             Spacer(modifier = Modifier.height(sectionSpacing))
 
-            SettingsPillRow(label = "缓存上限") {
+            WatchSettingsPillRow(label = "缓存上限") {
                 RoundIconButtonIcon(
-                    iconRes = R.drawable.ic_action_minus,
+                    icon = Icons.Outlined.Remove,
                     contentDescription = "减少缓存上限",
                     enabled = lowerCache != null,
                     testTag = SettingsTestTags.CACHE_DECREASE_BUTTON,
@@ -446,7 +451,7 @@ private fun AdvancedSettingsPage(
                 )
                 Spacer(modifier = Modifier.width(stepperSpacing))
                 RoundIconButtonIcon(
-                    iconRes = R.drawable.ic_action_plus,
+                    icon = Icons.Outlined.Add,
                     contentDescription = "增加缓存上限",
                     enabled = higherCache != null,
                     testTag = SettingsTestTags.CACHE_INCREASE_BUTTON,
@@ -468,9 +473,9 @@ private fun AdvancedSettingsPage(
 
             Spacer(modifier = Modifier.height(entrySpacing))
 
-            SettingsPillRow(label = "媒体缓存") {
+            WatchSettingsPillRow(label = "媒体缓存") {
                 RoundIconButtonIcon(
-                    iconRes = R.drawable.ic_action_minus,
+                    icon = Icons.Outlined.Remove,
                     contentDescription = "减少媒体缓存",
                     enabled = lowerImagePrefetchMode != null,
                     testTag = SettingsTestTags.IMAGE_PREFETCH_DECREASE_BUTTON,
@@ -484,7 +489,7 @@ private fun AdvancedSettingsPage(
                 )
                 Spacer(modifier = Modifier.width(stepperSpacing))
                 RoundIconButtonIcon(
-                    iconRes = R.drawable.ic_action_plus,
+                    icon = Icons.Outlined.Add,
                     contentDescription = "增加媒体缓存",
                     enabled = higherImagePrefetchMode != null,
                     testTag = SettingsTestTags.IMAGE_PREFETCH_INCREASE_BUTTON,
@@ -507,7 +512,7 @@ private fun AdvancedSettingsPage(
             if (showSystemShareSetting) {
                 Spacer(modifier = Modifier.height(entrySpacing))
 
-                SettingsPillRow(label = "使用系统分享方式", endPaddingMultiplier = 1.5f) {
+                WatchSettingsPillRow(label = "使用系统分享方式", endPaddingMultiplier = 1.5f) {
                     WatchSwitch(
                         checked = shareUseSystem,
                         modifier = Modifier.testTag(SettingsTestTags.SHARE_SWITCH),
@@ -600,61 +605,6 @@ private fun SettingsHeader(title: String) {
 }
 
 @Composable
-private fun SettingsPillRow(
-    label: String,
-    @DrawableRes leadingIconRes: Int? = null,
-    testTag: String? = null,
-    onClick: (() -> Unit)? = null,
-    endPaddingMultiplier: Float = 1f,
-    content: @Composable RowScope.() -> Unit = {}
-) {
-    val pillColor = watchColorResource(R.color.watch_pill_background)
-    val pillRadius = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_button_default_radius
-    val pillHeight = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_multiple_item_height
-    val startPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_10dp
-    val endPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_10dp * endPaddingMultiplier
-    val verticalPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_8dp
-    val iconSize = watchDimensionResource(R.dimen.hey_listitem_lefticon_height_width)
-    val iconSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_8dp
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(pillHeight)
-            .clip(RoundedCornerShape(pillRadius))
-            .background(pillColor)
-            .then(testTag?.let(Modifier::testTag) ?: Modifier)
-            .clickable(enabled = onClick != null, onClick = { onClick?.invoke() })
-            .padding(
-                start = startPadding,
-                end = endPadding,
-                top = verticalPadding,
-                bottom = verticalPadding
-            ),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        if (leadingIconRes != null) {
-            Icon(
-                painter = painterResource(id = leadingIconRes),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.size(iconSize)
-            )
-            Spacer(modifier = Modifier.width(iconSpacing))
-        }
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f)
-        )
-        content()
-    }
-}
-
-@Composable
 private fun StepperValue(
     text: String,
     width: androidx.compose.ui.unit.Dp,
@@ -713,7 +663,7 @@ private fun RoundIconButton(
 
 @Composable
 private fun RoundIconButtonIcon(
-    iconRes: Int,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String,
     enabled: Boolean,
     testTag: String? = null,
@@ -743,7 +693,7 @@ private fun RoundIconButtonIcon(
         contentAlignment = Alignment.Center
     ) {
         Icon(
-            painter = painterResource(id = iconRes),
+            imageVector = icon,
             contentDescription = contentDescription,
             tint = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.45f),
             modifier = Modifier.size(iconSize)

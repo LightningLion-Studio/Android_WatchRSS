@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.getValue
@@ -489,7 +491,7 @@ private fun AcousticConnectionScreen(
                 PhoneConnectionAbility.orderedValues.forEach { item ->
                     WatchSettingsPillRow(
                         label = item.displayName,
-                        leadingIconRes = R.drawable.ic_action_share,
+                        leadingIcon = androidx.compose.material.icons.Icons.Outlined.Share,
                         onClick = { onAbilitySelected(item) }
                     )
                 }

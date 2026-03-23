@@ -31,6 +31,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.FastRewind
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.ScreenRotation
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -103,7 +112,7 @@ internal data class PlayerScale(
 )
 
 private data class PlayerScaleToggleAction(
-    val iconRes: Int,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
     val contentDescription: String
 )
 
@@ -685,14 +694,14 @@ fun BiliPlayerScreen(
                         ) {
                             val scaleToggleAction = scaleMode.toggleAction()
                             PlayerIconButton(
-                                iconRes = scaleToggleAction.iconRes,
+                                icon = scaleToggleAction.icon,
                                 contentDescription = scaleToggleAction.contentDescription,
                                 size = controlSize,
                                 iconSize = iconSize,
                                 onClick = { scaleMode = scaleMode.next() }
                             )
                             PlayerIconButton(
-                                iconRes = R.drawable.ic_player_rotate,
+                                icon = Icons.Filled.ScreenRotation,
                                 contentDescription = "旋转",
                                 size = controlSize,
                                 iconSize = iconSize,
@@ -742,7 +751,7 @@ fun BiliPlayerScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         PlayerSeekButton(
-                            iconRes = R.drawable.ic_player_rewind,
+                            icon = Icons.Filled.FastRewind,
                             contentDescription = "后退4秒",
                             size = controlSize,
                             iconSize = iconSize,
@@ -752,7 +761,7 @@ fun BiliPlayerScreen(
                             onSeek = { delta -> seekBy(mediaPlayerRef, durationMs, delta) }
                         )
                         PlayerIconButton(
-                            iconRes = if (isPlaying) R.drawable.ic_player_pause else R.drawable.ic_player_play,
+                            icon = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                             contentDescription = if (isPlaying) "暂停" else "播放",
                             size = controlSize + spacing,
                             iconSize = iconSize + 4.dp,
@@ -760,7 +769,7 @@ fun BiliPlayerScreen(
                             onClick = { togglePlayback() }
                         )
                         PlayerSeekButton(
-                            iconRes = R.drawable.ic_player_forward,
+                            icon = Icons.Filled.FastForward,
                             contentDescription = "前进4秒",
                             size = controlSize,
                             iconSize = iconSize,
@@ -778,7 +787,7 @@ fun BiliPlayerScreen(
 
 @Composable
 private fun PlayerIconButton(
-    iconRes: Int,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String,
     size: androidx.compose.ui.unit.Dp,
     iconSize: androidx.compose.ui.unit.Dp,
@@ -792,9 +801,10 @@ private fun PlayerIconButton(
             .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Image(
-            painter = painterResource(iconRes),
+        Icon(
+            imageVector = icon,
             contentDescription = contentDescription,
+            tint = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.size(iconSize)
         )
     }
@@ -1072,15 +1082,15 @@ private fun panSignForBack(rotationStep: Int, isVerticalPan: Boolean): Float {
 private fun PlayerScaleMode.toggleAction(): PlayerScaleToggleAction {
     return when (this) {
         PlayerScaleMode.Standard -> PlayerScaleToggleAction(
-            iconRes = R.drawable.ic_player_fullscreen,
+            icon = Icons.Filled.Fullscreen,
             contentDescription = "放大"
         )
         PlayerScaleMode.Expanded -> PlayerScaleToggleAction(
-            iconRes = R.drawable.ic_player_shrink,
+            icon = Icons.Filled.Fullscreen,
             contentDescription = "缩小"
         )
         PlayerScaleMode.Shrunk -> PlayerScaleToggleAction(
-            iconRes = R.drawable.ic_player_fullscreen_exit,
+            icon = Icons.Filled.FullscreenExit,
             contentDescription = "标准"
         )
     }
@@ -1088,7 +1098,7 @@ private fun PlayerScaleMode.toggleAction(): PlayerScaleToggleAction {
 
 @Composable
 private fun PlayerSeekButton(
-    iconRes: Int,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String,
     size: androidx.compose.ui.unit.Dp,
     iconSize: androidx.compose.ui.unit.Dp,
@@ -1150,9 +1160,10 @@ private fun PlayerSeekButton(
             },
         contentAlignment = Alignment.Center
     ) {
-        Image(
-            painter = painterResource(iconRes),
+        Icon(
+            imageVector = icon,
             contentDescription = contentDescription,
+            tint = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.size(iconSize)
         )
     }

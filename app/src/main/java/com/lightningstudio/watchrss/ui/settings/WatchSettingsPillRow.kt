@@ -1,6 +1,5 @@
 package com.lightningstudio.watchrss.ui.settings
 
-import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
@@ -12,6 +11,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -29,7 +30,7 @@ import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 @Composable
 fun WatchSettingsPillRow(
     label: String,
-    @DrawableRes leadingIconRes: Int? = null,
+    leadingIcon: androidx.compose.ui.graphics.vector.ImageVector? = null,
     testTag: String? = null,
     onClick: (() -> Unit)? = null,
     endPaddingMultiplier: Float = 1f,
@@ -60,9 +61,9 @@ fun WatchSettingsPillRow(
             ),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (leadingIconRes != null) {
+        if (leadingIcon != null) {
             Icon(
-                painter = painterResource(id = leadingIconRes),
+                imageVector = leadingIcon,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(iconSize)

@@ -1,6 +1,5 @@
 package com.lightningstudio.watchrss.ui.screen.home
 
-import androidx.annotation.DrawableRes
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -31,6 +30,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.DoneAll
+import androidx.compose.material.icons.outlined.VerticalAlignTop
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -443,7 +445,7 @@ private fun HomeChannelEntry(
                             onCloseSwipe()
                             onMoveTopClick()
                         },
-                        iconRes = R.drawable.ic_action_move_top
+                        icon = Icons.Outlined.VerticalAlignTop
                     )
                     val isBuiltin = BuiltinChannelType.fromUrl(channel.url) != null
                     val canMarkRead = channel.unreadCount > 0 && !isBuiltin
@@ -458,7 +460,7 @@ private fun HomeChannelEntry(
                                 onMarkReadClick()
                             }
                         },
-                        iconRes = R.drawable.ic_action_mark_read
+                        icon = Icons.Outlined.DoneAll
                     )
                 }
                 cardContent(offsetModifier)
@@ -474,7 +476,7 @@ private fun HomeSwipeActionButton(
     alpha: Float = 1f,
     testTag: String? = null,
     onClick: () -> Unit,
-    @DrawableRes iconRes: Int? = null
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null
 ) {
     val radius = watchDimensionResource(R.dimen.hey_card_normal_bg_radius)
     val textSize = textSize(R.dimen.feed_card_action_text_size)
@@ -495,13 +497,13 @@ private fun HomeSwipeActionButton(
             .alpha(alpha),
         contentAlignment = Alignment.Center
     ) {
-        if (iconRes != null) {
+        if (icon != null) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.padding(horizontal = textPadding)
             ) {
                 Icon(
-                    painter = painterResource(id = iconRes),
+                    imageVector = icon,
                     contentDescription = text,
                     tint = actionColor,
                     modifier = Modifier.size(iconSize)

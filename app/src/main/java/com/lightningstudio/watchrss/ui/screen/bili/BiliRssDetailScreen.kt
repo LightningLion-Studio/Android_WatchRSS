@@ -26,6 +26,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -225,7 +230,7 @@ fun BiliRssDetailScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     CircleIconButton(
-                        iconRes = R.drawable.ic_action_favorite,
+                        icon = Icons.Filled.Star,
                         contentDescription = "收藏",
                         tint = if (uiState.isFavorited) activeColor else textColor,
                         containerColor = if (uiState.isFavorited) activeActionContainerColor else actionContainerColor,
@@ -237,7 +242,7 @@ fun BiliRssDetailScreen(
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     CircleIconButton(
-                        iconRes = R.drawable.ic_action_share,
+                        icon = Icons.Outlined.Share,
                         contentDescription = "分享",
                         tint = textColor,
                         containerColor = actionContainerColor,
@@ -329,9 +334,10 @@ private fun BiliRssVideoCard(
                     .height(coverHeight)
             )
         }
-        Image(
-            painter = painterResource(R.drawable.ic_play_circle),
+        Icon(
+            imageVector = Icons.Filled.PlayCircle,
             contentDescription = "播放",
+            tint = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier
                 .align(Alignment.Center)
                 .size(watchDimensionResource(R.dimen.hey_listitem_widget_size))
@@ -341,7 +347,7 @@ private fun BiliRssVideoCard(
 
 @Composable
 private fun CircleIconButton(
-    iconRes: Int,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String,
     tint: Color,
     containerColor: Color,
@@ -380,13 +386,13 @@ private fun CircleIconButton(
             ),
         contentAlignment = Alignment.Center
     ) {
-        Image(
-            painter = painterResource(iconRes),
+        Icon(
+            imageVector = icon,
             contentDescription = contentDescription,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(tint)
+            tint = tint
         )
     }
 }

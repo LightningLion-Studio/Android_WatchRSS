@@ -21,6 +21,13 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MonetizationOn
+import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.ThumbUp
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -203,9 +210,10 @@ private fun BiliCoverCard(
                 .background(MaterialTheme.colorScheme.background.copy(alpha = 0.6f)),
             contentAlignment = Alignment.Center
         ) {
-            Image(
-                painter = painterResource(R.drawable.ic_play_circle),
+            Icon(
+                imageVector = Icons.Filled.PlayCircle,
                 contentDescription = "播放",
+                tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(playIconSize)
             )
         }
@@ -324,14 +332,14 @@ private fun BiliActionSection(
             verticalAlignment = Alignment.CenterVertically
         ) {
             BiliActionCircleButton(
-                iconRes = R.drawable.ic_action_like,
+                icon = Icons.Filled.ThumbUp,
                 contentDescription = "点赞",
                 selected = isLiked,
                 size = buttonSize,
                 onClick = onLike
             )
             BiliActionCircleButton(
-                iconRes = R.drawable.ic_action_coin,
+                icon = Icons.Filled.MonetizationOn,
                 contentDescription = "投币",
                 selected = isCoined,
                 enabled = !isCoined,
@@ -339,14 +347,14 @@ private fun BiliActionSection(
                 onClick = onCoin
             )
             BiliActionCircleButton(
-                iconRes = R.drawable.ic_action_favorite,
+                icon = Icons.Filled.Star,
                 contentDescription = "收藏",
                 selected = isFavorited,
                 size = buttonSize,
                 onClick = onFavorite
             )
             BiliActionCircleButton(
-                iconRes = R.drawable.ic_action_share,
+                icon = Icons.Outlined.Share,
                 contentDescription = "转发",
                 size = buttonSize,
                 onClick = onShare
@@ -357,7 +365,7 @@ private fun BiliActionSection(
 
 @Composable
 private fun BiliActionCircleButton(
-    iconRes: Int,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String,
     selected: Boolean = false,
     enabled: Boolean = true,
@@ -379,9 +387,10 @@ private fun BiliActionCircleButton(
             .padding(horizontal = watchDimensionResource(R.dimen.hey_distance_2dp)),
         contentAlignment = Alignment.Center
     ) {
-        Image(
-            painter = painterResource(iconRes),
+        Icon(
+            imageVector = icon,
             contentDescription = contentDescription,
+            tint = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.size(iconSize)
         )
     }

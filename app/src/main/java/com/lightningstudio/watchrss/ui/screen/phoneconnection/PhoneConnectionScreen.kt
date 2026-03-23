@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -120,7 +122,7 @@ private fun ConnectionModeEntry(
     ) {
         WatchSettingsPillRow(
             label = title,
-            leadingIconRes = R.drawable.ic_action_share,
+            leadingIcon = Icons.Outlined.Share,
             testTag = testTag,
             onClick = onClick
         )
