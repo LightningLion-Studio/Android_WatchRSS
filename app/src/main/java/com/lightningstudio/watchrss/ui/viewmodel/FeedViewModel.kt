@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lightningstudio.watchrss.data.rss.RssRepository
 import com.lightningstudio.watchrss.data.rss.SavedState
+import com.lightningstudio.watchrss.debug.PerfTrace
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -14,6 +15,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -30,7 +32,16 @@ class FeedViewModel(
 
     val items = _visibleCount
         .flatMapLatest { limit ->
+            PerfTrace.log("feed", "viewModel observeItemsPaged channelId=$channelId limit=$limit")
             repository.observeItemsPaged(channelId, limit)
+        }
+        .onEach { currentItems ->
+            val firstId = currentItems.firstOrNull()?.id ?: -1L
+            val lastId = currentItems.lastOrNull()?.id ?: -1L
+            PerfTrace.log(
+                "feed",
+                "viewModel items emit channelId=$channelId size=${currentItems.size} firstId=$firstId lastId=$lastId"
+            )
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -51,28 +62,40 @@ class FeedViewModel(
     fun refresh() {
         viewModelScope.launch {
             if (_isRefreshing.value) return@launch
+            val startNanos = PerfTrace.now()
+            PerfTrace.log("feed", "viewModel refresh start channelId=$channelId")
             _isRefreshing.value = true
             val result = repository.refreshChannel(channelId)
             if (result.isFailure) {
                 _message.value = result.exceptionOrNull()?.message ?: "刷新失败"
             }
             _isRefreshing.value = false
+            PerfTrace.log(
+                "feed",
+                "viewModel refresh end channelId=$channelId success=${result.isSuccess} durMs=${PerfTrace.elapsedMs(startNanos)}"
+            )
         }
     }
 
     fun loadMore() {
         _visibleCount.value = (_visibleCount.value + PAGE_SIZE).coerceAtMost(MAX_VISIBLE_ITEMS)
+        PerfTrace.log("feed", "viewModel loadMore channelId=$channelId newLimit=${_visibleCount.value}")
     }
 
     fun requestOriginalContents(itemIds: List<Long>) {
         if (itemIds.isEmpty()) return
         val newIds = itemIds.filter { requestedOriginalIds.add(it) }
         if (newIds.isEmpty()) return
+        PerfTrace.log(
+            "feed",
+            "viewModel requestOriginalContents channelId=$channelId requested=${itemIds.size} new=${newIds.size} ids=${newIds.joinToString(",")}"
+        )
         repository.requestOriginalContents(newIds)
     }
 
     fun setOriginalContentUpdatesPaused(paused: Boolean) {
         if (channelId <= 0L) return
+        PerfTrace.log("feed", "viewModel originalContentPaused channelId=$channelId paused=$paused")
         repository.setOriginalContentUpdatesPaused(channelId, paused)
     }
 

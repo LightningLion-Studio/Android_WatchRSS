@@ -85,6 +85,7 @@ import com.lightningstudio.watchrss.ui.components.SwipeActionRow
 import com.lightningstudio.watchrss.ui.input.InstallRotaryLazyListHandler
 import com.lightningstudio.watchrss.ui.util.formatWatchTitleForWidthLimits
 import com.lightningstudio.watchrss.ui.util.RssImageLoader
+import com.lightningstudio.watchrss.debug.PerfTrace
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -153,6 +154,30 @@ fun FeedScreen(
             derivedStateOf { listState.isScrollInProgress }
         }
 
+        LaunchedEffect(channel?.id, items.size, useOriginalContent) {
+            PerfTrace.log(
+                "feed",
+                "screen snapshot channelId=${channel?.id ?: -1L} items=${items.size} useOriginal=$useOriginalContent hasMore=$hasMore refreshing=$isRefreshing"
+            )
+        }
+
+        LaunchedEffect(listState, channel?.id) {
+            snapshotFlow {
+                Triple(
+                    listState.isScrollInProgress,
+                    listState.firstVisibleItemIndex,
+                    listState.layoutInfo.visibleItemsInfo.size
+                )
+            }
+                .distinctUntilChanged()
+                .collect { (scrolling, firstIndex, visibleCount) ->
+                    PerfTrace.log(
+                        "feed",
+                        "scroll state channelId=${channel?.id ?: -1L} scrolling=$scrolling firstVisible=$firstIndex visibleCount=$visibleCount total=${listState.layoutInfo.totalItemsCount}"
+                    )
+                }
+        }
+
         LaunchedEffect(listState, items, maxImageWidthPx, channel?.id, useOriginalContent) {
             if (items.isEmpty()) return@LaunchedEffect
             snapshotFlow { listState.layoutInfo.visibleItemsInfo }
@@ -169,9 +194,12 @@ fun FeedScreen(
                 .collectLatest { (indices, first, last) ->
                     if (listState.isScrollInProgress) return@collectLatest
                     if (last < 0) return@collectLatest
+                    val startNanos = PerfTrace.now()
+                    var requestedOriginalCount = 0
                     if (useOriginalContent && indices.isNotEmpty()) {
                         val ids = indices.mapNotNull { index -> items.getOrNull(index)?.id }
                         if (ids.isNotEmpty()) {
+                            requestedOriginalCount = ids.distinct().size
                             onRequestOriginalContentsState.value(ids.distinct())
                         }
                     }
@@ -185,6 +213,10 @@ fun FeedScreen(
                         RssImageLoader.preloadAndCacheRatio(context, url, maxImageWidthPx)
                         prefetched++
                     }
+                    PerfTrace.log(
+                        "feed",
+                        "visible settle channelId=${channel?.id ?: -1L} indices=${indices.joinToString(",")} prefetchRange=$start..$end prefetched=$prefetched requestedOriginal=$requestedOriginalCount durMs=${PerfTrace.elapsedMs(startNanos)}"
+                    )
                 }
         }
 
@@ -193,16 +225,28 @@ fun FeedScreen(
             snapshotFlow { listState.isScrollInProgress }
                 .distinctUntilChanged()
                 .collect { isScrolling ->
+                    PerfTrace.log(
+                        "feed",
+                        "original updates scroll gate channelId=${channel?.id ?: -1L} paused=$isScrolling"
+                    )
                     onOriginalContentScrollStateChangedState.value(isScrolling)
                 }
         }
 
         DisposableEffect(useOriginalContent, channel?.id) {
             if (useOriginalContent) {
+                PerfTrace.log(
+                    "feed",
+                    "original updates disposable init channelId=${channel?.id ?: -1L}"
+                )
                 onOriginalContentScrollStateChangedState.value(false)
             }
             onDispose {
                 if (useOriginalContent) {
+                    PerfTrace.log(
+                        "feed",
+                        "original updates disposable dispose channelId=${channel?.id ?: -1L}"
+                    )
                     onOriginalContentScrollStateChangedState.value(false)
                 }
             }
@@ -226,6 +270,10 @@ fun FeedScreen(
                         lastLoadMoreSize != itemsSize
                     ) {
                         lastLoadMoreSize = itemsSize
+                        PerfTrace.log(
+                            "feed",
+                            "loadMore trigger channelId=${channel?.id ?: -1L} lastIndex=$lastIndex total=$total itemsSize=$itemsSize"
+                        )
                         onLoadMore()
                     }
                 }
@@ -850,7 +898,14 @@ private fun RssThumbnail(
     val pendingState = remember(url) { mutableStateOf<android.graphics.Bitmap?>(null) }
 
     LaunchedEffect(url, maxWidthPx, isScrolling) {
-        if (isScrolling && bitmapState.value == null) return@LaunchedEffect
+        if (isScrolling && bitmapState.value == null) {
+            PerfTrace.log(
+                "feed",
+                "thumbnail defer key=${thumbKey(url)} reason=scroll_no_cache"
+            )
+            return@LaunchedEffect
+        }
+        val startNanos = PerfTrace.now()
         val loaded = RssImageLoader.loadBitmap(context, url, maxWidthPx)
         if (loaded != null) {
             if (isScrolling && bitmapState.value == null) {
@@ -858,6 +913,15 @@ private fun RssThumbnail(
             } else {
                 bitmapState.value = loaded
             }
+            PerfTrace.log(
+                "feed",
+                "thumbnail ready key=${thumbKey(url)} scrolling=$isScrolling applied=${!isScrolling || bitmapState.value === loaded} size=${loaded.width}x${loaded.height} durMs=${PerfTrace.elapsedMs(startNanos)}"
+            )
+        } else {
+            PerfTrace.log(
+                "feed",
+                "thumbnail miss key=${thumbKey(url)} scrolling=$isScrolling durMs=${PerfTrace.elapsedMs(startNanos)}"
+            )
         }
     }
 
@@ -866,6 +930,10 @@ private fun RssThumbnail(
             pendingState.value?.let { bitmap ->
                 bitmapState.value = bitmap
                 pendingState.value = null
+                PerfTrace.log(
+                    "feed",
+                    "thumbnail promote key=${thumbKey(url)} size=${bitmap.width}x${bitmap.height}"
+                )
             }
         }
     }
@@ -946,3 +1014,5 @@ private fun resolveThumbUrl(item: RssItem): String? {
     val candidate = item.imageUrl?.takeIf { it.isNotBlank() }
     return RssUrlResolver.resolveMediaUrl(candidate, item.link)
 }
+
+private fun thumbKey(url: String): String = Integer.toHexString(url.hashCode())

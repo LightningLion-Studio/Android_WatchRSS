@@ -3,7 +3,6 @@ package com.lightningstudio.watchrss.debug
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
 import android.view.FrameMetrics
 import android.view.Window
 import androidx.activity.ComponentActivity
@@ -14,7 +13,7 @@ import androidx.metrics.performance.JankStats
 import androidx.metrics.performance.PerformanceMetricsState
 import com.lightningstudio.watchrss.BuildConfig
 import com.lightningstudio.watchrss.DetailActivity
-import com.lightningstudio.watchrss.util.AppLogger
+import com.lightningstudio.watchrss.FeedActivity
 import java.util.Collections
 import java.util.WeakHashMap
 
@@ -85,13 +84,15 @@ object PerformanceMonitor {
             append("avgMs=${"%.2f".format(avgMs)} ")
             append("maxMs=${"%.2f".format(maxMs)} ")
         }
-        DebugLogBuffer.log(PERF_TAG, message)
-        AppLogger.d(PERF_TAG, message)
+        PerfTrace.log(PERF_TAG, message)
     }
 
     private fun shouldCaptureDetailedFrames(activity: ComponentActivity): Boolean {
-        if (activity !is DetailActivity) return false
-        return activity.intent?.getBooleanExtra(EXTRA_ENABLE_FRAME_METRICS_LOGGING, false) == true
+        if (!BuildConfig.DEBUG) return false
+        if (activity.intent?.getBooleanExtra(EXTRA_ENABLE_FRAME_METRICS_LOGGING, false) == true) {
+            return true
+        }
+        return activity is DetailActivity || activity is FeedActivity
     }
 }
 
@@ -124,8 +125,7 @@ private class FrameMetricsLogger(private val activity: ComponentActivity) {
             append("gpu=").append("%.2f".format(gpuMs)).append("ms ")
             append("drop=").append(dropCount)
         }
-        DebugLogBuffer.log(FRAME_TAG, message)
-        Log.d(FRAME_TAG, message)
+        PerfTrace.log(FRAME_TAG, message)
     }
 
     fun start() {

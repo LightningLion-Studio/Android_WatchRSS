@@ -9,6 +9,7 @@ import android.widget.ImageView
 import com.lightningstudio.watchrss.data.cache.CacheTrimReason
 import com.lightningstudio.watchrss.data.cache.ManagedCacheService
 import com.lightningstudio.watchrss.data.rss.RssRemoteRequestPolicy
+import com.lightningstudio.watchrss.debug.PerfTrace
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -45,8 +46,14 @@ object RssImageLoader {
     }
 
     suspend fun preloadAndCacheRatio(context: Context, url: String, maxWidthPx: Int): Float? {
+        val startNanos = PerfTrace.now()
         loadBitmap(context, url, maxWidthPx)
-        return ratioCache.get(url)
+        val ratio = ratioCache.get(url)
+        PerfTrace.log(
+            "img",
+            "preload ratio key=${imageLabel(url)} ratio=${ratio ?: "null"} durMs=${PerfTrace.elapsedMs(startNanos)}"
+        )
+        return ratio
     }
 
     fun load(context: Context, url: String, imageView: ImageView, scope: CoroutineScope, maxWidthPx: Int) {
@@ -120,7 +127,14 @@ object RssImageLoader {
 
     suspend fun loadBitmap(context: Context, url: String, maxWidthPx: Int): Bitmap? {
         return withContext(Dispatchers.IO) {
-            cache.get(url)?.let { return@withContext it }
+            val startNanos = PerfTrace.now()
+            cache.get(url)?.let { cached ->
+                PerfTrace.log(
+                    "img",
+                    "loadBitmap source=mem key=${imageLabel(url)} size=${bitmapSize(cached)} durMs=${PerfTrace.elapsedMs(startNanos)}"
+                )
+                return@withContext cached
+            }
             if (isLocalPath(url)) {
                 val bitmap = decodeLocalBitmap(url, maxWidthPx)
                 if (bitmap != null) {
@@ -128,6 +142,10 @@ object RssImageLoader {
                     cache.put(url, bitmap)
                     storeAspectRatio(url, bitmap.width, bitmap.height)
                 }
+                PerfTrace.log(
+                    "img",
+                    "loadBitmap source=local key=${imageLabel(url)} hit=${bitmap != null} size=${bitmapSize(bitmap)} durMs=${PerfTrace.elapsedMs(startNanos)}"
+                )
                 return@withContext bitmap
             }
             val diskBitmap = decodeDiskBitmap(context, url, maxWidthPx)
@@ -135,6 +153,10 @@ object RssImageLoader {
                 prepareBitmap(diskBitmap)
                 cache.put(url, diskBitmap)
                 storeAspectRatio(url, diskBitmap.width, diskBitmap.height)
+                PerfTrace.log(
+                    "img",
+                    "loadBitmap source=disk key=${imageLabel(url)} size=${bitmapSize(diskBitmap)} durMs=${PerfTrace.elapsedMs(startNanos)}"
+                )
                 return@withContext diskBitmap
             }
             val bitmap = fetchBitmap(context, url, maxWidthPx)
@@ -143,6 +165,10 @@ object RssImageLoader {
                 cache.put(url, bitmap)
                 storeAspectRatio(url, bitmap.width, bitmap.height)
             }
+            PerfTrace.log(
+                "img",
+                "loadBitmap source=network key=${imageLabel(url)} hit=${bitmap != null} size=${bitmapSize(bitmap)} durMs=${PerfTrace.elapsedMs(startNanos)}"
+            )
             bitmap
         }
     }
@@ -151,6 +177,7 @@ object RssImageLoader {
         var connection: HttpURLConnection? = null
         val cacheFile = cacheFile(context, urlString)
         val tempFile = File(cacheFile.parentFile, "${cacheFile.name}.tmp")
+        val startNanos = PerfTrace.now()
         return try {
             val url = URL(urlString)
             connection = (url.openConnection() as HttpURLConnection).apply {
@@ -164,6 +191,10 @@ object RssImageLoader {
             }
             val responseCode = connection.responseCode
             if (responseCode !in 200..299) {
+                PerfTrace.log(
+                    "img",
+                    "fetchBitmap key=${imageLabel(urlString)} code=$responseCode durMs=${PerfTrace.elapsedMs(startNanos)}"
+                )
                 return null
             }
             connection.inputStream.buffered().use { input ->
@@ -171,10 +202,25 @@ object RssImageLoader {
                     input.copyTo(output)
                 }
             }
-            val bitmap = decodeBitmapFile(tempFile, urlString, maxWidthPx) ?: return null
+            val bitmap = decodeBitmapFile(tempFile, urlString, maxWidthPx)
+            if (bitmap == null) {
+                PerfTrace.log(
+                    "img",
+                    "fetchBitmap key=${imageLabel(urlString)} code=$responseCode decode=false bytes=${tempFile.length()} durMs=${PerfTrace.elapsedMs(startNanos)}"
+                )
+                return null
+            }
             persistTempFile(cacheFile, tempFile)
+            PerfTrace.log(
+                "img",
+                "fetchBitmap key=${imageLabel(urlString)} code=$responseCode bytes=${tempFile.length()} size=${bitmapSize(bitmap)} durMs=${PerfTrace.elapsedMs(startNanos)}"
+            )
             bitmap
         } catch (e: Exception) {
+            PerfTrace.log(
+                "img",
+                "fetchBitmap key=${imageLabel(urlString)} error=${e.javaClass.simpleName}:${e.message ?: "unknown"} durMs=${PerfTrace.elapsedMs(startNanos)}"
+            )
             null
         } finally {
             if (tempFile.exists()) {
@@ -291,5 +337,19 @@ object RssImageLoader {
             inSampleSize *= 2
         }
         return inSampleSize
+    }
+
+    private fun bitmapSize(bitmap: Bitmap?): String {
+        return if (bitmap == null) "0x0" else "${bitmap.width}x${bitmap.height}"
+    }
+
+    private fun imageLabel(url: String): String {
+        if (isLocalPath(url)) {
+            return "local:${url.substringAfterLast('/')}:${Integer.toHexString(url.hashCode())}"
+        }
+        val parsed = runCatching { URL(url) }.getOrNull()
+        val host = parsed?.host?.ifBlank { "unknown" } ?: "unknown"
+        val tail = parsed?.path?.substringAfterLast('/')?.takeLast(24).orEmpty()
+        return "$host/$tail:${Integer.toHexString(url.hashCode())}"
     }
 }

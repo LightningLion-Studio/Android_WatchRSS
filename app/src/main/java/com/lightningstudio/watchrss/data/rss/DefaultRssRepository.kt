@@ -14,6 +14,7 @@ import com.lightningstudio.watchrss.data.db.SavedEntryDao
 import com.lightningstudio.watchrss.data.db.SavedEntryEntity
 import com.lightningstudio.watchrss.data.db.SavedRssItem
 import com.lightningstudio.watchrss.debug.DebugLogBuffer
+import com.lightningstudio.watchrss.debug.PerfTrace
 import com.lightningstudio.watchrss.data.settings.SettingsRepository
 import com.prof18.rssparser.model.RssItem as ParsedItem
 import kotlinx.coroutines.CoroutineScope
@@ -23,6 +24,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
@@ -47,6 +49,7 @@ class DefaultRssRepository(
         ConcurrentHashMap<Long, ConcurrentHashMap<String, PendingOriginalUpdate>> =
         ConcurrentHashMap()
     private val previewJobs: MutableSet<Long> = ConcurrentHashMap.newKeySet()
+    private val previewAttemptKeys = ConcurrentHashMap<Long, String>()
 
     override fun observeChannels(): Flow<List<RssChannel>> =
         combine(
@@ -68,10 +71,22 @@ class DefaultRssRepository(
         }
 
     override fun observeItemsPaged(channelId: Long, limit: Int): Flow<List<RssItem>> =
-        itemDao.observeItemsPaged(channelId, limit).map { items ->
-            schedulePreviewUpdates(items)
-            items.map { it.toModel() }
-        }
+        itemDao.observeItemsPaged(channelId, limit)
+            .onEach { items ->
+                PerfTrace.log(
+                    "repo",
+                    "observeItemsPaged emit channelId=$channelId limit=$limit size=${items.size} missingSummary=${items.count { it.summary.isNullOrBlank() }} missingPreview=${items.count { it.previewImageUrl.isNullOrBlank() && it.imageUrl.isNullOrBlank() }} withContent=${items.count { !it.content.isNullOrBlank() }}"
+                )
+            }
+            .map { items ->
+                val startNanos = PerfTrace.now()
+                schedulePreviewUpdates(items)
+                PerfTrace.log(
+                    "repo",
+                    "observeItemsPaged map channelId=$channelId limit=$limit size=${items.size} schedulePreviewMs=${PerfTrace.elapsedMs(startNanos)}"
+                )
+                items.map { it.toModel() }
+            }
 
     override fun observeItemCount(channelId: Long): Flow<Int> =
         itemDao.observeItemCount(channelId)
@@ -298,13 +313,19 @@ class DefaultRssRepository(
         channelId: Long,
         refreshAll: Boolean
     ): Result<Unit> = withContext(Dispatchers.IO) {
+        val startNanos = PerfTrace.now()
+        PerfTrace.log("repo", "refreshChannel start channelId=$channelId refreshAll=$refreshAll")
         val channel = channelDao.getChannel(channelId)
             ?: return@withContext Result.failure(IllegalArgumentException("频道不存在"))
         if (BuiltinChannelType.fromUrl(channel.url) != null) {
+            PerfTrace.log(
+                "repo",
+                "refreshChannel skip builtin channelId=$channelId durMs=${PerfTrace.elapsedMs(startNanos)}"
+            )
             return@withContext Result.success(Unit)
         }
 
-        runCatching {
+        val result = runCatching {
             val fetchedAt = System.currentTimeMillis()
             val parsed = fetchService.fetchChannel(channel.url)
             val baseLink = parsed.link?.trim()?.ifEmpty { null } ?: channel.url
@@ -376,6 +397,11 @@ class DefaultRssRepository(
             ))
             trimCacheToLimit()
         }.mapError()
+        PerfTrace.log(
+            "repo",
+            "refreshChannel end channelId=$channelId refreshAll=$refreshAll success=${result.isSuccess} durMs=${PerfTrace.elapsedMs(startNanos)}"
+        )
+        result
     }
 
     override fun refreshChannelInBackground(channelId: Long, refreshAll: Boolean) {
@@ -395,10 +421,15 @@ class DefaultRssRepository(
         if (itemId <= 0L) return
         if (originalContentItemJobs.containsKey(itemId)) return
         val job = appScope.launch(Dispatchers.IO) {
+            val startNanos = PerfTrace.now()
             val item = itemDao.getItem(itemId) ?: return@launch
             if (!item.content.isNullOrBlank()) return@launch
             val channel = channelDao.getChannel(item.channelId) ?: return@launch
             if (!channel.useOriginalContent) return@launch
+            PerfTrace.log(
+                "repo",
+                "requestOriginalContent start itemId=$itemId channelId=${item.channelId} summaryMissing=${item.summary.isNullOrBlank()} pending=${pendingOriginalUpdates[item.channelId]?.size ?: 0}"
+            )
             if (item.summary.isNullOrBlank()) {
                 itemDao.updatePreview(item.id, "暂无摘要", null)
             }
@@ -422,6 +453,10 @@ class DefaultRssRepository(
             }
             val update = PendingOriginalUpdate(item.dedupKey, contentOverride, contentSizeBytes)
             if (pausedOriginalChannels.contains(item.channelId)) {
+                PerfTrace.log(
+                    "repo",
+                    "requestOriginalContent queue itemId=$itemId channelId=${item.channelId} contentSize=${contentOverride.length} durMs=${PerfTrace.elapsedMs(startNanos)}"
+                )
                 enqueueOriginalUpdate(item.channelId, update)
             } else {
                 itemDao.updateOriginalContentByDedupKey(
@@ -430,6 +465,10 @@ class DefaultRssRepository(
                     content = update.content,
                     contentSizeBytes = update.contentSizeBytes
                 )
+                PerfTrace.log(
+                    "repo",
+                    "requestOriginalContent apply itemId=$itemId channelId=${item.channelId} contentSize=${contentOverride.length} durMs=${PerfTrace.elapsedMs(startNanos)}"
+                )
             }
         }
         originalContentItemJobs[itemId] = job
@@ -437,6 +476,7 @@ class DefaultRssRepository(
     }
 
     override fun requestOriginalContents(itemIds: List<Long>) {
+        PerfTrace.log("repo", "requestOriginalContents batch size=${itemIds.size} ids=${itemIds.joinToString(",")}")
         itemIds.forEach { requestOriginalContent(it) }
     }
 
@@ -448,6 +488,10 @@ class DefaultRssRepository(
             pausedOriginalChannels.remove(channelId)
             flushOriginalUpdates(channelId)
         }
+        PerfTrace.log(
+            "repo",
+            "setOriginalContentUpdatesPaused channelId=$channelId paused=$paused pending=${pendingOriginalUpdates[channelId]?.size ?: 0}"
+        )
     }
 
     override suspend fun markItemRead(itemId: Long) {
@@ -582,27 +626,55 @@ class DefaultRssRepository(
     }
 
     private fun schedulePreviewUpdate(item: RssItemEntity) {
-        if (!needsPreviewUpdate(item)) return
+        if (!RssPreviewUpdatePlanner.needsPreviewUpdate(item)) {
+            previewAttemptKeys.remove(item.id)
+            return
+        }
+        val attemptKey = RssPreviewUpdatePlanner.attemptKeyFor(item)
+        val previousAttemptKey = previewAttemptKeys[item.id]
+        if (previousAttemptKey == attemptKey) {
+            PerfTrace.log(
+                "repo",
+                "preview build skip-same-attempt itemId=${item.id} channelId=${item.channelId} attempt=${attemptKey.take(8)}"
+            )
+            return
+        }
         if (!previewJobs.add(item.id)) return
         appScope.launch(Dispatchers.Default) {
+            val startNanos = PerfTrace.now()
             try {
+                PerfTrace.log(
+                    "repo",
+                    "preview build start itemId=${item.id} channelId=${item.channelId} hasContent=${!item.content.isNullOrBlank()} hasImage=${!item.imageUrl.isNullOrBlank()} attempt=${attemptKey.take(8)}"
+                )
                 val preview = RssPreviewFormatter.buildPreview(
                     description = item.description,
                     content = item.content,
                     imageUrl = item.imageUrl,
                     link = item.link
                 )
-                itemDao.updatePreview(item.id, preview.summary, preview.previewImageUrl)
+                val payload = RssPreviewUpdatePlanner.buildWritePayload(item, preview)
+                if (payload == null) {
+                    previewAttemptKeys[item.id] = attemptKey
+                    PerfTrace.log(
+                        "repo",
+                        "preview build skip-noop-write itemId=${item.id} channelId=${item.channelId} attempt=${attemptKey.take(8)} durMs=${PerfTrace.elapsedMs(startNanos)}"
+                    )
+                    return@launch
+                }
+                previewAttemptKeys[item.id] = attemptKey
+                itemDao.updatePreview(item.id, payload.summary, payload.previewImageUrl)
+                PerfTrace.log(
+                    "repo",
+                    "preview build end itemId=${item.id} summaryLen=${payload.summary?.length ?: 0} previewImage=${!payload.previewImageUrl.isNullOrBlank()} attempt=${attemptKey.take(8)} durMs=${PerfTrace.elapsedMs(startNanos)}"
+                )
+            } catch (t: Throwable) {
+                previewAttemptKeys.remove(item.id, attemptKey)
+                throw t
             } finally {
                 previewJobs.remove(item.id)
             }
         }
-    }
-
-    private fun needsPreviewUpdate(item: RssItemEntity): Boolean {
-        val missingSummary = item.summary.isNullOrBlank()
-        val missingPreview = item.previewImageUrl.isNullOrBlank() && item.imageUrl.isNullOrBlank()
-        return missingSummary || missingPreview
     }
 
     private fun enqueueOriginalUpdate(channelId: Long, update: PendingOriginalUpdate) {
@@ -614,6 +686,11 @@ class DefaultRssRepository(
         val pending = pendingOriginalUpdates.remove(channelId) ?: return
         if (pending.isEmpty()) return
         appScope.launch(Dispatchers.IO) {
+            val startNanos = PerfTrace.now()
+            PerfTrace.log(
+                "repo",
+                "flushOriginalUpdates start channelId=$channelId count=${pending.size}"
+            )
             pending.values.forEach { update ->
                 itemDao.updateOriginalContentByDedupKey(
                     channelId = channelId,
@@ -622,6 +699,10 @@ class DefaultRssRepository(
                     contentSizeBytes = update.contentSizeBytes
                 )
             }
+            PerfTrace.log(
+                "repo",
+                "flushOriginalUpdates end channelId=$channelId count=${pending.size} durMs=${PerfTrace.elapsedMs(startNanos)}"
+            )
         }
     }
 

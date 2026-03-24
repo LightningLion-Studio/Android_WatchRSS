@@ -10,6 +10,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import com.lightningstudio.watchrss.debug.PerfTrace
+import com.lightningstudio.watchrss.debug.PerformanceMonitor
 import com.lightningstudio.watchrss.ui.screen.rss.FeedScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
@@ -39,6 +41,9 @@ class FeedActivity : BaseWatchActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setupSystemBars()
+        val channelId = intent.getLongExtra(EXTRA_CHANNEL_ID, 0L)
+        PerformanceMonitor.setScenario(this, "feed_channel_$channelId")
+        PerfTrace.log("feed", "activity create channelId=$channelId")
         setContent {
             WatchRSSTheme {
                 val context = LocalContext.current
