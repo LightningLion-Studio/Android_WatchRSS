@@ -39,6 +39,9 @@ class LocalHttpServer private constructor(
     override fun serve(session: IHTTPSession): Response {
         val uri = session.uri
         return when {
+            uri == "/" -> {
+                handleRootPage()
+            }
             uri == "/health" -> {
                 handleHealth()
             }
@@ -64,6 +67,168 @@ class LocalHttpServer private constructor(
     }
 
     private fun supports(ability: PhoneConnectionAbility): Boolean = ability in abilities
+
+    private fun handleRootPage(): Response {
+        val html = """
+            <!DOCTYPE html>
+            <html lang="zh-CN">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>腕上RSS - 手机版下载</title>
+                <style>
+                    * { margin: 0; padding: 0; box-sizing: border-box; }
+                    body {
+                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                        min-height: 100vh;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        padding: 20px;
+                    }
+                    .container {
+                        background: white;
+                        border-radius: 16px;
+                        padding: 40px 30px;
+                        max-width: 500px;
+                        width: 100%;
+                        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                    }
+                    h1 {
+                        color: #333;
+                        font-size: 24px;
+                        margin-bottom: 30px;
+                        text-align: center;
+                    }
+                    .download-list {
+                        list-style: none;
+                    }
+                    .download-item {
+                        background: #f8f9fa;
+                        border-radius: 12px;
+                        padding: 20px;
+                        margin-bottom: 15px;
+                        cursor: pointer;
+                        transition: all 0.3s ease;
+                        border: 2px solid transparent;
+                    }
+                    .download-item:hover {
+                        background: #e9ecef;
+                        border-color: #667eea;
+                        transform: translateY(-2px);
+                    }
+                    .download-item.disabled {
+                        cursor: not-allowed;
+                        opacity: 0.6;
+                    }
+                    .download-item.disabled:hover {
+                        transform: none;
+                        border-color: transparent;
+                    }
+                    .platform {
+                        font-weight: 600;
+                        color: #667eea;
+                        font-size: 18px;
+                        margin-bottom: 8px;
+                    }
+                    .url {
+                        color: #666;
+                        font-size: 14px;
+                        word-break: break-all;
+                    }
+                    .note {
+                        color: #999;
+                        font-size: 13px;
+                        margin-top: 5px;
+                    }
+                    .toast {
+                        position: fixed;
+                        top: 20px;
+                        left: 50%;
+                        transform: translateX(-50%);
+                        background: #28a745;
+                        color: white;
+                        padding: 12px 24px;
+                        border-radius: 8px;
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                        opacity: 0;
+                        transition: opacity 0.3s ease;
+                        z-index: 1000;
+                    }
+                    .toast.show {
+                        opacity: 1;
+                    }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h1>请使用腕上RSS手机版App扫码</h1>
+                    <ul class="download-list">
+                        <li class="download-item" onclick="copyToClipboard('https://github.com/LightningLion-Studio/Android_WatchRSS_Phone/releases')">
+                            <div class="platform">安卓手机版本</div>
+                            <div class="url">https://github.com/LightningLion-Studio/Android_WatchRSS_Phone/releases</div>
+                            <div class="note">点击复制下载地址</div>
+                        </li>
+                        <li class="download-item disabled">
+                            <div class="platform">鸿蒙手机版本</div>
+                            <div class="url">暂未提供（请使用卓易通使用）</div>
+                        </li>
+                        <li class="download-item disabled">
+                            <div class="platform">苹果手机版本</div>
+                            <div class="url">暂未提供（请使用安卓手机来使用）</div>
+                        </li>
+                    </ul>
+                </div>
+                <div class="toast" id="toast">已复制到剪贴板</div>
+                <script>
+                    function copyToClipboard(text) {
+                        if (navigator.clipboard && navigator.clipboard.writeText) {
+                            navigator.clipboard.writeText(text).then(function() {
+                                showToast();
+                            }).catch(function(err) {
+                                fallbackCopy(text);
+                            });
+                        } else {
+                            fallbackCopy(text);
+                        }
+                    }
+
+                    function fallbackCopy(text) {
+                        var textArea = document.createElement("textarea");
+                        textArea.value = text;
+                        textArea.style.position = "fixed";
+                        textArea.style.left = "-999999px";
+                        document.body.appendChild(textArea);
+                        textArea.focus();
+                        textArea.select();
+                        try {
+                            document.execCommand('copy');
+                            showToast();
+                        } catch (err) {
+                            alert('复制失败，请手动复制');
+                        }
+                        document.body.removeChild(textArea);
+                    }
+
+                    function showToast() {
+                        var toast = document.getElementById('toast');
+                        toast.classList.add('show');
+                        setTimeout(function() {
+                            toast.classList.remove('show');
+                        }, 2000);
+                    }
+                </script>
+            </body>
+            </html>
+        """.trimIndent()
+
+        return newFixedLengthResponse(
+            Response.Status.OK,
+            "text/html; charset=utf-8",
+            html
+        )
+    }
 
     private fun handleHealth(): Response {
         return newFixedLengthResponse(

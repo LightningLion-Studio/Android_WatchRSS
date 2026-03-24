@@ -16,6 +16,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -119,9 +122,10 @@ fun BiliVideoCard(
                     alignment = Alignment.Center
                 )
             }
-            Image(
-                painter = painterResource(R.drawable.ic_play_circle),
+            Icon(
+                imageVector = Icons.Filled.PlayCircle,
                 contentDescription = "播放",
+                tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(watchDimensionResource(R.dimen.hey_listitem_widget_size))
             )
             if (durationText != null) {

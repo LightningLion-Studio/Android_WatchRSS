@@ -22,6 +22,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Undo
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -277,9 +280,10 @@ private fun UndoFloatingButton(
             .clickableWithoutRipple(onClick),
         contentAlignment = Alignment.Center
     ) {
-        androidx.compose.foundation.Image(
-            painter = painterResource(R.drawable.ic_action_undo),
+        Icon(
+            imageVector = Icons.Outlined.Undo,
             contentDescription = "撤回",
+            tint = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.size(iconSize)
         )
     }

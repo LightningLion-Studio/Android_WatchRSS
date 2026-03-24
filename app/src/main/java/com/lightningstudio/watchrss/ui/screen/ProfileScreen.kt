@@ -1,6 +1,5 @@
 package com.lightningstudio.watchrss.ui.screen
 
-import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -15,6 +14,13 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.PhoneAndroid
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -22,10 +28,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import com.lightningstudio.watchrss.ui.theme.watchColorResource
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import com.lightningstudio.watchrss.R
@@ -79,7 +85,7 @@ fun ProfileScreen(
 
             ProfileEntry(
                 title = "我的收藏",
-                iconRes = R.drawable.ic_action_favorite,
+                icon = Icons.Filled.Star,
                 onClick = onFavoritesClick,
                 testTag = ProfileTestTags.FAVORITES_ENTRY,
                 pillHeight = pillHeight,
@@ -95,7 +101,7 @@ fun ProfileScreen(
 
             ProfileEntry(
                 title = "稍后再看",
-                iconRes = R.drawable.ic_play_circle,
+                icon = Icons.Filled.PlayCircle,
                 onClick = onWatchLaterClick,
                 testTag = ProfileTestTags.WATCH_LATER_ENTRY,
                 pillHeight = pillHeight,
@@ -112,7 +118,7 @@ fun ProfileScreen(
 
                 ProfileEntry(
                     title = "连接手机",
-                    iconRes = R.drawable.ic_action_share,
+                    icon = Icons.Outlined.PhoneAndroid,
                     onClick = onPhoneConnectionClick,
                     testTag = ProfileTestTags.PHONE_CONNECTION_ENTRY,
                     pillHeight = pillHeight,
@@ -129,7 +135,7 @@ fun ProfileScreen(
 
             ProfileEntry(
                 title = "设置",
-                iconRes = R.drawable.ic_settings,
+                icon = Icons.Outlined.Settings,
                 onClick = onSettingsClick,
                 testTag = ProfileTestTags.SETTINGS_ENTRY,
                 pillHeight = pillHeight,
@@ -145,7 +151,7 @@ fun ProfileScreen(
 
             ProfileEntry(
                 title = "关于",
-                iconRes = R.drawable.ic_action_share,
+                icon = Icons.Outlined.Info,
                 onClick = onAboutClick,
                 testTag = ProfileTestTags.ABOUT_ENTRY,
                 pillHeight = pillHeight,
@@ -161,7 +167,7 @@ fun ProfileScreen(
 
             ProfileEntry(
                 title = "联系开发者",
-                iconRes = R.drawable.ic_person,
+                icon = Icons.Outlined.Person,
                 onClick = onContactDeveloperClick,
                 testTag = ProfileTestTags.CONTACT_DEVELOPER_ENTRY,
                 pillHeight = pillHeight,
@@ -181,7 +187,7 @@ fun ProfileScreen(
 @Composable
 private fun ProfileEntry(
     title: String,
-    @DrawableRes iconRes: Int,
+    icon: ImageVector,
     onClick: () -> Unit,
     testTag: String,
     pillHeight: androidx.compose.ui.unit.Dp,
@@ -209,7 +215,7 @@ private fun ProfileEntry(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            painter = painterResource(iconRes),
+            imageVector = icon,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.size(iconSize)

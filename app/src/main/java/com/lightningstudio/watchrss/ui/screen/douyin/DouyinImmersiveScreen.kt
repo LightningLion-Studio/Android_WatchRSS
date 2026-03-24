@@ -23,6 +23,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.filled.ZoomIn
+import androidx.compose.material.icons.outlined.ArrowUpward
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -48,7 +54,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.layout.onSizeChanged
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
@@ -98,7 +103,7 @@ internal enum class DouyinPlayerScaleMode {
 }
 
 private data class DouyinPlayerScaleToggleAction(
-    val iconRes: Int,
+    val icon: ImageVector,
     val contentDescription: String
 )
 
@@ -251,7 +256,7 @@ private fun DouyinTitlePage(
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
-                        painter = painterResource(id = R.drawable.ic_action_douyin_up),
+                        imageVector = Icons.Outlined.ArrowUpward,
                         contentDescription = "向上进入视频流",
                         tint = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.size(watchDimensionResource(R.dimen.hey_distance_16dp))
@@ -563,7 +568,7 @@ private fun DouyinVideoPage(
                         .size(controlsSize)
                 ) {
                     Icon(
-                        painter = painterResource(id = scaleToggleAction.iconRes),
+                        imageVector = scaleToggleAction.icon,
                         contentDescription = scaleToggleAction.contentDescription,
                         tint = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.size(controlsIconSize)
@@ -768,15 +773,15 @@ internal fun calculateDouyinPlayerShrinkFactor(
 private fun DouyinPlayerScaleMode.toggleAction(): DouyinPlayerScaleToggleAction {
     return when (this) {
         DouyinPlayerScaleMode.Standard -> DouyinPlayerScaleToggleAction(
-            iconRes = R.drawable.ic_player_fullscreen,
+            icon = Icons.Filled.Fullscreen,
             contentDescription = "放大"
         )
         DouyinPlayerScaleMode.Expanded -> DouyinPlayerScaleToggleAction(
-            iconRes = R.drawable.ic_player_shrink,
+            icon = Icons.Filled.ZoomIn,
             contentDescription = "缩小"
         )
         DouyinPlayerScaleMode.Shrunk -> DouyinPlayerScaleToggleAction(
-            iconRes = R.drawable.ic_player_fullscreen_exit,
+            icon = Icons.Filled.FullscreenExit,
             contentDescription = "标准"
         )
     }

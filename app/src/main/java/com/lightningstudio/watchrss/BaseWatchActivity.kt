@@ -148,14 +148,9 @@ open class BaseWatchActivity : ComponentActivity() {
 
     override fun dispatchGenericMotionEvent(ev: MotionEvent): Boolean {
         if (ev.actionMasked == MotionEvent.ACTION_SCROLL) {
-            if (ev.isFromSource(InputDevice.SOURCE_ROTARY_ENCODER)) {
-                val delta = ev.getAxisValue(MotionEvent.AXIS_SCROLL)
-                if (delta != 0f && dispatchRotaryHandlers(delta)) {
-                    return true
-                }
-            } else if (ev.isFromSource(InputDevice.SOURCE_CLASS_POINTER)) {
+            if (ev.isFromSource(InputDevice.SOURCE_CLASS_POINTER)) {
                 PointerWheelScrollTracker.onScrollEvent(ev.eventTime)
-                val delta = normalizePointerWheelScrollDelta(ev.getAxisValue(MotionEvent.AXIS_VSCROLL))
+                val delta = ev.getAxisValue(MotionEvent.AXIS_VSCROLL)
                 if (delta != 0f && dispatchRotaryHandlers(delta, pointerWheel = true)) {
                     return true
                 }

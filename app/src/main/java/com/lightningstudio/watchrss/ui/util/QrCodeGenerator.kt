@@ -38,8 +38,10 @@ object QrCodeGenerator {
      * @return 二维码 Bitmap
      */
     fun createWatchRssQrCode(data: String, size: Int): Bitmap? {
-        val base64Data = Base64.encodeToString(data.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
-        val qrContent = "请使用手机版的腕上RSS扫码\n$base64Data"
+        // 使用 URL fragment (#) 而不是查询参数 (?) 来添加用户提示
+        // 原因：fragment 不会被发送到服务器，只在客户端（扫码应用）显示
+        // 这样可以给用户提示，同时保持服务器端简洁，不污染服务器日志
+        val qrContent = "http://$data/#请将手机和手表连上同一个WiFi再扫码"
         return create(qrContent, size)
     }
 }

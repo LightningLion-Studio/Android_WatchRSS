@@ -2,7 +2,6 @@ package com.lightningstudio.watchrss.ui.components
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
-import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -17,6 +16,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.WatchLater
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -46,7 +48,7 @@ fun SwipeActionButton(
     text: String,
     width: Dp,
     onClick: () -> Unit,
-    @DrawableRes iconRes: Int? = null
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null
 ) {
     val radius = watchDimensionResource(R.dimen.hey_card_normal_bg_radius)
     val textSize = textSize(R.dimen.feed_card_action_text_size)
@@ -65,13 +67,13 @@ fun SwipeActionButton(
             .clickableWithoutRipple(onClick),
         contentAlignment = Alignment.Center
     ) {
-        if (iconRes != null) {
+        if (icon != null) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.padding(horizontal = textPadding)
             ) {
                 Icon(
-                    painter = painterResource(id = iconRes),
+                    imageVector = icon,
                     contentDescription = text,
                     tint = actionColor,
                     modifier = Modifier.size(iconSize)

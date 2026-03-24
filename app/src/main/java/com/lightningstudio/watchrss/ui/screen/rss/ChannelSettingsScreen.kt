@@ -1,6 +1,5 @@
 package com.lightningstudio.watchrss.ui.screen.rss
 
-import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -17,6 +16,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -79,7 +80,7 @@ fun ChannelSettingsScreen(
 
             SettingsDangerRow(
                 label = "删除频道",
-                iconRes = R.drawable.ic_action_delete_outline,
+                icon = Icons.Outlined.Delete,
                 enabled = deleteEnabled,
                 onClick = onDelete
             )
@@ -147,7 +148,7 @@ private fun SettingsPillRow(
 @Composable
 private fun SettingsDangerRow(
     label: String,
-    @DrawableRes iconRes: Int,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
     enabled: Boolean,
     onClick: () -> Unit
 ) {
@@ -185,7 +186,7 @@ private fun SettingsDangerRow(
         )
         Spacer(modifier = Modifier.width(iconSpacing))
         Icon(
-            painter = painterResource(id = iconRes),
+            imageVector = icon,
             contentDescription = null,
             tint = textColor,
             modifier = Modifier.size(iconSize)

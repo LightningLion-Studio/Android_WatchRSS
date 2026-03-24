@@ -13,6 +13,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Cancel
+import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -22,8 +25,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import com.lightningstudio.watchrss.ui.theme.watchColorResource
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -138,13 +141,13 @@ private fun DialogButtons(
     ) {
         RoundIconButton(
             background = MaterialTheme.colorScheme.surfaceVariant,
-            iconRes = R.drawable.ic_action_cancel,
+            icon = Icons.Outlined.Cancel,
             onClick = onCancel,
             scaleDp = scaleDp
         )
         RoundIconButton(
             background = watchColorResource(R.color.danger_red),
-            iconRes = R.drawable.ic_delete_confirm,
+            icon = Icons.Outlined.DeleteForever,
             onClick = onConfirm,
             scaleDp = scaleDp
         )
@@ -154,7 +157,7 @@ private fun DialogButtons(
 @Composable
 private fun RoundIconButton(
     background: Color,
-    iconRes: Int,
+    icon: ImageVector,
     onClick: () -> Unit,
     scaleDp: (Dp) -> Dp
 ) {
@@ -169,7 +172,7 @@ private fun RoundIconButton(
         contentAlignment = Alignment.Center
     ) {
         Icon(
-            painter = painterResource(id = iconRes),
+            imageVector = icon,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.size(iconSize)

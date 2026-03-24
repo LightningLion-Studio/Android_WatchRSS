@@ -23,6 +23,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.outlined.Remove
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -38,8 +43,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
@@ -415,7 +420,7 @@ private fun OobeCustomizationStep(
 
         OobeCustomizationSetting(info = fontSizeInfo) {
             WatchRoundIconButtonIcon(
-                iconRes = R.drawable.ic_action_minus,
+                icon = Icons.Outlined.Remove,
                 contentDescription = "减小字体",
                 enabled = lowerFont != null,
                 onClick = { lowerFont?.let { previewFontSizeSp = it } }
@@ -428,7 +433,7 @@ private fun OobeCustomizationStep(
             )
             Spacer(modifier = Modifier.width(stepperSpacing))
             WatchRoundIconButtonIcon(
-                iconRes = R.drawable.ic_action_plus,
+                icon = Icons.Filled.Add,
                 contentDescription = "增大字体",
                 enabled = higherFont != null,
                 onClick = { higherFont?.let { previewFontSizeSp = it } }
@@ -742,7 +747,7 @@ private fun OobeOfflineWarningDialogButtons(
     ) {
         OobeDialogIconButton(
             background = MaterialTheme.colorScheme.surfaceVariant,
-            iconRes = R.drawable.ic_action_cancel,
+            icon = Icons.Filled.Close,
             iconTint = MaterialTheme.colorScheme.onSurface,
             testTag = OobeTestTags.OFFLINE_WARNING_CANCEL_BUTTON,
             scaleDp = scaleDp,
@@ -750,7 +755,7 @@ private fun OobeOfflineWarningDialogButtons(
         )
         OobeDialogIconButton(
             background = MaterialTheme.colorScheme.primary,
-            iconRes = R.drawable.ic_action_confirm,
+            icon = Icons.Filled.Check,
             iconTint = MaterialTheme.colorScheme.onPrimary,
             testTag = OobeTestTags.OFFLINE_WARNING_CONFIRM_BUTTON,
             scaleDp = scaleDp,
@@ -762,7 +767,7 @@ private fun OobeOfflineWarningDialogButtons(
 @Composable
 private fun OobeDialogIconButton(
     background: Color,
-    iconRes: Int,
+    icon: ImageVector,
     iconTint: Color,
     testTag: String,
     scaleDp: (Dp) -> Dp,
@@ -781,7 +786,7 @@ private fun OobeDialogIconButton(
         contentAlignment = Alignment.Center
     ) {
         Icon(
-            painter = painterResource(id = iconRes),
+            imageVector = icon,
             contentDescription = null,
             tint = iconTint,
             modifier = Modifier.size(iconSize)

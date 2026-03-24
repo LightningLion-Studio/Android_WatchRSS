@@ -28,6 +28,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.WatchLater
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -627,7 +630,7 @@ private fun FeedItemEntry(
                             onCloseSwipe()
                             onFavoriteClick()
                         },
-                        iconRes = R.drawable.ic_action_favorite
+                        icon = Icons.Filled.Star
                     )
                     SwipeActionButton(
                         text = "稍后再看",
@@ -636,7 +639,7 @@ private fun FeedItemEntry(
                             onCloseSwipe()
                             onWatchLaterClick()
                         },
-                        iconRes = R.drawable.ic_action_watch_later
+                        icon = Icons.Outlined.WatchLater
                     )
                 }
                 cardContent(offsetModifier)

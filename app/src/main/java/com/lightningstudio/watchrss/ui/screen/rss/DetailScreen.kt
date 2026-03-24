@@ -43,6 +43,10 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.ui.ExperimentalComposeUiApi
@@ -696,7 +700,7 @@ internal fun DetailContent(
                         )
                         Spacer(modifier = Modifier.width(actionHorizontalSpacing))
                         CircleIconButton(
-                            iconRes = R.drawable.ic_action_share,
+                            icon = Icons.Outlined.Share,
                             contentDescription = "分享",
                             tint = normalIconColor,
                             containerColor = actionContainerColor,
@@ -1055,9 +1059,10 @@ private fun DetailVideoBlock(
                     .then(placeholderModifier)
             )
         }
-        Image(
-            painter = painterResource(R.drawable.ic_play_circle),
+        androidx.compose.material3.Icon(
+            imageVector = Icons.Filled.PlayCircle,
             contentDescription = "播放",
+            tint = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier
                 .align(Alignment.Center)
                 .size(watchDimensionResource(R.dimen.hey_listitem_widget_size))
@@ -1226,7 +1231,7 @@ private fun FavoriteButtonWithStars(
 
         // 收藏按钮
         CircleIconButton(
-            iconRes = R.drawable.ic_action_favorite,
+            icon = Icons.Filled.Star,
             contentDescription = "收藏",
             tint = if (isFavorite) activeColor else normalIconColor,
             containerColor = containerColor,
@@ -1341,7 +1346,7 @@ private fun StarParticle(
 
 @Composable
 private fun CircleIconButton(
-    iconRes: Int,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String,
     tint: Color,
     containerColor: Color,
@@ -1380,14 +1385,14 @@ private fun CircleIconButton(
             ),
         contentAlignment = Alignment.Center
     ) {
-        Image(
-            painter = painterResource(iconRes),
+        androidx.compose.material3.Icon(
+            imageVector = icon,
             contentDescription = contentDescription,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .offset(x = iconOffsetX),
-            colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(tint)
+            tint = tint
         )
     }
 }
