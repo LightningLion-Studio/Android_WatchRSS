@@ -81,4 +81,50 @@ class PlayerVolumeOverlayPolicyTest {
         assertEquals(1, nearestPositiveVolumeForPercent(0.07f, minVolume = 0, maxVolume = 10))
         assertEquals(1, highestSafeVolumeForPercent(0.16f, minVolume = 0, maxVolume = 10))
     }
+
+    @Test
+    fun shouldEnforcePlaybackStartGuard_returnsFalseAfterUserDismissal() {
+        val result = shouldEnforcePlaybackStartGuard(
+            guardEnabled = true,
+            dismissedByUser = true,
+            currentVolume = 5,
+            minVolume = 0,
+            maxVolume = 10
+        )
+
+        assertEquals(false, result)
+    }
+
+    @Test
+    fun shouldEnforcePlaybackStartGuard_returnsTrueForLoudPlaybackWithoutUserOverride() {
+        val result = shouldEnforcePlaybackStartGuard(
+            guardEnabled = true,
+            dismissedByUser = false,
+            currentVolume = 5,
+            minVolume = 0,
+            maxVolume = 10
+        )
+
+        assertEquals(true, result)
+    }
+
+    @Test
+    fun hasOutOfBandVolumeChange_returnsTrueWhenSystemVolumeChangedExternally() {
+        val result = hasOutOfBandVolumeChange(
+            observedVolume = 1,
+            actualVolume = 5
+        )
+
+        assertEquals(true, result)
+    }
+
+    @Test
+    fun hasOutOfBandVolumeChange_returnsFalseWhenObservedVolumeMatchesSystem() {
+        val result = hasOutOfBandVolumeChange(
+            observedVolume = 5,
+            actualVolume = 5
+        )
+
+        assertEquals(false, result)
+    }
 }

@@ -28,6 +28,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
+import com.lightningstudio.watchrss.util.AppLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -55,6 +56,7 @@ class PlayerVolumeState internal constructor(
     )
     private var hideJob: Job? = null
     private var rotaryGuardState by mutableStateOf(RotaryVolumeGuardState())
+    private var playbackStartGuardDismissedByUser by mutableStateOf(false)
 
     var currentVolume by mutableIntStateOf(
         audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).coerceIn(minVolume, maxVolume)
@@ -76,6 +78,7 @@ class PlayerVolumeState internal constructor(
 
     fun adjustBySteps(steps: Int, eventUptimeMs: Long = SystemClock.elapsedRealtime()) {
         if (steps == 0) return
+        playbackStartGuardDismissedByUser = true
         val current = readCurrentVolume()
         val guardedTarget = applyRotaryVolumeGuard(
             currentVolume = current,
@@ -93,9 +96,39 @@ class PlayerVolumeState internal constructor(
     }
 
     fun enforcePlaybackStartGuard() {
-        if (!guardEnabled) return
         val current = readCurrentVolume()
-        if (volumeProgress(current, minVolume, maxVolume) <= PLAYBACK_START_THRESHOLD_PERCENT) return
+        if (hasOutOfBandVolumeChange(
+                observedVolume = currentVolume,
+                actualVolume = current
+            )
+        ) {
+            // Treat any out-of-band stream volume change as explicit user intent.
+            AppLogger.d(
+                VOLUME_TAG,
+                "dismiss playback start guard after external volume change observed=$currentVolume actual=$current"
+            )
+            playbackStartGuardDismissedByUser = true
+            rotaryGuardState = RotaryVolumeGuardState()
+            currentVolume = current
+        }
+        if (!shouldEnforcePlaybackStartGuard(
+                guardEnabled = guardEnabled,
+                dismissedByUser = playbackStartGuardDismissedByUser,
+                currentVolume = current,
+                minVolume = minVolume,
+                maxVolume = maxVolume
+            )
+        ) {
+            AppLogger.d(
+                VOLUME_TAG,
+                "skip playback start guard current=$current dismissed=$playbackStartGuardDismissedByUser"
+            )
+            return
+        }
+        AppLogger.d(
+            VOLUME_TAG,
+            "apply playback start guard current=$current target=$playbackStartTargetVolume"
+        )
         setVolume(playbackStartTargetVolume, current)
         if (currentVolume != current) {
             show()
@@ -180,6 +213,7 @@ private const val PLAYBACK_START_THRESHOLD_PERCENT = 0.15f
 private const val PLAYBACK_START_TARGET_PERCENT = 0.07f
 private const val ROTARY_SESSION_CAP_PERCENT = 0.16f
 private const val ROTARY_SESSION_IDLE_TIMEOUT_MS = 600L
+private const val VOLUME_TAG = "PlayerVolume"
 
 internal data class RotaryVolumeGuardState(
     val sessionCapVolume: Int? = null,
@@ -238,6 +272,25 @@ internal fun applyRotaryVolumeGuard(
             lastEventUptimeMs = eventUptimeMs
         )
     )
+}
+
+internal fun shouldEnforcePlaybackStartGuard(
+    guardEnabled: Boolean,
+    dismissedByUser: Boolean,
+    currentVolume: Int,
+    minVolume: Int,
+    maxVolume: Int,
+    thresholdPercent: Float = PLAYBACK_START_THRESHOLD_PERCENT
+): Boolean {
+    if (!guardEnabled || dismissedByUser) return false
+    return volumeProgress(currentVolume, minVolume, maxVolume) > thresholdPercent
+}
+
+internal fun hasOutOfBandVolumeChange(
+    observedVolume: Int,
+    actualVolume: Int
+): Boolean {
+    return observedVolume != actualVolume
 }
 
 internal fun volumeProgress(

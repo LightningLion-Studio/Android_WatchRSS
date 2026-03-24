@@ -77,7 +77,6 @@ import com.lightningstudio.watchrss.ui.components.ToastMessage
 import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.components.WatchIconButton
 import com.lightningstudio.watchrss.ui.components.WatchSurface
-import com.lightningstudio.watchrss.ui.components.PlayerVolumeState
 import com.lightningstudio.watchrss.ui.components.PlayerVolumeOverlay
 import com.lightningstudio.watchrss.ui.components.rememberPlayerVolumeState
 import com.lightningstudio.watchrss.ui.input.InstallRotaryPagerHandler
@@ -139,6 +138,9 @@ fun DouyinImmersiveScreen(
 
     LaunchedEffect(pagerState.currentPage) {
         onPageSettled(pagerState.currentPage)
+        if (pagerState.currentPage > 0) {
+            volumeState.enforcePlaybackStartGuard()
+        }
     }
 
     LaunchedEffect(uiState.currentPage, uiState.showTitlePage, pageCount) {
@@ -171,7 +173,6 @@ fun DouyinImmersiveScreen(
                     item = item,
                     headers = uiState.playHeaders,
                     localPlayPath = uiState.localPlayPaths[item.awemeId],
-                    volumeState = volumeState,
                     isActive = pagerState.currentPage == page,
                     controlsVisible = controlsVisible,
                     scaleMode = scaleMode,
@@ -272,7 +273,6 @@ private fun DouyinVideoPage(
     item: DouyinStreamItem,
     headers: Map<String, String>,
     localPlayPath: String?,
-    volumeState: PlayerVolumeState,
     isActive: Boolean,
     controlsVisible: Boolean,
     scaleMode: DouyinPlayerScaleMode,
@@ -302,7 +302,6 @@ private fun DouyinVideoPage(
     var isBuffering by remember(item.awemeId) { mutableStateOf(false) }
     var isPlaying by remember(item.awemeId) { mutableStateOf(false) }
     var hasError by remember(item.awemeId) { mutableStateOf(false) }
-    var playbackStartGuardPending by remember(item.awemeId) { mutableStateOf(true) }
     var viewSize by remember(item.awemeId) { mutableStateOf(IntSize.Zero) }
     var videoSize by remember(item.awemeId) { mutableStateOf(IntSize.Zero) }
     val shouldKeepScreenOn = isActive && !hasError && (isPlaying || isBuffering)
@@ -479,10 +478,6 @@ private fun DouyinVideoPage(
         val shouldPlay = isActive && !pausedByGesture && !hasError
         player.playWhenReady = shouldPlay
         if (shouldPlay) {
-            if (playbackStartGuardPending) {
-                volumeState.enforcePlaybackStartGuard()
-                playbackStartGuardPending = false
-            }
             player.play()
         } else {
             stopPlayback()
