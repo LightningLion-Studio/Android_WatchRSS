@@ -19,6 +19,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.style.TextAlign
 import com.lightningstudio.watchrss.R
@@ -88,7 +89,7 @@ fun BiliListScreen(
             state = listState,
             contentPadding = PaddingValues(
                 top = safePadding,
-                bottom = safePadding + itemSpacing
+                bottom = safePadding + itemSpacing + 40.dp
             ),
             verticalArrangement = Arrangement.spacedBy(itemSpacing)
         ) {

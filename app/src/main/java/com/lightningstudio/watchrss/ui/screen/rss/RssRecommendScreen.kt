@@ -50,7 +50,12 @@ fun RssRecommendScreen(
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             state = listState,
-            contentPadding = PaddingValues(safePadding),
+            contentPadding = PaddingValues(
+                start = safePadding,
+                top = safePadding,
+                end = safePadding,
+                bottom = safePadding + 40.dp
+            ),
             verticalArrangement = Arrangement.spacedBy(spacing)
         ) {
             item {
@@ -79,7 +84,12 @@ fun RssRecommendGroupScreen(
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             state = listState,
-            contentPadding = PaddingValues(safePadding),
+            contentPadding = PaddingValues(
+                start = safePadding,
+                top = safePadding,
+                end = safePadding,
+                bottom = safePadding + 40.dp
+            ),
             verticalArrangement = Arrangement.spacedBy(spacing)
         ) {
             item {

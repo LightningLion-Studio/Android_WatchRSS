@@ -9,6 +9,7 @@ import androidx.compose.runtime.remember
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.lightningstudio.watchrss.BiliChannelInfoActivity
 import com.lightningstudio.watchrss.BiliDetailActivity
@@ -42,6 +43,7 @@ object BiliRoutes {
 @Composable
 fun BiliEntryNavGraph(repository: BiliRepositoryContract, rssRepository: RssRepository) {
     val navController = rememberNavController()
+    val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val factory = remember(repository, rssRepository) { BiliViewModelFactory(repository, rssRepository) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val originalContentEnabled by remember(rssRepository) {
@@ -52,6 +54,10 @@ fun BiliEntryNavGraph(repository: BiliRepositoryContract, rssRepository: RssRepo
 
     LaunchedEffect(Unit) {
         rssRepository.ensureBuiltinChannels()
+    }
+
+    LaunchedEffect(currentBackStackEntry?.destination?.route) {
+        (context as? BaseWatchActivity)?.resetNavigationThrottle()
     }
 
     NavHost(

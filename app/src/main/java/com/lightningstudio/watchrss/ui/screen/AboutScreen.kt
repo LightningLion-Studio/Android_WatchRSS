@@ -159,13 +159,13 @@ private fun AboutEntry(
                 .height(pillHeight)
                 .clip(RoundedCornerShape(pillRadius))
                 .background(pillColor)
+                .clickable(onClick = onClick)
                 .padding(
                     start = pillHorizontalPadding,
                     end = pillHorizontalPadding,
                     top = pillVerticalPadding,
                     bottom = pillVerticalPadding
-                )
-                .clickable(onClick = onClick),
+                ),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(

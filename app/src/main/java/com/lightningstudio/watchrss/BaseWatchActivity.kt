@@ -59,7 +59,7 @@ open class BaseWatchActivity : ComponentActivity() {
         hasResumedOnce = true
         window.decorView.removeCallbacks(resetRunnable)
         swipeCommitted = false
-        pendingActivityStartAllowanceAt = 0L
+        resetNavigationThrottle()
         resetViewState(window.decorView)
 
         // 记录Activity活跃
@@ -361,6 +361,11 @@ open class BaseWatchActivity : ComponentActivity() {
         return allowNavigation(minIntervalMs)
     }
 
+    fun resetNavigationThrottle() {
+        lastNavigationAt = 0L
+        pendingActivityStartAllowanceAt = 0L
+    }
+
     private fun shouldStartSwipe(root: View, ev: MotionEvent): Boolean {
         val width = root.width
         if (width <= 0 || ev.pointerCount != 1) {
@@ -509,8 +514,7 @@ open class BaseWatchActivity : ComponentActivity() {
         minIntervalMs: Long,
         reserveActivityStart: Boolean
     ): Boolean {
-        val latestNavigationAt = max(lastNavigationAt, globalNavigationAt)
-        if (now - latestNavigationAt < minIntervalMs) {
+        if (now - lastNavigationAt < minIntervalMs) {
             return false
         }
         markNavigation(now)
@@ -520,7 +524,6 @@ open class BaseWatchActivity : ComponentActivity() {
 
     private fun markNavigation(now: Long) {
         lastNavigationAt = now
-        globalNavigationAt = now
     }
 
     @Suppress("DEPRECATION")
@@ -529,8 +532,6 @@ open class BaseWatchActivity : ComponentActivity() {
     }
 
     companion object {
-        @Volatile
-        private var globalNavigationAt = 0L
         private const val RESET_DELAY_MS = 350L
         private const val SWIPE_START_RATIO = 0.65f
         private const val SWIPE_COMMIT_RATIO = 0.35f
