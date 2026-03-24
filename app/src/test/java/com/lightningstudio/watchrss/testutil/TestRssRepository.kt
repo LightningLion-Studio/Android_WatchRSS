@@ -45,6 +45,7 @@ class TestRssRepository(
     val toggledWatchLaterIds = mutableListOf<Long>()
     val syncedExternalSavedItems = mutableListOf<Triple<ExternalSavedItem, SaveType, Boolean>>()
     val retriedOfflineMediaIds = mutableListOf<Long>()
+    var retryOfflineMediaBehavior: suspend (Long) -> Unit = {}
     val toggledLikeIds = mutableListOf<Long>()
     val markedReadChannelIds = mutableListOf<Long>()
     val readingProgressUpdates = mutableListOf<Pair<Long, Float>>()
@@ -211,6 +212,7 @@ class TestRssRepository(
 
     override suspend fun retryOfflineMedia(itemId: Long) {
         retriedOfflineMediaIds += itemId
+        retryOfflineMediaBehavior(itemId)
     }
 
     override suspend fun toggleLike(itemId: Long): Result<Boolean> {

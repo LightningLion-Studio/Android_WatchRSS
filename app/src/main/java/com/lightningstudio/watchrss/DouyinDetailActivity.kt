@@ -68,6 +68,7 @@ class DouyinDetailActivity : BaseWatchActivity() {
                         contentBlocks = contentBlocks,
                         offlineMedia = emptyMap(),
                         hasOfflineFailures = false,
+                        isRetryingOfflineMedia = false,
                         isFavorite = isFavorite,
                         isWatchLater = false,
                         readingThemeDark = readingThemeDark,

@@ -17,7 +17,8 @@ data class DouyinSettingsUiState(
     val channelId: Long? = null,
     val originalContentEnabled: Boolean = false,
     val deleteEnabled: Boolean = false,
-    val showOriginalContent: Boolean = false
+    val showOriginalContent: Boolean = false,
+    val shouldReturnHome: Boolean = false
 )
 
 class DouyinSettingsViewModel(
@@ -44,7 +45,13 @@ class DouyinSettingsViewModel(
     fun logout() {
         viewModelScope.launch {
             repository.logoutAndClearMediaCache()
-            _uiState.update { it.copy(isLoggedIn = false, message = "已退出登录") }
+            _uiState.update {
+                it.copy(
+                    isLoggedIn = false,
+                    message = "已退出登录",
+                    shouldReturnHome = true
+                )
+            }
         }
     }
 

@@ -144,6 +144,7 @@ fun DetailScreen(
     val channel by viewModel.channel.collectAsState()
     val savedState by viewModel.savedState.collectAsState()
     val offlineMedia by viewModel.offlineMedia.collectAsState()
+    val isRetryingOfflineMedia by viewModel.isRetryingOfflineMedia.collectAsState()
     val contentBlocks by viewModel.contentBlocks.collectAsState()
     val readingThemeDark by viewModel.readingThemeDark.collectAsState()
     val readingFontSizeSp by viewModel.readingFontSizeSp.collectAsState()
@@ -162,6 +163,7 @@ fun DetailScreen(
             contentBlocks = contentBlocks,
             offlineMedia = offlineMap,
             hasOfflineFailures = hasOfflineFailures,
+            isRetryingOfflineMedia = isRetryingOfflineMedia,
             isFavorite = savedState.isFavorite,
             isWatchLater = savedState.isWatchLater,
             readingThemeDark = readingThemeDark,
@@ -184,6 +186,7 @@ internal fun DetailContent(
     contentBlocks: List<ContentBlock>,
     offlineMedia: Map<String, OfflineMedia>,
     hasOfflineFailures: Boolean,
+    isRetryingOfflineMedia: Boolean,
     isFavorite: Boolean,
     isWatchLater: Boolean,
     readingThemeDark: Boolean,
@@ -402,8 +405,9 @@ internal fun DetailContent(
         }
         val link = item?.link?.trim().orEmpty()
         val baseLink = link.takeIf { it.isNotBlank() }
-        val baseItemCount = remember(link, hasOfflineFailures) {
-            4 + (if (link.isNotEmpty()) 1 else 0) + (if (hasOfflineFailures) 1 else 0)
+        val baseItemCount = remember(link, hasOfflineFailures, isRetryingOfflineMedia) {
+            4 + (if (link.isNotEmpty()) 1 else 0) +
+                (if (hasOfflineFailures || isRetryingOfflineMedia) 1 else 0)
         }
         val prefetchedUrls = remember(item?.id) { mutableSetOf<String>() }
         val articlePrefetchedUrls = remember(item?.id) { mutableSetOf<String>() }
@@ -553,15 +557,16 @@ internal fun DetailContent(
                     )
                 }
             }
-            if (hasOfflineFailures) {
+            if (hasOfflineFailures || isRetryingOfflineMedia) {
                 item(key = "offlineAction") {
                     Spacer(modifier = Modifier.height(blockSpacing))
                     DetailActionButton(
-                        text = "离线媒体下载失败，点此重试",
+                        text = if (isRetryingOfflineMedia) "重试中..." else "离线媒体下载失败，点此重试",
                         fontSize = bodyFontSize,
                         containerColor = actionContainerColor,
                         contentColor = textColor,
                         borderColor = actionBorderColor,
+                        enabled = !isRetryingOfflineMedia,
                         onClick = onRetryOfflineMedia
                     )
                 }
@@ -781,6 +786,7 @@ internal fun DetailActionButton(
     containerColor: Color,
     contentColor: Color,
     borderColor: Color,
+    enabled: Boolean = true,
     onClick: () -> Unit
 ) {
     val shape = RoundedCornerShape(WatchDimens.hey_button_default_radius)
@@ -791,16 +797,24 @@ internal fun DetailActionButton(
     Box(
         modifier = Modifier
             .clip(shape)
-            .background(containerColor)
+            .background(if (enabled) containerColor else containerColor.copy(alpha = 0.72f))
             .then(
-                if (borderColor.alpha > 0f) Modifier.border(1.dp, borderColor, shape) else Modifier
+                if (borderColor.alpha > 0f) {
+                    Modifier.border(
+                        1.dp,
+                        if (enabled) borderColor else borderColor.copy(alpha = 0.72f),
+                        shape
+                    )
+                } else {
+                    Modifier
+                }
             )
-            .clickableWithoutRipple(onClick = onClick)
+            .clickableWithoutRipple(enabled = enabled, onClick = onClick)
             .padding(padding)
     ) {
         Text(
             text = text,
-            color = contentColor,
+            color = if (enabled) contentColor else contentColor.copy(alpha = 0.72f),
             fontSize = fontSize
         )
     }

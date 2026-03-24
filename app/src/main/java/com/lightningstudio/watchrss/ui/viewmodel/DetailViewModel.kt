@@ -12,7 +12,9 @@ import com.lightningstudio.watchrss.ui.util.RssContentCache
 import com.lightningstudio.watchrss.ui.util.buildContentBlocks
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.mapLatest
@@ -57,6 +59,9 @@ class DetailViewModel(
 
     val offlineMedia = repository.observeOfflineMedia(itemId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private val _isRetryingOfflineMedia = MutableStateFlow(false)
+    val isRetryingOfflineMedia = _isRetryingOfflineMedia.asStateFlow()
 
     val readingThemeDark = settingsRepository.readingThemeDark
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
@@ -111,9 +116,14 @@ class DetailViewModel(
     }
 
     fun retryOfflineMedia() {
-        if (itemId <= 0L) return
+        if (itemId <= 0L || _isRetryingOfflineMedia.value) return
         viewModelScope.launch {
-            repository.retryOfflineMedia(itemId)
+            _isRetryingOfflineMedia.value = true
+            try {
+                repository.retryOfflineMedia(itemId)
+            } finally {
+                _isRetryingOfflineMedia.value = false
+            }
         }
     }
 

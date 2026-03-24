@@ -3,6 +3,7 @@ package com.lightningstudio.watchrss
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
@@ -77,6 +78,11 @@ class DouyinSettingsActivity : BaseWatchActivity() {
                             viewModel.clearMessage()
                         }
                     }
+                    LaunchedEffect(uiState.shouldReturnHome) {
+                        if (uiState.shouldReturnHome) {
+                            navigateHome()
+                        }
+                    }
 
                     Box(modifier = Modifier.fillMaxSize()) {
                         BiliSettingsScreen(
@@ -115,5 +121,19 @@ class DouyinSettingsActivity : BaseWatchActivity() {
         fun createIntent(context: Context): Intent {
             return Intent(context, DouyinSettingsActivity::class.java)
         }
+    }
+
+    private fun navigateHome() {
+        com.lightningstudio.watchrss.ui.util.showAppToast(
+            applicationContext,
+            "已退出登录",
+            Toast.LENGTH_SHORT
+        )
+        startActivity(
+            Intent(this, MainActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            }
+        )
+        finish()
     }
 }

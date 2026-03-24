@@ -49,6 +49,7 @@ class PerfLargeArticleActivity : BaseWatchActivity() {
                         contentBlocks = contentBlocks,
                         offlineMedia = emptyMap(),
                         hasOfflineFailures = false,
+                        isRetryingOfflineMedia = false,
                         isFavorite = false,
                         isWatchLater = false,
                         readingThemeDark = true,
