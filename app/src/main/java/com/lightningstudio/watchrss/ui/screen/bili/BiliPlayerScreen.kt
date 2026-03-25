@@ -123,8 +123,7 @@ fun BiliPlayerScreen(
     onOpenWeb: () -> Unit,
     onPanStateChange: (Float, Float) -> Unit,
     allowPan: Boolean = true,
-    rotaryVolumeEnabled: Boolean = true,
-    volumeGuardEnabled: Boolean = true
+    rotaryVolumeEnabled: Boolean = true
 ) {
     val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
     val spacing = watchDimensionResource(R.dimen.hey_distance_6dp)
@@ -152,15 +151,12 @@ fun BiliPlayerScreen(
     var videoRotation by remember { mutableStateOf(0) }
     var lastUrl by remember { mutableStateOf<String?>(null) }
     var playWhenReady by remember { mutableStateOf(!uiState.playUrl.isNullOrBlank()) }
-    var playbackStartGuardPending by remember(uiState.playUrl) {
-        mutableStateOf(!uiState.playUrl.isNullOrBlank())
-    }
     var panOffsetX by remember { mutableStateOf(0f) }
     val panAnimator = remember { Animatable(0f) }
     val panDecay = remember { exponentialDecay<Float>() }
     val panScope = rememberCoroutineScope()
     val panFlingJob = remember { mutableStateOf<Job?>(null) }
-    val volumeState = rememberPlayerVolumeState(guardEnabled = volumeGuardEnabled)
+    val volumeState = rememberPlayerVolumeState()
     val shouldKeepScreenOn = !uiState.playUrl.isNullOrBlank() &&
         playbackError.isNullOrBlank() &&
         (isPlaying || isBuffering || (!isPrepared && surfaceRef != null))
@@ -203,10 +199,6 @@ fun BiliPlayerScreen(
                     positionMs = current
                 }
             } else if (isPrepared) {
-                if (playbackStartGuardPending) {
-                    volumeState.enforcePlaybackStartGuard()
-                    playbackStartGuardPending = false
-                }
                 player.start()
                 playWhenReady = true
                 isPlaying = true
@@ -238,7 +230,6 @@ fun BiliPlayerScreen(
         videoRotation = 0
         lastUrl = null
         playWhenReady = !uiState.playUrl.isNullOrBlank()
-        playbackStartGuardPending = !uiState.playUrl.isNullOrBlank()
         controlsVisible = true
         stopPanFling()
         panOffsetX = 0f
@@ -390,10 +381,6 @@ fun BiliPlayerScreen(
                 isVerticalPan
             )
             if (playWhenReady) {
-                if (playbackStartGuardPending) {
-                    volumeState.enforcePlaybackStartGuard()
-                    playbackStartGuardPending = false
-                }
                 mp.start()
                 isPlaying = true
             } else {
@@ -495,7 +482,7 @@ fun BiliPlayerScreen(
         showSystemUi = false,
         reverseDirection = true,
         supportsPointerWheel = true,
-        onVolumeStep = volumeState::adjustBySteps
+        onVolumeAdjust = volumeState::adjustByDelta
     )
 
     Box(

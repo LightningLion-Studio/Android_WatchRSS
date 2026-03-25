@@ -16,7 +16,6 @@ import com.lightningstudio.watchrss.data.douyin.DouyinFeedCacheStore
 import com.lightningstudio.watchrss.data.douyin.DouyinPreloadManager
 import com.lightningstudio.watchrss.data.douyin.DouyinWatchHistoryStore
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
-import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
 import com.lightningstudio.watchrss.ui.screen.douyin.DouyinImmersiveScreen
 import com.lightningstudio.watchrss.ui.screen.douyin.DouyinLoginScreen
 import com.lightningstudio.watchrss.ui.screen.douyin.DouyinRssFeedScreen
@@ -50,9 +49,6 @@ class DouyinEntryActivity : BaseWatchActivity() {
                 CompositionLocalProvider(LocalDensity provides Density(2f, baseDensity.fontScale)) {
                     val warningMessage = remember { mutableStateOf<String?>(null) }
                     val uiState by viewModel.uiState.collectAsState()
-                    val volumeGuardEnabled by container.settingsRepository.mediaVolumeGuardEnabled.collectAsState(
-                        initial = DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
-                    )
                     val originalContentEnabled by remember(rssRepository) {
                         rssRepository.observeChannels().map { channels ->
                             channels.firstOrNull { it.url == BuiltinChannelType.DOUYIN.url }?.useOriginalContent
@@ -84,7 +80,6 @@ class DouyinEntryActivity : BaseWatchActivity() {
                         if (originalContentEnabled) {
                             DouyinImmersiveScreen(
                                 uiState = uiState,
-                                volumeGuardEnabled = volumeGuardEnabled,
                                 onPageSettled = viewModel::onPageSettled,
                                 onEnterFlow = viewModel::enterVideoFlow,
                                 onMessageShown = viewModel::clearMessage,

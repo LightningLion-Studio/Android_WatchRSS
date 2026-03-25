@@ -78,7 +78,6 @@ fun SettingsScreen(
     shareUseSystem: StateFlow<Boolean>,
     readingFontSizeSp: StateFlow<Int>,
     phoneConnectionEnabled: StateFlow<Boolean>,
-    mediaVolumeGuardEnabled: StateFlow<Boolean>,
     rssInlineImagePrefetchMode: StateFlow<RssInlineImagePrefetchMode>,
     showPerformanceTools: Boolean,
     onSelectCacheLimit: (Long) -> Unit,
@@ -86,7 +85,6 @@ fun SettingsScreen(
     onToggleShareMode: () -> Unit,
     onSelectFontSize: (Int) -> Unit,
     onTogglePhoneConnection: () -> Unit,
-    onToggleMediaVolumeGuard: () -> Unit,
     onSelectRssInlineImagePrefetchMode: (RssInlineImagePrefetchMode) -> Unit,
     onOpenOobe: () -> Unit,
     onOpenPerfLargeList: () -> Unit,
@@ -101,7 +99,6 @@ fun SettingsScreen(
     val useSystemShare by shareUseSystem.collectAsState()
     val fontSizeSp by readingFontSizeSp.collectAsState()
     val phoneConnection by phoneConnectionEnabled.collectAsState()
-    val mediaVolumeGuard by mediaVolumeGuardEnabled.collectAsState()
     val imagePrefetchMode by rssInlineImagePrefetchMode.collectAsState()
     val showSystemShareSetting = remember(context) {
         isSystemShareSettingSupported(context)
@@ -117,12 +114,10 @@ fun SettingsScreen(
             readingThemeDark = themeDark,
             readingFontSizeSp = fontSizeSp,
             phoneConnectionEnabled = phoneConnection,
-            mediaVolumeGuardEnabled = mediaVolumeGuard,
             showPerformanceTools = showPerformanceTools,
             onToggleReadingTheme = onToggleReadingTheme,
             onSelectFontSize = onSelectFontSize,
             onTogglePhoneConnection = onTogglePhoneConnection,
-            onToggleMediaVolumeGuard = onToggleMediaVolumeGuard,
             onOpenAdvanced = { currentPage = SettingsPage.Advanced },
             onOpenOobe = onOpenOobe,
             onOpenPerfLargeList = onOpenPerfLargeList,
@@ -148,12 +143,10 @@ private fun MainSettingsPage(
     readingThemeDark: Boolean,
     readingFontSizeSp: Int,
     phoneConnectionEnabled: Boolean,
-    mediaVolumeGuardEnabled: Boolean,
     showPerformanceTools: Boolean,
     onToggleReadingTheme: () -> Unit,
     onSelectFontSize: (Int) -> Unit,
     onTogglePhoneConnection: () -> Unit,
-    onToggleMediaVolumeGuard: () -> Unit,
     onOpenAdvanced: () -> Unit,
     onOpenOobe: () -> Unit,
     onOpenPerfLargeList: () -> Unit,
@@ -175,7 +168,6 @@ private fun MainSettingsPage(
     val scrollState = rememberScrollState()
     val readingThemeInfo = remember { MainSettingsCatalog.readingTheme }
     val fontSizeInfo = remember { MainSettingsCatalog.fontSize }
-    val mediaVolumeGuardInfo = remember { MainSettingsCatalog.mediaVolumeGuard }
 
     InstallRotaryScrollHandler(scrollState)
 
@@ -238,38 +230,6 @@ private fun MainSettingsPage(
             }
             Text(
                 text = fontSizeInfo.description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
-            )
-
-            Spacer(modifier = Modifier.height(entrySpacing))
-
-            WatchSettingsPillRow(label = mediaVolumeGuardInfo.title, endPaddingMultiplier = 1.5f) {
-                WatchSwitch(
-                    checked = mediaVolumeGuardEnabled,
-                    modifier = Modifier.testTag(SettingsTestTags.MEDIA_VOLUME_GUARD_SWITCH),
-                    onCheckedChange = { onToggleMediaVolumeGuard() }
-                )
-            }
-            Text(
-                text = if (mediaVolumeGuardEnabled) {
-                    "播放前若音量超过15%，会先压到约7%"
-                } else {
-                    "关闭后播放时不再自动压低音量"
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
-            )
-            Text(
-                text = mediaVolumeGuardInfo.description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
-            )
-            Text(
-                text = "滚轮连续上调时会先停在约16%，停一下再滚可继续升高",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = valueIndent, top = valueSpacing)

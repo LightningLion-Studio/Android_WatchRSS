@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lightningstudio.watchrss.data.rss.RssRepository
 import com.lightningstudio.watchrss.data.settings.DEFAULT_CACHE_LIMIT_MB
-import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
 import com.lightningstudio.watchrss.data.settings.DEFAULT_READING_FONT_SIZE_SP
 import com.lightningstudio.watchrss.data.settings.DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE
 import com.lightningstudio.watchrss.data.settings.MB_BYTES
@@ -41,13 +40,6 @@ class SettingsViewModel(
 
     val phoneConnectionEnabled: StateFlow<Boolean> = settingsRepository.phoneConnectionEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
-
-    val mediaVolumeGuardEnabled: StateFlow<Boolean> = settingsRepository.mediaVolumeGuardEnabled
-        .stateIn(
-            viewModelScope,
-            SharingStarted.WhileSubscribed(5_000),
-            DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
-        )
 
     val rssInlineImagePrefetchMode: StateFlow<RssInlineImagePrefetchMode> =
         settingsRepository.rssInlineImagePrefetchMode
@@ -88,13 +80,6 @@ class SettingsViewModel(
         viewModelScope.launch {
             val current = phoneConnectionEnabled.value
             settingsRepository.setPhoneConnectionEnabled(!current)
-        }
-    }
-
-    fun toggleMediaVolumeGuard() {
-        viewModelScope.launch {
-            val current = mediaVolumeGuardEnabled.value
-            settingsRepository.setMediaVolumeGuardEnabled(!current)
         }
     }
 

@@ -35,7 +35,6 @@ class SettingsScreenTest {
                 shareUseSystem = MutableStateFlow(false),
                 readingFontSizeSp = MutableStateFlow(14),
                 phoneConnectionEnabled = MutableStateFlow(true),
-                mediaVolumeGuardEnabled = MutableStateFlow(true),
                 rssInlineImagePrefetchMode = MutableStateFlow(DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE),
                 showPerformanceTools = false,
                 onSelectCacheLimit = {},
@@ -43,7 +42,6 @@ class SettingsScreenTest {
                 onToggleShareMode = {},
                 onSelectFontSize = {},
                 onTogglePhoneConnection = {},
-                onToggleMediaVolumeGuard = {},
                 onSelectRssInlineImagePrefetchMode = {},
                 onOpenOobe = {},
                 onOpenPerfLargeList = {},
@@ -56,7 +54,6 @@ class SettingsScreenTest {
         composeRule.onNodeWithTag(SettingsTestTags.ROOT).assertExists()
         composeRule.onNodeWithTag(SettingsTestTags.THEME_SWITCH, useUnmergedTree = true).assertExists()
         composeRule.onNodeWithTag(SettingsTestTags.FONT_VALUE, useUnmergedTree = true).assertExists()
-        composeRule.onNodeWithTag(SettingsTestTags.MEDIA_VOLUME_GUARD_SWITCH, useUnmergedTree = true).performScrollTo().assertExists()
         composeRule.onNodeWithTag(SettingsTestTags.ADVANCED_ENTRY, useUnmergedTree = true).assertExists()
         composeRule.onNodeWithTag(SettingsTestTags.OPEN_OOBE_ENTRY, useUnmergedTree = true).performScrollTo().assertExists()
         composeRule.onNodeWithTag(SettingsTestTags.PHONE_CONNECTION_SWITCH, useUnmergedTree = true).performScrollTo().assertExists()
@@ -76,7 +73,6 @@ class SettingsScreenTest {
         val cacheSelections = mutableListOf<Long>()
         val fontSelections = mutableListOf<Int>()
         var themeToggleCount = 0
-        var mediaVolumeGuardToggleCount = 0
 
         composeRule.setWatchContent {
             SettingsScreen(
@@ -86,7 +82,6 @@ class SettingsScreenTest {
                 shareUseSystem = MutableStateFlow(false),
                 readingFontSizeSp = MutableStateFlow(14),
                 phoneConnectionEnabled = MutableStateFlow(true),
-                mediaVolumeGuardEnabled = MutableStateFlow(true),
                 rssInlineImagePrefetchMode = MutableStateFlow(DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE),
                 showPerformanceTools = false,
                 onSelectCacheLimit = { cacheSelections += it },
@@ -94,7 +89,6 @@ class SettingsScreenTest {
                 onToggleShareMode = {},
                 onSelectFontSize = { fontSelections += it },
                 onTogglePhoneConnection = {},
-                onToggleMediaVolumeGuard = { mediaVolumeGuardToggleCount += 1 },
                 onSelectRssInlineImagePrefetchMode = {},
                 onOpenOobe = {},
                 onOpenPerfLargeList = {},
@@ -107,7 +101,6 @@ class SettingsScreenTest {
         composeRule.onNodeWithTag(SettingsTestTags.THEME_SWITCH, useUnmergedTree = true).performClick()
         composeRule.onNodeWithTag(SettingsTestTags.FONT_DECREASE_BUTTON, useUnmergedTree = true).performScrollTo().performClick()
         composeRule.onNodeWithTag(SettingsTestTags.FONT_INCREASE_BUTTON, useUnmergedTree = true).performScrollTo().performClick()
-        composeRule.onNodeWithTag(SettingsTestTags.MEDIA_VOLUME_GUARD_SWITCH, useUnmergedTree = true).performScrollTo().performClick()
         composeRule.onNodeWithTag(SettingsTestTags.ADVANCED_ENTRY, useUnmergedTree = true).performScrollTo().performClick()
         composeRule.onNodeWithTag(SettingsTestTags.CACHE_DECREASE_BUTTON, useUnmergedTree = true).performClick()
         composeRule.onNodeWithTag(SettingsTestTags.CACHE_INCREASE_BUTTON, useUnmergedTree = true).performClick()
@@ -116,7 +109,6 @@ class SettingsScreenTest {
             assertEquals(listOf(768L, 1536L), cacheSelections)
             assertEquals(listOf(12, 16), fontSelections)
             assertEquals(1, themeToggleCount)
-            assertEquals(1, mediaVolumeGuardToggleCount)
         }
     }
 }

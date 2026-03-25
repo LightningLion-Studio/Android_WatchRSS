@@ -84,27 +84,6 @@ class SettingsRepositoryTest {
     }
 
     @Test
-    fun mediaVolumeGuardEnabled_defaultsToEnabled() = runBlocking {
-        val env = createRepository("media-volume-guard-default.preferences_pb")
-        try {
-            assertEquals(DEFAULT_MEDIA_VOLUME_GUARD_ENABLED, env.repository.mediaVolumeGuardEnabled.first())
-        } finally {
-            env.scope.cancel()
-        }
-    }
-
-    @Test
-    fun mediaVolumeGuardEnabled_persistsUpdates() = runBlocking {
-        val env = createRepository("media-volume-guard-updated.preferences_pb")
-        try {
-            env.repository.setMediaVolumeGuardEnabled(false)
-            assertEquals(false, env.repository.mediaVolumeGuardEnabled.first())
-        } finally {
-            env.scope.cancel()
-        }
-    }
-
-    @Test
     fun rssInlineImagePrefetchMode_defaultsToFirstFew() = runBlocking {
         val env = createRepository("rss-inline-prefetch-default.preferences_pb")
         try {

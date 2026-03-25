@@ -9,7 +9,6 @@ import androidx.activity.viewModels
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.core.content.FileProvider
-import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
 import com.lightningstudio.watchrss.ui.screen.bili.BiliPlayerScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.RssPlayerViewModel
@@ -28,9 +27,6 @@ class RssPlayerActivity : BaseWatchActivity() {
         setContent {
             WatchRSSTheme {
                 val uiState by viewModel.uiState.collectAsState()
-                val volumeGuardEnabled by settingsRepository.mediaVolumeGuardEnabled.collectAsState(
-                    initial = DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
-                )
                 BiliPlayerScreen(
                     uiState = uiState,
                     onRetry = viewModel::loadPlayUrl,
@@ -45,8 +41,7 @@ class RssPlayerActivity : BaseWatchActivity() {
                     onPanStateChange = { offsetX, rangeX ->
                         panOffsetX = offsetX
                         panRangeX = rangeX
-                    },
-                    volumeGuardEnabled = volumeGuardEnabled
+                    }
                 )
             }
         }

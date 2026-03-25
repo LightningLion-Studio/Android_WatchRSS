@@ -16,14 +16,8 @@ object MainSettingsCatalog {
         description = "调整正文阅读字号"
     )
 
-    val mediaVolumeGuard = MainSettingInfo(
-        title = "音量调节防干扰",
-        description = "播放前会先压低音量，减少外放突然过响"
-    )
-
     val standardEntries: List<MainSettingInfo> = listOf(
         readingTheme,
-        fontSize,
-        mediaVolumeGuard
+        fontSize
     )
 }

@@ -109,7 +109,6 @@ private data class DouyinPlayerScaleToggleAction(
 @Composable
 fun DouyinImmersiveScreen(
     uiState: DouyinFeedUiState,
-    volumeGuardEnabled: Boolean,
     onPageSettled: (Int) -> Unit,
     onEnterFlow: () -> Unit,
     onMessageShown: () -> Unit,
@@ -122,7 +121,7 @@ fun DouyinImmersiveScreen(
     )
     var controlsVisible by rememberSaveable { mutableStateOf(true) }
     var scaleMode by rememberSaveable { mutableStateOf(DouyinPlayerScaleMode.Standard) }
-    val volumeState = rememberPlayerVolumeState(guardEnabled = volumeGuardEnabled)
+    val volumeState = rememberPlayerVolumeState()
 
     InstallRotaryPagerHandler(
         pagerState = pagerState,
@@ -133,14 +132,11 @@ fun DouyinImmersiveScreen(
         showSystemUi = false,
         reverseDirection = true,
         supportsPointerWheel = true,
-        onVolumeStep = volumeState::adjustBySteps
+        onVolumeAdjust = volumeState::adjustByDelta
     )
 
     LaunchedEffect(pagerState.currentPage) {
         onPageSettled(pagerState.currentPage)
-        if (pagerState.currentPage > 0) {
-            volumeState.enforcePlaybackStartGuard()
-        }
     }
 
     LaunchedEffect(uiState.currentPage, uiState.showTitlePage, pageCount) {

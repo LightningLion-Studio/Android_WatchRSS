@@ -2,7 +2,6 @@ package com.lightningstudio.watchrss.ui.components
 
 import android.content.Context
 import android.media.AudioManager
-import android.os.SystemClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.padding
@@ -16,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,30 +33,25 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.math.floor
 import kotlin.math.roundToInt
 
 @Stable
 class PlayerVolumeState internal constructor(
     private val audioManager: AudioManager,
-    private val scope: CoroutineScope,
-    private val guardEnabled: Boolean
+    private val scope: CoroutineScope
 ) {
     private val minVolume = audioManager.getStreamMinVolume(AudioManager.STREAM_MUSIC)
+    // PlayerVolume: getStreamMaxVolume(STREAM_MUSIC)=16
     private val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-    private val playbackStartTargetVolume = nearestPositiveVolumeForPercent(
-        targetPercent = PLAYBACK_START_TARGET_PERCENT,
-        minVolume = minVolume,
-        maxVolume = maxVolume
-    )
-    private val rotarySessionCapVolume = highestSafeVolumeForPercent(
-        maxPercent = ROTARY_SESSION_CAP_PERCENT,
-        minVolume = minVolume,
-        maxVolume = maxVolume
-    )
+        .also { AppLogger.d(VOLUME_TAG, "getStreamMaxVolume(STREAM_MUSIC)=$it") }
+    // 每单位 rotary delta 对应的音量步长（5% 音量范围）
+    private val volumeSensitivity = (maxVolume - minVolume) * VOLUME_SENSITIVITY_PERCENT
     private var hideJob: Job? = null
-    private var rotaryGuardState by mutableStateOf(RotaryVolumeGuardState())
-    private var playbackStartGuardDismissedByUser by mutableStateOf(false)
+    // 浮点虚拟音量，保留 delta 累积精度，仅在提交给 AudioManager 时 roundToInt
+    // 用 mutableFloatStateOf 使 UI 直接观察连续值，而非离散的 AudioManager 整数
+    private var virtualVolume by mutableFloatStateOf(
+        audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).coerceIn(minVolume, maxVolume).toFloat()
+    )
 
     var currentVolume by mutableIntStateOf(
         audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).coerceIn(minVolume, maxVolume)
@@ -67,82 +62,39 @@ class PlayerVolumeState internal constructor(
         private set
 
     val progress: Float
-        get() = volumeProgress(
-            currentVolume = currentVolume,
-            minVolume = minVolume,
-            maxVolume = maxVolume
-        )
+        get() {
+            if (maxVolume <= minVolume) return 0f
+            return ((virtualVolume - minVolume) / (maxVolume - minVolume)).coerceIn(0f, 1f)
+        }
 
     val percentText: String
         get() = "${(progress * 100f).roundToInt()}%"
 
-    fun adjustBySteps(steps: Int, eventUptimeMs: Long = SystemClock.elapsedRealtime()) {
-        if (steps == 0) return
-        playbackStartGuardDismissedByUser = true
-        val current = readCurrentVolume()
-        val guardedTarget = applyRotaryVolumeGuard(
-            currentVolume = current,
-            requestedSteps = steps,
-            minVolume = minVolume,
-            maxVolume = maxVolume,
-            guardEnabled = guardEnabled,
-            sessionCapVolume = rotarySessionCapVolume,
-            previousState = rotaryGuardState,
-            eventUptimeMs = eventUptimeMs
-        )
-        rotaryGuardState = guardedTarget.nextState
-        setVolume(guardedTarget.targetVolume, current)
-        show()
-    }
-
-    fun enforcePlaybackStartGuard() {
-        val current = readCurrentVolume()
-        if (hasOutOfBandVolumeChange(
-                observedVolume = currentVolume,
-                actualVolume = current
-            )
-        ) {
-            // Treat any out-of-band stream volume change as explicit user intent.
-            AppLogger.d(
-                VOLUME_TAG,
-                "dismiss playback start guard after external volume change observed=$currentVolume actual=$current"
-            )
-            playbackStartGuardDismissedByUser = true
-            rotaryGuardState = RotaryVolumeGuardState()
-            currentVolume = current
-        }
-        if (!shouldEnforcePlaybackStartGuard(
-                guardEnabled = guardEnabled,
-                dismissedByUser = playbackStartGuardDismissedByUser,
-                currentVolume = current,
-                minVolume = minVolume,
-                maxVolume = maxVolume
-            )
-        ) {
-            AppLogger.d(
-                VOLUME_TAG,
-                "skip playback start guard current=$current dismissed=$playbackStartGuardDismissedByUser"
-            )
-            return
-        }
+    fun adjustByDelta(delta: Float) {
+        val prevVirtual = virtualVolume
+        virtualVolume = (virtualVolume + delta * volumeSensitivity)
+            .coerceIn(minVolume.toFloat(), maxVolume.toFloat())
+        val targetInt = virtualVolume.roundToInt()
         AppLogger.d(
             VOLUME_TAG,
-            "apply playback start guard current=$current target=$playbackStartTargetVolume"
+            "adjustByDelta delta=$delta sensitivity=$volumeSensitivity virtual $prevVirtual→$virtualVolume targetInt=$targetInt current=$currentVolume"
         )
-        setVolume(playbackStartTargetVolume, current)
-        if (currentVolume != current) {
-            show()
-        }
+        setVolume(targetInt)
+        show()
     }
 
     private fun readCurrentVolume(): Int {
         return audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).coerceIn(minVolume, maxVolume)
     }
 
-    private fun setVolume(target: Int, current: Int = readCurrentVolume()) {
+    private fun setVolume(target: Int) {
+        val current = readCurrentVolume()
         val clampedTarget = target.coerceIn(minVolume, maxVolume)
         if (!audioManager.isVolumeFixed && clampedTarget != current) {
+            AppLogger.d(VOLUME_TAG, "setStreamVolume $current→$clampedTarget")
             audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, clampedTarget, 0)
+        } else {
+            AppLogger.d(VOLUME_TAG, "setVolume skipped target=$clampedTarget current=$current fixed=${audioManager.isVolumeFixed}")
         }
         currentVolume = readCurrentVolume()
     }
@@ -158,17 +110,16 @@ class PlayerVolumeState internal constructor(
 }
 
 @Composable
-fun rememberPlayerVolumeState(guardEnabled: Boolean = true): PlayerVolumeState {
+fun rememberPlayerVolumeState(): PlayerVolumeState {
     val context = LocalContext.current
     val audioManager = remember(context) {
         context.applicationContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     }
     val scope = rememberCoroutineScope()
-    return remember(audioManager, scope, guardEnabled) {
+    return remember(audioManager, scope) {
         PlayerVolumeState(
             audioManager = audioManager,
-            scope = scope,
-            guardEnabled = guardEnabled
+            scope = scope
         )
     }
 }
@@ -209,121 +160,8 @@ fun PlayerVolumeOverlay(
 }
 
 private const val VOLUME_OVERLAY_HIDE_DELAY_MS = 1_200L
-private const val PLAYBACK_START_THRESHOLD_PERCENT = 0.15f
-private const val PLAYBACK_START_TARGET_PERCENT = 0.07f
-private const val ROTARY_SESSION_CAP_PERCENT = 0.16f
-private const val ROTARY_SESSION_IDLE_TIMEOUT_MS = 600L
+// 每单位 scaled delta（已乘以 ROTARY_VOLUME_STEP=0.01）调节的音量百分比
+// 按实测一圈表冠总 net scaled ≈ 16.5，校准为 1/16.5 ≈ 0.06，使一圈刚好覆盖 0→100% 音量范围
+private const val VOLUME_SENSITIVITY_PERCENT = 0.06f
 private const val VOLUME_TAG = "PlayerVolume"
 
-internal data class RotaryVolumeGuardState(
-    val sessionCapVolume: Int? = null,
-    val lastEventUptimeMs: Long = Long.MIN_VALUE
-)
-
-internal data class RotaryVolumeGuardResult(
-    val targetVolume: Int,
-    val nextState: RotaryVolumeGuardState
-)
-
-internal fun applyRotaryVolumeGuard(
-    currentVolume: Int,
-    requestedSteps: Int,
-    minVolume: Int,
-    maxVolume: Int,
-    guardEnabled: Boolean,
-    sessionCapVolume: Int,
-    previousState: RotaryVolumeGuardState,
-    eventUptimeMs: Long
-): RotaryVolumeGuardResult {
-    val clampedCurrent = currentVolume.coerceIn(minVolume, maxVolume)
-    if (requestedSteps == 0) {
-        return RotaryVolumeGuardResult(
-            targetVolume = clampedCurrent,
-            nextState = previousState
-        )
-    }
-
-    val isNewSession = previousState.lastEventUptimeMs == Long.MIN_VALUE ||
-        eventUptimeMs - previousState.lastEventUptimeMs > ROTARY_SESSION_IDLE_TIMEOUT_MS
-    val direction = requestedSteps.compareTo(0)
-    var activeCapVolume = if (isNewSession || direction <= 0 || !guardEnabled) {
-        null
-    } else {
-        previousState.sessionCapVolume
-    }
-    var targetVolume = (clampedCurrent + requestedSteps).coerceIn(minVolume, maxVolume)
-
-    if (guardEnabled && direction > 0) {
-        val effectiveCapVolume = activeCapVolume ?: if (clampedCurrent < sessionCapVolume) {
-            sessionCapVolume
-        } else {
-            null
-        }
-        if (effectiveCapVolume != null) {
-            activeCapVolume = effectiveCapVolume
-            targetVolume = targetVolume.coerceAtMost(effectiveCapVolume)
-        }
-    }
-
-    return RotaryVolumeGuardResult(
-        targetVolume = targetVolume,
-        nextState = RotaryVolumeGuardState(
-            sessionCapVolume = activeCapVolume,
-            lastEventUptimeMs = eventUptimeMs
-        )
-    )
-}
-
-internal fun shouldEnforcePlaybackStartGuard(
-    guardEnabled: Boolean,
-    dismissedByUser: Boolean,
-    currentVolume: Int,
-    minVolume: Int,
-    maxVolume: Int,
-    thresholdPercent: Float = PLAYBACK_START_THRESHOLD_PERCENT
-): Boolean {
-    if (!guardEnabled || dismissedByUser) return false
-    return volumeProgress(currentVolume, minVolume, maxVolume) > thresholdPercent
-}
-
-internal fun hasOutOfBandVolumeChange(
-    observedVolume: Int,
-    actualVolume: Int
-): Boolean {
-    return observedVolume != actualVolume
-}
-
-internal fun volumeProgress(
-    currentVolume: Int,
-    minVolume: Int,
-    maxVolume: Int
-): Float {
-    if (maxVolume <= minVolume) return 0f
-    val clampedVolume = currentVolume.coerceIn(minVolume, maxVolume)
-    val range = (maxVolume - minVolume).coerceAtLeast(1)
-    return ((clampedVolume - minVolume).toFloat() / range.toFloat()).coerceIn(0f, 1f)
-}
-
-internal fun nearestPositiveVolumeForPercent(
-    targetPercent: Float,
-    minVolume: Int,
-    maxVolume: Int
-): Int {
-    if (maxVolume <= minVolume) return minVolume
-    if (targetPercent <= 0f) return minVolume
-    val range = (maxVolume - minVolume).coerceAtLeast(1)
-    val target = minVolume + (range * targetPercent).roundToInt()
-    return target.coerceIn(minVolume + 1, maxVolume)
-}
-
-internal fun highestSafeVolumeForPercent(
-    maxPercent: Float,
-    minVolume: Int,
-    maxVolume: Int
-): Int {
-    if (maxVolume <= minVolume) return minVolume
-    if (maxPercent <= 0f) return minVolume
-    val range = (maxVolume - minVolume).coerceAtLeast(1)
-    val target = minVolume + floor(range * maxPercent).toInt()
-    return target.coerceIn(minVolume + 1, maxVolume)
-}

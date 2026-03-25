@@ -10,7 +10,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
-import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
 import com.lightningstudio.watchrss.ui.screen.bili.BiliPlayerScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.BiliPlayerViewModel
@@ -39,9 +38,6 @@ class BiliPlayerActivity : BaseWatchActivity() {
                 val baseDensity = LocalDensity.current
                 CompositionLocalProvider(LocalDensity provides Density(2f, baseDensity.fontScale)) {
                     val uiState by viewModel.uiState.collectAsState()
-                    val volumeGuardEnabled by settingsRepository.mediaVolumeGuardEnabled.collectAsState(
-                        initial = DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
-                    )
                     BiliPlayerScreen(
                         uiState = uiState,
                         onRetry = viewModel::loadPlayUrl,
@@ -52,8 +48,7 @@ class BiliPlayerActivity : BaseWatchActivity() {
                         onPanStateChange = { offsetX, rangeX ->
                             panOffsetX = offsetX
                             panRangeX = rangeX
-                        },
-                        volumeGuardEnabled = volumeGuardEnabled
+                        }
                     )
                 }
             }

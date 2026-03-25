@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.BaseWatchActivity
+import com.lightningstudio.watchrss.util.AppLogger
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.sign
@@ -99,7 +100,7 @@ fun InstallRotaryVolumeHandler(
     showSystemUi: Boolean = true,
     reverseDirection: Boolean = false,
     supportsPointerWheel: Boolean = false,
-    onVolumeStep: ((Int) -> Unit)? = null
+    onVolumeAdjust: ((Float) -> Unit)? = null
 ) {
     val context = LocalContext.current
     val audioManager = remember(context) {
@@ -110,16 +111,21 @@ fun InstallRotaryVolumeHandler(
         enabled = enabled,
         supportsPointerWheel = supportsPointerWheel
     ) { delta ->
-        accumulatedDelta += normalizeRotaryVolumeDelta(delta, reverseDirection)
-        if (abs(accumulatedDelta) < ROTARY_VOLUME_THRESHOLD) {
-            return@InstallRotaryHandler true
-        }
-        val steps = abs(accumulatedDelta).toInt().coerceAtLeast(1)
-        val direction = rotaryVolumeDirection(accumulatedDelta)
-        accumulatedDelta = 0f
-        if (onVolumeStep != null) {
-            onVolumeStep(direction * steps)
+        val normalizedDelta = normalizeRotaryVolumeDelta(delta, reverseDirection)
+        if (onVolumeAdjust != null) {
+            // 直接传 raw delta，由调用方维护浮点虚拟音量
+            val scaledDelta = normalizedDelta * ROTARY_VOLUME_STEP.toFloat()
+            AppLogger.d(ROTARY_VOLUME_TAG, "rotary delta=$delta normalized=$normalizedDelta scaled=$scaledDelta → onVolumeAdjust")
+            onVolumeAdjust(scaledDelta)
         } else {
+            // 无自定义 handler 时回退到系统 adjustStreamVolume（整步）
+            accumulatedDelta += normalizedDelta
+            if (abs(accumulatedDelta) < ROTARY_VOLUME_THRESHOLD) {
+                return@InstallRotaryHandler true
+            }
+            val steps = abs(accumulatedDelta).toInt().coerceAtLeast(1)
+            val direction = rotaryVolumeDirection(accumulatedDelta)
+            accumulatedDelta = 0f
             repeat(steps) {
                 audioManager.adjustStreamVolume(
                     AudioManager.STREAM_MUSIC,
@@ -190,6 +196,8 @@ private fun Context.findBaseWatchActivity(): BaseWatchActivity? {
 
 // 基于 OPPO Watch X2 实测，0.2 是自然滚动速度
 private const val ROTARY_SCROLL_STEP = 0.2
+private const val ROTARY_VOLUME_STEP = 0.01
 private const val ROTARY_PAGER_THRESHOLD = 0.8f
 private const val ROTARY_VOLUME_THRESHOLD = 0.8f
 private const val MAX_POINTER_WHEEL_SCROLL_DELTA = 1f
+private const val ROTARY_VOLUME_TAG = "RotaryVolume"

@@ -94,9 +94,7 @@ class OobeScreenTest {
         composeRule.onNodeWithText("自定义").assertExists()
         composeRule.onNodeWithText("阅读主题").assertExists()
         composeRule.onNodeWithText("字体大小").assertExists()
-        composeRule.onNodeWithText("音量调节防干扰").assertExists()
         composeRule.onNodeWithTag(OobeTestTags.CUSTOM_THEME_TOGGLE, useUnmergedTree = true).assertExists()
         composeRule.onNodeWithTag(OobeTestTags.CUSTOM_FONT_VALUE, useUnmergedTree = true).assertExists()
-        composeRule.onNodeWithTag(OobeTestTags.CUSTOM_MEDIA_GUARD_SWITCH, useUnmergedTree = true).assertExists()
     }
 }
