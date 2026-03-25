@@ -17,8 +17,8 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.lightningstudio.watchrss.debug.PerformanceMonitor
-import com.lightningstudio.watchrss.ui.input.PointerWheelScrollTracker
-import com.lightningstudio.watchrss.ui.input.normalizePointerWheelScrollDelta
+import com.lightningstudio.watchrss.ui.input.DigitalCrownScrollTracker
+import com.lightningstudio.watchrss.ui.input.normalizeDigitalCrownScrollDelta
 import com.lightningstudio.watchrss.ui.widget.WatchMaskLayout
 import com.lightningstudio.watchrss.util.AppLogger
 import kotlin.math.abs
@@ -36,8 +36,8 @@ open class BaseWatchActivity : ComponentActivity() {
     private var pendingActivityStartAllowanceAt = 0L
     private var hasResumedOnce = false
     private var pendingHardwareBackKeyCode: Int? = null
-    private var nextRotaryHandlerId = 0
-    private val rotaryHandlers = LinkedHashMap<Int, RotaryHandlerRegistration>()
+    private var nextDigitalCrownHandlerId = 0
+    private val digitalCrownHandlers = LinkedHashMap<Int, DigitalCrownHandlerRegistration>()
     private val swipeSlop by lazy { ViewConfiguration.get(this).scaledTouchSlop.toFloat() }
     private val minSwipeDistance by lazy {
         max(swipeSlop * 2f, resources.displayMetrics.density * 48f)
@@ -149,9 +149,9 @@ open class BaseWatchActivity : ComponentActivity() {
     override fun dispatchGenericMotionEvent(ev: MotionEvent): Boolean {
         if (ev.actionMasked == MotionEvent.ACTION_SCROLL) {
             if (ev.isFromSource(InputDevice.SOURCE_CLASS_POINTER)) {
-                PointerWheelScrollTracker.onScrollEvent(ev.eventTime)
+                DigitalCrownScrollTracker.onScrollEvent(ev.eventTime)
                 val delta = ev.getAxisValue(MotionEvent.AXIS_VSCROLL)
-                if (delta != 0f && dispatchRotaryHandlers(delta, pointerWheel = true)) {
+                if (delta != 0f && dispatchDigitalCrownHandlers(delta, digitalCrown = true)) {
                     return true
                 }
             }
@@ -333,20 +333,20 @@ open class BaseWatchActivity : ComponentActivity() {
         }
     }
 
-    fun registerRotaryHandler(
-        supportsPointerWheel: Boolean = false,
+    fun registerDigitalCrownHandler(
+        supportsDigitalCrown: Boolean = false,
         handler: (Float) -> Boolean
     ): Int {
-        val id = ++nextRotaryHandlerId
-        rotaryHandlers[id] = RotaryHandlerRegistration(
-            supportsPointerWheel = supportsPointerWheel,
+        val id = ++nextDigitalCrownHandlerId
+        digitalCrownHandlers[id] = DigitalCrownHandlerRegistration(
+            supportsDigitalCrown = supportsDigitalCrown,
             handler = handler
         )
         return id
     }
 
-    fun unregisterRotaryHandler(id: Int) {
-        rotaryHandlers.remove(id)
+    fun unregisterDigitalCrownHandler(id: Int) {
+        digitalCrownHandlers.remove(id)
     }
 
     protected fun allowNavigation(minIntervalMs: Long = NAVIGATION_THROTTLE_MS): Boolean {
@@ -408,10 +408,10 @@ open class BaseWatchActivity : ComponentActivity() {
         cancelEvent.recycle()
     }
 
-    private fun dispatchRotaryHandlers(delta: Float, pointerWheel: Boolean = false): Boolean {
-        val handlers = rotaryHandlers.values.toList().asReversed()
+    private fun dispatchDigitalCrownHandlers(delta: Float, digitalCrown: Boolean = false): Boolean {
+        val handlers = digitalCrownHandlers.values.toList().asReversed()
         for (registration in handlers) {
-            if (pointerWheel && !registration.supportsPointerWheel) {
+            if (digitalCrown && !registration.supportsDigitalCrown) {
                 continue
             }
             if (registration.handler(delta)) {
@@ -541,7 +541,7 @@ open class BaseWatchActivity : ComponentActivity() {
     }
 }
 
-private data class RotaryHandlerRegistration(
-    val supportsPointerWheel: Boolean,
+private data class DigitalCrownHandlerRegistration(
+    val supportsDigitalCrown: Boolean,
     val handler: (Float) -> Boolean
 )
