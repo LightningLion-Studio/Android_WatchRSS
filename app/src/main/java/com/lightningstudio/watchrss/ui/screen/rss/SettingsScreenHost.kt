@@ -24,6 +24,8 @@ fun SettingsScreenHost(
     onOpenOobe: () -> Unit,
     onOpenPerfLargeList: () -> Unit,
     onOpenPerfLargeArticle: () -> Unit,
+    onOpenLlmConnectivity: () -> Unit,
+    onOpenLlmPromptPreset: () -> Unit,
     onBeianClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -40,6 +42,10 @@ fun SettingsScreenHost(
         readingFontSizeSp = viewModel.readingFontSizeSp,
         phoneConnectionEnabled = viewModel.phoneConnectionEnabled,
         rssInlineImagePrefetchMode = viewModel.rssInlineImagePrefetchMode,
+        llmFeatureEnabled = viewModel.llmFeatureEnabled,
+        llmAutoSummarize = viewModel.llmAutoSummarize,
+        llmShowTokenUsage = viewModel.llmShowTokenUsage,
+        llmPromptPreset = viewModel.llmPromptPreset,
         showPerformanceTools = showPerformanceTools,
         onSelectCacheLimit = viewModel::updateCacheLimitMb,
         onToggleReadingTheme = viewModel::toggleReadingTheme,
@@ -47,6 +53,9 @@ fun SettingsScreenHost(
         onSelectFontSize = viewModel::updateReadingFontSizeSp,
         onTogglePhoneConnection = viewModel::togglePhoneConnection,
         onSelectRssInlineImagePrefetchMode = viewModel::updateRssInlineImagePrefetchMode,
+        onToggleLlmFeatureEnabled = viewModel::toggleLlmFeatureEnabled,
+        onToggleLlmAutoSummarize = viewModel::toggleLlmAutoSummarize,
+        onToggleLlmShowTokenUsage = viewModel::toggleLlmShowTokenUsage,
         onOpenOobe = onOpenOobe,
         onOpenPerfLargeList = onOpenPerfLargeList,
         onOpenPerfLargeArticle = onOpenPerfLargeArticle,
@@ -54,6 +63,8 @@ fun SettingsScreenHost(
             manualCookieInput = ""
             showManualCookieDialog = true
         },
+        onOpenLlmConnectivity = onOpenLlmConnectivity,
+        onOpenLlmPromptPreset = onOpenLlmPromptPreset,
         onBeianClick = onBeianClick
     )
 

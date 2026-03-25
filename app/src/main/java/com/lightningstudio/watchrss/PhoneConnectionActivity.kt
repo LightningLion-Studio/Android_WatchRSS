@@ -48,8 +48,15 @@ class PhoneConnectionActivity : BaseWatchActivity() {
         if (!allowNavigation()) return
         when (mode) {
             PhoneConnectionMode.MANUAL_WIFI -> {
+                val serverType = when (preferredAbility) {
+                    PhoneConnectionAbility.REMOTE_INPUT -> ServerActivity.ServerType.REMOTE_INPUT
+                    PhoneConnectionAbility.SYNC_FAVORITES -> ServerActivity.ServerType.SYNC_FAVORITES
+                    PhoneConnectionAbility.SYNC_WATCH_LATER -> ServerActivity.ServerType.SYNC_WATCH_LATER
+                    PhoneConnectionAbility.LLM_SUMMARY_CONFIG -> ServerActivity.ServerType.LLM_CONFIG
+                    null -> ServerActivity.ServerType.REMOTE_INPUT
+                }
                 val intent = Intent(this, ServerActivity::class.java).apply {
-                    putExtra(ServerActivity.EXTRA_SERVER_TYPE, ServerActivity.ServerType.CONNECTION_HUB.name)
+                    putExtra(ServerActivity.EXTRA_SERVER_TYPE, serverType.name)
                     putExtra(ServerActivity.EXTRA_PREFERRED_ABILITY, preferredAbility?.name)
                     putExtra(ServerActivity.EXTRA_SCREEN_TITLE, resolveManualTitle())
                     putExtra(ServerActivity.EXTRA_SCREEN_HINT, MANUAL_WIFI_HINT)
@@ -81,6 +88,7 @@ class PhoneConnectionActivity : BaseWatchActivity() {
             PhoneConnectionAbility.REMOTE_INPUT -> "从手机输入"
             PhoneConnectionAbility.SYNC_FAVORITES -> "同步收藏"
             PhoneConnectionAbility.SYNC_WATCH_LATER -> "同步稍后再看"
+            PhoneConnectionAbility.LLM_SUMMARY_CONFIG -> "配置大模型"
             null -> "连接手机"
         }
     }

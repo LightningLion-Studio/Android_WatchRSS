@@ -49,6 +49,18 @@ class SettingsViewModel(
                 DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE
             )
 
+    val llmFeatureEnabled: StateFlow<Boolean> = settingsRepository.llmFeatureEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    val llmAutoSummarize: StateFlow<Boolean> = settingsRepository.llmAutoSummarize
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    val llmShowTokenUsage: StateFlow<Boolean> = settingsRepository.llmShowTokenUsage
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    val llmPromptPreset: StateFlow<Int> = settingsRepository.llmPromptPreset
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+
     fun updateCacheLimitMb(value: Long) {
         viewModelScope.launch {
             settingsRepository.setCacheLimitBytes(value * MB_BYTES)
@@ -86,6 +98,30 @@ class SettingsViewModel(
     fun updateRssInlineImagePrefetchMode(value: RssInlineImagePrefetchMode) {
         viewModelScope.launch {
             settingsRepository.setRssInlineImagePrefetchMode(value)
+        }
+    }
+
+    fun toggleLlmFeatureEnabled() {
+        viewModelScope.launch {
+            settingsRepository.setLlmFeatureEnabled(!llmFeatureEnabled.value)
+        }
+    }
+
+    fun toggleLlmAutoSummarize() {
+        viewModelScope.launch {
+            settingsRepository.setLlmAutoSummarize(!llmAutoSummarize.value)
+        }
+    }
+
+    fun toggleLlmShowTokenUsage() {
+        viewModelScope.launch {
+            settingsRepository.setLlmShowTokenUsage(!llmShowTokenUsage.value)
+        }
+    }
+
+    fun updateLlmPromptPreset(value: Int) {
+        viewModelScope.launch {
+            settingsRepository.setLlmPromptPreset(value)
         }
     }
 }

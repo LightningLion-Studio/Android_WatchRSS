@@ -40,7 +40,7 @@ import com.lightningstudio.watchrss.data.rss.RssChannel
 import com.lightningstudio.watchrss.ui.components.WatchButton
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.R
-import com.lightningstudio.watchrss.ui.input.InstallRotaryScrollHandler
+import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownScrollHandler
 import com.lightningstudio.watchrss.ui.theme.ActionButtonTextStyle
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
 import com.lightningstudio.watchrss.ui.theme.watchActionButtonWidthFor
@@ -79,7 +79,7 @@ fun AddRssScreen(
 
     WatchSurface(pureBlack = true) {
         val scrollState = rememberScrollState()
-        InstallRotaryScrollHandler(scrollState)
+        InstallDigitalCrownScrollHandler(scrollState)
         val actionShape = RoundedCornerShape(WatchDimens.hey_button_default_radius)
         val actionHeight = WatchDimens.watch_action_button_height
         val actionColor = MaterialTheme.colorScheme.surfaceVariant

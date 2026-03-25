@@ -57,7 +57,7 @@ import com.lightningstudio.watchrss.ui.components.EmptyStateCard
 import com.lightningstudio.watchrss.ui.components.PullRefreshBox
 import com.lightningstudio.watchrss.ui.components.SwipeActionButton
 import com.lightningstudio.watchrss.ui.components.SwipeActionRow
-import com.lightningstudio.watchrss.ui.input.InstallRotaryLazyListHandler
+import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.viewmodel.BiliFeedUiState
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -80,7 +80,7 @@ fun BiliRssFeedScreen(
         val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
         val itemSpacing = watchDimensionResource(R.dimen.hey_distance_8dp)
         val listState = rememberLazyListState()
-        InstallRotaryLazyListHandler(listState)
+        InstallDigitalCrownLazyListHandler(listState)
         val isScrolling by remember(listState) {
             derivedStateOf { listState.isScrollInProgress }
         }

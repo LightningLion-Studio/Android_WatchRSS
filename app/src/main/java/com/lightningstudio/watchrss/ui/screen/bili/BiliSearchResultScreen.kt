@@ -24,7 +24,7 @@ import com.lightningstudio.watchrss.sdk.bili.BiliSearchedVideo
 import com.lightningstudio.watchrss.ui.components.LoadingIndicator
 import com.lightningstudio.watchrss.ui.components.SearchInputBar
 import com.lightningstudio.watchrss.ui.components.WatchSurface
-import com.lightningstudio.watchrss.ui.input.InstallRotaryLazyListHandler
+import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.utils.BiliFormatUtils
 import com.lightningstudio.watchrss.ui.viewmodel.BiliSearchSubmitAction
 import com.lightningstudio.watchrss.ui.viewmodel.BiliSearchViewModel
@@ -46,7 +46,7 @@ fun BiliSearchResultScreen(
     val listState = rememberLazyListState()
 
     BackHandler(onBack = onNavigateBack)
-    InstallRotaryLazyListHandler(listState)
+    InstallDigitalCrownLazyListHandler(listState)
 
     WatchSurface(pureBlack = true) {
         LazyColumn(

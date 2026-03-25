@@ -66,7 +66,7 @@ import com.lightningstudio.watchrss.ui.components.WatchCheckbox
 import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.components.WatchSwitch
-import com.lightningstudio.watchrss.ui.input.InstallRotaryScrollHandler
+import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownScrollHandler
 import com.lightningstudio.watchrss.ui.settings.MainSettingsCatalog
 import com.lightningstudio.watchrss.ui.settings.MainSettingInfo
 import com.lightningstudio.watchrss.ui.settings.WatchReadingThemeToggle
@@ -371,7 +371,7 @@ private fun OobeCustomizationStep(
     val lowerFont = fontOptions.lastOrNull { it < previewFontSizeSp }
     val higherFont = fontOptions.firstOrNull { it > previewFontSizeSp }
 
-    InstallRotaryScrollHandler(scrollState)
+    InstallDigitalCrownScrollHandler(scrollState)
 
     Column(
         modifier = modifier

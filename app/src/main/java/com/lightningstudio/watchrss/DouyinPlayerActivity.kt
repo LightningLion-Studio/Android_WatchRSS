@@ -87,7 +87,7 @@ class DouyinPlayerActivity : BaseWatchActivity() {
                                     },
                                     onPanStateChange = { _, _ -> },
                                     allowPan = false,
-                                    rotaryVolumeEnabled = page == pagerState.currentPage
+                                    digitalCrownVolumeEnabled = page == pagerState.currentPage
                                 )
                             }
                         }

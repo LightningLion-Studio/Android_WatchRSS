@@ -33,7 +33,7 @@ import com.lightningstudio.watchrss.ui.components.BiliCommentCard
 import com.lightningstudio.watchrss.ui.components.LoadingIndicator
 import com.lightningstudio.watchrss.ui.components.PullRefreshBox
 import com.lightningstudio.watchrss.ui.components.WatchIconButton
-import com.lightningstudio.watchrss.ui.input.InstallRotaryLazyListHandler
+import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
 import com.lightningstudio.watchrss.ui.viewmodel.BiliReplyViewModel
 import com.lightningstudio.watchrss.ui.viewmodel.BiliViewModelFactory
@@ -56,7 +56,7 @@ fun BiliReplyDetailScreen(
     val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
     var isRefreshing by remember { mutableStateOf(false) }
-    InstallRotaryLazyListHandler(listState)
+    InstallDigitalCrownLazyListHandler(listState)
 
     Scaffold(
         topBar = {

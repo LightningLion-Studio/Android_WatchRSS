@@ -47,6 +47,12 @@ class SettingsActivity : BaseWatchActivity() {
                             )
                         )
                     },
+                    onOpenLlmConnectivity = {
+                        startActivity(LlmConnectivityActivity.createIntent(this))
+                    },
+                    onOpenLlmPromptPreset = {
+                        startActivity(LlmPromptPresetActivity.createIntent(this))
+                    },
                     onBeianClick = {
                         startActivity(BeianActivity.createIntent(this))
                     }

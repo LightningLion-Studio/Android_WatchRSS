@@ -10,6 +10,7 @@ import com.lightningstudio.watchrss.data.cache.ManagedCacheService
 import com.lightningstudio.watchrss.data.douyin.DouyinRepositoryContract
 import com.lightningstudio.watchrss.data.network.InternetAvailabilityMonitor
 import com.lightningstudio.watchrss.data.rss.RssRepository
+import com.lightningstudio.watchrss.data.settings.LlmApiKeyStore
 import com.lightningstudio.watchrss.data.settings.SettingsRepository
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.rules.ExternalResource
@@ -25,6 +26,9 @@ class TestAppContainer(
     private val internetAvailabilityMonitorOverride: InternetAvailabilityMonitor? = null
 ) : AppContainer {
     private val fallback by lazy { DefaultAppContainer(context.applicationContext) }
+
+    override val llmApiKeyStore: LlmApiKeyStore
+        get() = fallback.llmApiKeyStore
 
     override val managedCacheService: ManagedCacheService
         get() = fallback.managedCacheService

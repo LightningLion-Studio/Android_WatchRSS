@@ -33,7 +33,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.WatchSurface
-import com.lightningstudio.watchrss.ui.input.InstallRotaryScrollHandler
+import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownScrollHandler
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
 
 @Composable
@@ -53,7 +53,7 @@ fun ContactDeveloperScreen(
     val iconSpacing = WatchDimens.hey_distance_12dp
     val scrollState = rememberScrollState()
 
-    InstallRotaryScrollHandler(scrollState)
+    InstallDigitalCrownScrollHandler(scrollState)
 
     WatchSurface(pureBlack = true) {
         Column(

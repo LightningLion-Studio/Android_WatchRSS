@@ -26,7 +26,7 @@ import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.sdk.bili.QrPollStatus
 import com.lightningstudio.watchrss.ui.components.PullRefreshBox
-import com.lightningstudio.watchrss.ui.input.InstallRotaryScrollHandler
+import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownScrollHandler
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
 import com.lightningstudio.watchrss.ui.theme.watchQrSizeFor
 import com.lightningstudio.watchrss.ui.util.QrCodeGenerator
@@ -44,7 +44,7 @@ fun BiliLoginScreen(
     val topPadding = 4.dp
     val titleSpacing = spacing / 4
     val scrollState = rememberScrollState()
-    InstallRotaryScrollHandler(scrollState)
+    InstallDigitalCrownScrollHandler(scrollState)
 
     LaunchedEffect(uiState.isSuccess) {
         if (uiState.isSuccess) {

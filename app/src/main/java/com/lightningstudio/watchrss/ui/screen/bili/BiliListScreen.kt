@@ -25,7 +25,7 @@ import androidx.compose.ui.text.style.TextAlign
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.EmptyStateCard
 import com.lightningstudio.watchrss.ui.components.PullRefreshBox
-import com.lightningstudio.watchrss.ui.input.InstallRotaryLazyListHandler
+import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.viewmodel.BiliListItem
 import com.lightningstudio.watchrss.ui.viewmodel.BiliListUiState
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -42,7 +42,7 @@ fun BiliListScreen(
     val itemSpacing = watchDimensionResource(R.dimen.hey_distance_8dp)
     val spacing = watchDimensionResource(R.dimen.hey_distance_6dp)
     val listState = rememberLazyListState()
-    InstallRotaryLazyListHandler(listState)
+    InstallDigitalCrownLazyListHandler(listState)
 
     val canLoadMoreState = rememberUpdatedState(uiState.canLoadMore)
     val isLoadingMoreState = rememberUpdatedState(uiState.isLoadingMore)

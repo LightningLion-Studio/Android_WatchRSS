@@ -48,6 +48,16 @@ class AppViewModelFactory(private val container: AppContainer) : ViewModelProvid
             modelClass.isAssignableFrom(RssSearchViewModel::class.java) -> {
                 RssSearchViewModel(savedStateHandle, container.rssRepository)
             }
+            modelClass.isAssignableFrom(LlmConnectivityViewModel::class.java) -> {
+                LlmConnectivityViewModel(container.settingsRepository, container.llmApiKeyStore)
+            }
+            modelClass.isAssignableFrom(LlmSummaryViewModel::class.java) -> {
+                LlmSummaryViewModel(
+                    container.rssRepository,
+                    container.settingsRepository,
+                    container.llmApiKeyStore
+                )
+            }
             else -> throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
         } as T
     }

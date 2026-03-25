@@ -16,8 +16,12 @@ import android.view.View
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.updateTransition
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -46,6 +50,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -98,7 +104,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
-import com.lightningstudio.watchrss.ui.input.InstallRotaryLazyListHandler
+import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ImagePreviewActivity
@@ -109,6 +115,8 @@ import com.lightningstudio.watchrss.BuildConfig
 import com.lightningstudio.watchrss.data.rss.OfflineMedia
 import com.lightningstudio.watchrss.data.rss.RssItem
 import com.lightningstudio.watchrss.data.rss.RssUrlResolver
+import com.lightningstudio.watchrss.ui.viewmodel.LlmSummaryUiState
+import com.lightningstudio.watchrss.ui.viewmodel.SummaryStatus
 import com.lightningstudio.watchrss.data.settings.DEFAULT_READING_FONT_SIZE_SP
 import com.lightningstudio.watchrss.data.settings.RssInlineImagePrefetchMode
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
@@ -142,6 +150,8 @@ import kotlin.math.roundToInt
 @Composable
 fun DetailScreen(
     viewModel: DetailViewModel,
+    llmSummaryState: LlmSummaryUiState = LlmSummaryUiState(),
+    onOpenAiSummary: () -> Unit = {},
     onBack: (Long, Boolean, Boolean) -> Unit
 ) {
     val item by viewModel.item.collectAsState()
@@ -154,6 +164,8 @@ fun DetailScreen(
     val readingFontSizeSp by viewModel.readingFontSizeSp.collectAsState()
     val shareUseSystem by viewModel.shareUseSystem.collectAsState(initial = false)
     val rssInlineImagePrefetchMode by viewModel.rssInlineImagePrefetchMode.collectAsState()
+    val llmFeatureEnabled by viewModel.llmFeatureEnabled.collectAsState()
+    val llmAutoSummarize by viewModel.llmAutoSummarize.collectAsState()
 
     val hasOfflineFailures = remember(offlineMedia) { offlineMedia.any { it.localPath == null } }
     val offlineMap = remember(offlineMedia) { offlineMedia.associateBy { it.originUrl } }
@@ -174,9 +186,13 @@ fun DetailScreen(
             readingFontSizeSp = readingFontSizeSp,
             shareUseSystem = shareUseSystem,
             rssInlineImagePrefetchMode = rssInlineImagePrefetchMode,
+            llmFeatureEnabled = llmFeatureEnabled,
+            llmAutoSummarize = llmAutoSummarize,
+            llmSummaryState = llmSummaryState,
             onToggleFavorite = viewModel::toggleFavorite,
             onRetryOfflineMedia = viewModel::retryOfflineMedia,
             onSaveReadingProgress = viewModel::updateReadingProgress,
+            onOpenAiSummary = onOpenAiSummary,
             onBack = onBack
         )
     }
@@ -197,9 +213,13 @@ internal fun DetailContent(
     readingFontSizeSp: Int,
     shareUseSystem: Boolean,
     rssInlineImagePrefetchMode: RssInlineImagePrefetchMode,
+    llmFeatureEnabled: Boolean = false,
+    llmAutoSummarize: Boolean = false,
+    llmSummaryState: LlmSummaryUiState = LlmSummaryUiState(),
     onToggleFavorite: () -> Unit,
     onRetryOfflineMedia: () -> Unit,
     onSaveReadingProgress: (Float) -> Unit,
+    onOpenAiSummary: () -> Unit = {},
     onBack: (Long, Boolean, Boolean) -> Unit
 ) {
     val context = LocalContext.current
@@ -208,7 +228,7 @@ internal fun DetailContent(
         shareUseSystem && isSystemShareSettingSupported(context)
     }
     val listState = rememberLazyListState()
-    InstallRotaryLazyListHandler(listState)
+    InstallDigitalCrownLazyListHandler(listState)
     val safePadding = WatchDimens.watch_safe_padding
     val pagePadding = WatchDimens.detail_page_horizontal_padding
     val blockSpacing = WatchDimens.detail_block_spacing
@@ -528,6 +548,12 @@ internal fun DetailContent(
 
         val listSemanticsModifier = Modifier.clearAndSetSemantics { }
 
+        val showAiBanner = llmFeatureEnabled && llmAutoSummarize &&
+            (llmSummaryState.status == SummaryStatus.Generating ||
+                llmSummaryState.text.isNotBlank() ||
+                llmSummaryState.status is SummaryStatus.Error)
+        val showAiButton = llmFeatureEnabled && !llmAutoSummarize
+
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -572,6 +598,18 @@ internal fun DetailContent(
                         borderColor = actionBorderColor,
                         enabled = !isRetryingOfflineMedia,
                         onClick = onRetryOfflineMedia
+                    )
+                }
+            }
+            if (showAiBanner) {
+                item(key = "aiSummaryBanner") {
+                    Spacer(modifier = Modifier.height(blockSpacing))
+                    AiSummaryBanner(
+                        summaryState = llmSummaryState,
+                        textColor = textColor,
+                        backgroundColor = backgroundColor,
+                        activeColor = activeColor,
+                        onClick = onOpenAiSummary
                     )
                 }
             }
@@ -723,10 +761,159 @@ internal fun DetailContent(
                 }
             }
             item(key = "bottomSpacer") {
-                Spacer(modifier = Modifier.height(actionVerticalSpacing))
+                Spacer(modifier = Modifier.height(if (showAiButton) 56.dp else actionVerticalSpacing))
             }
         }
 
+        val aiButtonVisible = showAiButton && !isScrolling
+        val aiTransition = updateTransition(targetState = aiButtonVisible, label = "AiButton")
+        val aiScale by aiTransition.animateFloat(
+            transitionSpec = {
+                if (targetState) spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)
+                else tween(160)
+            },
+            label = "aiScale"
+        ) { if (it) 1f else 0.72f }
+        val aiAlpha by aiTransition.animateFloat(
+            transitionSpec = {
+                if (targetState) tween(200) else tween(160)
+            },
+            label = "aiAlpha"
+        ) { if (it) 1f else 0f }
+        val aiBlurDp by aiTransition.animateFloat(
+            transitionSpec = {
+                if (targetState) tween(220) else tween(160)
+            },
+            label = "aiBlur"
+        ) { if (it) 0f else 6f }
+
+        if (aiTransition.currentState || aiTransition.targetState) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(bottom = 14.dp),
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                AiFloatingButton(
+                    activeColor = activeColor,
+                    containerColor = actionContainerColor,
+                    borderColor = actionBorderColor,
+                    modifier = Modifier
+                        .graphicsLayer {
+                            scaleX = aiScale
+                            scaleY = aiScale
+                            alpha = aiAlpha
+                        }
+                        .then(if (aiBlurDp > 0f) Modifier.blur(aiBlurDp.dp) else Modifier),
+                    onClick = onOpenAiSummary
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AiSummaryBanner(
+    summaryState: LlmSummaryUiState,
+    textColor: Color,
+    backgroundColor: Color,
+    activeColor: Color,
+    onClick: () -> Unit
+) {
+    val isGenerating = summaryState.status == SummaryStatus.Generating
+    val hasText = summaryState.text.isNotBlank()
+    val isError = summaryState.status is SummaryStatus.Error
+
+    val bannerBg = activeColor.copy(alpha = 0.10f).compositeOver(backgroundColor)
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(WatchDimens.hey_card_normal_bg_radius))
+            .background(bannerBg)
+            .clickableWithoutRipple(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 8.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            if (isGenerating && !hasText) {
+                androidx.compose.material3.CircularProgressIndicator(
+                    modifier = Modifier.size(12.dp),
+                    strokeWidth = 1.5.dp,
+                    color = activeColor
+                )
+            } else {
+                androidx.compose.material3.Icon(
+                    imageVector = Icons.Outlined.AutoAwesome,
+                    contentDescription = null,
+                    tint = activeColor,
+                    modifier = Modifier.size(12.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(6.dp))
+            val displayText = when {
+                isError -> "总结失败，点击重试"
+                hasText -> summaryState.firstLine
+                isGenerating -> "正在生成总结..."
+                else -> "AI 总结"
+            }
+            Text(
+                text = displayText,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (isError) Color(0xFFFF8A80) else textColor.copy(alpha = 0.9f),
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            androidx.compose.material3.Icon(
+                imageVector = Icons.Outlined.KeyboardArrowRight,
+                contentDescription = "查看详情",
+                tint = textColor.copy(alpha = 0.5f),
+                modifier = Modifier.size(14.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun AiFloatingButton(
+    activeColor: Color,
+    containerColor: Color,
+    borderColor: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val bg = if (isPressed) {
+        activeColor.copy(alpha = 0.18f).compositeOver(containerColor)
+    } else {
+        containerColor
+    }
+
+    Box(
+        modifier = modifier
+            .size(38.dp)
+            .clip(CircleShape)
+            .background(bg)
+            .then(
+                if (borderColor.alpha > 0f) Modifier.border(1.dp, borderColor, CircleShape)
+                else Modifier
+            )
+            .clickableWithoutRipple(interactionSource = interactionSource, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        androidx.compose.material3.Icon(
+            imageVector = Icons.Outlined.AutoAwesome,
+            contentDescription = "AI 总结",
+            tint = activeColor,
+            modifier = Modifier
+                .size(38.dp)
+                .padding(watchDimensionResource(R.dimen.hey_distance_6dp))
+        )
     }
 }
 

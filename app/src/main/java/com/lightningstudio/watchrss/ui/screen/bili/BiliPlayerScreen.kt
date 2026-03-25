@@ -16,7 +16,9 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.exponentialDecay
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.draggable
@@ -78,7 +80,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.PlayerVolumeOverlay
 import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
-import com.lightningstudio.watchrss.ui.input.InstallRotaryVolumeHandler
+import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownVolumeHandler
 import com.lightningstudio.watchrss.ui.components.rememberPlayerVolumeState
 import com.lightningstudio.watchrss.ui.viewmodel.BiliPlayerUiState
 import kotlinx.coroutines.Dispatchers
@@ -123,7 +125,7 @@ fun BiliPlayerScreen(
     onOpenWeb: () -> Unit,
     onPanStateChange: (Float, Float) -> Unit,
     allowPan: Boolean = true,
-    rotaryVolumeEnabled: Boolean = true
+    digitalCrownVolumeEnabled: Boolean = true
 ) {
     val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
     val spacing = watchDimensionResource(R.dimen.hey_distance_6dp)
@@ -145,6 +147,12 @@ fun BiliPlayerScreen(
     var positionMs by remember { mutableStateOf(0) }
     var scaleMode by remember { mutableStateOf(PlayerScaleMode.Standard) }
     var rotationAngle by remember { mutableStateOf(0f) }
+    var rotationTargetDeg by remember { mutableStateOf(0f) }
+    val animatedRotationAngle by animateFloatAsState(
+        targetValue = rotationTargetDeg,
+        animationSpec = tween(durationMillis = 300),
+        label = "screenRotation"
+    )
     var controlsVisible by remember { mutableStateOf(true) }
     var viewSize by remember { mutableStateOf(IntSize.Zero) }
     var videoSize by remember { mutableStateOf(IntSize.Zero) }
@@ -477,11 +485,11 @@ fun BiliPlayerScreen(
         }
     }
 
-    InstallRotaryVolumeHandler(
-        enabled = rotaryVolumeEnabled,
+    InstallDigitalCrownVolumeHandler(
+        enabled = digitalCrownVolumeEnabled,
         showSystemUi = false,
         reverseDirection = true,
-        supportsPointerWheel = true,
+        supportsDigitalCrown = true,
         onVolumeAdjust = volumeState::adjustByDelta
     )
 
@@ -489,7 +497,7 @@ fun BiliPlayerScreen(
         modifier = Modifier
             .fillMaxSize()
             .graphicsLayer(
-                rotationZ = rotationAngle,
+                rotationZ = animatedRotationAngle,
                 transformOrigin = TransformOrigin.Center
             )
             .background(Color.Black)
@@ -692,7 +700,10 @@ fun BiliPlayerScreen(
                                 contentDescription = "旋转",
                                 size = controlSize,
                                 iconSize = iconSize,
-                                onClick = { rotationAngle = (rotationAngle + 90f) % 360f }
+                                onClick = {
+                                    rotationTargetDeg += 90f
+                                    rotationAngle = (rotationAngle + 90f) % 360f
+                                }
                             )
                         }
                     }
@@ -779,6 +790,7 @@ private fun PlayerIconButton(
     size: androidx.compose.ui.unit.Dp,
     iconSize: androidx.compose.ui.unit.Dp,
     enabled: Boolean = true,
+    iconModifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     Box(
@@ -792,7 +804,7 @@ private fun PlayerIconButton(
             imageVector = icon,
             contentDescription = contentDescription,
             tint = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.size(iconSize)
+            modifier = Modifier.size(iconSize).then(iconModifier)
         )
     }
 }

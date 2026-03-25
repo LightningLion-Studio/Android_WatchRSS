@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import com.lightningstudio.watchrss.BuildConfig
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -18,6 +19,15 @@ private val READING_FONT_SIZE_SP = intPreferencesKey("reading_font_size_sp")
 private val SHARE_USE_SYSTEM = booleanPreferencesKey("share_use_system")
 private val PHONE_CONNECTION_ENABLED = booleanPreferencesKey("phone_connection_enabled")
 private val RSS_INLINE_IMAGE_PREFETCH_MODE = intPreferencesKey("rss_inline_image_prefetch_mode")
+private val LLM_PROVIDER = stringPreferencesKey("llm_provider")
+private val LLM_MODEL = stringPreferencesKey("llm_model")
+private val LLM_BASE_URL = stringPreferencesKey("llm_base_url")
+private val LLM_SYSTEM_PROMPT = stringPreferencesKey("llm_system_prompt")
+private val LLM_ENABLED = booleanPreferencesKey("llm_enabled")
+private val LLM_FEATURE_ENABLED = booleanPreferencesKey("llm_feature_enabled")
+private val LLM_AUTO_SUMMARIZE = booleanPreferencesKey("llm_auto_summarize")
+private val LLM_SHOW_TOKEN_USAGE = booleanPreferencesKey("llm_show_token_usage")
+private val LLM_PROMPT_PRESET = intPreferencesKey("llm_prompt_preset")
 const val MIN_CACHE_LIMIT_MB: Long = 512
 const val MAX_CACHE_LIMIT_MB: Long = 4 * 1024
 const val DEFAULT_CACHE_LIMIT_MB: Long = MIN_CACHE_LIMIT_MB
@@ -53,6 +63,15 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
                 ?: DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE.persistedValue
         )
     }
+    val llmProvider: Flow<String> = dataStore.data.map { it[LLM_PROVIDER] ?: "" }
+    val llmModel: Flow<String> = dataStore.data.map { it[LLM_MODEL] ?: "" }
+    val llmBaseUrl: Flow<String> = dataStore.data.map { it[LLM_BASE_URL] ?: "" }
+    val llmSystemPrompt: Flow<String> = dataStore.data.map { it[LLM_SYSTEM_PROMPT] ?: "" }
+    val llmEnabled: Flow<Boolean> = dataStore.data.map { it[LLM_ENABLED] ?: false }
+    val llmFeatureEnabled: Flow<Boolean> = dataStore.data.map { it[LLM_FEATURE_ENABLED] ?: false }
+    val llmAutoSummarize: Flow<Boolean> = dataStore.data.map { it[LLM_AUTO_SUMMARIZE] ?: false }
+    val llmShowTokenUsage: Flow<Boolean> = dataStore.data.map { it[LLM_SHOW_TOKEN_USAGE] ?: false }
+    val llmPromptPreset: Flow<Int> = dataStore.data.map { it[LLM_PROMPT_PRESET] ?: 0 }
 
     suspend fun setCacheLimitBytes(bytes: Long) {
         dataStore.edit { preferences ->
@@ -100,6 +119,36 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         dataStore.edit { preferences ->
             preferences[RSS_INLINE_IMAGE_PREFETCH_MODE] = value.persistedValue
         }
+    }
+
+    suspend fun setLlmConfig(
+        provider: String,
+        model: String,
+        baseUrl: String,
+        enabled: Boolean
+    ) {
+        dataStore.edit { preferences ->
+            preferences[LLM_PROVIDER] = provider
+            preferences[LLM_MODEL] = model
+            preferences[LLM_BASE_URL] = baseUrl
+            preferences[LLM_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setLlmFeatureEnabled(value: Boolean) {
+        dataStore.edit { it[LLM_FEATURE_ENABLED] = value }
+    }
+
+    suspend fun setLlmAutoSummarize(value: Boolean) {
+        dataStore.edit { it[LLM_AUTO_SUMMARIZE] = value }
+    }
+
+    suspend fun setLlmShowTokenUsage(value: Boolean) {
+        dataStore.edit { it[LLM_SHOW_TOKEN_USAGE] = value }
+    }
+
+    suspend fun setLlmPromptPreset(value: Int) {
+        dataStore.edit { it[LLM_PROMPT_PRESET] = value }
     }
 
     private fun clampCacheLimitBytes(bytes: Long): Long {

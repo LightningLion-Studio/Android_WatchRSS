@@ -29,7 +29,7 @@ import com.lightningstudio.watchrss.data.douyin.DouyinStreamItem
 import com.lightningstudio.watchrss.ui.components.EmptyStateCard
 import com.lightningstudio.watchrss.ui.components.PullRefreshBox
 import com.lightningstudio.watchrss.ui.components.ToastMessage
-import com.lightningstudio.watchrss.ui.input.InstallRotaryLazyListHandler
+import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.screen.bili.BiliFeedCard
 import com.lightningstudio.watchrss.ui.screen.bili.formatBiliCount
 import com.lightningstudio.watchrss.ui.viewmodel.DouyinFeedUiState
@@ -45,7 +45,7 @@ fun DouyinFeedScreen(
     val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
     val itemSpacing = watchDimensionResource(R.dimen.hey_distance_8dp)
     val listState = rememberLazyListState()
-    InstallRotaryLazyListHandler(listState)
+    InstallDigitalCrownLazyListHandler(listState)
     val isAtTop = remember(listState) {
         derivedStateOf {
             listState.firstVisibleItemIndex == 0 &&

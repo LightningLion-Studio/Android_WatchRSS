@@ -71,6 +71,15 @@ class DetailViewModel(
 
     val shareUseSystem = settingsRepository.shareUseSystem
 
+    val llmFeatureEnabled = settingsRepository.llmFeatureEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    val llmAutoSummarize = settingsRepository.llmAutoSummarize
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    val llmShowTokenUsage = settingsRepository.llmShowTokenUsage
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
     val rssInlineImagePrefetchMode = settingsRepository.rssInlineImagePrefetchMode
         .stateIn(
             viewModelScope,

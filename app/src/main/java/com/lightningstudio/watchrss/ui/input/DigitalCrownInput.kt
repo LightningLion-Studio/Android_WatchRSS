@@ -25,14 +25,14 @@ import kotlin.math.abs
 import kotlin.math.sign
 
 @Composable
-fun InstallRotaryScrollHandler(
+fun InstallDigitalCrownScrollHandler(
     scrollState: ScrollState,
     enabled: Boolean = true,
     reverseDirection: Boolean = false
 ) {
     val scope = rememberCoroutineScope()
-    val stepPx = with(LocalDensity.current) { ROTARY_SCROLL_STEP.dp.toPx() }
-    InstallRotaryHandler(enabled = enabled, supportsPointerWheel = true) { delta ->
+    val stepPx = with(LocalDensity.current) { DIGITAL_CROWN_SCROLL_STEP.dp.toPx() }
+    InstallDigitalCrownHandler(enabled = enabled, supportsDigitalCrown = true) { delta ->
         val amount = delta.toScrollAmount(stepPx, reverseDirection)
         if (amount == 0f) {
             false
@@ -46,14 +46,14 @@ fun InstallRotaryScrollHandler(
 }
 
 @Composable
-fun InstallRotaryLazyListHandler(
+fun InstallDigitalCrownLazyListHandler(
     listState: LazyListState,
     enabled: Boolean = true,
     reverseDirection: Boolean = false
 ) {
     val scope = rememberCoroutineScope()
-    val stepPx = with(LocalDensity.current) { ROTARY_SCROLL_STEP.dp.toPx() }
-    InstallRotaryHandler(enabled = enabled, supportsPointerWheel = true) { delta ->
+    val stepPx = with(LocalDensity.current) { DIGITAL_CROWN_SCROLL_STEP.dp.toPx() }
+    InstallDigitalCrownHandler(enabled = enabled, supportsDigitalCrown = true) { delta ->
         val amount = delta.toScrollAmount(stepPx, reverseDirection)
         if (amount == 0f) {
             false
@@ -67,17 +67,17 @@ fun InstallRotaryLazyListHandler(
 }
 
 @Composable
-fun InstallRotaryPagerHandler(
+fun InstallDigitalCrownPagerHandler(
     pagerState: PagerState,
     enabled: Boolean = true,
     reverseDirection: Boolean = false
 ) {
     val scope = rememberCoroutineScope()
     var accumulatedDelta by remember { mutableFloatStateOf(0f) }
-    InstallRotaryHandler(enabled = enabled) { delta ->
+    InstallDigitalCrownHandler(enabled = enabled) { delta ->
         accumulatedDelta += if (reverseDirection) -delta else delta
-        if (abs(accumulatedDelta) < ROTARY_PAGER_THRESHOLD) {
-            return@InstallRotaryHandler true
+        if (abs(accumulatedDelta) < DIGITAL_CROWN_PAGER_THRESHOLD) {
+            return@InstallDigitalCrownHandler true
         }
         val direction = -sign(accumulatedDelta).toInt()
         accumulatedDelta = 0f
@@ -95,11 +95,11 @@ fun InstallRotaryPagerHandler(
 }
 
 @Composable
-fun InstallRotaryVolumeHandler(
+fun InstallDigitalCrownVolumeHandler(
     enabled: Boolean = true,
     showSystemUi: Boolean = true,
     reverseDirection: Boolean = false,
-    supportsPointerWheel: Boolean = false,
+    supportsDigitalCrown: Boolean = false,
     onVolumeAdjust: ((Float) -> Unit)? = null
 ) {
     val context = LocalContext.current
@@ -107,24 +107,24 @@ fun InstallRotaryVolumeHandler(
         context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     }
     var accumulatedDelta by remember { mutableFloatStateOf(0f) }
-    InstallRotaryHandler(
+    InstallDigitalCrownHandler(
         enabled = enabled,
-        supportsPointerWheel = supportsPointerWheel
+        supportsDigitalCrown = supportsDigitalCrown
     ) { delta ->
-        val normalizedDelta = normalizeRotaryVolumeDelta(delta, reverseDirection)
+        val normalizedDelta = normalizeDigitalCrownVolumeDelta(delta, reverseDirection)
         if (onVolumeAdjust != null) {
             // 直接传 raw delta，由调用方维护浮点虚拟音量
-            val scaledDelta = normalizedDelta * ROTARY_VOLUME_STEP.toFloat()
-            AppLogger.d(ROTARY_VOLUME_TAG, "rotary delta=$delta normalized=$normalizedDelta scaled=$scaledDelta → onVolumeAdjust")
+            val scaledDelta = normalizedDelta * DIGITAL_CROWN_VOLUME_STEP.toFloat()
+            AppLogger.d(DIGITAL_CROWN_VOLUME_TAG, "digitalCrown delta=$delta normalized=$normalizedDelta scaled=$scaledDelta → onVolumeAdjust")
             onVolumeAdjust(scaledDelta)
         } else {
             // 无自定义 handler 时回退到系统 adjustStreamVolume（整步）
             accumulatedDelta += normalizedDelta
-            if (abs(accumulatedDelta) < ROTARY_VOLUME_THRESHOLD) {
-                return@InstallRotaryHandler true
+            if (abs(accumulatedDelta) < DIGITAL_CROWN_VOLUME_THRESHOLD) {
+                return@InstallDigitalCrownHandler true
             }
             val steps = abs(accumulatedDelta).toInt().coerceAtLeast(1)
-            val direction = rotaryVolumeDirection(accumulatedDelta)
+            val direction = digitalCrownVolumeDirection(accumulatedDelta)
             accumulatedDelta = 0f
             repeat(steps) {
                 audioManager.adjustStreamVolume(
@@ -138,11 +138,11 @@ fun InstallRotaryVolumeHandler(
     }
 }
 
-internal fun normalizeRotaryVolumeDelta(delta: Float, reverseDirection: Boolean): Float {
+internal fun normalizeDigitalCrownVolumeDelta(delta: Float, reverseDirection: Boolean): Float {
     return if (reverseDirection) -delta else delta
 }
 
-internal fun rotaryVolumeDirection(accumulatedDelta: Float): Int {
+internal fun digitalCrownVolumeDirection(accumulatedDelta: Float): Int {
     return when {
         accumulatedDelta > 0f -> 1
         accumulatedDelta < 0f -> -1
@@ -151,32 +151,32 @@ internal fun rotaryVolumeDirection(accumulatedDelta: Float): Int {
 }
 
 @Composable
-fun InstallRotaryHandler(
+fun InstallDigitalCrownHandler(
     enabled: Boolean = true,
-    supportsPointerWheel: Boolean = false,
-    onRotaryInput: (Float) -> Boolean
+    supportsDigitalCrown: Boolean = false,
+    onDigitalCrownInput: (Float) -> Boolean
 ) {
     val context = LocalContext.current
     val activity = remember(context) { context.findBaseWatchActivity() }
-    val latestHandler by rememberUpdatedState(onRotaryInput)
+    val latestHandler by rememberUpdatedState(onDigitalCrownInput)
 
     DisposableEffect(activity, enabled) {
         if (!enabled || activity == null) {
             onDispose { }
         } else {
-            val id = activity.registerRotaryHandler(supportsPointerWheel = supportsPointerWheel) { delta ->
+            val id = activity.registerDigitalCrownHandler(supportsDigitalCrown = supportsDigitalCrown) { delta ->
                 latestHandler(delta)
             }
             onDispose {
-                activity.unregisterRotaryHandler(id)
+                activity.unregisterDigitalCrownHandler(id)
             }
         }
     }
 }
 
-internal fun normalizePointerWheelScrollDelta(delta: Float): Float {
+internal fun normalizeDigitalCrownScrollDelta(delta: Float): Float {
     if (delta == 0f) return 0f
-    return delta.coerceIn(-MAX_POINTER_WHEEL_SCROLL_DELTA, MAX_POINTER_WHEEL_SCROLL_DELTA)
+    return delta.coerceIn(-MAX_DIGITAL_CROWN_SCROLL_DELTA, MAX_DIGITAL_CROWN_SCROLL_DELTA)
 }
 
 private fun Float.toScrollAmount(stepPx: Float, reverseDirection: Boolean): Float {
@@ -195,9 +195,9 @@ private fun Context.findBaseWatchActivity(): BaseWatchActivity? {
 }
 
 // 基于 OPPO Watch X2 实测，0.2 是自然滚动速度
-private const val ROTARY_SCROLL_STEP = 0.2
-private const val ROTARY_VOLUME_STEP = 0.01
-private const val ROTARY_PAGER_THRESHOLD = 0.8f
-private const val ROTARY_VOLUME_THRESHOLD = 0.8f
-private const val MAX_POINTER_WHEEL_SCROLL_DELTA = 1f
-private const val ROTARY_VOLUME_TAG = "RotaryVolume"
+private const val DIGITAL_CROWN_SCROLL_STEP = 0.2
+private const val DIGITAL_CROWN_VOLUME_STEP = 0.01
+private const val DIGITAL_CROWN_PAGER_THRESHOLD = 0.8f
+private const val DIGITAL_CROWN_VOLUME_THRESHOLD = 0.8f
+private const val MAX_DIGITAL_CROWN_SCROLL_DELTA = 1f
+private const val DIGITAL_CROWN_VOLUME_TAG = "DigitalCrownVolume"

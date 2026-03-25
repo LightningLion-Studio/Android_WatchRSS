@@ -129,6 +129,7 @@ dependencies {
     implementation(libs.androidx.media3.ui)
     implementation(libs.androidx.media3.datasource.okhttp)
     implementation(libs.nanohttpd)
+    implementation(libs.androidx.security.crypto)
     ksp(libs.sqlite.jdbc)
     ksp(libs.androidx.room.compiler)
     testImplementation(libs.junit)

@@ -30,7 +30,7 @@ import androidx.compose.ui.text.style.TextAlign
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.WatchSwitch
 import com.lightningstudio.watchrss.ui.components.WatchSurface
-import com.lightningstudio.watchrss.ui.input.InstallRotaryScrollHandler
+import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownScrollHandler
 import com.lightningstudio.watchrss.ui.theme.watchColorResource
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 
@@ -55,7 +55,7 @@ fun BiliSettingsScreen(
     val statusText = if (isLoggedIn) "已登录" else "未登录"
     val scrollState = rememberScrollState()
 
-    InstallRotaryScrollHandler(scrollState)
+    InstallDigitalCrownScrollHandler(scrollState)
 
     WatchSurface(pureBlack = true) {
         Column(

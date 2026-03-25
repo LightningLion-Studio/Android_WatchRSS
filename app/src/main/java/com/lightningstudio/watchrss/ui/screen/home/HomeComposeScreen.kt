@@ -73,7 +73,7 @@ import androidx.compose.ui.unit.sp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.rss.RssChannel
-import com.lightningstudio.watchrss.ui.input.InstallRotaryLazyListHandler
+import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.testing.HomeTestTags
 import com.lightningstudio.watchrss.ui.util.formatTime
 import com.lightningstudio.watchrss.ui.viewmodel.HomePlatformLoginState
@@ -106,7 +106,7 @@ fun HomeComposeScreen(
         val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
         val itemSpacing = watchDimensionResource(R.dimen.hey_distance_6dp)
         val listState = rememberLazyListState()
-        InstallRotaryLazyListHandler(listState)
+        InstallDigitalCrownLazyListHandler(listState)
         // 目的：解决纵向滚动与卡片横向滑动（HomeSwipeRow）之间的手势冲突。
         // 滚动时将 HomeSwipeRow 替换为普通 Box，彻底移除横向手势，避免误触左滑操作。
         // 代价：isScrollInProgress 在滚动过程中高频变化，会导致列表所有可见卡片频繁重组。

@@ -54,7 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.sdk.bili.BiliPage
-import com.lightningstudio.watchrss.ui.input.InstallRotaryLazyListHandler
+import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
 import com.lightningstudio.watchrss.ui.util.RssImageLoader
 import com.lightningstudio.watchrss.ui.viewmodel.BiliDetailUiState
@@ -76,7 +76,7 @@ fun BiliDetailScreen(
     val spacing = watchDimensionResource(R.dimen.hey_distance_6dp)
     val extraBottomPadding = 32.dp
     val listState = rememberLazyListState()
-    InstallRotaryLazyListHandler(listState)
+    InstallDigitalCrownLazyListHandler(listState)
     val detail = uiState.detail
 
     Box(

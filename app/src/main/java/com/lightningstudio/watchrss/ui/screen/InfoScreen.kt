@@ -23,7 +23,7 @@ import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.screen.rss.DetailTextBlock
 import com.lightningstudio.watchrss.ui.screen.rss.DetailTitle
-import com.lightningstudio.watchrss.ui.input.InstallRotaryLazyListHandler
+import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.util.ContentBlock
 import com.lightningstudio.watchrss.ui.util.TextStyle as ContentTextStyle
 import androidx.compose.material3.MaterialTheme
@@ -49,7 +49,7 @@ fun InfoScreen(
     val contentGap = blockSpacing + 4.dp
     val listState = rememberLazyListState()
 
-    InstallRotaryLazyListHandler(listState)
+    InstallDigitalCrownLazyListHandler(listState)
 
     LazyColumn(
         modifier = Modifier

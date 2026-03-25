@@ -33,7 +33,7 @@ import android.graphics.Paint
 import android.text.TextPaint
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.WatchSurface
-import com.lightningstudio.watchrss.ui.input.InstallRotaryScrollHandler
+import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownScrollHandler
 import com.lightningstudio.watchrss.ui.theme.ActionButtonTextStyle
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
 import com.lightningstudio.watchrss.ui.theme.rememberWatchTitleLineLimitsPx
@@ -83,7 +83,7 @@ fun BiliChannelInfoScreen(
     }
     val scrollState = rememberScrollState()
 
-    InstallRotaryScrollHandler(scrollState)
+    InstallDigitalCrownScrollHandler(scrollState)
 
     WatchSurface(pureBlack = true) {
         Column(

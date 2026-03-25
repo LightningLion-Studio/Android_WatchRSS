@@ -43,7 +43,7 @@ import com.lightningstudio.watchrss.phoneconnection.acoustic.AcousticPacket
 import com.lightningstudio.watchrss.phoneconnection.guided.WatchGuidedWifiClient
 import com.lightningstudio.watchrss.ui.components.WatchButton
 import com.lightningstudio.watchrss.ui.components.WatchSurface
-import com.lightningstudio.watchrss.ui.input.InstallRotaryScrollHandler
+import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownScrollHandler
 import com.lightningstudio.watchrss.ui.settings.WatchSettingsPillRow
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
@@ -170,8 +170,8 @@ class AcousticConnectionActivity : BaseWatchActivity() {
                     PhoneConnectionMode.PURE_SOUND -> preparePureSoundSync(currentAbility)
                     PhoneConnectionMode.SOUND_GUIDED_WIFI -> {
                         statusMessage = when (currentAbility) {
-                            PhoneConnectionAbility.SYNC_FAVORITES -> "请在手机上选择“引导同步收藏”"
-                            PhoneConnectionAbility.SYNC_WATCH_LATER -> "请在手机上选择“引导同步稍后再看”"
+                            PhoneConnectionAbility.SYNC_FAVORITES -> "请在手机上选择”引导同步收藏"
+                            PhoneConnectionAbility.SYNC_WATCH_LATER -> "请在手机上选择”引导同步稍后再看"
                             else -> ""
                         }
                         detailMessage = "手表会先听取手机热点信息，连入后再通过局域网上传数据"
@@ -181,6 +181,13 @@ class AcousticConnectionActivity : BaseWatchActivity() {
 
                     PhoneConnectionMode.MANUAL_WIFI -> Unit
                 }
+            }
+
+            PhoneConnectionAbility.LLM_SUMMARY_CONFIG -> {
+                statusMessage = "LLM 配置不支持声波连接"
+                detailMessage = "请使用 WiFi 扫码方式配置大模型"
+                primaryButtonLabel = null
+                isBusy = false
             }
         }
     }
@@ -238,6 +245,7 @@ class AcousticConnectionActivity : BaseWatchActivity() {
 
                 PhoneConnectionAbility.SYNC_FAVORITES,
                 PhoneConnectionAbility.SYNC_WATCH_LATER -> startPureSoundPlayback()
+                PhoneConnectionAbility.LLM_SUMMARY_CONFIG -> Unit
                 null -> Unit
             }
 
@@ -323,6 +331,8 @@ class AcousticConnectionActivity : BaseWatchActivity() {
                             )
                             handleRemoteInput(url)
                         }
+
+                        PhoneConnectionAbility.LLM_SUMMARY_CONFIG -> Unit
 
                         PhoneConnectionAbility.SYNC_FAVORITES,
                         PhoneConnectionAbility.SYNC_WATCH_LATER -> {
@@ -455,7 +465,7 @@ private fun AcousticConnectionScreen(
     val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
     val scrollState = rememberScrollState()
 
-    InstallRotaryScrollHandler(scrollState)
+    InstallDigitalCrownScrollHandler(scrollState)
 
     WatchSurface(pureBlack = true) {
         Column(

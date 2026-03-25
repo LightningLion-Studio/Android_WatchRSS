@@ -44,7 +44,7 @@ class PlayerVolumeState internal constructor(
     // PlayerVolume: getStreamMaxVolume(STREAM_MUSIC)=16
     private val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
         .also { AppLogger.d(VOLUME_TAG, "getStreamMaxVolume(STREAM_MUSIC)=$it") }
-    // 每单位 rotary delta 对应的音量步长（5% 音量范围）
+    // 每单位 digitalCrown delta 对应的音量步长（5% 音量范围）
     private val volumeSensitivity = (maxVolume - minVolume) * VOLUME_SENSITIVITY_PERCENT
     private var hideJob: Job? = null
     // 浮点虚拟音量，保留 delta 累积精度，仅在提交给 AudioManager 时 roundToInt

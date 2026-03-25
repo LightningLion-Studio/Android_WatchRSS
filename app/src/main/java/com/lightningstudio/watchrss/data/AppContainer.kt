@@ -18,6 +18,7 @@ import com.lightningstudio.watchrss.data.rss.RssFetchService
 import com.lightningstudio.watchrss.data.rss.RssOfflineStore
 import com.lightningstudio.watchrss.data.rss.RssParseService
 import com.lightningstudio.watchrss.data.rss.RssRepository
+import com.lightningstudio.watchrss.data.settings.LlmApiKeyStore
 import com.lightningstudio.watchrss.data.settings.SettingsRepository
 import com.lightningstudio.watchrss.ui.util.RssImageLoader
 import kotlinx.coroutines.CoroutineScope
@@ -27,6 +28,7 @@ import kotlinx.coroutines.SupervisorJob
 interface AppContainer {
     val rssRepository: RssRepository
     val settingsRepository: SettingsRepository
+    val llmApiKeyStore: LlmApiKeyStore
     val managedCacheService: ManagedCacheService
     val biliRepository: BiliRepositoryContract
     val douyinRepository: DouyinRepositoryContract
@@ -57,6 +59,10 @@ class DefaultAppContainer(context: Context) : AppContainer {
             produceFile = { appContext.preferencesDataStoreFile("settings.preferences_pb") }
         )
         SettingsRepository(dataStore)
+    }
+
+    override val llmApiKeyStore: LlmApiKeyStore by lazy {
+        LlmApiKeyStore(appContext)
     }
 
     override val managedCacheService: ManagedCacheService by lazy {

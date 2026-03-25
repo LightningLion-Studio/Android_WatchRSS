@@ -79,8 +79,8 @@ import com.lightningstudio.watchrss.ui.components.WatchIconButton
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.components.PlayerVolumeOverlay
 import com.lightningstudio.watchrss.ui.components.rememberPlayerVolumeState
-import com.lightningstudio.watchrss.ui.input.InstallRotaryPagerHandler
-import com.lightningstudio.watchrss.ui.input.InstallRotaryVolumeHandler
+import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownPagerHandler
+import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownVolumeHandler
 import com.lightningstudio.watchrss.ui.viewmodel.DouyinFeedUiState
 import com.lightningstudio.watchrss.util.AppLogger
 import okhttp3.OkHttpClient
@@ -123,15 +123,15 @@ fun DouyinImmersiveScreen(
     var scaleMode by rememberSaveable { mutableStateOf(DouyinPlayerScaleMode.Standard) }
     val volumeState = rememberPlayerVolumeState()
 
-    InstallRotaryPagerHandler(
+    InstallDigitalCrownPagerHandler(
         pagerState = pagerState,
         enabled = pagerState.currentPage == 0 && pageCount > 1
     )
-    InstallRotaryVolumeHandler(
+    InstallDigitalCrownVolumeHandler(
         enabled = pagerState.currentPage > 0,
         showSystemUi = false,
         reverseDirection = true,
-        supportsPointerWheel = true,
+        supportsDigitalCrown = true,
         onVolumeAdjust = volumeState::adjustByDelta
     )
 

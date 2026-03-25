@@ -29,7 +29,7 @@ import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.rss.RssItem
 import com.lightningstudio.watchrss.ui.components.SearchInputBar
 import com.lightningstudio.watchrss.ui.components.WatchSurface
-import com.lightningstudio.watchrss.ui.input.InstallRotaryLazyListHandler
+import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 
 @Composable
 fun RssSearchScreen(
@@ -43,7 +43,7 @@ fun RssSearchScreen(
     val listSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_6dp
     val listState = rememberLazyListState()
 
-    InstallRotaryLazyListHandler(listState)
+    InstallDigitalCrownLazyListHandler(listState)
 
     WatchSurface(pureBlack = true) {
         LazyColumn(

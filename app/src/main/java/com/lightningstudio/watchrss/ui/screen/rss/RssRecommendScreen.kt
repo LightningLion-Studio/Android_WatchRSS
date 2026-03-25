@@ -33,7 +33,7 @@ import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.rss.RssRecommendChannel
 import com.lightningstudio.watchrss.data.rss.RssRecommendGroup
 import com.lightningstudio.watchrss.ui.components.WatchSurface
-import com.lightningstudio.watchrss.ui.input.InstallRotaryLazyListHandler
+import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 
 @Composable
 fun RssRecommendScreen(
@@ -44,7 +44,7 @@ fun RssRecommendScreen(
     val spacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_4dp
     val listState = rememberLazyListState()
 
-    InstallRotaryLazyListHandler(listState)
+    InstallDigitalCrownLazyListHandler(listState)
 
     WatchSurface(pureBlack = true) {
         LazyColumn(
@@ -78,7 +78,7 @@ fun RssRecommendGroupScreen(
     val startIndent = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_content_horizontal_distance
     val listState = rememberLazyListState()
 
-    InstallRotaryLazyListHandler(listState)
+    InstallDigitalCrownLazyListHandler(listState)
 
     WatchSurface(pureBlack = true) {
         LazyColumn(

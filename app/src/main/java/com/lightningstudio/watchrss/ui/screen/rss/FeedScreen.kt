@@ -82,7 +82,7 @@ import com.lightningstudio.watchrss.data.rss.RssUrlResolver
 import com.lightningstudio.watchrss.ui.components.PullRefreshBox
 import com.lightningstudio.watchrss.ui.components.SwipeActionButton
 import com.lightningstudio.watchrss.ui.components.SwipeActionRow
-import com.lightningstudio.watchrss.ui.input.InstallRotaryLazyListHandler
+import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.util.formatWatchTitleForWidthLimits
 import com.lightningstudio.watchrss.ui.util.RssImageLoader
 import com.lightningstudio.watchrss.debug.PerfTrace
@@ -128,7 +128,7 @@ fun FeedScreen(
         val imageItemSpacing = watchDimensionResource(R.dimen.hey_distance_8dp)
         val textItemSpacing = watchDimensionResource(R.dimen.hey_distance_8dp)
         val listState = rememberLazyListState()
-        InstallRotaryLazyListHandler(listState)
+        InstallDigitalCrownLazyListHandler(listState)
         val context = LocalContext.current
         val canLoadMoreState = rememberUpdatedState(hasMore)
         val isRefreshingState = rememberUpdatedState(isRefreshing)

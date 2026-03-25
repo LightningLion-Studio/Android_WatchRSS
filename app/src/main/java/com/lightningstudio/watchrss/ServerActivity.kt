@@ -11,7 +11,7 @@ import com.lightningstudio.watchrss.phoneconnection.PhoneConnectionAbility
 import com.lightningstudio.watchrss.ui.screen.ServerScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.util.AppLogger
-import com.lightningstudio.watchrss.util.LocalHttpServer
+import com.lightningstudio.watchrss.phoneconnection.LocalHttpServer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -72,13 +72,8 @@ class ServerActivity : BaseWatchActivity() {
                             handleSyncComplete()
                         }
                     }
-                    ServerType.CONNECTION_HUB -> {
-                        LocalHttpServer.createConnectionHubServer(
-                            container = app.container,
-                            preferredAbility = preferredAbility,
-                            onRemoteInput = { url -> handleRemoteInput(url) },
-                            onSyncComplete = { handleSyncComplete() }
-                        )
+                    ServerType.LLM_CONFIG -> {
+                        LocalHttpServer.createLlmConfigServer(app.container)
                     }
                 }
                 server?.start()
@@ -134,7 +129,7 @@ class ServerActivity : BaseWatchActivity() {
         REMOTE_INPUT,
         SYNC_FAVORITES,
         SYNC_WATCH_LATER,
-        CONNECTION_HUB
+        LLM_CONFIG
     }
 
     private fun resolveTitle(): String {
@@ -143,7 +138,7 @@ class ServerActivity : BaseWatchActivity() {
             ServerType.REMOTE_INPUT -> "从手机输入"
             ServerType.SYNC_FAVORITES -> "同步收藏"
             ServerType.SYNC_WATCH_LATER -> "同步稍后再看"
-            ServerType.CONNECTION_HUB -> "连接手机"
+            ServerType.LLM_CONFIG -> "配置大模型"
         }
     }
 
@@ -153,7 +148,7 @@ class ServerActivity : BaseWatchActivity() {
             ServerType.REMOTE_INPUT -> "请使用手机版扫描下方二维码"
             ServerType.SYNC_FAVORITES -> "请使用手机版扫描下方二维码"
             ServerType.SYNC_WATCH_LATER -> "请使用手机版扫描下方二维码"
-            ServerType.CONNECTION_HUB -> "请先让手表与手机位于同一 WiFi，或让手表连接到手机热点，再使用手机版扫码"
+            ServerType.LLM_CONFIG -> "请使用手机版扫描下方二维码"
         }
     }
 }

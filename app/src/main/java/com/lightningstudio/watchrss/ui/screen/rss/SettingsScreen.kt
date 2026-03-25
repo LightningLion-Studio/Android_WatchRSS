@@ -59,7 +59,7 @@ import com.lightningstudio.watchrss.data.settings.RssInlineImagePrefetchMode
 import com.lightningstudio.watchrss.ui.components.WatchSwitch
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.settings.WatchSettingsPillRow
-import com.lightningstudio.watchrss.ui.input.InstallRotaryScrollHandler
+import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownScrollHandler
 import com.lightningstudio.watchrss.ui.settings.MainSettingsCatalog
 import com.lightningstudio.watchrss.ui.testing.SettingsTestTags
 import com.lightningstudio.watchrss.ui.util.isSystemShareSettingSupported
@@ -79,6 +79,10 @@ fun SettingsScreen(
     readingFontSizeSp: StateFlow<Int>,
     phoneConnectionEnabled: StateFlow<Boolean>,
     rssInlineImagePrefetchMode: StateFlow<RssInlineImagePrefetchMode>,
+    llmFeatureEnabled: StateFlow<Boolean>,
+    llmAutoSummarize: StateFlow<Boolean>,
+    llmShowTokenUsage: StateFlow<Boolean>,
+    llmPromptPreset: StateFlow<Int>,
     showPerformanceTools: Boolean,
     onSelectCacheLimit: (Long) -> Unit,
     onToggleReadingTheme: () -> Unit,
@@ -86,10 +90,15 @@ fun SettingsScreen(
     onSelectFontSize: (Int) -> Unit,
     onTogglePhoneConnection: () -> Unit,
     onSelectRssInlineImagePrefetchMode: (RssInlineImagePrefetchMode) -> Unit,
+    onToggleLlmFeatureEnabled: () -> Unit,
+    onToggleLlmAutoSummarize: () -> Unit,
+    onToggleLlmShowTokenUsage: () -> Unit,
     onOpenOobe: () -> Unit,
     onOpenPerfLargeList: () -> Unit,
     onOpenPerfLargeArticle: () -> Unit,
     onOpenDouyinCookieInput: () -> Unit,
+    onOpenLlmConnectivity: () -> Unit,
+    onOpenLlmPromptPreset: () -> Unit,
     onBeianClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -100,6 +109,10 @@ fun SettingsScreen(
     val fontSizeSp by readingFontSizeSp.collectAsState()
     val phoneConnection by phoneConnectionEnabled.collectAsState()
     val imagePrefetchMode by rssInlineImagePrefetchMode.collectAsState()
+    val llmEnabled by llmFeatureEnabled.collectAsState()
+    val llmAuto by llmAutoSummarize.collectAsState()
+    val llmTokenUsage by llmShowTokenUsage.collectAsState()
+    val llmPreset by llmPromptPreset.collectAsState()
     val showSystemShareSetting = remember(context) {
         isSystemShareSettingSupported(context)
     }
@@ -114,15 +127,24 @@ fun SettingsScreen(
             readingThemeDark = themeDark,
             readingFontSizeSp = fontSizeSp,
             phoneConnectionEnabled = phoneConnection,
+            llmFeatureEnabled = llmEnabled,
+            llmAutoSummarize = llmAuto,
+            llmShowTokenUsage = llmTokenUsage,
+            llmPromptPreset = llmPreset,
             showPerformanceTools = showPerformanceTools,
             onToggleReadingTheme = onToggleReadingTheme,
             onSelectFontSize = onSelectFontSize,
             onTogglePhoneConnection = onTogglePhoneConnection,
+            onToggleLlmFeatureEnabled = onToggleLlmFeatureEnabled,
+            onToggleLlmAutoSummarize = onToggleLlmAutoSummarize,
+            onToggleLlmShowTokenUsage = onToggleLlmShowTokenUsage,
             onOpenAdvanced = { currentPage = SettingsPage.Advanced },
             onOpenOobe = onOpenOobe,
             onOpenPerfLargeList = onOpenPerfLargeList,
             onOpenPerfLargeArticle = onOpenPerfLargeArticle,
             onOpenDouyinCookieInput = onOpenDouyinCookieInput,
+            onOpenLlmConnectivity = onOpenLlmConnectivity,
+            onOpenLlmPromptPreset = onOpenLlmPromptPreset,
             onBeianClick = onBeianClick
         )
         SettingsPage.Advanced -> AdvancedSettingsPage(
@@ -143,15 +165,24 @@ private fun MainSettingsPage(
     readingThemeDark: Boolean,
     readingFontSizeSp: Int,
     phoneConnectionEnabled: Boolean,
+    llmFeatureEnabled: Boolean,
+    llmAutoSummarize: Boolean,
+    llmShowTokenUsage: Boolean,
+    llmPromptPreset: Int,
     showPerformanceTools: Boolean,
     onToggleReadingTheme: () -> Unit,
     onSelectFontSize: (Int) -> Unit,
     onTogglePhoneConnection: () -> Unit,
+    onToggleLlmFeatureEnabled: () -> Unit,
+    onToggleLlmAutoSummarize: () -> Unit,
+    onToggleLlmShowTokenUsage: () -> Unit,
     onOpenAdvanced: () -> Unit,
     onOpenOobe: () -> Unit,
     onOpenPerfLargeList: () -> Unit,
     onOpenPerfLargeArticle: () -> Unit,
     onOpenDouyinCookieInput: () -> Unit,
+    onOpenLlmConnectivity: () -> Unit,
+    onOpenLlmPromptPreset: () -> Unit,
     onBeianClick: () -> Unit
 ) {
     val fontOptions = remember { (12..32 step 2).toList() }
@@ -169,7 +200,7 @@ private fun MainSettingsPage(
     val readingThemeInfo = remember { MainSettingsCatalog.readingTheme }
     val fontSizeInfo = remember { MainSettingsCatalog.fontSize }
 
-    InstallRotaryScrollHandler(scrollState)
+    InstallDigitalCrownScrollHandler(scrollState)
 
     WatchSurface(pureBlack = true) {
         Column(
@@ -304,6 +335,82 @@ private fun MainSettingsPage(
                     modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
                 )
 
+                Spacer(modifier = Modifier.height(entrySpacing))
+
+                // AI 总结功能
+                WatchSettingsPillRow(label = "AI 总结功能", endPaddingMultiplier = 1.5f) {
+                    WatchSwitch(
+                        checked = llmFeatureEnabled,
+                        onCheckedChange = { onToggleLlmFeatureEnabled() }
+                    )
+                }
+                Text(
+                    text = "在 RSS 文章详情页显示 AI 总结按钮",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+                )
+
+                Spacer(modifier = Modifier.height(entrySpacing))
+                WatchSettingsPillRow(
+                    label = "AI 连通性",
+                    onClick = onOpenLlmConnectivity
+                )
+                Text(
+                    text = "配置大模型服务商与 API Key",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+                )
+
+                if (llmFeatureEnabled) {
+                    Spacer(modifier = Modifier.height(entrySpacing))
+                    WatchSettingsPillRow(label = "进入详情自动开始总结", endPaddingMultiplier = 1.5f) {
+                        WatchSwitch(
+                            checked = llmAutoSummarize,
+                            onCheckedChange = { onToggleLlmAutoSummarize() }
+                        )
+                    }
+                    Text(
+                        text = if (llmAutoSummarize) "进入文章时自动在顶部显示总结" else "详情页底部显示总结按钮，手动触发",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+                    )
+
+                    Spacer(modifier = Modifier.height(entrySpacing))
+                    val presetLabel = com.lightningstudio.watchrss.ui.viewmodel.LlmPromptPresets.all
+                        .getOrNull(llmPromptPreset - 1)?.label
+                        ?: com.lightningstudio.watchrss.ui.viewmodel.LlmPromptPresets.all.first().label
+                    WatchSettingsPillRow(label = "提示词预设", onClick = onOpenLlmPromptPreset) {
+                        Text(
+                            text = presetLabel,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Text(
+                        text = "选择 AI 总结时使用的提示词",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+                    )
+
+                    Spacer(modifier = Modifier.height(entrySpacing))
+                    WatchSettingsPillRow(label = "显示 Token 用量", endPaddingMultiplier = 1.5f) {
+                        WatchSwitch(
+                            checked = llmShowTokenUsage,
+                            onCheckedChange = { onToggleLlmShowTokenUsage() }
+                        )
+                    }
+                    Text(
+                        text = "在总结页面显示本次请求消耗的 token 数量",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+                    )
+                }
+
                 if (showPerformanceTools) {
                     Spacer(modifier = Modifier.height(entrySpacing))
                     Text(
@@ -381,7 +488,7 @@ private fun AdvancedSettingsPage(
     val pillHeight = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_multiple_item_height
     val scrollState = rememberScrollState()
 
-    InstallRotaryScrollHandler(scrollState)
+    InstallDigitalCrownScrollHandler(scrollState)
 
     WatchSurface(pureBlack = true) {
         Column(
@@ -547,7 +654,7 @@ private fun ReadingThemeToggle(
 }
 
 @Composable
-private fun SettingsHeader(title: String) {
+internal fun SettingsHeader(title: String) {
     val padding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_4dp
 
     Row(

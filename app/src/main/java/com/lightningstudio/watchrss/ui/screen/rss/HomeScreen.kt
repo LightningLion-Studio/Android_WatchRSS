@@ -32,7 +32,7 @@ import com.lightningstudio.watchrss.ui.components.PullRefreshBox
 import com.lightningstudio.watchrss.ui.components.ToastMessage
 import com.lightningstudio.watchrss.ui.components.WatchTextButton
 import com.lightningstudio.watchrss.ui.components.WatchSurface
-import com.lightningstudio.watchrss.ui.input.InstallRotaryLazyListHandler
+import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.theme.BrandOrange
 import com.lightningstudio.watchrss.ui.util.formatTime
 import kotlinx.coroutines.delay
@@ -53,7 +53,7 @@ fun HomeScreen(
     val refreshing by isRefreshing.collectAsState()
     val toastMessage by message.collectAsState()
     val listState = rememberLazyListState()
-    InstallRotaryLazyListHandler(listState)
+    InstallDigitalCrownLazyListHandler(listState)
 
     LaunchedEffect(toastMessage) {
         if (toastMessage != null) {

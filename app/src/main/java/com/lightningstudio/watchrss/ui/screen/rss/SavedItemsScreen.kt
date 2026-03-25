@@ -51,7 +51,7 @@ import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.WatchButton
 import com.lightningstudio.watchrss.data.rss.SavedItem
-import com.lightningstudio.watchrss.ui.input.InstallRotaryLazyListHandler
+import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
 import com.lightningstudio.watchrss.ui.theme.watchActionButtonWidthFor
 import com.lightningstudio.watchrss.ui.util.formatTime
@@ -76,7 +76,7 @@ fun SavedItemsScreen(
     val itemSpacing = watchDimensionResource(R.dimen.hey_distance_6dp)
     val listState = rememberLazyListState()
 
-    InstallRotaryLazyListHandler(listState)
+    InstallDigitalCrownLazyListHandler(listState)
 
     Box(
         modifier = Modifier
