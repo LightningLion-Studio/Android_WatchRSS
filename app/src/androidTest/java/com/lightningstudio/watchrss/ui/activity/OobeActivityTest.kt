@@ -1,7 +1,5 @@
 package com.lightningstudio.watchrss.ui.activity
 
-import android.app.Activity
-import android.os.SystemClock
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
@@ -10,9 +8,6 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.espresso.Espresso.pressBackUnconditionally
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import androidx.test.platform.app.InstrumentationRegistry
-import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
-import androidx.test.runner.lifecycle.Stage
 import com.lightningstudio.watchrss.MainActivity
 import com.lightningstudio.watchrss.OobeActivity
 import com.lightningstudio.watchrss.data.network.InternetAvailabilityMonitor
@@ -20,7 +15,9 @@ import com.lightningstudio.watchrss.data.network.InternetAvailabilityStatus
 import com.lightningstudio.watchrss.testutil.FakeRssRepository
 import com.lightningstudio.watchrss.testutil.TestAppContainer
 import com.lightningstudio.watchrss.testutil.TestAppContainerRule
+import com.lightningstudio.watchrss.testutil.currentResumedActivity
 import com.lightningstudio.watchrss.testutil.createTestSettingsRepository
+import com.lightningstudio.watchrss.testutil.waitUntil
 import com.lightningstudio.watchrss.ui.testing.OobeTestTags
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -110,29 +107,9 @@ class OobeActivityTest {
         }
     }
 
-    private fun waitUntil(timeoutMillis: Long, condition: () -> Boolean) {
-        val deadline = SystemClock.elapsedRealtime() + timeoutMillis
-        while (SystemClock.elapsedRealtime() < deadline) {
-            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
-            if (condition()) return
-            SystemClock.sleep(100)
-        }
-        throw AssertionError("Condition not met within ${timeoutMillis}ms")
-    }
-
     private fun waitUntilTagExists(tag: String) {
         waitUntil(timeoutMillis = 5_000) {
             composeRule.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
         }
-    }
-
-    private fun currentResumedActivity(): Activity? {
-        var resumedActivity: Activity? = null
-        InstrumentationRegistry.getInstrumentation().runOnMainSync {
-            resumedActivity = ActivityLifecycleMonitorRegistry.getInstance()
-                .getActivitiesInStage(Stage.RESUMED)
-                .firstOrNull()
-        }
-        return resumedActivity
     }
 }

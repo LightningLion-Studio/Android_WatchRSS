@@ -4,18 +4,24 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.lifecycle.lifecycleScope
 import com.lightningstudio.watchrss.phoneconnection.PhoneConnectionAbility
 import com.lightningstudio.watchrss.ui.screen.rss.DetailScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
 import com.lightningstudio.watchrss.ui.viewmodel.DetailViewModel
+import com.lightningstudio.watchrss.ui.viewmodel.LlmSummaryViewModel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class DetailActivity : BaseWatchActivity() {
     private val container by lazy { (application as WatchRssApplication).container }
     private val viewModel: DetailViewModel by viewModels {
+        AppViewModelFactory(container)
+    }
+    private val llmSummaryViewModel: LlmSummaryViewModel by viewModels {
         AppViewModelFactory(container)
     }
 
@@ -25,11 +31,17 @@ class DetailActivity : BaseWatchActivity() {
         super.onCreate(savedInstanceState)
         setupSystemBars()
         fromWatchLater = intent.getBooleanExtra(EXTRA_FROM_WATCH_LATER, false)
+        val itemId = intent.getLongExtra(EXTRA_ITEM_ID, 0L)
+        if (itemId > 0L) {
+            llmSummaryViewModel.prepare(itemId)
+        }
 
         setContent {
             WatchRSSTheme {
+                val llmSummaryState by llmSummaryViewModel.state.collectAsState()
                 DetailScreen(
                     viewModel = viewModel,
+                    llmSummaryState = llmSummaryState,
                     onOpenAiSummary = ::openAiSummary,
                     onBack = { itemId, reachedBottom, isWatchLater ->
                         handleBackPress(itemId, reachedBottom, isWatchLater)

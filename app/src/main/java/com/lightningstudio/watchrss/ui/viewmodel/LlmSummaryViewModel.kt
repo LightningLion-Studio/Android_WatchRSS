@@ -3,11 +3,15 @@ package com.lightningstudio.watchrss.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lightningstudio.watchrss.data.rss.RssRepository
-import com.lightningstudio.watchrss.data.settings.LlmApiKeyStore
+import com.lightningstudio.watchrss.data.settings.LlmApiKeyProvider
 import com.lightningstudio.watchrss.data.settings.SettingsRepository
 import com.lightningstudio.watchrss.util.AppLogger
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -41,6 +45,7 @@ data class LlmSummaryUiState(
 
 sealed interface SummaryStatus {
     data object Idle : SummaryStatus
+    data object WaitingForContent : SummaryStatus
     data object Generating : SummaryStatus
     data object Done : SummaryStatus
     data class Error(val message: String) : SummaryStatus
@@ -64,7 +69,7 @@ object LlmPromptPresets {
 class LlmSummaryViewModel(
     private val rssRepository: RssRepository,
     private val settingsRepository: SettingsRepository,
-    private val llmApiKeyStore: LlmApiKeyStore
+    private val llmApiKeyProvider: LlmApiKeyProvider
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(LlmSummaryUiState())
@@ -73,6 +78,7 @@ class LlmSummaryViewModel(
     private var pendingTitle = ""
     private var pendingContent = ""
     private var generationJob: Job? = null
+    private var preparationJob: Job? = null
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -81,28 +87,7 @@ class LlmSummaryViewModel(
 
     fun prepare(itemId: Long) {
         if (_state.value.itemId == itemId) return
-        generationJob?.cancel()
-        generationJob = null
-        _state.value = LlmSummaryUiState(itemId = itemId)
-
-        viewModelScope.launch {
-            val item = rssRepository.observeItem(itemId).first() ?: return@launch
-            pendingTitle = item.title.orEmpty()
-            val rawHtml = item.content ?: item.description ?: ""
-            pendingContent = if (rawHtml.isNotBlank()) {
-                withContext(Dispatchers.Default) {
-                    Jsoup.parse(rawHtml).text().take(MAX_CONTENT_CHARS)
-                }
-            } else {
-                ""
-            }
-
-            val autoStart = settingsRepository.llmAutoSummarize.first()
-            val featureEnabled = settingsRepository.llmFeatureEnabled.first()
-            if (autoStart && featureEnabled && _state.value.status == SummaryStatus.Idle) {
-                startGeneration()
-            }
-        }
+        startPreparation(itemId, forceStartWhenReady = false)
     }
 
     fun startIfIdle() {
@@ -113,26 +98,71 @@ class LlmSummaryViewModel(
     /** 加载内容并立即开始生成（不依赖 autoSummarize 设置，适用于用户主动触发的场景）。 */
     fun prepareAndStart(itemId: Long) {
         if (_state.value.itemId == itemId) {
+            if (_state.value.status == SummaryStatus.WaitingForContent) return
             startIfIdle()
             return
         }
+        startPreparation(itemId, forceStartWhenReady = true)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun startPreparation(itemId: Long, forceStartWhenReady: Boolean) {
         generationJob?.cancel()
         generationJob = null
+        preparationJob?.cancel()
+        preparationJob = null
         _state.value = LlmSummaryUiState(itemId = itemId)
 
-        viewModelScope.launch {
-            val item = rssRepository.observeItem(itemId).first() ?: return@launch
-            pendingTitle = item.title.orEmpty()
-            val rawHtml = item.content ?: item.description ?: ""
-            pendingContent = if (rawHtml.isNotBlank()) {
-                withContext(Dispatchers.Default) {
-                    Jsoup.parse(rawHtml).text().take(MAX_CONTENT_CHARS)
+        preparationJob = viewModelScope.launch {
+            val featureEnabled = settingsRepository.llmFeatureEnabled.first()
+            val autoStart = forceStartWhenReady ||
+                (settingsRepository.llmAutoSummarize.first() && featureEnabled)
+
+            combine(
+                rssRepository.observeItem(itemId),
+                rssRepository.observeItem(itemId).flatMapLatest { item ->
+                    if (item == null) {
+                        flowOf(null)
+                    } else {
+                        rssRepository.observeChannel(item.channelId)
+                    }
                 }
-            } else {
-                ""
-            }
-            if (_state.value.status == SummaryStatus.Idle) {
-                startGeneration()
+            ) { item, channel ->
+                item to channel
+            }.collect { (item, channel) ->
+                if (item == null) return@collect
+
+                pendingTitle = item.title.orEmpty()
+
+                val waitingForOriginalContent = channel?.useOriginalContent == true &&
+                    item.content.isNullOrBlank()
+                if (waitingForOriginalContent) {
+                    pendingContent = ""
+                    if (_state.value.status == SummaryStatus.Idle ||
+                        _state.value.status == SummaryStatus.WaitingForContent
+                    ) {
+                        _state.update { it.copy(status = SummaryStatus.WaitingForContent, text = "") }
+                    }
+                    return@collect
+                }
+
+                val rawHtml = item.content ?: item.description ?: ""
+                pendingContent = if (rawHtml.isNotBlank()) {
+                    withContext(Dispatchers.Default) {
+                        Jsoup.parse(rawHtml).text().take(MAX_CONTENT_CHARS)
+                    }
+                } else {
+                    ""
+                }
+
+                if (autoStart &&
+                    (_state.value.status == SummaryStatus.Idle ||
+                        _state.value.status == SummaryStatus.WaitingForContent)
+                ) {
+                    startGeneration()
+                } else if (_state.value.status == SummaryStatus.WaitingForContent) {
+                    _state.update { it.copy(status = SummaryStatus.Idle, text = "") }
+                }
             }
         }
     }
@@ -149,7 +179,7 @@ class LlmSummaryViewModel(
         generationJob?.cancel()
         generationJob = viewModelScope.launch(Dispatchers.IO) {
             try {
-                val apiKey = llmApiKeyStore.getApiKey()
+                val apiKey = llmApiKeyProvider.getApiKey()
                 if (apiKey.isEmpty()) {
                     _state.update { it.copy(status = SummaryStatus.Error("未配置 API Key")) }
                     return@launch

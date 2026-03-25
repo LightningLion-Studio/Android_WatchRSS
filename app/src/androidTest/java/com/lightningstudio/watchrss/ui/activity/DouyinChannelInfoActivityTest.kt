@@ -1,14 +1,11 @@
 package com.lightningstudio.watchrss.ui.activity
 
-import android.app.Activity
 import android.os.SystemClock
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
-import androidx.test.runner.lifecycle.Stage
 import com.lightningstudio.watchrss.DouyinChannelInfoActivity
 import com.lightningstudio.watchrss.DouyinSettingsActivity
 import com.lightningstudio.watchrss.MainActivity
@@ -18,6 +15,7 @@ import com.lightningstudio.watchrss.testutil.FakeDouyinRepository
 import com.lightningstudio.watchrss.testutil.FakeRssRepository
 import com.lightningstudio.watchrss.testutil.TestAppContainer
 import com.lightningstudio.watchrss.testutil.TestAppContainerRule
+import com.lightningstudio.watchrss.testutil.currentResumedActivity
 import com.lightningstudio.watchrss.testutil.createTestSettingsRepository
 import com.lightningstudio.watchrss.testutil.sampleDouyinBuiltinChannel
 import com.lightningstudio.watchrss.testutil.sampleDouyinFeedPage
@@ -80,20 +78,10 @@ class DouyinChannelInfoActivityTest {
         }
     }
 
-    private fun waitForResumedActivity(expectedClass: Class<out Activity>) {
+    private fun waitForResumedActivity(expectedClass: Class<out android.app.Activity>) {
         composeRule.waitUntil(timeoutMillis = 5_000) {
             InstrumentationRegistry.getInstrumentation().waitForIdleSync()
             currentResumedActivity()?.javaClass == expectedClass
         }
-    }
-
-    private fun currentResumedActivity(): Activity? {
-        var resumedActivity: Activity? = null
-        InstrumentationRegistry.getInstrumentation().runOnMainSync {
-            resumedActivity = ActivityLifecycleMonitorRegistry.getInstance()
-                .getActivitiesInStage(Stage.RESUMED)
-                .firstOrNull()
-        }
-        return resumedActivity
     }
 }

@@ -6,6 +6,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -158,7 +159,9 @@ fun ServerScreen(
                         Image(
                             bitmap = bitmap.asImageBitmap(),
                             contentDescription = "QR Code",
-                            modifier = Modifier.size(120.dp)
+                            modifier = Modifier
+                                .size(120.dp)
+                                .border(width = 6.dp, color = Color.Black)
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                     }

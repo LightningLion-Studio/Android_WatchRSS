@@ -101,12 +101,13 @@ internal fun AiSummaryBanner(
                 )
             }
             Spacer(modifier = Modifier.width(6.dp))
-            val displayText = when {
-                isError -> "总结失败，点击重试"
-                hasText -> summaryState.firstLine
-                isGenerating -> "正在生成总结..."
-                else -> "AI 总结"
-            }
+    val displayText = when {
+        isError -> "总结失败，点击重试"
+        hasText -> summaryState.firstLine
+        summaryState.status == SummaryStatus.WaitingForContent -> "等待原文加载..."
+        isGenerating -> "正在生成总结..."
+        else -> "AI 总结"
+    }
             Text(
                 text = displayText,
                 style = MaterialTheme.typography.bodySmall,

@@ -471,7 +471,8 @@ internal fun DetailContent(
 
         val listSemanticsModifier = Modifier.clearAndSetSemantics { }
         val showAiBanner = llmFeatureEnabled && llmAutoSummarize &&
-            (llmSummaryState.status == SummaryStatus.Generating ||
+            (llmSummaryState.status == SummaryStatus.WaitingForContent ||
+                llmSummaryState.status == SummaryStatus.Generating ||
                 llmSummaryState.text.isNotBlank() ||
                 llmSummaryState.status is SummaryStatus.Error)
         val showAiButton = llmFeatureEnabled && !llmAutoSummarize
@@ -552,7 +553,7 @@ internal fun DetailContent(
             }
             if (item == null) {
                 item(key = "loading") {}
-            } else if (contentBlocks.isEmpty()) {
+            } else if (contentBlocks.isEmpty() && !showOriginalLoadingNotice) {
                 item(key = "emptyContent") {
                     DetailTextBlock(
                         text = "暂无正文",

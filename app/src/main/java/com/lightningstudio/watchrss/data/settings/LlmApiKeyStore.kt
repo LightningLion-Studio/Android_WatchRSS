@@ -7,7 +7,11 @@ import androidx.security.crypto.MasterKey
 private const val PREFS_FILE = "llm_secure_prefs"
 private const val KEY_API_KEY = "llm_api_key"
 
-class LlmApiKeyStore(context: Context) {
+interface LlmApiKeyProvider {
+    fun getApiKey(): String
+}
+
+class LlmApiKeyStore(context: Context) : LlmApiKeyProvider {
     private val prefs by lazy {
         val masterKey = MasterKey.Builder(context.applicationContext)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
@@ -21,7 +25,7 @@ class LlmApiKeyStore(context: Context) {
         )
     }
 
-    fun getApiKey(): String = prefs.getString(KEY_API_KEY, "") ?: ""
+    override fun getApiKey(): String = prefs.getString(KEY_API_KEY, "") ?: ""
 
     fun setApiKey(apiKey: String) {
         prefs.edit().putString(KEY_API_KEY, apiKey).apply()

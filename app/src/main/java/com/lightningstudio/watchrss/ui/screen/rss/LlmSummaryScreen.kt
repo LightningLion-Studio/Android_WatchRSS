@@ -119,6 +119,14 @@ private fun LlmSummaryContent(
                         modifier = Modifier.padding(start = valueIndent)
                     )
                 }
+                is SummaryStatus.WaitingForContent -> {
+                    Text(
+                        text = "原文还在加载，准备好后会自动开始总结。",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = valueIndent)
+                    )
+                }
                 is SummaryStatus.Generating -> {
                     if (state.text.isNotBlank()) {
                         SummaryTextCard(text = state.text)
