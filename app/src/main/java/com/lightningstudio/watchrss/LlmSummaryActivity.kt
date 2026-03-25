@@ -13,6 +13,8 @@ import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
 import com.lightningstudio.watchrss.ui.viewmodel.LlmSummaryViewModel
 
 class LlmSummaryActivity : BaseWatchActivity() {
+    private var itemId: Long = -1L
+
     private val viewModel: LlmSummaryViewModel by viewModels {
         AppViewModelFactory((application as WatchRssApplication).container)
     }
@@ -22,13 +24,13 @@ class LlmSummaryActivity : BaseWatchActivity() {
         setupSystemBars()
 
         val container = (application as WatchRssApplication).container
+        itemId = intent.getLongExtra(EXTRA_ITEM_ID, -1L)
         if (!container.llmApiKeyStore.hasApiKey()) {
-            startActivity(LlmConnectivityActivity.createIntent(this))
+            startActivity(LlmConnectivityActivity.createIntent(this, itemId))
             finish()
             return
         }
 
-        val itemId = intent.getLongExtra(EXTRA_ITEM_ID, -1L)
         if (itemId > 0L) viewModel.prepareAndStart(itemId)
 
         val settingsRepository = container.settingsRepository
@@ -37,7 +39,10 @@ class LlmSummaryActivity : BaseWatchActivity() {
                 val showTokenUsage by settingsRepository.llmShowTokenUsage.collectAsState(initial = false)
                 LlmSummaryScreen(
                     viewModel = viewModel,
-                    showTokenUsage = showTokenUsage
+                    showTokenUsage = showTokenUsage,
+                    onOpenConnectivityCheck = {
+                        startActivity(LlmConnectivityActivity.createIntent(this, itemId))
+                    }
                 )
             }
         }

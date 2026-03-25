@@ -77,6 +77,11 @@ class DouyinPlayerActivity : BaseWatchActivity() {
                             }
 
                             key(retryKey, item.playUrl) {
+                                // VerticalPager may keep neighboring pages composed for
+                                // smoother swipes. Those pages share the same Activity
+                                // window, so window-scoped side effects inside
+                                // BiliPlayerScreen must know whether this page is the
+                                // one currently presented to the user.
                                 BiliPlayerScreen(
                                     uiState = uiState,
                                     onRetry = { retryKey += 1 },
@@ -87,6 +92,7 @@ class DouyinPlayerActivity : BaseWatchActivity() {
                                     },
                                     onPanStateChange = { _, _ -> },
                                     allowPan = false,
+                                    isActive = page == pagerState.currentPage,
                                     digitalCrownVolumeEnabled = page == pagerState.currentPage
                                 )
                             }

@@ -58,18 +58,24 @@ class BiliDetailActivity : BaseWatchActivity() {
                     val onPlay = {
                         val cid = viewModel.selectedCid()
                         val item = uiState.detail?.item
-                        val page = viewModel.selectedPage()
-                        context.startActivity(
-                            BiliPlayerActivity.createIntent(
-                                context = context,
-                                aid = item?.aid,
-                                bvid = item?.bvid,
-                                cid = cid,
-                                title = item?.title,
-                                owner = item?.owner?.name,
-                                pageTitle = page?.part
+                        val aid = item?.aid ?: viewModel.selectedAid()
+                        val bvid = item?.bvid ?: viewModel.selectedBvid()
+                        if (aid == null && bvid.isNullOrBlank()) {
+                            Unit
+                        } else {
+                            val page = viewModel.selectedPage()
+                            context.startActivity(
+                                BiliPlayerActivity.createIntent(
+                                    context = context,
+                                    aid = aid,
+                                    bvid = bvid,
+                                    cid = cid,
+                                    title = item?.title,
+                                    owner = item?.owner?.name,
+                                    pageTitle = page?.part
+                                )
                             )
-                        )
+                        }
                     }
                     val onShare = {
                         val item = uiState.detail?.item

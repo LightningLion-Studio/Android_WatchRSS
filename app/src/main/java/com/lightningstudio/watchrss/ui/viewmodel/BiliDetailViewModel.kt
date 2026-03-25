@@ -177,6 +177,10 @@ class BiliDetailViewModel(
         return pages[index].cid ?: cidArg ?: detail.item.cid
     }
 
+    fun selectedAid(): Long? = currentAid()
+
+    fun selectedBvid(): String? = currentBvid()
+
     fun selectedPage(): BiliPage? {
         val detail = _uiState.value.detail ?: return null
         val pages = detail.pages

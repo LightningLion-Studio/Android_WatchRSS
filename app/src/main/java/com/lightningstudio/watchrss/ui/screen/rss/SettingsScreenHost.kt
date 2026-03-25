@@ -25,6 +25,7 @@ fun SettingsScreenHost(
     onOpenPerfLargeList: () -> Unit,
     onOpenPerfLargeArticle: () -> Unit,
     onOpenLlmConnectivity: () -> Unit,
+    onOpenLlmPhoneConfig: () -> Unit,
     onOpenLlmPromptPreset: () -> Unit,
     onBeianClick: () -> Unit
 ) {
@@ -64,6 +65,7 @@ fun SettingsScreenHost(
             showManualCookieDialog = true
         },
         onOpenLlmConnectivity = onOpenLlmConnectivity,
+        onOpenLlmPhoneConfig = onOpenLlmPhoneConfig,
         onOpenLlmPromptPreset = onOpenLlmPromptPreset,
         onBeianClick = onBeianClick
     )

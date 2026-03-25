@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import com.lightningstudio.watchrss.debug.PerfEntryActivity
+import com.lightningstudio.watchrss.phoneconnection.PhoneConnectionAbility
 import com.lightningstudio.watchrss.ui.screen.rss.SettingsScreenHost
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
@@ -49,6 +50,14 @@ class SettingsActivity : BaseWatchActivity() {
                     },
                     onOpenLlmConnectivity = {
                         startActivity(LlmConnectivityActivity.createIntent(this))
+                    },
+                    onOpenLlmPhoneConfig = {
+                        startActivity(
+                            PhoneConnectionActivity.createIntent(
+                                context = this,
+                                preferredAbility = PhoneConnectionAbility.LLM_SUMMARY_CONFIG
+                            )
+                        )
                     },
                     onOpenLlmPromptPreset = {
                         startActivity(LlmPromptPresetActivity.createIntent(this))

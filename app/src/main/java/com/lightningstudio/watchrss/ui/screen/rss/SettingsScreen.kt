@@ -98,6 +98,7 @@ fun SettingsScreen(
     onOpenPerfLargeArticle: () -> Unit,
     onOpenDouyinCookieInput: () -> Unit,
     onOpenLlmConnectivity: () -> Unit,
+    onOpenLlmPhoneConfig: () -> Unit,
     onOpenLlmPromptPreset: () -> Unit,
     onBeianClick: () -> Unit
 ) {
@@ -144,6 +145,7 @@ fun SettingsScreen(
             onOpenPerfLargeArticle = onOpenPerfLargeArticle,
             onOpenDouyinCookieInput = onOpenDouyinCookieInput,
             onOpenLlmConnectivity = onOpenLlmConnectivity,
+            onOpenLlmPhoneConfig = onOpenLlmPhoneConfig,
             onOpenLlmPromptPreset = onOpenLlmPromptPreset,
             onBeianClick = onBeianClick
         )
@@ -182,6 +184,7 @@ private fun MainSettingsPage(
     onOpenPerfLargeArticle: () -> Unit,
     onOpenDouyinCookieInput: () -> Unit,
     onOpenLlmConnectivity: () -> Unit,
+    onOpenLlmPhoneConfig: () -> Unit,
     onOpenLlmPromptPreset: () -> Unit,
     onBeianClick: () -> Unit
 ) {
@@ -358,6 +361,18 @@ private fun MainSettingsPage(
                 )
                 Text(
                     text = "配置大模型服务商与 API Key",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+                )
+
+                Spacer(modifier = Modifier.height(entrySpacing))
+                WatchSettingsPillRow(
+                    label = "手机扫码配置大模型",
+                    onClick = onOpenLlmPhoneConfig
+                )
+                Text(
+                    text = "直接进入手机互联扫码配置，并固定为 LLM 配置能力",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = valueIndent, top = valueSpacing)

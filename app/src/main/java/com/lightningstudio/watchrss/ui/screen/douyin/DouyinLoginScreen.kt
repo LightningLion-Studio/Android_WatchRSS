@@ -41,11 +41,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -58,6 +56,7 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.lightningstudio.watchrss.ui.util.getWebViewUnavailableMessage
 import com.lightningstudio.watchrss.util.AppLogger
 import com.lightningstudio.watchrss.ui.theme.rememberIsRoundWatch
+import com.lightningstudio.watchrss.ui.widget.ProgressRingView
 import kotlinx.coroutines.delay
 
 @Composable
@@ -520,9 +519,9 @@ fun DouyinLoginScreen(
                     }
                 }
 
-                // Circular loading indicator
+                // Match the loading ring style used by WebViewActivity.
                 if (isLoading) {
-                    CircularLoadingIndicator(progress = animatedProgress)
+                    WebViewStyleLoadingIndicator(progress = animatedProgress)
                 }
             }
         }
@@ -543,47 +542,20 @@ fun DouyinLoginScreen(
 }
 
 @Composable
-private fun CircularLoadingIndicator(progress: Float) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        Canvas(
-            modifier = Modifier.size(116.dp)
-        ) {
-            val strokeWidth = 4.dp.toPx()
-            val radius = (size.minDimension - strokeWidth) / 2
-            val centerX = size.width / 2
-            val centerY = size.height / 2
-
-            // Background circle
-            drawCircle(
-                color = Color.Gray.copy(alpha = 0.3f),
-                radius = radius,
-                center = Offset(centerX, centerY),
-                style = Stroke(width = strokeWidth)
-            )
-
-            // Progress arc
-            if (progress > 0f) {
-                drawArc(
-                    color = Color(0xFF1E88E5),
-                    startAngle = -90f,
-                    sweepAngle = 360f * progress,
-                    useCenter = false,
-                    topLeft = Offset(
-                        centerX - radius,
-                        centerY - radius
-                    ),
-                    size = Size(radius * 2, radius * 2),
-                    style = Stroke(
-                        width = strokeWidth,
-                        cap = StrokeCap.Round
-                    )
-                )
+private fun WebViewStyleLoadingIndicator(progress: Float) {
+    AndroidView(
+        factory = { context ->
+            ProgressRingView(context).apply {
+                setShowBase(false)
+                setProgress(progress)
             }
+        },
+        modifier = Modifier.fillMaxSize(),
+        update = { ring ->
+            ring.setShowBase(false)
+            ring.setProgress(progress)
         }
-    }
+    )
 }
 
 @Composable

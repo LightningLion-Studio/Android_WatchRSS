@@ -4,14 +4,19 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.lifecycle.lifecycleScope
+import com.lightningstudio.watchrss.phoneconnection.PhoneConnectionAbility
 import com.lightningstudio.watchrss.ui.screen.rss.DetailScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
 import com.lightningstudio.watchrss.ui.viewmodel.DetailViewModel
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 class DetailActivity : BaseWatchActivity() {
+    private val container by lazy { (application as WatchRssApplication).container }
     private val viewModel: DetailViewModel by viewModels {
-        AppViewModelFactory((application as WatchRssApplication).container)
+        AppViewModelFactory(container)
     }
 
     private var fromWatchLater: Boolean = false
@@ -25,6 +30,7 @@ class DetailActivity : BaseWatchActivity() {
             WatchRSSTheme {
                 DetailScreen(
                     viewModel = viewModel,
+                    onOpenAiSummary = ::openAiSummary,
                     onBack = { itemId, reachedBottom, isWatchLater ->
                         handleBackPress(itemId, reachedBottom, isWatchLater)
                     }
@@ -39,6 +45,27 @@ class DetailActivity : BaseWatchActivity() {
             setResult(RESULT_OK, data)
         }
         finish()
+    }
+
+    private fun openAiSummary() {
+        val itemId = intent.getLongExtra(EXTRA_ITEM_ID, 0L)
+        if (itemId <= 0L) return
+
+        lifecycleScope.launch {
+            val isConfigured = container.llmApiKeyStore.hasApiKey() &&
+                container.settingsRepository.llmProvider.first().isNotBlank()
+            startActivity(
+                if (isConfigured) {
+                    LlmSummaryActivity.createIntent(this@DetailActivity, itemId)
+                } else {
+                    PhoneConnectionActivity.createIntent(
+                        context = this@DetailActivity,
+                        preferredAbility = PhoneConnectionAbility.LLM_SUMMARY_CONFIG,
+                        llmSummaryItemId = itemId
+                    )
+                }
+            )
+        }
     }
 
     override fun buildResumeIntent(): Intent? {

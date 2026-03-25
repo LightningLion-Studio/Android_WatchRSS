@@ -125,6 +125,7 @@ fun BiliPlayerScreen(
     onOpenWeb: () -> Unit,
     onPanStateChange: (Float, Float) -> Unit,
     allowPan: Boolean = true,
+    isActive: Boolean = true,
     digitalCrownVolumeEnabled: Boolean = true
 ) {
     val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
@@ -165,7 +166,16 @@ fun BiliPlayerScreen(
     val panScope = rememberCoroutineScope()
     val panFlingJob = remember { mutableStateOf<Job?>(null) }
     val volumeState = rememberPlayerVolumeState()
-    val shouldKeepScreenOn = !uiState.playUrl.isNullOrBlank() &&
+    // Keep-screen-on is a window-level flag, not a per-composable flag.
+    // In pager-based players there may be multiple BiliPlayerScreen instances
+    // composed at the same time for preloading/adjacent pages, but they still
+    // point to the same Activity window. If an off-screen page is allowed to
+    // participate in this effect, its disposal can clear the flag that the
+    // currently visible page still relies on, causing the screen to sleep while
+    // video is actively playing. `isActive` gates the effect so only the page
+    // that owns user focus can add or clear FLAG_KEEP_SCREEN_ON.
+    val shouldKeepScreenOn = isActive &&
+        !uiState.playUrl.isNullOrBlank() &&
         playbackError.isNullOrBlank() &&
         (isPlaying || isBuffering || (!isPrepared && surfaceRef != null))
 
@@ -344,6 +354,14 @@ fun BiliPlayerScreen(
         onDispose { }
     }
 
+    // This observer handles host lifecycle transitions such as app backgrounding.
+    // It is intentionally separate from pager focus management below:
+    // - Lifecycle ON_PAUSE means the whole Activity is leaving the foreground,
+    //   so playback should stop unconditionally.
+    // - Pager page switches do not trigger ON_PAUSE, because the Activity stays
+    //   resumed while only the visible page changes.
+    // Keeping these concerns separate makes it clear that "background pause"
+    // and "active page ownership" solve different failure modes.
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_PAUSE) {
@@ -356,13 +374,53 @@ fun BiliPlayerScreen(
         }
     }
 
-    DisposableEffect(shouldKeepScreenOn, view) {
+    // Activity ON_PAUSE only covers app/background transitions. In pager-based
+    // players a page can lose focus while the host Activity stays resumed, so
+    // we also need an explicit ownership handoff when this composable is no
+    // longer the active page.
+    //
+    // The important subtlety here is that we pause without clearing
+    // playWhenReady:
+    // - If the page was auto-playing and the user swipes away, it should stop
+    //   immediately because it no longer owns playback focus.
+    // - If the user swipes back, that same page may resume automatically.
+    // - If the user manually paused earlier, playWhenReady is already false, so
+    //   the page stays paused across pager switches.
+    //
+    // Together with the ON_PAUSE observer above, this prevents two classes of
+    // bugs:
+    // 1. audio/video continuing from an off-screen pager page;
+    // 2. an off-screen page finishing prepareAsync() and auto-starting while
+    //    another page is currently visible.
+    LaunchedEffect(isActive) {
+        if (!isActive) {
+            pausePlayback(clearPlayWhenReady = false)
+        } else {
+            val player = mediaPlayerRef
+            if (player != null && isPrepared && playWhenReady && !player.isPlaying) {
+                runCatching {
+                    player.start()
+                    isPlaying = true
+                    isBuffering = false
+                }
+            }
+        }
+    }
+
+    DisposableEffect(shouldKeepScreenOn, isActive, view) {
         val window = view.context.findActivity()?.window
         if (shouldKeepScreenOn) {
             window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
         onDispose {
-            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            // Only the active page is allowed to clear the window flag.
+            // Without this guard, a neighboring pager item that leaves the
+            // composition can accidentally disable keep-screen-on for the page
+            // that is still visible and playing, because both pages share the
+            // same Activity window underneath.
+            if (isActive) {
+                window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
         }
     }
 
@@ -388,7 +446,10 @@ fun BiliPlayerScreen(
                 panOffsetX,
                 isVerticalPan
             )
-            if (playWhenReady) {
+            // prepareAsync() may complete after pager focus has already moved to
+            // another page. Requiring both isActive and playWhenReady avoids an
+            // off-screen page auto-starting just because it finished preparing.
+            if (isActive && playWhenReady) {
                 mp.start()
                 isPlaying = true
             } else {

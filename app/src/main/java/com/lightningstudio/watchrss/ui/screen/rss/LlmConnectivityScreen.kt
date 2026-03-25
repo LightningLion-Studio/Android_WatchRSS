@@ -40,14 +40,29 @@ fun LlmConnectivityScreen(viewModel: LlmConnectivityViewModel) {
     val state by viewModel.state.collectAsState()
     LlmConnectivityContent(
         state = state,
-        onRunTest = viewModel::runTest
+        onRunTest = viewModel::runTest,
+        onOpenPhoneConfig = {}
+    )
+}
+
+@Composable
+fun LlmConnectivityScreen(
+    viewModel: LlmConnectivityViewModel,
+    onOpenPhoneConfig: () -> Unit
+) {
+    val state by viewModel.state.collectAsState()
+    LlmConnectivityContent(
+        state = state,
+        onRunTest = viewModel::runTest,
+        onOpenPhoneConfig = onOpenPhoneConfig
     )
 }
 
 @Composable
 private fun LlmConnectivityContent(
     state: LlmConnectivityState,
-    onRunTest: () -> Unit
+    onRunTest: () -> Unit,
+    onOpenPhoneConfig: () -> Unit
 ) {
     val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
     val entrySpacing = WatchDimens.hey_distance_8dp
@@ -96,6 +111,19 @@ private fun LlmConnectivityContent(
                     MaterialTheme.colorScheme.onSurfaceVariant
                 else
                     Color(0xFFFF6B6B),
+                modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+            )
+
+            Spacer(modifier = Modifier.height(entrySpacing))
+
+            WatchSettingsPillRow(
+                label = "手机扫码配置大模型",
+                onClick = onOpenPhoneConfig
+            )
+            Text(
+                text = "进入手机版扫码页面，直接配置服务商、模型和 API Key",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
             )
 

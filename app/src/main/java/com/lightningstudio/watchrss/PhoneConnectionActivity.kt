@@ -15,6 +15,7 @@ import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 class PhoneConnectionActivity : BaseWatchActivity() {
     private var preferredAbility: PhoneConnectionAbility? = null
     private var returnRemoteUrl: Boolean = false
+    private var llmSummaryItemId: Long = 0L
 
     private val manualServerLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -33,6 +34,7 @@ class PhoneConnectionActivity : BaseWatchActivity() {
 
         preferredAbility = PhoneConnectionAbility.fromNameOrNull(intent.getStringExtra(EXTRA_PREFERRED_ABILITY))
         returnRemoteUrl = intent.getBooleanExtra(EXTRA_RETURN_REMOTE_URL, false)
+        llmSummaryItemId = intent.getLongExtra(EXTRA_LLM_SUMMARY_ITEM_ID, 0L)
 
         setContent {
             WatchRSSTheme {
@@ -61,6 +63,7 @@ class PhoneConnectionActivity : BaseWatchActivity() {
                     putExtra(ServerActivity.EXTRA_SCREEN_TITLE, resolveManualTitle())
                     putExtra(ServerActivity.EXTRA_SCREEN_HINT, MANUAL_WIFI_HINT)
                     putExtra(ServerActivity.EXTRA_RETURN_REMOTE_URL, returnRemoteUrl)
+                    putExtra(ServerActivity.EXTRA_LLM_SUMMARY_ITEM_ID, llmSummaryItemId)
                 }
                 if (returnRemoteUrl) {
                     manualServerLauncher.launch(intent)
@@ -96,17 +99,20 @@ class PhoneConnectionActivity : BaseWatchActivity() {
     companion object {
         private const val EXTRA_PREFERRED_ABILITY = "preferred_ability"
         private const val EXTRA_RETURN_REMOTE_URL = "return_remote_url"
+        private const val EXTRA_LLM_SUMMARY_ITEM_ID = "llm_summary_item_id"
         private const val MANUAL_WIFI_HINT =
             "请先让手表与手机位于同一 WiFi，或让手表连接到手机热点，再使用手机版扫码"
 
         fun createIntent(
             context: Context,
             preferredAbility: PhoneConnectionAbility? = null,
-            returnRemoteUrl: Boolean = false
+            returnRemoteUrl: Boolean = false,
+            llmSummaryItemId: Long = 0L
         ): Intent {
             return Intent(context, PhoneConnectionActivity::class.java).apply {
                 putExtra(EXTRA_PREFERRED_ABILITY, preferredAbility?.name)
                 putExtra(EXTRA_RETURN_REMOTE_URL, returnRemoteUrl)
+                putExtra(EXTRA_LLM_SUMMARY_ITEM_ID, llmSummaryItemId)
             }
         }
     }

@@ -25,6 +25,7 @@ class ServerActivity : BaseWatchActivity() {
     private var screenHint by mutableStateOf("")
     private var returnRemoteInputToCaller by mutableStateOf(false)
     private var preferredAbility: PhoneConnectionAbility? by mutableStateOf(null)
+    private var llmSummaryItemId by mutableStateOf(0L)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,6 +37,7 @@ class ServerActivity : BaseWatchActivity() {
         screenTitle = intent.getStringExtra(EXTRA_SCREEN_TITLE).orEmpty()
         screenHint = intent.getStringExtra(EXTRA_SCREEN_HINT).orEmpty()
         returnRemoteInputToCaller = intent.getBooleanExtra(EXTRA_RETURN_REMOTE_URL, false)
+        llmSummaryItemId = intent.getLongExtra(EXTRA_LLM_SUMMARY_ITEM_ID, 0L)
 
         setContent {
             WatchRSSTheme {
@@ -73,7 +75,9 @@ class ServerActivity : BaseWatchActivity() {
                         }
                     }
                     ServerType.LLM_CONFIG -> {
-                        LocalHttpServer.createLlmConfigServer(app.container)
+                        LocalHttpServer.createLlmConfigServer(app.container) {
+                            handleLlmConfigComplete()
+                        }
                     }
                 }
                 server?.start()
@@ -111,6 +115,19 @@ class ServerActivity : BaseWatchActivity() {
         }
     }
 
+    private fun handleLlmConfigComplete() {
+        lifecycleScope.launch {
+            withContext(Dispatchers.Main) {
+                if (llmSummaryItemId > 0L) {
+                    startActivity(LlmConnectivityActivity.createIntent(this@ServerActivity, llmSummaryItemId))
+                    finish()
+                } else {
+                    synced = true
+                }
+            }
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         server?.stop()
@@ -123,6 +140,7 @@ class ServerActivity : BaseWatchActivity() {
         const val EXTRA_SCREEN_TITLE = "screen_title"
         const val EXTRA_SCREEN_HINT = "screen_hint"
         const val EXTRA_RETURN_REMOTE_URL = "return_remote_url"
+        const val EXTRA_LLM_SUMMARY_ITEM_ID = "llm_summary_item_id"
     }
 
     enum class ServerType {

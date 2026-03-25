@@ -85,7 +85,8 @@ class LocalHttpServer private constructor(
     private val serverType: ServerType,
     private val preferredAbility: PhoneConnectionAbility? = null,
     private val onRemoteInput: ((String) -> Unit)? = null,
-    private val onSyncComplete: (() -> Unit)? = null
+    private val onSyncComplete: (() -> Unit)? = null,
+    private val onLlmConfigSaved: (() -> Unit)? = null
 ) : NanoHTTPD(port) {
 
     /**
@@ -599,6 +600,7 @@ class LocalHttpServer private constructor(
                     enabled = enabled
                 )
             }
+            onLlmConfigSaved?.invoke()
 
             newFixedLengthResponse(
                 Response.Status.OK,
@@ -704,13 +706,15 @@ class LocalHttpServer private constructor(
          * 注意：该服务器不提供 [onRemoteInput] / [onSyncComplete] 回调，配置写入是同步完成的。
          */
         fun createLlmConfigServer(
-            container: AppContainer
+            container: AppContainer,
+            onLlmConfigSaved: (() -> Unit)? = null
         ): LocalHttpServer {
             return LocalHttpServer(
                 DEFAULT_PORT,
                 container,
                 ServerType.LLM_CONFIG,
-                preferredAbility = PhoneConnectionAbility.LLM_SUMMARY_CONFIG
+                preferredAbility = PhoneConnectionAbility.LLM_SUMMARY_CONFIG,
+                onLlmConfigSaved = onLlmConfigSaved
             )
         }
     }

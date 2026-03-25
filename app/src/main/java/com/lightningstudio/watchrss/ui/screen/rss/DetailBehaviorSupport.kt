@@ -1,0 +1,193 @@
+package com.lightningstudio.watchrss.ui.screen.rss
+
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.os.SystemClock
+import android.os.Trace
+import android.view.View
+import android.widget.Toast
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.semantics.invisibleToUser
+import androidx.compose.ui.semantics.semantics
+import androidx.core.content.FileProvider
+import com.lightningstudio.watchrss.BuildConfig
+import com.lightningstudio.watchrss.ImagePreviewActivity
+import com.lightningstudio.watchrss.RssPlayerActivity
+import com.lightningstudio.watchrss.ShareQrActivity
+import com.lightningstudio.watchrss.WebViewActivity
+import com.lightningstudio.watchrss.ui.util.showAppToast
+import java.io.File
+import kotlin.math.abs
+
+private const val DETAIL_SHARE_QR_WIDTH_RATIO = 0.7f
+
+internal fun calculateReadingProgress(listState: androidx.compose.foundation.lazy.LazyListState): Float {
+    if (isDetailTracingEnabled()) {
+        Trace.beginSection("ReadingProgress")
+    }
+    val layoutInfo = listState.layoutInfo
+    val totalItems = layoutInfo.totalItemsCount
+    if (totalItems == 0) {
+        if (isDetailTracingEnabled()) {
+            Trace.endSection()
+        }
+        return 1f
+    }
+    if (layoutInfo.visibleItemsInfo.isNotEmpty() && !listState.canScrollForward) {
+        if (isDetailTracingEnabled()) {
+            Trace.endSection()
+        }
+        return 1f
+    }
+    val firstIndex = listState.firstVisibleItemIndex
+    val firstOffset = listState.firstVisibleItemScrollOffset
+    val firstSize = layoutInfo.visibleItemsInfo.firstOrNull()?.size ?: 0
+    val offsetProgress = if (firstSize > 0) firstOffset.toFloat() / firstSize.toFloat() else 0f
+    val denominator = (totalItems - 1).coerceAtLeast(1)
+    val rawProgress = (firstIndex + offsetProgress) / denominator.toFloat()
+    val clamped = rawProgress.coerceIn(0f, 1f)
+    if (isDetailTracingEnabled()) {
+        Trace.endSection()
+    }
+    return clamped
+}
+
+internal fun Modifier.debugTraceLayout(name: String): Modifier {
+    if (!isDetailTracingEnabled()) return this
+    return this.layout { measurable, constraints ->
+        Trace.beginSection(name)
+        try {
+            val placeable = measurable.measure(constraints)
+            layout(placeable.width, placeable.height) {
+                placeable.placeRelative(0, 0)
+            }
+        } finally {
+            Trace.endSection()
+        }
+    }
+}
+
+@OptIn(ExperimentalComposeUiApi::class)
+internal fun Modifier.scrollSemanticsDisabled(isScrolling: Boolean): Modifier {
+    if (!isScrolling) return this
+    return this.semantics { invisibleToUser() }
+}
+
+internal fun Modifier.debugTraceDraw(name: String): Modifier {
+    if (!isDetailTracingEnabled()) return this
+    return this.drawWithContent {
+        Trace.beginSection(name)
+        try {
+            drawContent()
+        } finally {
+            Trace.endSection()
+        }
+    }
+}
+
+internal fun View.captureAccessibilityDelegate(): View.AccessibilityDelegate? {
+    return runCatching {
+        val field = View::class.java.getDeclaredField("mAccessibilityDelegate")
+        field.isAccessible = true
+        field.get(this) as? View.AccessibilityDelegate
+    }.getOrNull()
+}
+
+internal fun isDetailTracingEnabled(): Boolean {
+    return BuildConfig.DEBUG &&
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+        Trace.isEnabled()
+}
+
+internal fun isReachedBottom(
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    thresholdPx: Float
+): Boolean {
+    val layoutInfo = listState.layoutInfo
+    val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull() ?: return false
+    val bottom = lastVisible.offset + lastVisible.size
+    return lastVisible.index >= layoutInfo.totalItemsCount - 1 &&
+        bottom >= layoutInfo.viewportEndOffset - thresholdPx
+}
+
+internal fun maybeSaveReadingProgress(
+    readingProgress: Float,
+    force: Boolean,
+    lastSavedProgress: () -> Float,
+    lastProgressSavedAt: () -> Long,
+    updateLastSavedProgress: (Float) -> Unit,
+    updateLastProgressSavedAt: (Long) -> Unit,
+    onSave: (Float) -> Unit
+) {
+    val clamped = readingProgress.coerceIn(0f, 1f)
+    val now = SystemClock.elapsedRealtime()
+    if (!force && lastSavedProgress() >= 0f) {
+        val diff = abs(clamped - lastSavedProgress())
+        if (diff < 0.02f && now - lastProgressSavedAt() < 1500L) return
+    }
+    updateLastSavedProgress(clamped)
+    updateLastProgressSavedAt(now)
+    onSave(clamped)
+}
+
+internal fun openLinkInApp(context: Context, link: String) {
+    val trimmed = link.trim()
+    if (trimmed.isEmpty()) return
+    WebViewActivity.open(context, trimmed)
+}
+
+internal fun shareCurrent(context: Context, title: String, link: String?) {
+    if (title.isBlank()) return
+    val text = if (!link.isNullOrBlank()) "$title\n$link" else title
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_TEXT, text)
+    }
+    context.startActivity(Intent.createChooser(intent, "分享"))
+}
+
+internal fun showShareQr(context: Context, title: String, link: String?) {
+    val trimmed = link?.trim().orEmpty()
+    if (trimmed.isEmpty()) {
+        showAppToast(context, "暂无可分享链接", Toast.LENGTH_SHORT)
+        return
+    }
+    context.startActivity(
+        ShareQrActivity.createIntent(
+            context = context,
+            title = title,
+            link = trimmed,
+            qrWidthRatio = DETAIL_SHARE_QR_WIDTH_RATIO
+        )
+    )
+}
+
+internal fun openExternalLink(context: Context, link: String) {
+    val trimmed = link.trim()
+    if (trimmed.isEmpty()) return
+    val uri = if (trimmed.startsWith("/")) {
+        FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", File(trimmed))
+    } else {
+        Uri.parse(trimmed)
+    }
+    val intent = Intent(Intent.ACTION_VIEW, uri)
+    intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    context.startActivity(intent)
+}
+
+internal fun openImagePreview(context: Context, url: String, alt: String?) {
+    val trimmed = url.trim()
+    if (trimmed.isEmpty()) return
+    context.startActivity(ImagePreviewActivity.createIntent(context, trimmed, alt))
+}
+
+internal fun openRssVideo(context: Context, playUrl: String, webUrl: String?) {
+    val trimmed = playUrl.trim()
+    if (trimmed.isEmpty()) return
+    context.startActivity(RssPlayerActivity.createIntent(context, trimmed, webUrl))
+}
