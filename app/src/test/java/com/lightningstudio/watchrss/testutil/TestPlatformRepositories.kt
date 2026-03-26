@@ -5,12 +5,14 @@ import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
 import com.lightningstudio.watchrss.data.douyin.DouyinErrorCodes
 import com.lightningstudio.watchrss.data.douyin.DouyinRepositoryContract
 import com.lightningstudio.watchrss.data.douyin.DouyinResult
+import com.lightningstudio.watchrss.sdk.bili.BiliDurl
 import com.lightningstudio.watchrss.sdk.bili.BiliFeedPage
 import com.lightningstudio.watchrss.sdk.bili.BiliFeedSource
 import com.lightningstudio.watchrss.sdk.bili.BiliHotSearchResponse
 import com.lightningstudio.watchrss.sdk.bili.BiliItem
 import com.lightningstudio.watchrss.sdk.bili.BiliOwner
 import com.lightningstudio.watchrss.sdk.bili.BiliPage
+import com.lightningstudio.watchrss.sdk.bili.BiliPlayUrl
 import com.lightningstudio.watchrss.sdk.bili.BiliResult
 import com.lightningstudio.watchrss.sdk.bili.BiliSearchResponse
 import com.lightningstudio.watchrss.sdk.bili.BiliStat
@@ -41,6 +43,18 @@ class TestBiliRepository(
     var coinResult: BiliResult<Boolean> = BiliResult(code = 0, data = false)
     var favoriteResult: BiliResult<Boolean> = BiliResult(code = 0, data = true)
     var addToViewResult: BiliResult<Unit> = BiliResult(code = 0, data = Unit)
+    var playUrlResult: BiliResult<BiliPlayUrl> = BiliResult(
+        code = 0,
+        data = BiliPlayUrl(
+            durl = listOf(BiliDurl(url = "https://example.com/video.mp4"))
+        )
+    )
+    var playHeaders: Map<String, String> = mapOf(
+        "User-Agent" to "TestBiliRepository",
+        "Referer" to "https://www.bilibili.com"
+    )
+    var cachedPreviewUriValue: String? = null
+    var cachedPreviewUriAnyValue: String? = null
     var warmupDetailResult: Result<Unit> = Result.success(Unit)
     var ensureInteractionReadyResult: Result<Unit> = Result.success(Unit)
     var hotSearchResult: BiliResult<BiliHotSearchResponse> = BiliResult(
@@ -71,6 +85,16 @@ class TestBiliRepository(
     override suspend fun fetchFeed(): BiliResult<BiliFeedPage> = feedResult
 
     override suspend fun fetchVideoDetail(aid: Long?, bvid: String?): BiliResult<BiliVideoDetail> = videoDetailResult
+
+    override suspend fun fetchPlayUrlMp4(
+        cid: Long,
+        aid: Long?,
+        bvid: String?,
+        qn: Int
+    ): BiliResult<BiliPlayUrl> {
+        callLog += "play:$cid:$aid:$bvid:$qn"
+        return playUrlResult
+    }
 
     override suspend fun readLocalInteractionState(aid: Long?, bvid: String?): BiliInteractionState {
         localInteractionReadRequests += aid to bvid
@@ -153,6 +177,18 @@ class TestBiliRepository(
     override suspend fun clearCachedPreview(aid: Long?, bvid: String?, cid: Long?) {
         callLog += "clearcache:$aid:$bvid:$cid"
         clearedPreviewRequests += Triple(aid, bvid, cid)
+    }
+
+    override suspend fun buildPlayHeaders(): Map<String, String> = playHeaders
+
+    override suspend fun cachedPreviewUri(aid: Long?, bvid: String?, cid: Long?): String? {
+        callLog += "cached:$aid:$bvid:$cid"
+        return cachedPreviewUriValue
+    }
+
+    override suspend fun cachedPreviewUriAny(aid: Long?, bvid: String?): String? {
+        callLog += "cachedAny:$aid:$bvid"
+        return cachedPreviewUriAnyValue
     }
 
     override suspend fun requestWebQrCode(): WebQrCode? = qrCode

@@ -52,19 +52,11 @@ class BiliPlayerViewModel(
             _uiState.update { it.copy(isLoading = true, message = null) }
             val safeCid = resolvedCid ?: resolveCid()
             if (safeCid == null) {
-                val fallback = repository.cachedPreviewUriAny(aid, bvid)
-                if (!fallback.isNullOrBlank()) {
-                    _uiState.update { it.copy(isLoading = false, playUrl = fallback, headers = emptyMap()) }
-                } else {
+                if (!applyCachedPreviewFallback()) {
                     _uiState.update {
                         it.copy(isLoading = false, message = formatBiliError(BiliErrorCodes.PLAY_PARAM_MISSING))
                     }
                 }
-                return@launch
-            }
-            val cached = repository.cachedPreviewUri(aid, bvid, safeCid)
-            if (!cached.isNullOrBlank()) {
-                _uiState.update { it.copy(isLoading = false, playUrl = cached, headers = emptyMap()) }
                 return@launch
             }
             val result = repository.fetchPlayUrlMp4(cid = safeCid, aid = aid, bvid = bvid)
@@ -72,21 +64,45 @@ class BiliPlayerViewModel(
                 val url = result.data?.durl?.firstOrNull()?.url
                 val headers = repository.buildPlayHeaders()
                 if (url.isNullOrBlank()) {
-                    _uiState.update {
-                        it.copy(isLoading = false, message = formatBiliError(BiliErrorCodes.PLAY_URL_EMPTY))
+                    if (!applyCachedPreviewFallback(safeCid)) {
+                        _uiState.update {
+                            it.copy(isLoading = false, message = formatBiliError(BiliErrorCodes.PLAY_URL_EMPTY))
+                        }
                     }
                 } else {
                     _uiState.update { it.copy(isLoading = false, playUrl = url, headers = headers) }
                 }
             } else {
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        message = formatBiliError(result.code, result.message)
-                    )
+                if (!applyCachedPreviewFallback(safeCid)) {
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            message = formatBiliError(result.code, result.message)
+                        )
+                    }
                 }
             }
         }
+    }
+
+    private suspend fun applyCachedPreviewFallback(cid: Long? = null): Boolean {
+        val fallback = if (cid == null) {
+            repository.cachedPreviewUriAny(aid, bvid)
+        } else {
+            repository.cachedPreviewUri(aid, bvid, cid)
+        }
+        if (fallback.isNullOrBlank()) {
+            return false
+        }
+        _uiState.update {
+            it.copy(
+                isLoading = false,
+                playUrl = fallback,
+                headers = emptyMap(),
+                message = null
+            )
+        }
+        return true
     }
 
     private suspend fun resolveCid(): Long? {

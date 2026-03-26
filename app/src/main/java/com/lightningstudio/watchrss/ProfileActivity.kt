@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.compose.setContent
+import com.lightningstudio.watchrss.phoneconnection.PhoneConnectionFeature
 import com.lightningstudio.watchrss.ui.screen.ProfileScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 
@@ -15,7 +16,7 @@ class ProfileActivity : BaseWatchActivity() {
         setContent {
             WatchRSSTheme {
                 ProfileScreen(
-                    showPhoneConnectionEntry = true,
+                    showPhoneConnectionEntry = PhoneConnectionFeature.isDebugBuild,
                     onFavoritesClick = {
                         if (!allowNavigation()) return@ProfileScreen
                         val intent = Intent(this, SavedItemsActivity::class.java)

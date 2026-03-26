@@ -74,4 +74,24 @@ class ProfileScreenTest {
             assertEquals(1, contactClicks)
         }
     }
+
+    @Test
+    fun profileScreen_hidesPhoneConnectionEntryWhenDisabled() {
+        composeRule.setWatchContent {
+            ProfileScreen(
+                showPhoneConnectionEntry = false,
+                onFavoritesClick = {},
+                onWatchLaterClick = {},
+                onPhoneConnectionClick = {},
+                onSettingsClick = {},
+                onAboutClick = {},
+                onContactDeveloperClick = {}
+            )
+        }
+
+        composeRule.onNodeWithTag(ProfileTestTags.FAVORITES_ENTRY).assertExists()
+        composeRule.onNodeWithTag(ProfileTestTags.WATCH_LATER_ENTRY).assertExists()
+        composeRule.onNodeWithTag(ProfileTestTags.PHONE_CONNECTION_ENTRY).assertDoesNotExist()
+        composeRule.onNodeWithTag(ProfileTestTags.SETTINGS_ENTRY).assertExists()
+    }
 }
