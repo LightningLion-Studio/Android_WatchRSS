@@ -60,7 +60,14 @@ class BiliLoginViewModel(
             if (result.isSuccess) {
                 _uiState.update { it.copy(isSuccess = true, message = "登录成功") }
             } else {
-                _uiState.update { it.copy(message = formatBiliError(BiliErrorCodes.COOKIE_INVALID)) }
+                _uiState.update {
+                    it.copy(
+                        message = formatBiliError(
+                            BiliErrorCodes.COOKIE_INVALID,
+                            result.exceptionOrNull()?.message
+                        )
+                    )
+                }
             }
         }
     }
@@ -83,13 +90,19 @@ class BiliLoginViewModel(
                     }
                     QrPollStatus.EXPIRED -> {
                         _uiState.update {
-                            it.copy(status = result.status, message = formatBiliError(result.rawCode))
+                            it.copy(
+                                status = result.status,
+                                message = formatBiliError(result.rawCode, result.message)
+                            )
                         }
                         return@launch
                     }
                     QrPollStatus.ERROR -> {
                         _uiState.update {
-                            it.copy(status = result.status, message = formatBiliError(result.rawCode))
+                            it.copy(
+                                status = result.status,
+                                message = formatBiliError(result.rawCode, result.message)
+                            )
                         }
                         return@launch
                     }

@@ -97,7 +97,7 @@ class BiliFeedViewModel(
                         isRefreshing = false,
                         isLoadingMore = false,
                         items = if (cachedItems.isNotEmpty()) cachedItems else it.items,
-                        message = formatBiliError(result.code)
+                        message = formatBiliError(result.code, result.message)
                     )
                 }
             }
@@ -129,7 +129,7 @@ class BiliFeedViewModel(
                 _uiState.update {
                     it.copy(
                         isLoadingMore = false,
-                        message = formatBiliError(result.code)
+                        message = formatBiliError(result.code, result.message)
                     )
                 }
             }
@@ -148,7 +148,7 @@ class BiliFeedViewModel(
                 _uiState.update { it.copy(message = "已收藏") }
                 syncLocalSaved(item, SaveType.FAVORITE, true)
             } else {
-                _uiState.update { it.copy(message = formatBiliError(result.code)) }
+                _uiState.update { it.copy(message = formatBiliError(result.code, result.message)) }
             }
         }
     }
@@ -160,7 +160,7 @@ class BiliFeedViewModel(
                 _uiState.update { it.copy(message = "已加入稍后再看") }
                 syncLocalSaved(item, SaveType.WATCH_LATER, true)
             } else {
-                _uiState.update { it.copy(message = formatBiliError(result.code)) }
+                _uiState.update { it.copy(message = formatBiliError(result.code, result.message)) }
             }
         }
     }

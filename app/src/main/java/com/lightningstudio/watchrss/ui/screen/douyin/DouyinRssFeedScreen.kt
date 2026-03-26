@@ -151,7 +151,7 @@ fun DouyinRssFeedScreen(
         }
     }
 
-    if (!uiState.message.isNullOrBlank() && uiState.items.isNotEmpty()) {
+    if (!uiState.message.isNullOrBlank()) {
         ToastMessage(text = uiState.message)
     }
 }

@@ -20,7 +20,12 @@ class BiliAction(private val client: BiliClient) {
                 )
             )
         }
-        return BiliResult(status.code, status.message)
+        return BiliResult(
+            code = status.code,
+            message = status.message,
+            httpCode = status.httpCode,
+            requestMode = status.requestMode
+        )
     }
 
     suspend fun coin(
@@ -41,7 +46,13 @@ class BiliAction(private val client: BiliClient) {
         }
         val dataObj = status.data?.asObjectOrNull()
         val likeResult = dataObj?.booleanOrNull("like") ?: false
-        return BiliResult(status.code, status.message, likeResult)
+        return BiliResult(
+            code = status.code,
+            message = status.message,
+            data = likeResult,
+            httpCode = status.httpCode,
+            requestMode = status.requestMode
+        )
     }
 
     suspend fun triple(aid: Long, preferApp: Boolean = true): BiliResult<BiliTripleResult> {
@@ -57,7 +68,13 @@ class BiliAction(private val client: BiliClient) {
             coin = dataObj?.booleanOrNull("coin") ?: false,
             fav = dataObj?.booleanOrNull("fav") ?: false
         )
-        return BiliResult(status.code, status.message, result)
+        return BiliResult(
+            code = status.code,
+            message = status.message,
+            data = result,
+            httpCode = status.httpCode,
+            requestMode = status.requestMode
+        )
     }
 
     suspend fun favorite(
@@ -74,18 +91,32 @@ class BiliAction(private val client: BiliClient) {
         )
         val status = if (preferApp && !client.accessKey().isNullOrBlank()) {
             params["access_key"] = client.accessKey().orEmpty()
-            postRawAction("${client.config.webBaseUrl}/medialist/gateway/coll/resource/deal", params)
+            postRawAction(
+                "${client.config.webBaseUrl}/medialist/gateway/coll/resource/deal",
+                params,
+                requestMode = REQUEST_MODE_APP
+            )
         } else {
             val csrf = client.csrfToken()
             if (csrf.isNullOrBlank()) {
-                return BiliResult(-1, "missing_csrf")
+                return BiliResult(-111, "missing_csrf", requestMode = REQUEST_MODE_WEB)
             }
             params["csrf"] = csrf
-            postRawAction("${client.config.webBaseUrl}/medialist/gateway/coll/resource/deal", params)
+            postRawAction(
+                "${client.config.webBaseUrl}/medialist/gateway/coll/resource/deal",
+                params,
+                requestMode = REQUEST_MODE_WEB
+            )
         }
         val dataObj = status.data?.asObjectOrNull()
         val prompt = dataObj?.booleanOrNull("prompt") ?: false
-        return BiliResult(status.code, status.message, prompt)
+        return BiliResult(
+            code = status.code,
+            message = status.message,
+            data = prompt,
+            httpCode = status.httpCode,
+            requestMode = status.requestMode
+        )
     }
 
     private suspend fun postAppAction(url: String, params: Map<String, String>): BiliStatus {
@@ -95,22 +126,31 @@ class BiliAction(private val client: BiliClient) {
             signed,
             headers = mapOf("User-Agent" to client.config.appUserAgent)
         )
-        return parseBiliStatus(response.body)
+        return parseBiliStatus(response, REQUEST_MODE_APP)
     }
 
     private suspend fun postWebAction(url: String, params: Map<String, String>): BiliStatus {
         val csrf = client.csrfToken()
         if (csrf.isNullOrBlank()) {
-            return BiliStatus(-1, "missing_csrf")
+            return BiliStatus(-111, "missing_csrf", requestMode = REQUEST_MODE_WEB)
         }
         val payload = params.toMutableMap()
         payload["csrf"] = csrf
         val response = client.httpClient.postForm(url, payload)
-        return parseBiliStatus(response.body)
+        return parseBiliStatus(response, REQUEST_MODE_WEB)
     }
 
-    private suspend fun postRawAction(url: String, params: Map<String, String>): BiliStatus {
+    private suspend fun postRawAction(
+        url: String,
+        params: Map<String, String>,
+        requestMode: String
+    ): BiliStatus {
         val response = client.httpClient.postForm(url, params)
-        return parseBiliStatus(response.body)
+        return parseBiliStatus(response, requestMode)
+    }
+
+    private companion object {
+        private const val REQUEST_MODE_APP = "app"
+        private const val REQUEST_MODE_WEB = "web"
     }
 }

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -90,7 +91,7 @@ fun BiliDetailScreen(
                 .fillMaxSize()
                 .padding(horizontal = safePadding),
             contentPadding = PaddingValues(
-                top = safePadding,
+                top = 0.dp,
                 bottom = safePadding + spacing + extraBottomPadding
             ),
             verticalArrangement = Arrangement.spacedBy(spacing)
@@ -167,7 +168,6 @@ private fun BiliCoverCard(
     onClick: () -> Unit
 ) {
     val radius = watchDimensionResource(R.dimen.hey_card_normal_bg_radius)
-    val coverHeight = watchDimensionResource(R.dimen.hey_card_large_height)
     val playIconSize = watchDimensionResource(R.dimen.hey_listitem_widget_size)
     val overlay = Brush.verticalGradient(
         colors = listOf(Color.Transparent, MaterialTheme.colorScheme.background.copy(alpha = 0.7f))
@@ -183,7 +183,7 @@ private fun BiliCoverCard(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(coverHeight)
+            .aspectRatio(3f / 2f)
             .clip(RoundedCornerShape(radius))
             .background(MaterialTheme.colorScheme.surface)
             .clickableWithoutRipple(onClick),

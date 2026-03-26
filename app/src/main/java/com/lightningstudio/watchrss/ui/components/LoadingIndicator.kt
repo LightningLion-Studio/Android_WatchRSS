@@ -10,17 +10,23 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.paging.LoadState
+import com.lightningstudio.watchrss.ui.util.normalizeUserFacingMessage
+import com.lightningstudio.watchrss.ui.util.offlineToastMessageOrNull
+import com.lightningstudio.watchrss.ui.util.showAppToast
 
 @Composable
 fun LoadingIndicator(
     loadState: LoadState,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     when (loadState) {
         is LoadState.Loading -> {
             Box(
@@ -35,6 +41,14 @@ fun LoadingIndicator(
             }
         }
         is LoadState.Error -> {
+            val errorMessage =
+                normalizeUserFacingMessage(context, loadState.error.message)?.toString()
+                    ?: (loadState.error.message ?: "未知错误")
+            LaunchedEffect(errorMessage) {
+                offlineToastMessageOrNull(context, errorMessage)?.let { toastMessage ->
+                    showAppToast(context, toastMessage)
+                }
+            }
             Box(
                 modifier = modifier
                     .fillMaxWidth()
@@ -42,7 +56,7 @@ fun LoadingIndicator(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "加载失败: ${loadState.error.message}",
+                    text = "加载失败: $errorMessage",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.error
                 )

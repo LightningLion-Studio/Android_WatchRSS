@@ -2,6 +2,7 @@ package com.lightningstudio.watchrss.ui.viewmodel
 
 import androidx.lifecycle.SavedStateHandle
 import com.lightningstudio.watchrss.data.bili.BiliErrorCodes
+import com.lightningstudio.watchrss.data.bili.BiliInteractionState
 import com.lightningstudio.watchrss.sdk.bili.BiliPage
 import com.lightningstudio.watchrss.sdk.bili.BiliResult
 import com.lightningstudio.watchrss.testutil.MainDispatcherRule
@@ -57,6 +58,28 @@ class BiliDetailViewModelTest {
     }
 
     @Test
+    fun init_startsWarmupImmediately_fromSavedTargetBeforeDetailSucceeds() = runTest {
+        val repo = TestBiliRepository(initialLoggedIn = true).apply {
+            videoDetailResult = BiliResult(code = BiliErrorCodes.REQUEST_FAILED)
+        }
+
+        BiliDetailViewModel(
+            savedStateHandle = SavedStateHandle(
+                mapOf(
+                    "aid" to "13",
+                    "bvid" to "BV13",
+                    "cid" to "303"
+                )
+            ),
+            repository = repo,
+            rssRepository = TestRssRepository()
+        )
+        advanceUntilIdle()
+
+        assertEquals(listOf(Triple(13L, "BV13", 303L)), repo.warmupDetailRequests)
+    }
+
+    @Test
     fun selectPage_restartsWarmup_forNewCid() = runTest {
         val repo = TestBiliRepository(initialLoggedIn = true).apply {
             val item = sampleBiliItem(aid = 22L, bvid = "BV22", cid = 301L)
@@ -91,7 +114,29 @@ class BiliDetailViewModelTest {
     }
 
     @Test
-    fun like_positive_updatesUiImmediately_and_ensuresReady_beforeAction() = runTest {
+    fun loadDetail_restoresPersistedLikeAndCoinState() = runTest {
+        val repo = TestBiliRepository(initialLoggedIn = true).apply {
+            val item = sampleBiliItem(aid = 31L, bvid = "BV31", cid = 401L)
+            videoDetailResult = BiliResult(code = 0, data = sampleBiliVideoDetail(item))
+            localInteractionStates["bv:BV31"] = BiliInteractionState(
+                isLiked = true,
+                isCoined = true
+            )
+        }
+
+        val viewModel = BiliDetailViewModel(
+            savedStateHandle = SavedStateHandle(mapOf("aid" to "31", "bvid" to "BV31")),
+            repository = repo,
+            rssRepository = TestRssRepository()
+        )
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.isLiked)
+        assertTrue(viewModel.uiState.value.isCoined)
+    }
+
+    @Test
+    fun like_positive_updatesUiImmediately_and_runsActionWithoutWarmupGate() = runTest {
         val repo = TestBiliRepository(initialLoggedIn = true).apply {
             val item = sampleBiliItem(aid = 55L, bvid = "BV55", cid = 77L)
             videoDetailResult = BiliResult(code = 0, data = sampleBiliVideoDetail(item))
@@ -106,16 +151,19 @@ class BiliDetailViewModelTest {
         viewModel.like()
 
         assertTrue(viewModel.uiState.value.isLiked)
-        assertNull(viewModel.uiState.value.message)
+        assertEquals("已点赞", viewModel.uiState.value.message)
 
         advanceUntilIdle()
 
         assertEquals(listOf(Pair(55L, true)), repo.likeRequests)
-        assertEquals(listOf(Triple(55L, "BV55", 77L)), repo.ensureInteractionRequests)
+        assertTrue(repo.ensureInteractionRequests.isEmpty())
+        assertEquals(
+            BiliInteractionState(isLiked = true, isCoined = false),
+            repo.localInteractionStates["bv:BV55"]
+        )
         assertEquals(
             listOf(
                 "warmup:55:BV55:77",
-                "ensure:55:BV55:77",
                 "like:55:true"
             ),
             repo.callLog
@@ -123,7 +171,7 @@ class BiliDetailViewModelTest {
     }
 
     @Test
-    fun coin_failure_keepsOptimisticSuccess_withoutMessage() = runTest {
+    fun coin_failure_keepsOptimisticState_and_stillShowsSuccessMessage() = runTest {
         val repo = TestBiliRepository(initialLoggedIn = true).apply {
             val item = sampleBiliItem(aid = 88L, bvid = "BV88", cid = 99L)
             videoDetailResult = BiliResult(code = 0, data = sampleBiliVideoDetail(item))
@@ -139,18 +187,68 @@ class BiliDetailViewModelTest {
         viewModel.coin()
 
         assertTrue(viewModel.uiState.value.isCoined)
-        assertNull(viewModel.uiState.value.message)
+        assertEquals("已投币", viewModel.uiState.value.message)
 
         advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value.isCoined)
-        assertNull(viewModel.uiState.value.message)
-        assertEquals(listOf(Triple(88L, "BV88", 99L)), repo.ensureInteractionRequests)
+        assertEquals("已投币", viewModel.uiState.value.message)
+        assertTrue(repo.ensureInteractionRequests.isEmpty())
         assertEquals(listOf(Triple(88L, 1, false)), repo.coinRequests)
     }
 
     @Test
-    fun unlike_usesRealResult_and_doesNotRequireWarmup() = runTest {
+    fun coin_success_persistsCoinState_forFutureOpen() = runTest {
+        val repo = TestBiliRepository(initialLoggedIn = true).apply {
+            val item = sampleBiliItem(aid = 91L, bvid = "BV91", cid = 191L)
+            videoDetailResult = BiliResult(code = 0, data = sampleBiliVideoDetail(item))
+            coinResult = BiliResult(code = 0, data = false)
+        }
+        val viewModel = BiliDetailViewModel(
+            savedStateHandle = SavedStateHandle(mapOf("aid" to "91", "bvid" to "BV91", "cid" to "191")),
+            repository = repo,
+            rssRepository = TestRssRepository()
+        )
+        advanceUntilIdle()
+
+        viewModel.coin()
+        advanceUntilIdle()
+
+        assertEquals(
+            BiliInteractionState(isLiked = false, isCoined = true),
+            repo.localInteractionStates["bv:BV91"]
+        )
+    }
+
+    @Test
+    fun like_failure_keepsOptimisticState_and_stillShowsSuccessMessage() = runTest {
+        val repo = TestBiliRepository(initialLoggedIn = true).apply {
+            val item = sampleBiliItem(aid = 77L, bvid = "BV77", cid = 177L)
+            videoDetailResult = BiliResult(code = 0, data = sampleBiliVideoDetail(item))
+            likeResult = BiliResult(code = BiliErrorCodes.REQUEST_FAILED)
+        }
+        val viewModel = BiliDetailViewModel(
+            savedStateHandle = SavedStateHandle(mapOf("aid" to "77", "bvid" to "BV77", "cid" to "177")),
+            repository = repo,
+            rssRepository = TestRssRepository()
+        )
+        advanceUntilIdle()
+
+        viewModel.like()
+
+        assertTrue(viewModel.uiState.value.isLiked)
+        assertEquals("已点赞", viewModel.uiState.value.message)
+
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.isLiked)
+        assertEquals("已点赞", viewModel.uiState.value.message)
+        assertTrue(repo.ensureInteractionRequests.isEmpty())
+        assertEquals(listOf(Pair(77L, true)), repo.likeRequests)
+    }
+
+    @Test
+    fun unlike_staysOptimistic_and_doesNotRequireWarmup() = runTest {
         val repo = TestBiliRepository(initialLoggedIn = true).apply {
             val item = sampleBiliItem(aid = 66L, bvid = "BV66", cid = 166L)
             videoDetailResult = BiliResult(code = 0, data = sampleBiliVideoDetail(item))
@@ -174,7 +272,34 @@ class BiliDetailViewModelTest {
 
         assertEquals(listOf(Pair(66L, false)), repo.likeRequests)
         assertTrue(repo.ensureInteractionRequests.isEmpty())
-        assertEquals("RSS解析失败(-9001)", viewModel.uiState.value.message)
+        assertEquals("已取消点赞", viewModel.uiState.value.message)
         assertEquals(listOf("like:66:false"), repo.callLog)
+        assertTrue(!viewModel.uiState.value.isLiked)
+    }
+
+    @Test
+    fun unlike_success_clearsPersistedLikeState() = runTest {
+        val repo = TestBiliRepository(initialLoggedIn = true).apply {
+            val item = sampleBiliItem(aid = 67L, bvid = "BV67", cid = 167L)
+            videoDetailResult = BiliResult(code = 0, data = sampleBiliVideoDetail(item))
+        }
+        val viewModel = BiliDetailViewModel(
+            savedStateHandle = SavedStateHandle(mapOf("aid" to "67", "bvid" to "BV67", "cid" to "167")),
+            repository = repo,
+            rssRepository = TestRssRepository()
+        )
+        advanceUntilIdle()
+
+        viewModel.like()
+        advanceUntilIdle()
+        assertEquals(
+            BiliInteractionState(isLiked = true, isCoined = false),
+            repo.localInteractionStates["bv:BV67"]
+        )
+
+        viewModel.like()
+        advanceUntilIdle()
+
+        assertNull(repo.localInteractionStates["bv:BV67"])
     }
 }

@@ -24,21 +24,33 @@ class BiliIdentity(
         val data = json["data"]?.jsonObject ?: return null
         val buvid3 = data["b_3"]?.jsonPrimitive?.content
         val buvid4 = data["b_4"]?.jsonPrimitive?.content
-        if (buvid3.isNullOrBlank() && buvid4.isNullOrBlank()) return null
+        val browserCookies = fetchBrowserIdentityCookies()
+        val bNut = browserCookies["b_nut"]
+        val cookieBuvid3 = browserCookies["buvid3"]
+        if (buvid3.isNullOrBlank() && buvid4.isNullOrBlank() && cookieBuvid3.isNullOrBlank() && bNut.isNullOrBlank()) {
+            return null
+        }
         accountStore?.update { current ->
             val updatedCookies = buildMap {
                 if (!buvid3.isNullOrBlank()) put("buvid3", buvid3)
+                else if (!cookieBuvid3.isNullOrBlank()) put("buvid3", cookieBuvid3)
                 if (!buvid4.isNullOrBlank()) put("buvid4", buvid4)
+                if (!bNut.isNullOrBlank()) put("b_nut", bNut)
             }
             current.copy(
                 cookies = if (updatedCookies.isEmpty()) current.cookies
                 else BiliCookies.merge(current.cookies, updatedCookies),
-                buvid3 = buvid3 ?: current.buvid3,
+                buvid3 = buvid3 ?: cookieBuvid3 ?: current.buvid3,
                 buvid4 = buvid4 ?: current.buvid4,
+                bNut = bNut ?: current.bNut,
                 updatedAtMillis = System.currentTimeMillis()
             )
         }
-        return BuvidResult(buvid3, buvid4)
+        return BuvidResult(
+            buvid3 = buvid3 ?: cookieBuvid3,
+            buvid4 = buvid4,
+            bNut = bNut
+        )
     }
 
     suspend fun fetchWbiKeys(): WbiKeys? {
@@ -130,11 +142,21 @@ class BiliIdentity(
         return bytes.joinToString("") { String.format(Locale.US, "%02x", it) }
     }
 
+    private suspend fun fetchBrowserIdentityCookies(): Map<String, String> {
+        val response = httpClient.get(
+            url = "https://www.bilibili.com/",
+            includeCookies = false
+        )
+        if (response.code != 200) return emptyMap()
+        return BiliCookies.parseSetCookieHeaders(response.headers)
+    }
+
 }
 
 data class BuvidResult(
     val buvid3: String?,
-    val buvid4: String?
+    val buvid4: String?,
+    val bNut: String?
 )
 
 data class WbiKeys(

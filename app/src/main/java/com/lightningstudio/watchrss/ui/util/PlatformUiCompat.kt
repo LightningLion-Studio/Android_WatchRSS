@@ -8,6 +8,6 @@ fun showAppToast(
     message: CharSequence?,
     duration: Int = Toast.LENGTH_SHORT
 ) {
-    if (message.isNullOrEmpty()) return
-    Toast.makeText(context, message, duration).show()
+    val safeMessage = normalizeUserFacingMessage(context, message) ?: return
+    Toast.makeText(context, safeMessage, duration).show()
 }

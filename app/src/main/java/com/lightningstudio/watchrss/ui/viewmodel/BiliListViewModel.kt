@@ -86,7 +86,10 @@ class BiliListViewModel(
                         }
                     } else {
                         _uiState.update {
-                            it.copy(isRefreshing = false, message = formatBiliError(result.code))
+                            it.copy(
+                                isRefreshing = false,
+                                message = formatBiliError(result.code, result.message)
+                            )
                         }
                     }
                 }

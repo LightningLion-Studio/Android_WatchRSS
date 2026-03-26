@@ -28,7 +28,11 @@ import androidx.webkit.WebViewFeature
 import com.lightningstudio.watchrss.ui.screen.WebViewScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.util.getWebViewUnavailableMessage
+import com.lightningstudio.watchrss.ui.util.hasValidatedInternetConnection
+import com.lightningstudio.watchrss.ui.util.offlineToastMessageOrNull
+import com.lightningstudio.watchrss.ui.util.OFFLINE_USER_MESSAGE
 import com.lightningstudio.watchrss.ui.util.warnWebViewUnavailable
+import com.lightningstudio.watchrss.ui.util.showAppToast
 import com.lightningstudio.watchrss.ui.widget.ProgressRingView
 import com.lightningstudio.watchrss.util.AppLogger
 import java.io.File
@@ -183,6 +187,14 @@ class WebViewActivity : BaseWatchActivity() {
                 request: android.webkit.WebResourceRequest?,
                 error: android.webkit.WebResourceError?
             ) {
+                if (request?.isForMainFrame == true) {
+                    offlineToastMessageOrNull(
+                        this@WebViewActivity,
+                        error?.description?.toString()
+                    )?.let { message ->
+                        showAppToast(this@WebViewActivity, message)
+                    }
+                }
                 hideLoadingRing()
             }
         }
@@ -268,6 +280,10 @@ class WebViewActivity : BaseWatchActivity() {
         private const val EXTRA_URL = "url"
 
         fun open(context: Context, link: String): Boolean {
+            if (requiresInternetConnection(link) && !hasValidatedInternetConnection(context)) {
+                showAppToast(context, OFFLINE_USER_MESSAGE)
+                return false
+            }
             val unavailableMessage = getWebViewUnavailableMessage(context)
             if (unavailableMessage != null) {
                 warnWebViewUnavailable(context, unavailableMessage)
@@ -285,6 +301,15 @@ class WebViewActivity : BaseWatchActivity() {
                 trimmed
             }
             return Intent(context, WebViewActivity::class.java).putExtra(EXTRA_URL, resolved)
+        }
+
+        private fun requiresInternetConnection(link: String): Boolean {
+            val trimmed = link.trim()
+            if (trimmed.isEmpty() || trimmed.startsWith("/")) return false
+            return when (Uri.parse(trimmed).scheme?.lowercase()) {
+                "http", "https" -> true
+                else -> false
+            }
         }
     }
 }

@@ -52,6 +52,7 @@ import kotlin.math.min
 private val FEED_CACHE_JSON = stringPreferencesKey("bili_feed_cache_json")
 private val FEED_CACHE_AT = longPreferencesKey("bili_feed_cache_at")
 private val SEARCH_HISTORY_JSON = stringPreferencesKey("bili_search_history")
+private val LOCAL_INTERACTION_STATE_JSON = stringPreferencesKey("bili_local_interaction_state_json")
 private const val FEED_CACHE_LIMIT = 50
 private const val PREVIEW_CACHE_QN = 32
 private const val PREVIEW_CACHE_MS = 30 * 60 * 1000L
@@ -85,6 +86,7 @@ class BiliRepository(
 
     override suspend fun logoutAndClearPreviewCache() {
         clearAccount()
+        clearLocalInteractionState()
         if (cacheService != null) {
             cacheService.clearBucket(ManagedCacheBucket.BILI_PREVIEW)
         } else {
@@ -97,6 +99,12 @@ class BiliRepository(
         val cookies = BiliCookies.parseCookieHeader(rawCookie)
         if (cookies.isEmpty()) {
             return Result.failure(IllegalArgumentException("缺少有效 Cookie"))
+        }
+        if (cookies["SESSDATA"].isNullOrBlank()) {
+            return Result.failure(IllegalArgumentException("missing_cookie:SESSDATA"))
+        }
+        if (cookies["bili_jct"].isNullOrBlank()) {
+            return Result.failure(IllegalArgumentException("missing_cookie:bili_jct"))
         }
         client.auth.applyCookies(cookies)
         debugLogAuth("cookie", "applied")
@@ -143,6 +151,38 @@ class BiliRepository(
 
     override suspend fun fetchVideoDetail(aid: Long?, bvid: String?): BiliResult<BiliVideoDetail> =
         safeCall { client.video.fetchView(aid = aid, bvid = bvid, useWbi = true) }
+
+    override suspend fun readLocalInteractionState(aid: Long?, bvid: String?): BiliInteractionState =
+        withContext(Dispatchers.IO) {
+            val raw = dataStore.data.first()[LOCAL_INTERACTION_STATE_JSON].orEmpty()
+            if (raw.isBlank()) return@withContext BiliInteractionState()
+            findBiliInteractionState(
+                records = parseBiliInteractionRecords(raw),
+                aid = aid,
+                bvid = bvid
+            )
+        }
+
+    override suspend fun writeLocalInteractionState(aid: Long?, bvid: String?, state: BiliInteractionState) {
+        withContext(Dispatchers.IO) {
+            dataStore.edit { preferences ->
+                val current = parseBiliInteractionRecords(
+                    preferences[LOCAL_INTERACTION_STATE_JSON].orEmpty()
+                )
+                val updated = upsertBiliInteractionState(
+                    records = current,
+                    aid = aid,
+                    bvid = bvid,
+                    state = state
+                )
+                if (updated.isEmpty()) {
+                    preferences.remove(LOCAL_INTERACTION_STATE_JSON)
+                } else {
+                    preferences[LOCAL_INTERACTION_STATE_JSON] = buildBiliInteractionRecordsJson(updated)
+                }
+            }
+        }
+    }
 
     override suspend fun fetchPlayUrlMp4(
         cid: Long,
@@ -200,43 +240,52 @@ class BiliRepository(
     }
 
     override suspend fun like(aid: Long, like: Boolean): BiliResult<Unit> {
-        debugLogAction("like", aid, "start", extra = "like=$like")
-        val result = safeCall { client.action.like(aid, like) }
-        debugLogAction("like", aid, "result", result = result)
-        return result
+        return performActionWithFallback(
+            action = "like",
+            aid = aid,
+            startExtra = "like=$like"
+        ) { preferApp ->
+            client.action.like(aid, like, preferApp = preferApp)
+        }
     }
 
     override suspend fun coin(aid: Long, multiply: Int, selectLike: Boolean): BiliResult<Boolean> {
-        debugLogAction(
-            "coin",
-            aid,
-            "start",
-            extra = "multiply=$multiply selectLike=$selectLike"
-        )
-        val result = safeCall { client.action.coin(aid, multiply, selectLike) }
-        debugLogAction(
-            "coin",
-            aid,
-            "result",
-            extra = "likeResult=${result.data}",
-            result = result
-        )
-        return result
+        return performActionWithFallback(
+            action = "coin",
+            aid = aid,
+            startExtra = "multiply=$multiply selectLike=$selectLike",
+            resultExtra = { result -> "likeResult=${result.data}" }
+        ) { preferApp ->
+            client.action.coin(aid, multiply, selectLike, preferApp = preferApp)
+        }
     }
 
     override suspend fun triple(aid: Long): BiliResult<com.lightningstudio.watchrss.sdk.bili.BiliTripleResult> {
-        debugLogAction("triple", aid, "start")
-        val result = safeCall { client.action.triple(aid) }
-        debugLogAction("triple", aid, "result", result = result)
-        return result
+        return performActionWithFallback(
+            action = "triple",
+            aid = aid
+        ) { preferApp ->
+            client.action.triple(aid, preferApp = preferApp)
+        }
     }
 
-    override suspend fun favorite(aid: Long, add: Boolean): BiliResult<Boolean> = safeCall {
+    override suspend fun favorite(aid: Long, add: Boolean): BiliResult<Boolean> {
         val folderId = defaultFavoriteFolderId()
-            ?: return@safeCall BiliResult(BiliErrorCodes.MISSING_FAVORITE_FOLDER, "missing_favorite_folder")
+            ?: return BiliResult(BiliErrorCodes.MISSING_FAVORITE_FOLDER, "missing_favorite_folder")
         val addIds = if (add) listOf(folderId) else emptyList()
         val delIds = if (add) emptyList() else listOf(folderId)
-        client.action.favorite(aid, addMediaIds = addIds, delMediaIds = delIds)
+        return performActionWithFallback(
+            action = "favorite",
+            aid = aid,
+            startExtra = "add=$add"
+        ) { preferApp ->
+            client.action.favorite(
+                aid,
+                addMediaIds = addIds,
+                delMediaIds = delIds,
+                preferApp = preferApp
+            )
+        }
     }
 
     override suspend fun addToView(aid: Long?, bvid: String?): BiliResult<Unit> =
@@ -479,6 +528,12 @@ class BiliRepository(
         return first.id ?: first.fid
     }
 
+    private suspend fun clearLocalInteractionState() {
+        dataStore.edit { preferences ->
+            preferences.remove(LOCAL_INTERACTION_STATE_JSON)
+        }
+    }
+
     private fun buildFeedCacheJson(items: List<BiliItem>): String {
         val array = JSONArray()
         items.forEach { item ->
@@ -580,30 +635,33 @@ class BiliRepository(
         aid: Long,
         phase: String,
         extra: String? = null,
-        result: BiliResult<*>? = null
+        result: BiliResult<*>? = null,
+        modeOverride: String? = null
     ) {
         if (!DebugLogBuffer.isEnabled()) return
         val flags = readDebugAccountFlags()
-        val mode = if (flags.hasAccessKey) "app" else "web"
+        val mode = modeOverride ?: result?.requestMode ?: if (flags.hasAccessKey && hasConfiguredAppKeys()) "app" else "web"
         val extraPart = if (extra.isNullOrBlank()) "" else " $extra"
-        val resultPart = result?.let { " code=${it.code} msg=${it.message}" }.orEmpty()
+        val resultPart = result?.let {
+            " code=${it.code} http=${it.httpCode} resultMode=${it.requestMode} msg=${it.message}"
+        }.orEmpty()
         DebugLogBuffer.log(
             "bili",
             "action=$action phase=$phase mode=$mode aid=$aid accessKey=${flags.hasAccessKey} " +
                 "sess=${flags.hasSessdata} csrf=${flags.hasCsrf} buvid3=${flags.hasBuvid3} " +
-                "buvid4=${flags.hasBuvid4} ticket=${flags.hasTicket}$extraPart$resultPart"
+                "buvid4=${flags.hasBuvid4} bnut=${flags.hasBNut} ticket=${flags.hasTicket}$extraPart$resultPart"
         )
     }
 
     private suspend fun debugLogAuth(source: String, phase: String) {
         if (!DebugLogBuffer.isEnabled()) return
         val flags = readDebugAccountFlags()
-        val mode = if (flags.hasAccessKey) "app" else "web"
+        val mode = if (flags.hasAccessKey && hasConfiguredAppKeys()) "app" else "web"
         DebugLogBuffer.log(
             "bili",
             "auth=$source phase=$phase mode=$mode accessKey=${flags.hasAccessKey} " +
                 "sess=${flags.hasSessdata} csrf=${flags.hasCsrf} buvid3=${flags.hasBuvid3} " +
-                "buvid4=${flags.hasBuvid4} ticket=${flags.hasTicket}"
+                "buvid4=${flags.hasBuvid4} bnut=${flags.hasBNut} ticket=${flags.hasTicket}"
         )
     }
 
@@ -616,6 +674,7 @@ class BiliRepository(
             hasCsrf = !cookies["bili_jct"].isNullOrBlank(),
             hasBuvid3 = !cookies["buvid3"].isNullOrBlank() || !account?.buvid3.isNullOrBlank(),
             hasBuvid4 = !cookies["buvid4"].isNullOrBlank() || !account?.buvid4.isNullOrBlank(),
+            hasBNut = !cookies["b_nut"].isNullOrBlank() || !account?.bNut.isNullOrBlank(),
             hasTicket = !account?.biliTicket.isNullOrBlank()
         )
     }
@@ -626,8 +685,52 @@ class BiliRepository(
         val hasCsrf: Boolean,
         val hasBuvid3: Boolean,
         val hasBuvid4: Boolean,
+        val hasBNut: Boolean,
         val hasTicket: Boolean
     )
+
+    private suspend fun <T> performActionWithFallback(
+        action: String,
+        aid: Long,
+        startExtra: String? = null,
+        resultExtra: ((BiliResult<T>) -> String?)? = null,
+        block: suspend (preferApp: Boolean) -> BiliResult<T>
+    ): BiliResult<T> {
+        val preferApp = shouldPreferAppAction(client.config, accountStore.read())
+        debugLogAction(
+            action = action,
+            aid = aid,
+            phase = "start",
+            extra = startExtra,
+            modeOverride = if (preferApp) "app" else "web"
+        )
+
+        var result = safeCall { block(preferApp) }
+        if (preferApp && shouldRetryActionViaWeb(result) && hasWebActionAuth(accountStore.read())) {
+            debugLogAction(
+                action = action,
+                aid = aid,
+                phase = "fallback",
+                extra = "from=app to=web",
+                result = result,
+                modeOverride = "web"
+            )
+            result = safeCall { block(false) }
+        }
+
+        debugLogAction(
+            action = action,
+            aid = aid,
+            phase = "result",
+            extra = resultExtra?.invoke(result),
+            result = result
+        )
+        return result
+    }
+
+    private fun hasConfiguredAppKeys(): Boolean {
+        return client.config.appKey.isNotBlank() && client.config.appSec.isNotBlank()
+    }
 
     private suspend fun <T> safeCall(block: suspend () -> BiliResult<T>): BiliResult<T> {
         return try {

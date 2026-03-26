@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.lightningstudio.watchrss.data.bili.BiliInteractionState
 import com.lightningstudio.watchrss.data.bili.formatBiliError
 import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
@@ -51,6 +52,8 @@ class BiliDetailViewModel(
 
     init {
         observeLocalItem()
+        restoreInitialInteractionState()
+        scheduleWarmupForSelection()
         loadDetail()
     }
 
@@ -61,11 +64,17 @@ class BiliDetailViewModel(
             if (result.isSuccess) {
                 val detail = result.data
                 val selected = resolveInitialPageIndex(detail?.pages, cidArg)
+                val interactionState = repository.readLocalInteractionState(
+                    aid = detail?.item?.aid ?: aid,
+                    bvid = detail?.item?.bvid ?: bvid
+                )
                 _uiState.update {
                     it.copy(
                         isLoading = false,
                         detail = detail,
                         selectedPageIndex = selected,
+                        isLiked = interactionState.isLiked,
+                        isCoined = interactionState.isCoined,
                         message = null
                     )
                 }
@@ -74,7 +83,7 @@ class BiliDetailViewModel(
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        message = formatBiliError(result.code)
+                        message = formatBiliError(result.code, result.message)
                     )
                 }
             }
@@ -88,48 +97,26 @@ class BiliDetailViewModel(
 
     fun like() {
         val safeAid = currentAid() ?: return
-        val target = currentInteractionTarget()
-        if (_uiState.value.isLiked) {
-            viewModelScope.launch {
-                val result = repository.like(safeAid, like = false)
-                if (result.isSuccess) {
-                    _uiState.update { it.copy(isLiked = false, message = null) }
-                } else {
-                    _uiState.update { it.copy(message = formatBiliError(result.code)) }
-                }
-            }
-            return
-        }
-        _uiState.update { it.copy(isLiked = true, message = null) }
-        viewModelScope.launch {
-            val ready = repository.ensureInteractionReady(
-                aid = target?.aid ?: safeAid,
-                bvid = target?.bvid,
-                cid = target?.cid
+        val nextLiked = !_uiState.value.isLiked
+        _uiState.update {
+            it.copy(
+                isLiked = nextLiked,
+                message = if (nextLiked) "已点赞" else "已取消点赞"
             )
-            if (ready.isSuccess) {
-                repository.like(safeAid, like = true)
-            }
+        }
+        viewModelScope.launch {
+            persistInteractionState(isLiked = nextLiked)
+            repository.like(safeAid, like = nextLiked)
         }
     }
 
     fun coin() {
         if (_uiState.value.isCoined) return
         val safeAid = currentAid() ?: return
-        val target = currentInteractionTarget()
-        _uiState.update { it.copy(isCoined = true, message = null) }
+        _uiState.update { it.copy(isCoined = true, message = "已投币") }
         viewModelScope.launch {
-            val ready = repository.ensureInteractionReady(
-                aid = target?.aid ?: safeAid,
-                bvid = target?.bvid,
-                cid = target?.cid
-            )
-            if (ready.isSuccess) {
-                val result = repository.coin(safeAid)
-                if (result.isSuccess && result.data == true) {
-                    _uiState.update { it.copy(isLiked = true) }
-                }
-            }
+            persistInteractionState(isCoined = true)
+            repository.coin(safeAid)
         }
     }
 
@@ -147,7 +134,7 @@ class BiliDetailViewModel(
                 }
                 syncLocalSaved(SaveType.FAVORITE, nextFavorited)
             } else {
-                _uiState.update { it.copy(message = formatBiliError(result.code)) }
+                _uiState.update { it.copy(message = formatBiliError(result.code, result.message)) }
             }
         }
     }
@@ -160,7 +147,7 @@ class BiliDetailViewModel(
                 _uiState.update { it.copy(isWatchLater = true, message = "已加入稍后再看") }
                 syncLocalSaved(SaveType.WATCH_LATER, true)
             } else {
-                _uiState.update { it.copy(message = formatBiliError(result.code)) }
+                _uiState.update { it.copy(message = formatBiliError(result.code, result.message)) }
             }
         }
     }
@@ -194,6 +181,13 @@ class BiliDetailViewModel(
         if (cid == null) return 0
         val index = safePages.indexOfFirst { it.cid == cid }
         return if (index >= 0) index else 0
+    }
+
+    private fun restoreInitialInteractionState() {
+        if (aid == null && bvid.isNullOrBlank()) return
+        viewModelScope.launch {
+            applyInteractionState(repository.readLocalInteractionState(aid = aid, bvid = bvid))
+        }
     }
 
     private suspend fun syncLocalSaved(saveType: SaveType, saved: Boolean) {
@@ -267,7 +261,8 @@ class BiliDetailViewModel(
 
     private fun scheduleWarmupForSelection() {
         val target = currentInteractionTarget() ?: return
-        if (warmupTarget == target && warmupJob?.isActive == true) {
+        if (target.cid == null) return
+        if (warmupTarget == target) {
             return
         }
         warmupTarget = target
@@ -284,6 +279,29 @@ class BiliDetailViewModel(
     private fun currentAid(): Long? = _uiState.value.detail?.item?.aid ?: aid
 
     private fun currentBvid(): String? = _uiState.value.detail?.item?.bvid ?: bvid
+
+    private fun applyInteractionState(state: BiliInteractionState) {
+        _uiState.update {
+            it.copy(
+                isLiked = state.isLiked,
+                isCoined = state.isCoined
+            )
+        }
+    }
+
+    private suspend fun persistInteractionState(
+        isLiked: Boolean = _uiState.value.isLiked,
+        isCoined: Boolean = _uiState.value.isCoined
+    ) {
+        repository.writeLocalInteractionState(
+            aid = currentAid(),
+            bvid = currentBvid(),
+            state = BiliInteractionState(
+                isLiked = isLiked,
+                isCoined = isCoined
+            )
+        )
+    }
 
     private fun currentInteractionTarget(): BiliTarget? {
         val safeAid = currentAid()

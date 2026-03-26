@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.VolumeUp
+import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -145,7 +145,7 @@ fun PlayerVolumeOverlay(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            imageVector = Icons.Outlined.VolumeUp,
+            imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
             contentDescription = "音量",
             tint = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier
@@ -164,4 +164,3 @@ private const val VOLUME_OVERLAY_HIDE_DELAY_MS = 1_200L
 // 按实测一圈表冠总 net scaled ≈ 16.5，校准为 1/16.5 ≈ 0.06，使一圈刚好覆盖 0→100% 音量范围
 private const val VOLUME_SENSITIVITY_PERCENT = 0.06f
 private const val VOLUME_TAG = "PlayerVolume"
-

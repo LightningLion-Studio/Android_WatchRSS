@@ -6,7 +6,9 @@ import kotlinx.serialization.json.jsonObject
 internal data class BiliStatus(
     val code: Int,
     val message: String? = null,
-    val data: JsonElement? = null
+    val data: JsonElement? = null,
+    val httpCode: Int? = null,
+    val requestMode: String? = null
 )
 
 internal fun parseBiliStatus(body: String): BiliStatus {
@@ -20,4 +22,23 @@ internal fun parseBiliStatus(body: String): BiliStatus {
     }.getOrElse {
         BiliStatus(-1, "invalid_json")
     }
+}
+
+internal fun parseBiliStatus(
+    response: BiliHttpResult,
+    requestMode: String? = null
+): BiliStatus {
+    val parsed = parseBiliStatus(response.body)
+    if (parsed.code == -1 && parsed.message == "invalid_json" && response.code !in 200..299) {
+        return parsed.copy(
+            code = -response.code,
+            message = "HTTP ${response.code}",
+            httpCode = response.code,
+            requestMode = requestMode
+        )
+    }
+    return parsed.copy(
+        httpCode = response.code,
+        requestMode = requestMode
+    )
 }

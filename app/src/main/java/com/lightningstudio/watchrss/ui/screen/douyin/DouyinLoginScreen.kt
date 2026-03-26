@@ -54,6 +54,8 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.lightningstudio.watchrss.ui.util.getWebViewUnavailableMessage
+import com.lightningstudio.watchrss.ui.util.offlineToastMessageOrNull
+import com.lightningstudio.watchrss.ui.util.showAppToast
 import com.lightningstudio.watchrss.util.AppLogger
 import com.lightningstudio.watchrss.ui.theme.rememberIsRoundWatch
 import com.lightningstudio.watchrss.ui.widget.ProgressRingView
@@ -93,6 +95,12 @@ fun DouyinLoginScreen(
 
     // Swipe back gesture state
     var screenWidth by remember { mutableFloatStateOf(0f) }
+
+    LaunchedEffect(errorMessage) {
+        offlineToastMessageOrNull(context, errorMessage)?.let { message ->
+            showAppToast(context, message)
+        }
+    }
 
     // Track loading state changes
     LaunchedEffect(isLoading) {
@@ -377,7 +385,6 @@ fun DouyinLoginScreen(
                                     settings.apply {
                                         javaScriptEnabled = true
                                         domStorageEnabled = true
-                                        databaseEnabled = true
                                         userAgentString = USER_AGENT
                                         loadWithOverviewMode = true
                                         useWideViewPort = true

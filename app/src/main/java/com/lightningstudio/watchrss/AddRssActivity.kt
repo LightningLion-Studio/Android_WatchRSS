@@ -6,11 +6,15 @@ import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalContext
 import com.lightningstudio.watchrss.phoneconnection.PhoneConnectionFeature
 import com.lightningstudio.watchrss.ui.screen.rss.AddRssScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
+import com.lightningstudio.watchrss.ui.util.offlineToastMessageOrNull
+import com.lightningstudio.watchrss.ui.util.showAppToast
 import com.lightningstudio.watchrss.ui.viewmodel.AddRssViewModel
 import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
 
@@ -41,9 +45,18 @@ class AddRssActivity : BaseWatchActivity() {
 
         setContent {
             WatchRSSTheme {
+                val context = LocalContext.current
+                val uiState by viewModel.uiState.collectAsState()
                 val phoneConnectionEnabled by settingsRepository.phoneConnectionEnabled.collectAsState(
                     initial = PhoneConnectionFeature.isDebugBuild
                 )
+
+                LaunchedEffect(uiState.errorMessage) {
+                    offlineToastMessageOrNull(context, uiState.errorMessage)?.let { message ->
+                        showAppToast(context, message)
+                    }
+                }
+
                 AddRssScreen(
                     uiState = viewModel.uiState,
                     showRemoteInputButton = PhoneConnectionFeature.isEnabled(phoneConnectionEnabled),

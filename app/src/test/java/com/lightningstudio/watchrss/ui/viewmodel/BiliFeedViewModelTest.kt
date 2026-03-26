@@ -90,6 +90,6 @@ class BiliFeedViewModelTest {
         viewModel.loadMore()
         advanceUntilIdle()
 
-        assertEquals("RSS解析失败(-9001)", viewModel.uiState.value.message)
+        assertEquals("网络请求失败", viewModel.uiState.value.message)
     }
 }

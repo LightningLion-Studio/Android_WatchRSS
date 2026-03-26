@@ -40,14 +40,14 @@ class BiliLoginAndSearchViewModelTest {
     @Test
     fun applyCookies_failure_showsCookieError() = runTest {
         val repo = TestBiliRepository().apply {
-            applyCookieResult = Result.failure(IllegalArgumentException("bad cookie"))
+            applyCookieResult = Result.failure(IllegalArgumentException("missing_cookie:bili_jct"))
         }
         val viewModel = BiliLoginViewModel(repo)
 
         viewModel.applyCookies("SESSDATA=bad")
         advanceUntilIdle()
 
-        assertEquals("RSS解析失败(-9005)", viewModel.uiState.value.message)
+        assertEquals("Cookie 缺少 bili_jct", viewModel.uiState.value.message)
     }
 
     @Test

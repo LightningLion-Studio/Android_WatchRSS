@@ -82,6 +82,9 @@ import com.lightningstudio.watchrss.ui.components.PlayerVolumeOverlay
 import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownVolumeHandler
 import com.lightningstudio.watchrss.ui.components.rememberPlayerVolumeState
+import com.lightningstudio.watchrss.ui.util.normalizeUserFacingMessage
+import com.lightningstudio.watchrss.ui.util.offlineToastMessageOrNull
+import com.lightningstudio.watchrss.ui.util.showAppToast
 import com.lightningstudio.watchrss.ui.viewmodel.BiliPlayerUiState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -692,7 +695,15 @@ fun BiliPlayerScreen(
             )
         }
 
-        val errorText = playbackError ?: uiState.message
+        val errorText = normalizeUserFacingMessage(
+            context,
+            playbackError ?: uiState.message
+        )?.toString() ?: (playbackError ?: uiState.message)
+        LaunchedEffect(errorText) {
+            offlineToastMessageOrNull(context, errorText)?.let { message ->
+                showAppToast(context, message)
+            }
+        }
         val showLoading = uiState.isLoading ||
             (!isPrepared && !uiState.playUrl.isNullOrBlank()) ||
             isBuffering

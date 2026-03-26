@@ -79,7 +79,12 @@ class BiliPlayerViewModel(
                     _uiState.update { it.copy(isLoading = false, playUrl = url, headers = headers) }
                 }
             } else {
-                _uiState.update { it.copy(isLoading = false, message = formatBiliError(result.code)) }
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        message = formatBiliError(result.code, result.message)
+                    )
+                }
             }
         }
     }

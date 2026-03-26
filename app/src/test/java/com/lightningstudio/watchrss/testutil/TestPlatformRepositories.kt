@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss.testutil
 
+import com.lightningstudio.watchrss.data.bili.BiliInteractionState
 import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
 import com.lightningstudio.watchrss.data.douyin.DouyinErrorCodes
 import com.lightningstudio.watchrss.data.douyin.DouyinRepositoryContract
@@ -60,6 +61,9 @@ class TestBiliRepository(
     val ensureInteractionRequests = mutableListOf<Triple<Long?, String?, Long?>>()
     val likeRequests = mutableListOf<Pair<Long, Boolean>>()
     val coinRequests = mutableListOf<Triple<Long, Int, Boolean>>()
+    val localInteractionReadRequests = mutableListOf<Pair<Long?, String?>>()
+    val localInteractionWriteRequests = mutableListOf<Triple<Long?, String?, BiliInteractionState>>()
+    val localInteractionStates = mutableMapOf<String, BiliInteractionState>()
     val callLog = mutableListOf<String>()
 
     override suspend fun isLoggedIn(): Boolean = loggedIn
@@ -67,6 +71,26 @@ class TestBiliRepository(
     override suspend fun fetchFeed(): BiliResult<BiliFeedPage> = feedResult
 
     override suspend fun fetchVideoDetail(aid: Long?, bvid: String?): BiliResult<BiliVideoDetail> = videoDetailResult
+
+    override suspend fun readLocalInteractionState(aid: Long?, bvid: String?): BiliInteractionState {
+        localInteractionReadRequests += aid to bvid
+        return interactionKeys(aid, bvid)
+            .asSequence()
+            .mapNotNull(localInteractionStates::get)
+            .firstOrNull()
+            ?: BiliInteractionState()
+    }
+
+    override suspend fun writeLocalInteractionState(aid: Long?, bvid: String?, state: BiliInteractionState) {
+        localInteractionWriteRequests += Triple(aid, bvid, state)
+        interactionKeys(aid, bvid).forEach { key ->
+            if (state.hasAnyInteraction) {
+                localInteractionStates[key] = state
+            } else {
+                localInteractionStates.remove(key)
+            }
+        }
+    }
 
     override suspend fun readFeedCache(): List<BiliItem> = feedCache
 
@@ -163,6 +187,13 @@ class TestBiliRepository(
     override suspend fun logoutAndClearPreviewCache() {
         logoutCalls += 1
         loggedIn = false
+    }
+
+    private fun interactionKeys(aid: Long?, bvid: String?): List<String> {
+        return buildList {
+            bvid?.trim()?.takeIf { it.isNotEmpty() }?.let { add("bv:$it") }
+            aid?.let { add("av:$it") }
+        }
     }
 }
 
