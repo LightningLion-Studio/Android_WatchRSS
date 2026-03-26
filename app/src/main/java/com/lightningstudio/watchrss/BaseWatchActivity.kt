@@ -140,7 +140,9 @@ open class BaseWatchActivity : ComponentActivity() {
         val handled = super.dispatchTouchEvent(ev)
         if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
             root.removeCallbacks(resetRunnable)
-            resetViewState(root)
+            if (shouldResetViewStateImmediatelyOnTouchEnd()) {
+                resetViewState(root)
+            }
             root.postDelayed(resetRunnable, RESET_DELAY_MS)
         }
         return handled
@@ -322,6 +324,8 @@ open class BaseWatchActivity : ComponentActivity() {
     protected open fun isSwipeBackEnabled(): Boolean = true
 
     protected open fun shouldAnimateSwipeBackGesture(): Boolean = true
+
+    protected open fun shouldResetViewStateImmediatelyOnTouchEnd(): Boolean = true
 
     protected open fun buildResumeIntent(): Intent? = null
 

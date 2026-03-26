@@ -56,6 +56,8 @@ class MainActivity : BaseWatchActivity() {
 
     override fun shouldAnimateSwipeBackGesture(): Boolean = false
 
+    override fun shouldResetViewStateImmediatelyOnTouchEnd(): Boolean = false
+
     override fun onResume() {
         super.onResume()
         closeOpenSwipe()
