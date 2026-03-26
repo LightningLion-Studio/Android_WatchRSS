@@ -17,7 +17,6 @@ import com.lightningstudio.watchrss.sdk.bili.BiliToViewPage
 import com.lightningstudio.watchrss.sdk.bili.BiliTripleResult
 import com.lightningstudio.watchrss.sdk.bili.BiliVideoDetail
 import com.lightningstudio.watchrss.sdk.bili.QrPollResult
-import com.lightningstudio.watchrss.sdk.bili.TvQrCode
 import com.lightningstudio.watchrss.sdk.bili.WebQrCode
 
 private fun unsupportedBiliRepositoryMethod(): Nothing {
@@ -31,9 +30,7 @@ interface BiliRepositoryContract {
     suspend fun logoutAndClearPreviewCache(): Unit = unsupportedBiliRepositoryMethod()
     suspend fun applyCookieHeader(rawCookie: String): Result<Unit> = unsupportedBiliRepositoryMethod()
     suspend fun requestWebQrCode(): WebQrCode? = unsupportedBiliRepositoryMethod()
-    suspend fun requestTvQrCode(): TvQrCode? = unsupportedBiliRepositoryMethod()
     suspend fun pollWebQrCode(qrKey: String): QrPollResult = unsupportedBiliRepositoryMethod()
-    suspend fun pollTvQrCode(authCode: String): QrPollResult = unsupportedBiliRepositoryMethod()
     suspend fun fetchFeed(): BiliResult<BiliFeedPage> = unsupportedBiliRepositoryMethod()
     suspend fun readFeedCache(): List<BiliItem> = unsupportedBiliRepositoryMethod()
     suspend fun writeFeedCache(items: List<BiliItem>): Unit = unsupportedBiliRepositoryMethod()

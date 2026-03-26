@@ -80,7 +80,7 @@ fun sampleBiliItem(
 }
 
 fun sampleBiliFeedPage(items: List<BiliItem> = listOf(sampleBiliItem())): BiliFeedPage {
-    return BiliFeedPage(items = items, source = BiliFeedSource.APP)
+    return BiliFeedPage(items = items, source = BiliFeedSource.WEB)
 }
 
 fun sampleBiliVideoDetail(item: BiliItem = sampleBiliItem()): BiliVideoDetail {

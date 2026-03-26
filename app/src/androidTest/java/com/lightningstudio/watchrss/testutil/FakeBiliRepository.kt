@@ -34,7 +34,6 @@ import com.lightningstudio.watchrss.sdk.bili.BiliVideoDetail
 import com.lightningstudio.watchrss.sdk.bili.BiliDurl
 import com.lightningstudio.watchrss.sdk.bili.QrPollResult
 import com.lightningstudio.watchrss.sdk.bili.QrPollStatus
-import com.lightningstudio.watchrss.sdk.bili.TvQrCode
 import com.lightningstudio.watchrss.sdk.bili.WebQrCode
 
 class FakeBiliRepository(
@@ -57,21 +56,15 @@ class FakeBiliRepository(
 
     var applyCookieResult: Result<Unit> = Result.success(Unit)
     var webQrCode: WebQrCode? = WebQrCode("web_qr_key", "https://example.com/web-qr")
-    var tvQrCode: TvQrCode? = TvQrCode("tv_auth", "https://example.com/tv-qr")
     var webQrPollResult: QrPollResult = QrPollResult(
         status = QrPollStatus.SUCCESS,
         rawCode = 0,
         cookies = mapOf("SESSDATA" to "test")
     )
-    var tvQrPollResult: QrPollResult = QrPollResult(
-        status = QrPollStatus.SUCCESS,
-        rawCode = 0,
-        cookies = mapOf("SESSDATA" to "tv-test")
-    )
 
     var feedResult: BiliResult<BiliFeedPage> = BiliResult(
         code = 0,
-        data = BiliFeedPage(items = initialFeedItems, source = BiliFeedSource.APP)
+        data = BiliFeedPage(items = initialFeedItems, source = BiliFeedSource.WEB)
     )
     var feedCache: List<BiliItem> = initialFeedCache
     var videoDetailResult: BiliResult<BiliVideoDetail> = BiliResult(
@@ -214,20 +207,11 @@ class FakeBiliRepository(
 
     override suspend fun requestWebQrCode(): WebQrCode? = webQrCode
 
-    override suspend fun requestTvQrCode(): TvQrCode? = tvQrCode
-
     override suspend fun pollWebQrCode(qrKey: String): QrPollResult {
         if (webQrPollResult.status == QrPollStatus.SUCCESS) {
             loggedIn = true
         }
         return webQrPollResult
-    }
-
-    override suspend fun pollTvQrCode(authCode: String): QrPollResult {
-        if (tvQrPollResult.status == QrPollStatus.SUCCESS) {
-            loggedIn = true
-        }
-        return tvQrPollResult
     }
 
     override suspend fun fetchFeed(): BiliResult<BiliFeedPage> = feedResult
@@ -268,7 +252,7 @@ class FakeBiliRepository(
             data = BiliResolvedPlaybackSource(
                 cid = cid,
                 url = url,
-                headers = playHeaders,
+                headers = headers,
                 cacheKey = "bili:fake:$cid:q${playUrl.quality ?: qn}",
                 quality = playUrl.quality ?: qn
             )

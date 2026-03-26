@@ -1,6 +1,7 @@
 package com.lightningstudio.watchrss.ui.viewmodel
 
 import com.lightningstudio.watchrss.data.bili.BiliErrorCodes
+import com.lightningstudio.watchrss.data.bili.formatBiliError
 import com.lightningstudio.watchrss.sdk.bili.QrPollResult
 import com.lightningstudio.watchrss.sdk.bili.QrPollStatus
 import com.lightningstudio.watchrss.testutil.MainDispatcherRule
@@ -19,32 +20,8 @@ class BiliLoginAndSearchViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     @Test
-    fun startLogin_prefersTvQr_and_successfullyPollsQrState() = runTest {
+    fun startLogin_requestsWebQr_and_successfullyPollsQrState() = runTest {
         val repo = TestBiliRepository().apply {
-            tvQrPollResult = QrPollResult(status = QrPollStatus.SUCCESS, rawCode = 0)
-        }
-        val viewModel = BiliLoginViewModel(repo)
-
-        viewModel.startLogin()
-        advanceUntilIdle()
-
-        assertEquals("tv-test-auth", viewModel.uiState.value.pollToken)
-        assertEquals(BiliQrLoginMode.TV, viewModel.uiState.value.loginMode)
-        assertEquals(1, repo.requestTvQrCodeCalls)
-        assertEquals(0, repo.requestWebQrCodeCalls)
-
-        advanceTimeBy(2_100)
-        advanceUntilIdle()
-
-        assertEquals(true, viewModel.uiState.value.isSuccess)
-        assertEquals("登录成功", viewModel.uiState.value.message)
-        assertEquals("tv-test-auth", repo.lastTvPollToken)
-    }
-
-    @Test
-    fun startLogin_fallsBackToWebQr_whenTvQrUnavailable() = runTest {
-        val repo = TestBiliRepository().apply {
-            tvQrCode = null
             webQrPollResult = QrPollResult(status = QrPollStatus.SUCCESS, rawCode = 0)
         }
         val viewModel = BiliLoginViewModel(repo)
@@ -53,14 +30,28 @@ class BiliLoginAndSearchViewModelTest {
         advanceUntilIdle()
 
         assertEquals("web-test-key", viewModel.uiState.value.pollToken)
-        assertEquals(BiliQrLoginMode.WEB, viewModel.uiState.value.loginMode)
-        assertEquals(1, repo.requestTvQrCodeCalls)
         assertEquals(1, repo.requestWebQrCodeCalls)
 
         advanceTimeBy(2_100)
         advanceUntilIdle()
 
+        assertEquals(true, viewModel.uiState.value.isSuccess)
+        assertEquals("登录成功", viewModel.uiState.value.message)
         assertEquals("web-test-key", repo.lastWebPollToken)
+    }
+
+    @Test
+    fun startLogin_showsError_whenWebQrUnavailable() = runTest {
+        val repo = TestBiliRepository().apply {
+            webQrCode = null
+        }
+        val viewModel = BiliLoginViewModel(repo)
+
+        viewModel.startLogin()
+        advanceUntilIdle()
+
+        assertEquals(1, repo.requestWebQrCodeCalls)
+        assertEquals(formatBiliError(BiliErrorCodes.QR_REQUEST_FAILED), viewModel.uiState.value.message)
     }
 
     @Test

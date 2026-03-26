@@ -73,7 +73,7 @@ class BiliFeedViewModelTest {
                 code = 0,
                 data = com.lightningstudio.watchrss.sdk.bili.BiliFeedPage(
                     items = emptyList(),
-                    source = com.lightningstudio.watchrss.sdk.bili.BiliFeedSource.APP
+                    source = com.lightningstudio.watchrss.sdk.bili.BiliFeedSource.WEB
                 )
             )
         }

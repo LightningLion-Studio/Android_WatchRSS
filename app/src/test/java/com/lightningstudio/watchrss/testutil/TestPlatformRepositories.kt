@@ -22,7 +22,6 @@ import com.lightningstudio.watchrss.sdk.bili.BiliTrendingWord
 import com.lightningstudio.watchrss.sdk.bili.BiliVideoDetail
 import com.lightningstudio.watchrss.sdk.bili.QrPollResult
 import com.lightningstudio.watchrss.sdk.bili.QrPollStatus
-import com.lightningstudio.watchrss.sdk.bili.TvQrCode
 import com.lightningstudio.watchrss.sdk.bili.WebQrCode
 import com.lightningstudio.watchrss.sdk.douyin.DouyinContent
 import com.lightningstudio.watchrss.sdk.douyin.DouyinFeedPage
@@ -37,7 +36,7 @@ class TestBiliRepository(
     var feedCache: List<BiliItem> = initialFeedItems
     var feedResult: BiliResult<BiliFeedPage> = BiliResult(
         code = 0,
-        data = BiliFeedPage(items = initialFeedItems, source = BiliFeedSource.APP)
+        data = BiliFeedPage(items = initialFeedItems, source = BiliFeedSource.WEB)
     )
     var videoDetailResult: BiliResult<BiliVideoDetail> = BiliResult(
         code = 0,
@@ -73,9 +72,7 @@ class TestBiliRepository(
     var searchHistory = mutableListOf("Compose")
     var applyCookieResult: Result<Unit> = Result.success(Unit)
     var webQrCode: WebQrCode? = WebQrCode(qrKey = "web-test-key", url = "https://example.com/qr.png")
-    var tvQrCode: TvQrCode? = TvQrCode(authCode = "tv-test-auth", url = "https://example.com/tv-qr.png")
     var webQrPollResult: QrPollResult = QrPollResult(status = QrPollStatus.SUCCESS, rawCode = 0)
-    var tvQrPollResult: QrPollResult = QrPollResult(status = QrPollStatus.SUCCESS, rawCode = 0)
     var logoutCalls = 0
     val writtenFeedCaches = mutableListOf<List<BiliItem>>()
     val favoriteRequests = mutableListOf<Pair<Long, Boolean>>()
@@ -96,9 +93,7 @@ class TestBiliRepository(
     val clearedPlaybackProgressRequests = mutableListOf<Triple<Long?, String?, Long>>()
     val callLog = mutableListOf<String>()
     var requestWebQrCodeCalls = 0
-    var requestTvQrCodeCalls = 0
     var lastWebPollToken: String? = null
-    var lastTvPollToken: String? = null
 
     override suspend fun isLoggedIn(): Boolean = loggedIn
 
@@ -288,19 +283,6 @@ class TestBiliRepository(
             loggedIn = true
         }
         return webQrPollResult
-    }
-
-    override suspend fun requestTvQrCode(): TvQrCode? {
-        requestTvQrCodeCalls += 1
-        return tvQrCode
-    }
-
-    override suspend fun pollTvQrCode(authCode: String): QrPollResult {
-        lastTvPollToken = authCode
-        if (tvQrPollResult.status == QrPollStatus.SUCCESS) {
-            loggedIn = true
-        }
-        return tvQrPollResult
     }
 
     override suspend fun applyCookieHeader(rawCookie: String): Result<Unit> {
