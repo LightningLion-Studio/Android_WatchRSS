@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import com.lightningstudio.watchrss.WatchRssApplication
 import com.lightningstudio.watchrss.data.AppContainer
 import com.lightningstudio.watchrss.data.DefaultAppContainer
+import com.lightningstudio.watchrss.data.bili.BiliPlaybackCacheManager
 import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
 import com.lightningstudio.watchrss.data.cache.ManagedCacheService
 import com.lightningstudio.watchrss.data.douyin.DouyinRepositoryContract
@@ -32,6 +33,9 @@ class TestAppContainer(
 
     override val managedCacheService: ManagedCacheService
         get() = fallback.managedCacheService
+
+    override val biliPlaybackCacheManager: BiliPlaybackCacheManager
+        get() = fallback.biliPlaybackCacheManager
 
     override val biliRepository: BiliRepositoryContract
         get() = biliRepositoryOverride ?: fallback.biliRepository

@@ -1,6 +1,8 @@
 package com.lightningstudio.watchrss.testutil
 
 import com.lightningstudio.watchrss.data.bili.BiliInteractionState
+import com.lightningstudio.watchrss.data.bili.BiliPlaybackProgress
+import com.lightningstudio.watchrss.data.bili.BiliResolvedPlaybackSource
 import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
 import com.lightningstudio.watchrss.data.douyin.DouyinErrorCodes
 import com.lightningstudio.watchrss.data.douyin.DouyinRepositoryContract
@@ -20,10 +22,12 @@ import com.lightningstudio.watchrss.sdk.bili.BiliTrendingWord
 import com.lightningstudio.watchrss.sdk.bili.BiliVideoDetail
 import com.lightningstudio.watchrss.sdk.bili.QrPollResult
 import com.lightningstudio.watchrss.sdk.bili.QrPollStatus
+import com.lightningstudio.watchrss.sdk.bili.TvQrCode
 import com.lightningstudio.watchrss.sdk.bili.WebQrCode
 import com.lightningstudio.watchrss.sdk.douyin.DouyinContent
 import com.lightningstudio.watchrss.sdk.douyin.DouyinFeedPage
 import com.lightningstudio.watchrss.sdk.douyin.DouyinVideo
+import kotlinx.coroutines.delay
 
 class TestBiliRepository(
     initialLoggedIn: Boolean = false,
@@ -53,6 +57,11 @@ class TestBiliRepository(
         "User-Agent" to "TestBiliRepository",
         "Referer" to "https://www.bilibili.com"
     )
+    var resolvedPlaybackSourceValue: BiliResolvedPlaybackSource? = null
+    val resolvedPlaybackSourceResultQueueByCid = mutableMapOf<Long, MutableList<BiliResult<BiliResolvedPlaybackSource>>>()
+    val resolvedPlaybackSourceResultsByCid = mutableMapOf<Long, BiliResult<BiliResolvedPlaybackSource>>()
+    val resolvePlaybackSourceDelayMsByCid = mutableMapOf<Long, Long>()
+    var videoDetailDelayMs: Long = 0L
     var cachedPreviewUriValue: String? = null
     var cachedPreviewUriAnyValue: String? = null
     var warmupDetailResult: Result<Unit> = Result.success(Unit)
@@ -63,8 +72,10 @@ class TestBiliRepository(
     )
     var searchHistory = mutableListOf("Compose")
     var applyCookieResult: Result<Unit> = Result.success(Unit)
-    var qrCode: WebQrCode? = WebQrCode(qrKey = "test-key", url = "https://example.com/qr.png")
-    var qrPollResult: QrPollResult = QrPollResult(status = QrPollStatus.SUCCESS, rawCode = 0)
+    var webQrCode: WebQrCode? = WebQrCode(qrKey = "web-test-key", url = "https://example.com/qr.png")
+    var tvQrCode: TvQrCode? = TvQrCode(authCode = "tv-test-auth", url = "https://example.com/tv-qr.png")
+    var webQrPollResult: QrPollResult = QrPollResult(status = QrPollStatus.SUCCESS, rawCode = 0)
+    var tvQrPollResult: QrPollResult = QrPollResult(status = QrPollStatus.SUCCESS, rawCode = 0)
     var logoutCalls = 0
     val writtenFeedCaches = mutableListOf<List<BiliItem>>()
     val favoriteRequests = mutableListOf<Pair<Long, Boolean>>()
@@ -78,13 +89,27 @@ class TestBiliRepository(
     val localInteractionReadRequests = mutableListOf<Pair<Long?, String?>>()
     val localInteractionWriteRequests = mutableListOf<Triple<Long?, String?, BiliInteractionState>>()
     val localInteractionStates = mutableMapOf<String, BiliInteractionState>()
+    val playbackProgressRecords = mutableListOf<BiliPlaybackProgress>()
+    val latestPlaybackProgressReadRequests = mutableListOf<Pair<Long?, String?>>()
+    val exactPlaybackProgressReadRequests = mutableListOf<Triple<Long?, String?, Long>>()
+    val playbackProgressWrites = mutableListOf<BiliPlaybackProgress>()
+    val clearedPlaybackProgressRequests = mutableListOf<Triple<Long?, String?, Long>>()
     val callLog = mutableListOf<String>()
+    var requestWebQrCodeCalls = 0
+    var requestTvQrCodeCalls = 0
+    var lastWebPollToken: String? = null
+    var lastTvPollToken: String? = null
 
     override suspend fun isLoggedIn(): Boolean = loggedIn
 
     override suspend fun fetchFeed(): BiliResult<BiliFeedPage> = feedResult
 
-    override suspend fun fetchVideoDetail(aid: Long?, bvid: String?): BiliResult<BiliVideoDetail> = videoDetailResult
+    override suspend fun fetchVideoDetail(aid: Long?, bvid: String?): BiliResult<BiliVideoDetail> {
+        if (videoDetailDelayMs > 0L) {
+            delay(videoDetailDelayMs)
+        }
+        return videoDetailResult
+    }
 
     override suspend fun fetchPlayUrlMp4(
         cid: Long,
@@ -94,6 +119,40 @@ class TestBiliRepository(
     ): BiliResult<BiliPlayUrl> {
         callLog += "play:$cid:$aid:$bvid:$qn"
         return playUrlResult
+    }
+
+    override suspend fun resolvePlaybackSource(
+        aid: Long?,
+        bvid: String?,
+        cid: Long,
+        qn: Int
+    ): BiliResult<BiliResolvedPlaybackSource> {
+        callLog += "resolve:$cid:$aid:$bvid:$qn"
+        resolvePlaybackSourceDelayMsByCid[cid]?.takeIf { it > 0L }?.let { delay(it) }
+        resolvedPlaybackSourceResultQueueByCid[cid]
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { return it.removeAt(0) }
+        resolvedPlaybackSourceResultsByCid[cid]?.let { return it }
+        resolvedPlaybackSourceValue?.let { resolved ->
+            return BiliResult(code = 0, data = resolved)
+        }
+        if (!playUrlResult.isSuccess) {
+            return BiliResult(code = playUrlResult.code, message = playUrlResult.message)
+        }
+        val playUrl = playUrlResult.data
+            ?: return BiliResult(code = 0, message = "empty_play_url")
+        val url = playUrl.durl.firstOrNull()?.url
+            ?: return BiliResult(code = 0, message = "empty_play_url")
+        return BiliResult(
+            code = 0,
+            data = BiliResolvedPlaybackSource(
+                cid = cid,
+                url = url,
+                headers = playHeaders,
+                cacheKey = "bili:test:$cid:q${playUrl.quality ?: qn}",
+                quality = playUrl.quality ?: qn
+            )
+        )
     }
 
     override suspend fun readLocalInteractionState(aid: Long?, bvid: String?): BiliInteractionState {
@@ -114,6 +173,33 @@ class TestBiliRepository(
                 localInteractionStates.remove(key)
             }
         }
+    }
+
+    override suspend fun readLatestPlaybackProgress(aid: Long?, bvid: String?): BiliPlaybackProgress? {
+        latestPlaybackProgressReadRequests += aid to bvid
+        return playbackProgressRecords
+            .filter { matchesPlaybackVideo(it, aid, bvid) }
+            .maxByOrNull { it.updatedAtMillis }
+    }
+
+    override suspend fun readPlaybackProgress(aid: Long?, bvid: String?, cid: Long): BiliPlaybackProgress? {
+        exactPlaybackProgressReadRequests += Triple(aid, bvid, cid)
+        return playbackProgressRecords
+            .filter { matchesPlaybackIdentity(it, aid, bvid, cid) }
+            .maxByOrNull { it.updatedAtMillis }
+    }
+
+    override suspend fun writePlaybackProgress(progress: BiliPlaybackProgress) {
+        playbackProgressWrites += progress
+        playbackProgressRecords.removeAll {
+            matchesPlaybackIdentity(it, progress.aid, progress.bvid, progress.cid)
+        }
+        playbackProgressRecords += progress
+    }
+
+    override suspend fun clearPlaybackProgress(aid: Long?, bvid: String?, cid: Long) {
+        clearedPlaybackProgressRequests += Triple(aid, bvid, cid)
+        playbackProgressRecords.removeAll { matchesPlaybackIdentity(it, aid, bvid, cid) }
     }
 
     override suspend fun readFeedCache(): List<BiliItem> = feedCache
@@ -191,13 +277,30 @@ class TestBiliRepository(
         return cachedPreviewUriAnyValue
     }
 
-    override suspend fun requestWebQrCode(): WebQrCode? = qrCode
+    override suspend fun requestWebQrCode(): WebQrCode? {
+        requestWebQrCodeCalls += 1
+        return webQrCode
+    }
 
     override suspend fun pollWebQrCode(qrKey: String): QrPollResult {
-        if (qrPollResult.status == QrPollStatus.SUCCESS) {
+        lastWebPollToken = qrKey
+        if (webQrPollResult.status == QrPollStatus.SUCCESS) {
             loggedIn = true
         }
-        return qrPollResult
+        return webQrPollResult
+    }
+
+    override suspend fun requestTvQrCode(): TvQrCode? {
+        requestTvQrCodeCalls += 1
+        return tvQrCode
+    }
+
+    override suspend fun pollTvQrCode(authCode: String): QrPollResult {
+        lastTvPollToken = authCode
+        if (tvQrPollResult.status == QrPollStatus.SUCCESS) {
+            loggedIn = true
+        }
+        return tvQrPollResult
     }
 
     override suspend fun applyCookieHeader(rawCookie: String): Result<Unit> {
@@ -223,6 +326,7 @@ class TestBiliRepository(
     override suspend fun logoutAndClearPreviewCache() {
         logoutCalls += 1
         loggedIn = false
+        playbackProgressRecords.clear()
     }
 
     private fun interactionKeys(aid: Long?, bvid: String?): List<String> {
@@ -230,6 +334,24 @@ class TestBiliRepository(
             bvid?.trim()?.takeIf { it.isNotEmpty() }?.let { add("bv:$it") }
             aid?.let { add("av:$it") }
         }
+    }
+
+    private fun matchesPlaybackIdentity(
+        progress: BiliPlaybackProgress,
+        aid: Long?,
+        bvid: String?,
+        cid: Long
+    ): Boolean {
+        if (progress.cid != cid) return false
+        return matchesPlaybackVideo(progress, aid, bvid) ||
+            (aid == null && bvid.isNullOrBlank() && !progress.hasVideoIdentity)
+    }
+
+    private fun matchesPlaybackVideo(progress: BiliPlaybackProgress, aid: Long?, bvid: String?): Boolean {
+        val safeBvid = bvid?.trim()
+        val sameBvid = !safeBvid.isNullOrEmpty() && progress.bvid.equals(safeBvid, ignoreCase = true)
+        val sameAid = aid != null && progress.aid == aid
+        return sameBvid || sameAid
     }
 }
 

@@ -46,12 +46,31 @@ interface BiliRepositoryContract {
         bvid: String?,
         state: BiliInteractionState
     ): Unit = unsupportedBiliRepositoryMethod()
+    suspend fun readLatestPlaybackProgress(aid: Long? = null, bvid: String? = null): BiliPlaybackProgress? =
+        unsupportedBiliRepositoryMethod()
+    suspend fun readPlaybackProgress(
+        aid: Long? = null,
+        bvid: String? = null,
+        cid: Long
+    ): BiliPlaybackProgress? = unsupportedBiliRepositoryMethod()
+    suspend fun writePlaybackProgress(progress: BiliPlaybackProgress): Unit = unsupportedBiliRepositoryMethod()
+    suspend fun clearPlaybackProgress(
+        aid: Long? = null,
+        bvid: String? = null,
+        cid: Long
+    ): Unit = unsupportedBiliRepositoryMethod()
     suspend fun fetchPlayUrlMp4(
         cid: Long,
         aid: Long? = null,
         bvid: String? = null,
         qn: Int = 32
     ): BiliResult<BiliPlayUrl> = unsupportedBiliRepositoryMethod()
+    suspend fun resolvePlaybackSource(
+        aid: Long?,
+        bvid: String?,
+        cid: Long,
+        qn: Int = 32
+    ): BiliResult<BiliResolvedPlaybackSource> = unsupportedBiliRepositoryMethod()
     suspend fun warmupDetailPreview(aid: Long?, bvid: String?, cid: Long?): Result<Unit> =
         unsupportedBiliRepositoryMethod()
     suspend fun ensureInteractionReady(aid: Long?, bvid: String?, cid: Long?): Result<Unit> =

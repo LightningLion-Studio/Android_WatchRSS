@@ -35,6 +35,8 @@ import com.lightningstudio.watchrss.sdk.bili.TvQrCode
 import com.lightningstudio.watchrss.sdk.bili.WebQrCode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -45,6 +47,7 @@ import java.io.IOException
 import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
+import java.util.LinkedHashMap
 import javax.net.ssl.SSLException
 import kotlin.math.max
 import kotlin.math.min
@@ -53,15 +56,19 @@ private val FEED_CACHE_JSON = stringPreferencesKey("bili_feed_cache_json")
 private val FEED_CACHE_AT = longPreferencesKey("bili_feed_cache_at")
 private val SEARCH_HISTORY_JSON = stringPreferencesKey("bili_search_history")
 private val LOCAL_INTERACTION_STATE_JSON = stringPreferencesKey("bili_local_interaction_state_json")
+private val LOCAL_PLAYBACK_PROGRESS_JSON = stringPreferencesKey("bili_playback_progress_json")
 private const val FEED_CACHE_LIMIT = 50
 private const val PREVIEW_CACHE_QN = 32
 private const val PREVIEW_CACHE_MS = 30 * 60 * 1000L
 private const val DETAIL_PREVIEW_CACHE_MS = 60 * 1000L
+private const val PLAYBACK_SOURCE_CACHE_TTL_MS = 5 * 60 * 1000L
+private const val PLAYBACK_SOURCE_CACHE_LIMIT = 24
 
 class BiliRepository(
     context: Context,
     private val dataStore: DataStore<Preferences>,
-    private val cacheService: ManagedCacheService? = null
+    private val cacheService: ManagedCacheService? = null,
+    private val playbackCacheManager: BiliPlaybackCacheManager? = null
 ) : BiliRepositoryContract {
     private val appContext = context.applicationContext
     private val accountStore = EncryptedBiliAccountStore(context)
@@ -72,10 +79,14 @@ class BiliRepository(
         .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
         .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
         .build()
+    private val playbackSourceCacheLock = Any()
+    private val playbackSourceCache = LinkedHashMap<String, CachedPlaybackSource>()
+    private val playbackSourceResolutionLocks = LinkedHashMap<String, Mutex>()
 
     override suspend fun isLoggedIn(): Boolean {
         val account = accountStore.read()
-        return !account?.cookies?.get("SESSDATA").isNullOrBlank()
+        return !account?.cookies?.get("SESSDATA").isNullOrBlank() ||
+            !account?.accessToken.isNullOrBlank()
     }
 
     override suspend fun readAccount(): BiliAccount? = accountStore.read()
@@ -87,6 +98,9 @@ class BiliRepository(
     override suspend fun logoutAndClearPreviewCache() {
         clearAccount()
         clearLocalInteractionState()
+        clearLocalPlaybackProgress()
+        clearCachedPlaybackSources()
+        playbackCacheManager?.clearAll()
         if (cacheService != null) {
             cacheService.clearBucket(ManagedCacheBucket.BILI_PREVIEW)
         } else {
@@ -131,8 +145,17 @@ class BiliRepository(
         return result
     }
 
-    override suspend fun fetchFeed(): BiliResult<BiliFeedPage> =
-        safeCall { client.feed.fetchDefaultFeed() }
+    override suspend fun fetchFeed(): BiliResult<BiliFeedPage> {
+        debugLogFeed(phase = "start")
+        val result = safeCall { client.feed.fetchDefaultFeed() }
+        debugLogFeed(
+            phase = "result",
+            result = result,
+            source = result.data?.source,
+            itemCount = result.data?.items?.size
+        )
+        return result
+    }
 
     override suspend fun readFeedCache(): List<BiliItem> = withContext(Dispatchers.IO) {
         val raw = dataStore.data.first()[FEED_CACHE_JSON].orEmpty()
@@ -184,6 +207,69 @@ class BiliRepository(
         }
     }
 
+    override suspend fun readLatestPlaybackProgress(aid: Long?, bvid: String?): BiliPlaybackProgress? =
+        withContext(Dispatchers.IO) {
+            val raw = dataStore.data.first()[LOCAL_PLAYBACK_PROGRESS_JSON].orEmpty()
+            if (raw.isBlank()) return@withContext null
+            findLatestBiliPlaybackProgress(
+                records = parseBiliPlaybackProgressRecords(raw),
+                aid = aid,
+                bvid = bvid
+            )
+        }
+
+    override suspend fun readPlaybackProgress(aid: Long?, bvid: String?, cid: Long): BiliPlaybackProgress? =
+        withContext(Dispatchers.IO) {
+            val raw = dataStore.data.first()[LOCAL_PLAYBACK_PROGRESS_JSON].orEmpty()
+            if (raw.isBlank()) return@withContext null
+            findBiliPlaybackProgress(
+                records = parseBiliPlaybackProgressRecords(raw),
+                aid = aid,
+                bvid = bvid,
+                cid = cid
+            )
+        }
+
+    override suspend fun writePlaybackProgress(progress: BiliPlaybackProgress) {
+        withContext(Dispatchers.IO) {
+            dataStore.edit { preferences ->
+                val current = parseBiliPlaybackProgressRecords(
+                    preferences[LOCAL_PLAYBACK_PROGRESS_JSON].orEmpty()
+                )
+                val updated = upsertBiliPlaybackProgress(
+                    records = current,
+                    progress = progress
+                )
+                if (updated.isEmpty()) {
+                    preferences.remove(LOCAL_PLAYBACK_PROGRESS_JSON)
+                } else {
+                    preferences[LOCAL_PLAYBACK_PROGRESS_JSON] = buildBiliPlaybackProgressRecordsJson(updated)
+                }
+            }
+        }
+    }
+
+    override suspend fun clearPlaybackProgress(aid: Long?, bvid: String?, cid: Long) {
+        withContext(Dispatchers.IO) {
+            dataStore.edit { preferences ->
+                val current = parseBiliPlaybackProgressRecords(
+                    preferences[LOCAL_PLAYBACK_PROGRESS_JSON].orEmpty()
+                )
+                val updated = removeBiliPlaybackProgress(
+                    records = current,
+                    aid = aid,
+                    bvid = bvid,
+                    cid = cid
+                )
+                if (updated.isEmpty()) {
+                    preferences.remove(LOCAL_PLAYBACK_PROGRESS_JSON)
+                } else {
+                    preferences[LOCAL_PLAYBACK_PROGRESS_JSON] = buildBiliPlaybackProgressRecordsJson(updated)
+                }
+            }
+        }
+    }
+
     override suspend fun fetchPlayUrlMp4(
         cid: Long,
         aid: Long?,
@@ -198,27 +284,85 @@ class BiliRepository(
         )
     }
 
-    override suspend fun warmupDetailPreview(aid: Long?, bvid: String?, cid: Long?): Result<Unit> {
-        if (cachedPreviewUri(aid, bvid, cid) != null) {
-            return Result.success(Unit)
+    override suspend fun resolvePlaybackSource(
+        aid: Long?,
+        bvid: String?,
+        cid: Long,
+        qn: Int
+    ): BiliResult<BiliResolvedPlaybackSource> {
+        readCachedPlaybackSource(aid = aid, bvid = bvid, cid = cid, qn = qn)?.let { cached ->
+            return BiliResult(code = 0, data = cached)
         }
+        val sourceCacheKey = playbackSourceCacheKey(aid = aid, bvid = bvid, cid = cid, qn = qn)
+        return obtainPlaybackSourceResolutionLock(sourceCacheKey).withLock {
+            readCachedPlaybackSource(aid = aid, bvid = bvid, cid = cid, qn = qn)?.let { cached ->
+                return@withLock BiliResult(code = 0, data = cached)
+            }
+            val result = fetchPlayUrlMp4(
+                cid = cid,
+                aid = aid,
+                bvid = bvid,
+                qn = qn
+            )
+            if (!result.isSuccess) {
+                return@withLock BiliResult(code = result.code, message = result.message)
+            }
+            val playUrl = result.data
+                ?: return@withLock BiliResult(BiliErrorCodes.PLAY_URL_EMPTY, "empty_play_url")
+            val durl = playUrl.durl.firstOrNull()
+                ?: return@withLock BiliResult(BiliErrorCodes.PLAY_URL_EMPTY, "empty_play_url")
+            val url = durl.url?.trim().takeUnless { it.isNullOrEmpty() }
+                ?: return@withLock BiliResult(BiliErrorCodes.PLAY_URL_EMPTY, "empty_play_url")
+            val quality = playUrl.quality ?: qn
+            val resolved = BiliResolvedPlaybackSource(
+                cid = cid,
+                url = url,
+                headers = buildPlayHeaders(),
+                cacheKey = BiliPlaybackCacheManager.buildCacheKey(
+                    aid = aid,
+                    bvid = bvid,
+                    cid = cid,
+                    quality = quality
+                ),
+                quality = quality,
+                detailPreviewBytes = BiliPlaybackCacheManager.estimatePreviewBytes(
+                    durl = durl,
+                    maxPreviewMs = DETAIL_PREVIEW_CACHE_MS
+                )
+            )
+            rememberCachedPlaybackSource(
+                aid = aid,
+                bvid = bvid,
+                cid = cid,
+                qn = qn,
+                source = resolved
+            )
+            BiliResult(code = 0, data = resolved)
+        }
+    }
+
+    override suspend fun warmupDetailPreview(aid: Long?, bvid: String?, cid: Long?): Result<Unit> {
+        val manager = playbackCacheManager ?: return Result.success(Unit)
         val safeCid = cid ?: return Result.failure(IllegalArgumentException("missing_cid"))
-        val result = fetchPlayUrlMp4(
-            cid = safeCid,
+        val result = resolvePlaybackSource(
             aid = aid,
             bvid = bvid,
+            cid = safeCid,
             qn = PREVIEW_CACHE_QN
         )
         if (!result.isSuccess) {
             return Result.failure(IllegalStateException(result.message ?: "fetch_failed"))
         }
-        return downloadPreviewClip(
-            aid = aid,
-            bvid = bvid,
-            cid = safeCid,
-            playUrl = result.data,
-            maxPreviewMs = DETAIL_PREVIEW_CACHE_MS
-        ).map { Unit }
+        val source = result.data ?: return Result.failure(IllegalStateException("empty_play_url"))
+        val previewBytes = source.detailPreviewBytes
+            ?.takeIf { it > 0L }
+            ?: return Result.success(Unit)
+        return manager.prefetch(
+            url = source.url,
+            headers = source.headers,
+            cacheKey = source.cacheKey,
+            lengthBytes = previewBytes
+        )
     }
 
     override suspend fun ensureInteractionReady(aid: Long?, bvid: String?, cid: Long?): Result<Unit> {
@@ -534,6 +678,81 @@ class BiliRepository(
         }
     }
 
+    private suspend fun clearLocalPlaybackProgress() {
+        dataStore.edit { preferences ->
+            preferences.remove(LOCAL_PLAYBACK_PROGRESS_JSON)
+        }
+    }
+
+    private fun readCachedPlaybackSource(
+        aid: Long?,
+        bvid: String?,
+        cid: Long,
+        qn: Int
+    ): BiliResolvedPlaybackSource? {
+        val key = playbackSourceCacheKey(aid = aid, bvid = bvid, cid = cid, qn = qn)
+        val now = System.currentTimeMillis()
+        return synchronized(playbackSourceCacheLock) {
+            val entry = playbackSourceCache[key] ?: return@synchronized null
+            if (now - entry.cachedAtMs > PLAYBACK_SOURCE_CACHE_TTL_MS) {
+                playbackSourceCache.remove(key)
+                null
+            } else {
+                entry.source
+            }
+        }
+    }
+
+    private fun rememberCachedPlaybackSource(
+        aid: Long?,
+        bvid: String?,
+        cid: Long,
+        qn: Int,
+        source: BiliResolvedPlaybackSource
+    ) {
+        val key = playbackSourceCacheKey(aid = aid, bvid = bvid, cid = cid, qn = qn)
+        synchronized(playbackSourceCacheLock) {
+            playbackSourceCache.remove(key)
+            playbackSourceCache[key] = CachedPlaybackSource(
+                source = source,
+                cachedAtMs = System.currentTimeMillis()
+            )
+            while (playbackSourceCache.size > PLAYBACK_SOURCE_CACHE_LIMIT) {
+                val eldestKey = playbackSourceCache.entries.firstOrNull()?.key ?: break
+                playbackSourceCache.remove(eldestKey)
+            }
+        }
+    }
+
+    private fun clearCachedPlaybackSources() {
+        synchronized(playbackSourceCacheLock) {
+            playbackSourceCache.clear()
+            playbackSourceResolutionLocks.clear()
+        }
+    }
+
+    private fun obtainPlaybackSourceResolutionLock(key: String): Mutex {
+        return synchronized(playbackSourceCacheLock) {
+            playbackSourceResolutionLocks[key] ?: Mutex().also { created ->
+                playbackSourceResolutionLocks[key] = created
+            }
+        }
+    }
+
+    private fun playbackSourceCacheKey(
+        aid: Long?,
+        bvid: String?,
+        cid: Long,
+        qn: Int
+    ): String {
+        val videoKey = when {
+            !bvid.isNullOrBlank() -> "bv:${bvid.trim()}"
+            aid != null -> "av:$aid"
+            else -> "cid:$cid"
+        }
+        return "$videoKey:$cid:q$qn"
+    }
+
     private fun buildFeedCacheJson(items: List<BiliItem>): String {
         val array = JSONArray()
         items.forEach { item ->
@@ -665,6 +884,27 @@ class BiliRepository(
         )
     }
 
+    private suspend fun debugLogFeed(
+        phase: String,
+        result: BiliResult<BiliFeedPage>? = null,
+        source: com.lightningstudio.watchrss.sdk.bili.BiliFeedSource? = null,
+        itemCount: Int? = null
+    ) {
+        if (!DebugLogBuffer.isEnabled()) return
+        val flags = readDebugAccountFlags()
+        val sourcePart = source?.name ?: "-"
+        val countPart = itemCount?.toString() ?: "-"
+        val resultPart = result?.let {
+            " code=${it.code} http=${it.httpCode} mode=${it.requestMode} msg=${it.message}"
+        }.orEmpty()
+        DebugLogBuffer.log(
+            "bili",
+            "feed phase=$phase source=$sourcePart items=$countPart accessKey=${flags.hasAccessKey} " +
+                "sess=${flags.hasSessdata} csrf=${flags.hasCsrf} buvid3=${flags.hasBuvid3} " +
+                "buvid4=${flags.hasBuvid4} bnut=${flags.hasBNut} ticket=${flags.hasTicket}$resultPart"
+        )
+    }
+
     private suspend fun readDebugAccountFlags(): DebugAccountFlags {
         val account = accountStore.read()
         val cookies = account?.cookies.orEmpty()
@@ -775,6 +1015,11 @@ class BiliRepository(
             list
         }.getOrDefault(emptyList())
     }
+
+    private data class CachedPlaybackSource(
+        val source: BiliResolvedPlaybackSource,
+        val cachedAtMs: Long
+    )
 
     companion object {
         internal const val PREVIEW_CACHE_DIR_NAME = "offline/bili"

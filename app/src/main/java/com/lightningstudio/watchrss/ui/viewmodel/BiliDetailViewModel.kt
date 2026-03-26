@@ -17,6 +17,7 @@ import com.lightningstudio.watchrss.sdk.bili.BiliItem
 import com.lightningstudio.watchrss.sdk.bili.BiliOwner
 import com.lightningstudio.watchrss.sdk.bili.BiliPage
 import com.lightningstudio.watchrss.sdk.bili.BiliVideoDetail
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -49,6 +50,7 @@ class BiliDetailViewModel(
     private val rssItemId: Long? = savedStateHandle.get<String>("rssItemId")?.toLongOrNull()
     private var warmupJob: Job? = null
     private var warmupTarget: BiliTarget? = null
+    private var hasUserSelectedPage = false
 
     init {
         observeLocalItem()
@@ -63,16 +65,31 @@ class BiliDetailViewModel(
             val result = repository.fetchVideoDetail(aid = aid, bvid = bvid)
             if (result.isSuccess) {
                 val detail = result.data
-                val selected = resolveInitialPageIndex(detail?.pages, cidArg)
+                val safeAid = detail?.item?.aid ?: aid
+                val safeBvid = detail?.item?.bvid ?: bvid
+                val latestPlayback = repository.readLatestPlaybackProgress(
+                    aid = safeAid,
+                    bvid = safeBvid
+                )
+                val selected = resolveInitialPageIndex(
+                    pages = detail?.pages,
+                    cid = cidArg,
+                    resumeCid = latestPlayback?.cid
+                )
                 val interactionState = repository.readLocalInteractionState(
-                    aid = detail?.item?.aid ?: aid,
-                    bvid = detail?.item?.bvid ?: bvid
+                    aid = safeAid,
+                    bvid = safeBvid
                 )
                 _uiState.update {
+                    val selectedPageIndex = if (hasUserSelectedPage) {
+                        clampPageIndex(detail?.pages, it.selectedPageIndex)
+                    } else {
+                        selected
+                    }
                     it.copy(
                         isLoading = false,
                         detail = detail,
-                        selectedPageIndex = selected,
+                        selectedPageIndex = selectedPageIndex,
                         isLiked = interactionState.isLiked,
                         isCoined = interactionState.isCoined,
                         message = null
@@ -91,6 +108,7 @@ class BiliDetailViewModel(
     }
 
     fun selectPage(index: Int) {
+        hasUserSelectedPage = true
         _uiState.update { it.copy(selectedPageIndex = index) }
         scheduleWarmupForSelection()
     }
@@ -176,11 +194,18 @@ class BiliDetailViewModel(
         return pages[index]
     }
 
-    private fun resolveInitialPageIndex(pages: List<BiliPage>?, cid: Long?): Int {
+    private fun resolveInitialPageIndex(pages: List<BiliPage>?, cid: Long?, resumeCid: Long?): Int {
         val safePages = pages ?: return 0
-        if (cid == null) return 0
-        val index = safePages.indexOfFirst { it.cid == cid }
+        val preferredCid = resumeCid ?: cid
+        if (preferredCid == null) return 0
+        val index = safePages.indexOfFirst { it.cid == preferredCid }
         return if (index >= 0) index else 0
+    }
+
+    private fun clampPageIndex(pages: List<BiliPage>?, index: Int): Int {
+        val safePages = pages ?: return 0
+        if (safePages.isEmpty()) return 0
+        return index.coerceIn(0, safePages.lastIndex)
     }
 
     private fun restoreInitialInteractionState() {
@@ -268,6 +293,7 @@ class BiliDetailViewModel(
         warmupTarget = target
         warmupJob?.cancel()
         warmupJob = viewModelScope.launch {
+            delay(DETAIL_WARMUP_DELAY_MS)
             repository.warmupDetailPreview(
                 aid = target.aid,
                 bvid = target.bvid,
@@ -377,5 +403,9 @@ class BiliDetailViewModel(
             }
             else -> null
         }
+    }
+
+    companion object {
+        private const val DETAIL_WARMUP_DELAY_MS = 750L
     }
 }

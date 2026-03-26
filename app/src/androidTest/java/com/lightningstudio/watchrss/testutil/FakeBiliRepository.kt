@@ -2,6 +2,8 @@ package com.lightningstudio.watchrss.testutil
 
 import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
 import com.lightningstudio.watchrss.data.bili.BiliErrorCodes
+import com.lightningstudio.watchrss.data.bili.BiliPlaybackProgress
+import com.lightningstudio.watchrss.data.bili.BiliResolvedPlaybackSource
 import com.lightningstudio.watchrss.sdk.bili.BiliAccount
 import com.lightningstudio.watchrss.sdk.bili.BiliCommentContent
 import com.lightningstudio.watchrss.sdk.bili.BiliCommentCursor
@@ -90,6 +92,7 @@ class FakeBiliRepository(
             )
         )
     )
+    var resolvedPlaybackSourceValue: BiliResolvedPlaybackSource? = null
     var likeResult: BiliResult<Unit> = BiliResult(0, data = Unit)
     var coinResult: BiliResult<Boolean> = BiliResult(0, data = true)
     var tripleResult: BiliResult<com.lightningstudio.watchrss.sdk.bili.BiliTripleResult> =
@@ -173,6 +176,7 @@ class FakeBiliRepository(
     var headers: Map<String, String> = initialPlayHeaders
     var cachedPreviewUriValue: String? = null
     var cachedPreviewUriAnyValue: String? = null
+    val playbackProgressRecords = mutableListOf<BiliPlaybackProgress>()
     var cachePreviewClipResult: Result<String> = Result.success("/tmp/fake-preview.mp4")
     var warmupDetailResult: Result<Unit> = Result.success(Unit)
     var ensureInteractionReadyResult: Result<Unit> = Result.success(Unit)
@@ -198,6 +202,7 @@ class FakeBiliRepository(
     override suspend fun logoutAndClearPreviewCache() {
         logoutCount += 1
         clearAccount()
+        playbackProgressRecords.clear()
     }
 
     override suspend fun applyCookieHeader(rawCookie: String): Result<Unit> {
@@ -243,6 +248,55 @@ class FakeBiliRepository(
         bvid: String?,
         qn: Int
     ): BiliResult<BiliPlayUrl> = playUrlResult
+
+    override suspend fun resolvePlaybackSource(
+        aid: Long?,
+        bvid: String?,
+        cid: Long,
+        qn: Int
+    ): BiliResult<BiliResolvedPlaybackSource> {
+        resolvedPlaybackSourceValue?.let { resolved ->
+            return BiliResult(code = 0, data = resolved)
+        }
+        if (!playUrlResult.isSuccess) {
+            return BiliResult(code = playUrlResult.code, message = playUrlResult.message)
+        }
+        val playUrl = playUrlResult.data ?: return BiliResult(code = 0, message = "empty_play_url")
+        val url = playUrl.durl.firstOrNull()?.url ?: return BiliResult(code = 0, message = "empty_play_url")
+        return BiliResult(
+            code = 0,
+            data = BiliResolvedPlaybackSource(
+                cid = cid,
+                url = url,
+                headers = playHeaders,
+                cacheKey = "bili:fake:$cid:q${playUrl.quality ?: qn}",
+                quality = playUrl.quality ?: qn
+            )
+        )
+    }
+
+    override suspend fun readLatestPlaybackProgress(aid: Long?, bvid: String?): BiliPlaybackProgress? {
+        return playbackProgressRecords
+            .filter { matchesPlaybackVideo(it, aid, bvid) }
+            .maxByOrNull { it.updatedAtMillis }
+    }
+
+    override suspend fun readPlaybackProgress(aid: Long?, bvid: String?, cid: Long): BiliPlaybackProgress? {
+        return playbackProgressRecords
+            .filter { matchesPlaybackIdentity(it, aid, bvid, cid) }
+            .maxByOrNull { it.updatedAtMillis }
+    }
+
+    override suspend fun writePlaybackProgress(progress: BiliPlaybackProgress) {
+        playbackProgressRecords.removeAll {
+            matchesPlaybackIdentity(it, progress.aid, progress.bvid, progress.cid)
+        }
+        playbackProgressRecords += progress
+    }
+
+    override suspend fun clearPlaybackProgress(aid: Long?, bvid: String?, cid: Long) {
+        playbackProgressRecords.removeAll { matchesPlaybackIdentity(it, aid, bvid, cid) }
+    }
 
     override suspend fun warmupDetailPreview(aid: Long?, bvid: String?, cid: Long?): Result<Unit> {
         warmupDetailRequests += Triple(aid, bvid, cid)
@@ -344,6 +398,24 @@ class FakeBiliRepository(
 
     override suspend fun clearCachedPreview(aid: Long?, bvid: String?, cid: Long?) {
         clearedPreviewRequests += Triple(aid, bvid, cid)
+    }
+
+    private fun matchesPlaybackIdentity(
+        progress: BiliPlaybackProgress,
+        aid: Long?,
+        bvid: String?,
+        cid: Long
+    ): Boolean {
+        if (progress.cid != cid) return false
+        return matchesPlaybackVideo(progress, aid, bvid) ||
+            (aid == null && bvid.isNullOrBlank() && !progress.hasVideoIdentity)
+    }
+
+    private fun matchesPlaybackVideo(progress: BiliPlaybackProgress, aid: Long?, bvid: String?): Boolean {
+        val safeBvid = bvid?.trim()
+        val sameBvid = !safeBvid.isNullOrEmpty() && progress.bvid.equals(safeBvid, ignoreCase = true)
+        val sameAid = aid != null && progress.aid == aid
+        return sameBvid || sameAid
     }
 
     fun setSearchResult(keyword: String, page: Int, result: BiliResult<BiliSearchResponse>) {

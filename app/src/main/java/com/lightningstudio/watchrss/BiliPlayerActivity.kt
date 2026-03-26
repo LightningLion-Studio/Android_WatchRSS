@@ -18,6 +18,7 @@ import com.lightningstudio.watchrss.ui.viewmodel.BiliViewModelFactory
 class BiliPlayerActivity : BaseWatchActivity() {
     private val container by lazy { (application as WatchRssApplication).container }
     private val repository by lazy { container.biliRepository }
+    private val playbackCacheManager by lazy { container.biliPlaybackCacheManager }
     private val settingsRepository by lazy { container.settingsRepository }
     private val viewModel: BiliPlayerViewModel by viewModels {
         BiliViewModelFactory(repository)
@@ -41,12 +42,14 @@ class BiliPlayerActivity : BaseWatchActivity() {
                     BiliPlayerScreen(
                         uiState = uiState,
                         onRetry = viewModel::loadPlayUrl,
+                        onPlaybackError = viewModel::onPlaybackError,
                         onOpenWeb = {
                             val safeLink = link ?: return@BiliPlayerScreen
                             WebViewActivity.open(this, safeLink)
                         },
-                        onPreviewSourceInvalidated = viewModel::onPreviewPlaybackFailed,
-                        onUpgradeSourceActivated = viewModel::promoteUpgradeSource,
+                        onPlaybackProgress = viewModel::onPlaybackProgress,
+                        onPlaybackEnded = viewModel::onPlaybackEnded,
+                        playbackDataSourceFactoryProvider = playbackCacheManager::buildPlaybackDataSourceFactory,
                         onPanStateChange = { offsetX, rangeX ->
                             panOffsetX = offsetX
                             panRangeX = rangeX

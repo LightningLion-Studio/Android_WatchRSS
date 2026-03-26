@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.preferencesDataStoreFile
 import androidx.room.Room
+import com.lightningstudio.watchrss.data.bili.BiliPlaybackCacheManager
 import com.lightningstudio.watchrss.data.cache.ManagedCacheService
 import com.lightningstudio.watchrss.data.bili.BiliRepository
 import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
@@ -30,6 +31,7 @@ interface AppContainer {
     val settingsRepository: SettingsRepository
     val llmApiKeyStore: LlmApiKeyStore
     val managedCacheService: ManagedCacheService
+    val biliPlaybackCacheManager: BiliPlaybackCacheManager
     val biliRepository: BiliRepositoryContract
     val douyinRepository: DouyinRepositoryContract
     val internetAvailabilityMonitor: InternetAvailabilityMonitor
@@ -71,11 +73,20 @@ class DefaultAppContainer(context: Context) : AppContainer {
         }
     }
 
+    override val biliPlaybackCacheManager: BiliPlaybackCacheManager by lazy {
+        BiliPlaybackCacheManager(appContext)
+    }
+
     override val biliRepository: BiliRepositoryContract by lazy {
         val dataStore = PreferenceDataStoreFactory.create(
             produceFile = { appContext.preferencesDataStoreFile("bili_cache.preferences_pb") }
         )
-        BiliRepository(appContext, dataStore, managedCacheService)
+        BiliRepository(
+            context = appContext,
+            dataStore = dataStore,
+            cacheService = managedCacheService,
+            playbackCacheManager = biliPlaybackCacheManager
+        )
     }
 
     override val douyinRepository: DouyinRepositoryContract by lazy {

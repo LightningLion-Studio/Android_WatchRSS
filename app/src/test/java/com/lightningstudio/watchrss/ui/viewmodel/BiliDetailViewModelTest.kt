@@ -3,6 +3,7 @@ package com.lightningstudio.watchrss.ui.viewmodel
 import androidx.lifecycle.SavedStateHandle
 import com.lightningstudio.watchrss.data.bili.BiliErrorCodes
 import com.lightningstudio.watchrss.data.bili.BiliInteractionState
+import com.lightningstudio.watchrss.data.bili.BiliPlaybackProgress
 import com.lightningstudio.watchrss.sdk.bili.BiliPage
 import com.lightningstudio.watchrss.sdk.bili.BiliResult
 import com.lightningstudio.watchrss.testutil.MainDispatcherRule
@@ -58,7 +59,48 @@ class BiliDetailViewModelTest {
     }
 
     @Test
-    fun init_startsWarmupImmediately_fromSavedTargetBeforeDetailSucceeds() = runTest {
+    fun loadDetail_prefersLatestPlaybackCid_overCidArg_withoutWarmingStaleCidFirst() = runTest {
+        val repo = TestBiliRepository(initialLoggedIn = true).apply {
+            val item = sampleBiliItem(aid = 12L, bvid = "BV12", cid = 101L)
+            videoDetailResult = BiliResult(
+                code = 0,
+                data = sampleBiliVideoDetail(
+                    item = item,
+                    pages = listOf(
+                        BiliPage(cid = 101L, page = 1, part = "P1", duration = 30),
+                        BiliPage(cid = 202L, page = 2, part = "P2", duration = 40)
+                    )
+                )
+            )
+            playbackProgressRecords += BiliPlaybackProgress(
+                aid = 12L,
+                bvid = "BV12",
+                cid = 202L,
+                positionMs = 18_000L,
+                durationMs = 40_000L,
+                updatedAtMillis = 100L
+            )
+        }
+
+        val viewModel = BiliDetailViewModel(
+            savedStateHandle = SavedStateHandle(
+                mapOf(
+                    "aid" to "12",
+                    "bvid" to "BV12",
+                    "cid" to "101"
+                )
+            ),
+            repository = repo,
+            rssRepository = TestRssRepository()
+        )
+        advanceUntilIdle()
+
+        assertEquals(1, viewModel.uiState.value.selectedPageIndex)
+        assertEquals(listOf(Triple(12L, "BV12", 202L)), repo.warmupDetailRequests)
+    }
+
+    @Test
+    fun init_schedulesWarmup_fromSavedTargetWhenDetailFails() = runTest {
         val repo = TestBiliRepository(initialLoggedIn = true).apply {
             videoDetailResult = BiliResult(code = BiliErrorCodes.REQUEST_FAILED)
         }
@@ -108,6 +150,53 @@ class BiliDetailViewModelTest {
             listOf(
                 Triple(22L, "BV22", 301L),
                 Triple(22L, "BV22", 302L)
+            ),
+            repo.warmupDetailRequests
+        )
+    }
+
+    @Test
+    fun loadDetail_doesNotOverrideManualPageSelection_onReload() = runTest {
+        val repo = TestBiliRepository(initialLoggedIn = true).apply {
+            val item = sampleBiliItem(aid = 32L, bvid = "BV32", cid = 401L)
+            videoDetailResult = BiliResult(
+                code = 0,
+                data = sampleBiliVideoDetail(
+                    item = item,
+                    pages = listOf(
+                        BiliPage(cid = 401L, page = 1, part = "P1", duration = 30),
+                        BiliPage(cid = 402L, page = 2, part = "P2", duration = 40)
+                    )
+                )
+            )
+            playbackProgressRecords += BiliPlaybackProgress(
+                aid = 32L,
+                bvid = "BV32",
+                cid = 402L,
+                positionMs = 12_000L,
+                durationMs = 40_000L,
+                updatedAtMillis = 50L
+            )
+        }
+
+        val viewModel = BiliDetailViewModel(
+            savedStateHandle = SavedStateHandle(mapOf("aid" to "32", "bvid" to "BV32")),
+            repository = repo,
+            rssRepository = TestRssRepository()
+        )
+        advanceUntilIdle()
+        assertEquals(1, viewModel.uiState.value.selectedPageIndex)
+
+        viewModel.selectPage(0)
+        advanceUntilIdle()
+        viewModel.loadDetail()
+        advanceUntilIdle()
+
+        assertEquals(0, viewModel.uiState.value.selectedPageIndex)
+        assertEquals(
+            listOf(
+                Triple(32L, "BV32", 402L),
+                Triple(32L, "BV32", 401L)
             ),
             repo.warmupDetailRequests
         )
