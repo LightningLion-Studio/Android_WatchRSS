@@ -21,6 +21,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import com.lightningstudio.watchrss.ui.screen.PlatformEntryScreen
 import com.lightningstudio.watchrss.ui.screen.bili.BiliPlayerScreen
+import com.lightningstudio.watchrss.ui.viewmodel.BiliPlaybackSource
+import com.lightningstudio.watchrss.ui.viewmodel.BiliPlaybackSourceKind
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.BiliPlayerUiState
 import kotlinx.coroutines.flow.collectLatest
@@ -68,8 +70,14 @@ class DouyinPlayerActivity : BaseWatchActivity() {
                                 val playUrl = item.playUrl?.takeIf { it.isNotBlank() }
                                 BiliPlayerUiState(
                                     isLoading = false,
-                                    playUrl = playUrl,
-                                    headers = headers,
+                                    initialSource = playUrl?.let {
+                                        BiliPlaybackSource(
+                                            url = it,
+                                            headers = headers,
+                                            kind = BiliPlaybackSourceKind.REMOTE
+                                        )
+                                    },
+                                    upgradeSource = null,
                                     message = if (playUrl.isNullOrBlank()) "播放地址为空" else null,
                                     title = item.title,
                                     owner = item.author

@@ -6,15 +6,29 @@ import androidx.lifecycle.viewModelScope
 import com.lightningstudio.watchrss.data.bili.BiliErrorCodes
 import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
 import com.lightningstudio.watchrss.data.bili.formatBiliError
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+enum class BiliPlaybackSourceKind {
+    PREVIEW,
+    REMOTE
+}
+
+data class BiliPlaybackSource(
+    val url: String,
+    val headers: Map<String, String> = emptyMap(),
+    val kind: BiliPlaybackSourceKind
+)
+
 data class BiliPlayerUiState(
     val isLoading: Boolean = true,
-    val playUrl: String? = null,
-    val headers: Map<String, String> = emptyMap(),
+    val initialSource: BiliPlaybackSource? = null,
+    val upgradeSource: BiliPlaybackSource? = null,
+    val isUpgradeLoading: Boolean = false,
+    val upgradeErrorMessage: String? = null,
     val message: String? = null,
     val title: String? = null,
     val owner: String? = null,
@@ -35,6 +49,9 @@ class BiliPlayerViewModel(
     private val titleArg: String? = savedStateHandle.get<String>("title")?.trim()?.takeIf { it.isNotBlank() }
     private val ownerArg: String? = savedStateHandle.get<String>("owner")?.trim()?.takeIf { it.isNotBlank() }
     private val pageTitleArg: String? = savedStateHandle.get<String>("pageTitle")?.trim()?.takeIf { it.isNotBlank() }
+    private var loadJob: Job? = null
+    private var remoteLoadJob: Job? = null
+    private var loadGeneration: Long = 0L
 
     init {
         _uiState.update {
@@ -48,61 +65,100 @@ class BiliPlayerViewModel(
     }
 
     fun loadPlayUrl() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, message = null) }
+        loadJob?.cancel()
+        remoteLoadJob?.cancel()
+        val generation = ++loadGeneration
+        loadJob = viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    isLoading = true,
+                    initialSource = null,
+                    upgradeSource = null,
+                    isUpgradeLoading = false,
+                    upgradeErrorMessage = null,
+                    message = null
+                )
+            }
             val safeCid = resolvedCid ?: resolveCid()
             if (safeCid == null) {
-                if (!applyCachedPreviewFallback()) {
-                    _uiState.update {
-                        it.copy(isLoading = false, message = formatBiliError(BiliErrorCodes.PLAY_PARAM_MISSING))
-                    }
+                if (generation != loadGeneration) return@launch
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        message = formatBiliError(BiliErrorCodes.PLAY_PARAM_MISSING)
+                    )
                 }
                 return@launch
             }
-            val result = repository.fetchPlayUrlMp4(cid = safeCid, aid = aid, bvid = bvid)
-            if (result.isSuccess) {
-                val url = result.data?.durl?.firstOrNull()?.url
-                val headers = repository.buildPlayHeaders()
-                if (url.isNullOrBlank()) {
-                    if (!applyCachedPreviewFallback(safeCid)) {
-                        _uiState.update {
-                            it.copy(isLoading = false, message = formatBiliError(BiliErrorCodes.PLAY_URL_EMPTY))
-                        }
-                    }
-                } else {
-                    _uiState.update { it.copy(isLoading = false, playUrl = url, headers = headers) }
+            if (generation != loadGeneration) return@launch
+
+            val previewSource = repository.cachedPreviewUri(aid, bvid, safeCid)
+                ?.takeIf { it.isNotBlank() }
+                ?.let(::previewSource)
+            if (generation != loadGeneration) return@launch
+            if (previewSource != null) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        initialSource = previewSource,
+                        upgradeSource = null,
+                        isUpgradeLoading = true,
+                        upgradeErrorMessage = null,
+                        message = null
+                    )
                 }
-            } else {
-                if (!applyCachedPreviewFallback(safeCid)) {
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            message = formatBiliError(result.code, result.message)
-                        )
-                    }
+            }
+            startRemoteLoad(safeCid, generation)
+        }
+    }
+
+    fun onPreviewPlaybackFailed() {
+        val safeCid = resolvedCid ?: cid ?: return
+        viewModelScope.launch {
+            repository.clearCachedPreview(aid, bvid, safeCid)
+            val upgradeSource = _uiState.value.upgradeSource
+            if (upgradeSource != null) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        initialSource = upgradeSource,
+                        upgradeSource = null,
+                        isUpgradeLoading = false,
+                        upgradeErrorMessage = null,
+                        message = null
+                    )
                 }
+                return@launch
+            }
+
+            _uiState.update {
+                it.copy(
+                    isLoading = true,
+                    initialSource = null,
+                    upgradeSource = null,
+                    isUpgradeLoading = false,
+                    upgradeErrorMessage = null,
+                    message = null
+                )
+            }
+            if (remoteLoadJob?.isActive != true) {
+                startRemoteLoad(safeCid, loadGeneration)
             }
         }
     }
 
-    private suspend fun applyCachedPreviewFallback(cid: Long? = null): Boolean {
-        val fallback = if (cid == null) {
-            repository.cachedPreviewUriAny(aid, bvid)
-        } else {
-            repository.cachedPreviewUri(aid, bvid, cid)
-        }
-        if (fallback.isNullOrBlank()) {
-            return false
-        }
-        _uiState.update {
-            it.copy(
+    fun promoteUpgradeSource() {
+        _uiState.update { current ->
+            val upgradeSource = current.upgradeSource ?: return@update current
+            current.copy(
+                initialSource = upgradeSource,
+                upgradeSource = null,
                 isLoading = false,
-                playUrl = fallback,
-                headers = emptyMap(),
+                isUpgradeLoading = false,
+                upgradeErrorMessage = null,
                 message = null
             )
         }
-        return true
     }
 
     private suspend fun resolveCid(): Long? {
@@ -119,6 +175,80 @@ class BiliPlayerViewModel(
         _uiState.update { it.copy(message = null) }
     }
 
+    private fun startRemoteLoad(cid: Long, generation: Long) {
+        remoteLoadJob?.cancel()
+        remoteLoadJob = viewModelScope.launch {
+            val result = repository.fetchPlayUrlMp4(cid = cid, aid = aid, bvid = bvid)
+            if (generation != loadGeneration) return@launch
+            if (result.isSuccess) {
+                val url = result.data?.durl?.firstOrNull()?.url
+                if (url.isNullOrBlank()) {
+                    applyRemoteFailure(formatBiliError(BiliErrorCodes.PLAY_URL_EMPTY), generation)
+                    return@launch
+                }
+                val remoteSource = BiliPlaybackSource(
+                    url = url,
+                    headers = repository.buildPlayHeaders(),
+                    kind = BiliPlaybackSourceKind.REMOTE
+                )
+                applyRemoteSuccess(remoteSource, generation)
+                return@launch
+            }
+            applyRemoteFailure(formatBiliError(result.code, result.message), generation)
+        }
+    }
+
+    private fun applyRemoteSuccess(source: BiliPlaybackSource, generation: Long) {
+        if (generation != loadGeneration) return
+        _uiState.update { current ->
+            if (generation != loadGeneration) {
+                current
+            } else if (current.initialSource?.kind == BiliPlaybackSourceKind.PREVIEW) {
+                current.copy(
+                    isLoading = false,
+                    upgradeSource = source,
+                    isUpgradeLoading = false,
+                    upgradeErrorMessage = null,
+                    message = null
+                )
+            } else {
+                current.copy(
+                    isLoading = false,
+                    initialSource = source,
+                    upgradeSource = null,
+                    isUpgradeLoading = false,
+                    upgradeErrorMessage = null,
+                    message = null
+                )
+            }
+        }
+    }
+
+    private fun applyRemoteFailure(message: String, generation: Long) {
+        if (generation != loadGeneration) return
+        _uiState.update { current ->
+            if (generation != loadGeneration) {
+                current
+            } else if (current.initialSource?.kind == BiliPlaybackSourceKind.PREVIEW) {
+                current.copy(
+                    isLoading = false,
+                    upgradeSource = null,
+                    isUpgradeLoading = false,
+                    upgradeErrorMessage = message,
+                    message = null
+                )
+            } else {
+                current.copy(
+                    isLoading = false,
+                    upgradeSource = null,
+                    isUpgradeLoading = false,
+                    upgradeErrorMessage = null,
+                    message = message
+                )
+            }
+        }
+    }
+
     private fun applyDetailMeta(detail: com.lightningstudio.watchrss.sdk.bili.BiliVideoDetail, cid: Long?) {
         val title = detail.item.title?.trim()?.takeIf { it.isNotBlank() }
         val owner = detail.item.owner?.name?.trim()?.takeIf { it.isNotBlank() }
@@ -132,5 +262,13 @@ class BiliPlayerViewModel(
                 pageTitle = current.pageTitle ?: pageTitle
             )
         }
+    }
+
+    private fun previewSource(url: String): BiliPlaybackSource {
+        return BiliPlaybackSource(
+            url = url,
+            headers = emptyMap(),
+            kind = BiliPlaybackSourceKind.PREVIEW
+        )
     }
 }

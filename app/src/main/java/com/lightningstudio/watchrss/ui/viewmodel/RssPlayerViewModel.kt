@@ -24,14 +24,26 @@ class RssPlayerViewModel(
     fun loadPlayUrl() {
         val normalized = normalizePlayUrl(rawPlayUrl)
         if (normalized.isNullOrBlank()) {
-            _uiState.update { it.copy(isLoading = false, playUrl = null, message = "播放地址为空") }
+            _uiState.update {
+                it.copy(
+                    isLoading = false,
+                    initialSource = null,
+                    upgradeSource = null,
+                    message = "播放地址为空"
+                )
+            }
             return
         }
         _uiState.update {
             it.copy(
                 isLoading = false,
-                playUrl = normalized,
-                headers = emptyMap(),
+                initialSource = BiliPlaybackSource(
+                    url = normalized,
+                    kind = BiliPlaybackSourceKind.REMOTE
+                ),
+                upgradeSource = null,
+                isUpgradeLoading = false,
+                upgradeErrorMessage = null,
                 message = null
             )
         }

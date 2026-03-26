@@ -85,6 +85,8 @@ import com.lightningstudio.watchrss.ui.components.rememberPlayerVolumeState
 import com.lightningstudio.watchrss.ui.util.normalizeUserFacingMessage
 import com.lightningstudio.watchrss.ui.util.offlineToastMessageOrNull
 import com.lightningstudio.watchrss.ui.util.showAppToast
+import com.lightningstudio.watchrss.ui.viewmodel.BiliPlaybackSource
+import com.lightningstudio.watchrss.ui.viewmodel.BiliPlaybackSourceKind
 import com.lightningstudio.watchrss.ui.viewmodel.BiliPlayerUiState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -127,6 +129,8 @@ fun BiliPlayerScreen(
     onRetry: () -> Unit,
     onOpenWeb: () -> Unit,
     onPanStateChange: (Float, Float) -> Unit,
+    onPreviewSourceInvalidated: () -> Unit = {},
+    onUpgradeSourceActivated: () -> Unit = {},
     allowPan: Boolean = true,
     isActive: Boolean = true,
     digitalCrownVolumeEnabled: Boolean = true
@@ -149,6 +153,12 @@ fun BiliPlayerScreen(
     var isBuffering by remember { mutableStateOf(false) }
     var durationMs by remember { mutableStateOf(0) }
     var positionMs by remember { mutableStateOf(0) }
+    var activeSource by remember { mutableStateOf<BiliPlaybackSource?>(null) }
+    var completedPreviewSource by remember { mutableStateOf<BiliPlaybackSource?>(null) }
+    var pendingSeekPositionMs by remember { mutableStateOf(0) }
+    var pendingPreparedPlayWhenReady by remember { mutableStateOf(false) }
+    var pendingUpgradeActivation by remember { mutableStateOf<BiliPlaybackSource?>(null) }
+    var autoPlayInitialized by remember { mutableStateOf(false) }
     var scaleMode by remember { mutableStateOf(PlayerScaleMode.Standard) }
     var rotationAngle by remember { mutableStateOf(0f) }
     var rotationTargetDeg by remember { mutableStateOf(0f) }
@@ -161,14 +171,14 @@ fun BiliPlayerScreen(
     var viewSize by remember { mutableStateOf(IntSize.Zero) }
     var videoSize by remember { mutableStateOf(IntSize.Zero) }
     var videoRotation by remember { mutableStateOf(0) }
-    var lastUrl by remember { mutableStateOf<String?>(null) }
-    var playWhenReady by remember { mutableStateOf(!uiState.playUrl.isNullOrBlank()) }
+    var playWhenReady by remember { mutableStateOf(false) }
     var panOffsetX by remember { mutableStateOf(0f) }
     val panAnimator = remember { Animatable(0f) }
     val panDecay = remember { exponentialDecay<Float>() }
     val panScope = rememberCoroutineScope()
     val panFlingJob = remember { mutableStateOf<Job?>(null) }
     val volumeState = rememberPlayerVolumeState()
+    val hasConfiguredSource = uiState.initialSource != null || uiState.upgradeSource != null
     // Keep-screen-on is a window-level flag, not a per-composable flag.
     // In pager-based players there may be multiple BiliPlayerScreen instances
     // composed at the same time for preloading/adjacent pages, but they still
@@ -178,9 +188,9 @@ fun BiliPlayerScreen(
     // video is actively playing. `isActive` gates the effect so only the page
     // that owns user focus can add or clear FLAG_KEEP_SCREEN_ON.
     val shouldKeepScreenOn = isActive &&
-        !uiState.playUrl.isNullOrBlank() &&
+        hasConfiguredSource &&
         playbackError.isNullOrBlank() &&
-        (isPlaying || isBuffering || (!isPrepared && surfaceRef != null))
+        (isPlaying || isBuffering || activeSource != null || (!isPrepared && surfaceRef != null))
 
     fun stopPanFling() {
         panFlingJob.value?.cancel()
@@ -190,6 +200,7 @@ fun BiliPlayerScreen(
     fun pausePlayback(clearPlayWhenReady: Boolean = true) {
         if (clearPlayWhenReady) {
             playWhenReady = false
+            pendingPreparedPlayWhenReady = false
         }
         val player = mediaPlayerRef
         if (player != null) {
@@ -213,6 +224,7 @@ fun BiliPlayerScreen(
             if (player.isPlaying) {
                 player.pause()
                 playWhenReady = false
+                pendingPreparedPlayWhenReady = false
                 isPlaying = false
                 isBuffering = false
                 val current = player.currentPosition
@@ -222,6 +234,7 @@ fun BiliPlayerScreen(
             } else if (isPrepared) {
                 player.start()
                 playWhenReady = true
+                pendingPreparedPlayWhenReady = true
                 isPlaying = true
                 isBuffering = false
             }
@@ -238,10 +251,21 @@ fun BiliPlayerScreen(
             surfaceRef?.release()
             surfaceRef = null
             textureViewRef = null
+            activeSource = null
         }
     }
 
-    LaunchedEffect(uiState.playUrl) {
+    LaunchedEffect(uiState.initialSource, uiState.upgradeSource) {
+        val completedPreview = completedPreviewSource
+        if (completedPreview != null && uiState.initialSource != completedPreview) {
+            completedPreviewSource = null
+        }
+    }
+
+    LaunchedEffect(uiState.isLoading, uiState.initialSource, uiState.upgradeSource) {
+        if (!uiState.isLoading || hasConfiguredSource) {
+            return@LaunchedEffect
+        }
         playbackError = null
         isPrepared = false
         isPlaying = false
@@ -249,8 +273,13 @@ fun BiliPlayerScreen(
         positionMs = 0
         videoSize = IntSize.Zero
         videoRotation = 0
-        lastUrl = null
-        playWhenReady = !uiState.playUrl.isNullOrBlank()
+        activeSource = null
+        completedPreviewSource = null
+        pendingSeekPositionMs = 0
+        pendingPreparedPlayWhenReady = false
+        pendingUpgradeActivation = null
+        playWhenReady = false
+        autoPlayInitialized = false
         controlsVisible = true
         stopPanFling()
         panOffsetX = 0f
@@ -259,17 +288,31 @@ fun BiliPlayerScreen(
         mediaPlayerRef?.reset()
     }
 
-    LaunchedEffect(uiState.playUrl, uiState.headers) {
-        val targetUrl = uiState.playUrl
-        if (targetUrl.isNullOrBlank()) {
+    LaunchedEffect(hasConfiguredSource, uiState.isLoading) {
+        if (uiState.isLoading && !hasConfiguredSource) {
+            autoPlayInitialized = false
+            playWhenReady = false
+            return@LaunchedEffect
+        }
+        if (hasConfiguredSource && !autoPlayInitialized) {
+            playWhenReady = true
+            pendingPreparedPlayWhenReady = true
+            autoPlayInitialized = true
+        }
+    }
+
+    LaunchedEffect(activeSource) {
+        val targetSource = activeSource
+        if (targetSource == null) {
             videoRotation = 0
             return@LaunchedEffect
         }
-        val headers = uiState.headers ?: emptyMap()
         val rotation = withContext(Dispatchers.IO) {
-            readVideoRotation(targetUrl, headers)
+            readVideoRotation(targetSource.url, targetSource.headers)
         }
-        videoRotation = rotation
+        if (activeSource == targetSource) {
+            videoRotation = rotation
+        }
     }
 
     val isVerticalPan = remember(videoSize, videoRotation) {
@@ -427,18 +470,65 @@ fun BiliPlayerScreen(
         }
     }
 
-    fun prepareMediaPlayer(surface: Surface, targetUrl: String) {
-        val headers = uiState.headers ?: emptyMap()
+    fun handleSourceFailure(source: BiliPlaybackSource) {
+        val player = mediaPlayerRef
+        val currentPosition = runCatching { player?.currentPosition ?: positionMs }
+            .getOrDefault(positionMs)
+            .coerceAtLeast(0)
+        positionMs = currentPosition
+        isPrepared = false
+        isPlaying = false
+        isBuffering = false
+        activeSource = null
+        if (source.kind == BiliPlaybackSourceKind.PREVIEW) {
+            completedPreviewSource = source
+            pendingSeekPositionMs = currentPosition
+            pendingPreparedPlayWhenReady = playWhenReady
+            playbackError = null
+            pendingUpgradeActivation = null
+            isBuffering = uiState.upgradeSource != null ||
+                uiState.isUpgradeLoading ||
+                uiState.initialSource?.kind == BiliPlaybackSourceKind.REMOTE
+            onPreviewSourceInvalidated()
+        } else {
+            playbackError = "播放失败"
+            pendingUpgradeActivation = null
+            playWhenReady = false
+        }
+    }
+
+    fun prepareMediaPlayer(
+        surface: Surface,
+        source: BiliPlaybackSource,
+        startPositionMs: Int = 0,
+        shouldPlay: Boolean = playWhenReady,
+        activatingUpgrade: Boolean = false
+    ) {
         val player = mediaPlayerRef ?: MediaPlayer().also { mediaPlayerRef = it }
+        activeSource = source
+        pendingSeekPositionMs = startPositionMs.coerceAtLeast(0)
+        pendingPreparedPlayWhenReady = shouldPlay
+        pendingUpgradeActivation = if (activatingUpgrade) source else null
         isPrepared = false
         isPlaying = false
         isBuffering = true
         playbackError = null
         player.reset()
         player.setOnPreparedListener { mp ->
+            if (activeSource != source) {
+                return@setOnPreparedListener
+            }
             isPrepared = true
-            isBuffering = false
-            durationMs = mp.duration.coerceAtLeast(0)
+            val duration = mp.duration.coerceAtLeast(0)
+            durationMs = duration
+            val seekTarget = pendingSeekPositionMs.coerceIn(0, if (duration > 0) duration else pendingSeekPositionMs)
+            if (seekTarget > 0) {
+                runCatching { mp.seekTo(seekTarget) }
+                positionMs = seekTarget
+            } else {
+                positionMs = 0
+            }
+            pendingSeekPositionMs = 0
             videoSize = IntSize(mp.videoWidth, mp.videoHeight)
             updateTextureTransform(
                 textureViewRef,
@@ -449,10 +539,15 @@ fun BiliPlayerScreen(
                 panOffsetX,
                 isVerticalPan
             )
+            if (pendingUpgradeActivation == source) {
+                onUpgradeSourceActivated()
+                pendingUpgradeActivation = null
+            }
+            isBuffering = false
             // prepareAsync() may complete after pager focus has already moved to
             // another page. Requiring both isActive and playWhenReady avoids an
             // off-screen page auto-starting just because it finished preparing.
-            if (isActive && playWhenReady) {
+            if (isActive && pendingPreparedPlayWhenReady) {
                 mp.start()
                 isPlaying = true
             } else {
@@ -472,9 +567,23 @@ fun BiliPlayerScreen(
             )
         }
         player.setOnCompletionListener {
+            val completedSource = activeSource ?: source
+            val currentPosition = runCatching { player.currentPosition }
+                .getOrDefault(positionMs)
+                .coerceAtLeast(0)
+            positionMs = currentPosition
             isPlaying = false
-            isBuffering = false
-            playWhenReady = false
+            if (completedSource.kind == BiliPlaybackSourceKind.PREVIEW) {
+                completedPreviewSource = completedSource
+                pendingSeekPositionMs = currentPosition.coerceAtLeast(durationMs)
+                pendingPreparedPlayWhenReady = playWhenReady
+                isPrepared = false
+                isBuffering = uiState.isUpgradeLoading || uiState.upgradeSource != null
+                activeSource = null
+            } else {
+                isBuffering = false
+                playWhenReady = false
+            }
         }
         player.setOnInfoListener { _, what, _ ->
             when (what) {
@@ -485,39 +594,81 @@ fun BiliPlayerScreen(
             false
         }
         player.setOnErrorListener { _, _, _ ->
-            playbackError = "播放失败"
-            isBuffering = false
-            isPlaying = false
-            playWhenReady = false
+            handleSourceFailure(source)
             true
         }
         player.setSurface(surface)
         try {
-            player.setDataSource(context, Uri.parse(targetUrl), headers)
+            player.setDataSource(context, Uri.parse(source.url), source.headers)
             player.prepareAsync()
-        } catch (e: Exception) {
-            playbackError = "播放失败"
-            isBuffering = false
-            isPlaying = false
+        } catch (_: Exception) {
+            handleSourceFailure(source)
         }
     }
 
-    LaunchedEffect(uiState.playUrl, uiState.headers, uiState.isLoading, surfaceRef) {
+    LaunchedEffect(
+        uiState.initialSource,
+        uiState.upgradeSource,
+        uiState.isLoading,
+        surfaceRef,
+        activeSource,
+        completedPreviewSource
+    ) {
         if (uiState.isLoading) {
             return@LaunchedEffect
         }
-        val targetUrl = uiState.playUrl
         val surface = surfaceRef
-        if (!targetUrl.isNullOrBlank() && surface != null && (targetUrl != lastUrl || !isPrepared)) {
-            if (targetUrl != lastUrl || !playbackError.isNullOrBlank()) {
-                playWhenReady = true
+        val currentSource = activeSource
+        val upgradeSource = uiState.upgradeSource
+        if (surface == null) {
+            return@LaunchedEffect
+        }
+        if (currentSource?.kind == BiliPlaybackSourceKind.PREVIEW &&
+            upgradeSource != null &&
+            currentSource != upgradeSource
+        ) {
+            val player = mediaPlayerRef
+            val resumePosition = runCatching { player?.currentPosition ?: positionMs }
+                .getOrDefault(positionMs)
+                .coerceAtLeast(0)
+            val shouldPlay = runCatching { player?.isPlaying ?: playWhenReady }
+                .getOrDefault(playWhenReady)
+            prepareMediaPlayer(
+                surface = surface,
+                source = upgradeSource,
+                startPositionMs = resumePosition,
+                shouldPlay = shouldPlay,
+                activatingUpgrade = true
+            )
+            return@LaunchedEffect
+        }
+        if (currentSource != null) {
+            return@LaunchedEffect
+        }
+        val nextInitialSource = uiState.initialSource
+            ?.takeUnless {
+                it.kind == BiliPlaybackSourceKind.PREVIEW && it == completedPreviewSource
             }
-            lastUrl = targetUrl
-            prepareMediaPlayer(surface, targetUrl)
+        val nextSource = upgradeSource ?: nextInitialSource ?: return@LaunchedEffect
+        prepareMediaPlayer(
+            surface = surface,
+            source = nextSource,
+            startPositionMs = pendingSeekPositionMs,
+            shouldPlay = pendingPreparedPlayWhenReady || playWhenReady,
+            activatingUpgrade = upgradeSource != null
+        )
+    }
+
+    LaunchedEffect(uiState.upgradeSource, activeSource) {
+        if (activeSource?.kind == BiliPlaybackSourceKind.PREVIEW) {
+            return@LaunchedEffect
+        }
+        if (uiState.upgradeSource == null) {
+            pendingUpgradeActivation = null
         }
     }
 
-    LaunchedEffect(mediaPlayerRef, isPrepared) {
+    LaunchedEffect(mediaPlayerRef, isPrepared, isActive) {
         while (isActive) {
             val player = mediaPlayerRef
             if (player != null && isPrepared) {
@@ -566,7 +717,8 @@ fun BiliPlayerScreen(
             )
             .background(Color.Black)
     ) {
-        if (!uiState.playUrl.isNullOrBlank()) {
+        val showPlayerSurface = activeSource != null || hasConfiguredSource || uiState.isLoading
+        if (showPlayerSurface) {
             AndroidView(
                 factory = {
                     TextureView(context).apply {
@@ -695,18 +847,27 @@ fun BiliPlayerScreen(
             )
         }
 
+        val deferredUpgradeError = uiState.upgradeErrorMessage?.takeIf {
+            playbackError.isNullOrBlank() &&
+                uiState.message.isNullOrBlank() &&
+                activeSource == null &&
+                uiState.upgradeSource == null &&
+                completedPreviewSource != null
+        }
+        val rawErrorText = playbackError ?: uiState.message ?: deferredUpgradeError
         val errorText = normalizeUserFacingMessage(
             context,
-            playbackError ?: uiState.message
-        )?.toString() ?: (playbackError ?: uiState.message)
+            rawErrorText
+        )?.toString() ?: rawErrorText
         LaunchedEffect(errorText) {
             offlineToastMessageOrNull(context, errorText)?.let { message ->
                 showAppToast(context, message)
             }
         }
-        val showLoading = uiState.isLoading ||
-            (!isPrepared && !uiState.playUrl.isNullOrBlank()) ||
-            isBuffering
+        val showLoading = (uiState.isLoading && activeSource == null) ||
+            (activeSource != null && !isPrepared) ||
+            isBuffering ||
+            (activeSource == null && errorText.isNullOrBlank() && (uiState.isUpgradeLoading || uiState.upgradeSource != null))
         if (showLoading && errorText.isNullOrBlank()) {
             WatchCircularProgressIndicator(
                 color = MaterialTheme.colorScheme.onSurface,

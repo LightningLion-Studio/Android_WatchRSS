@@ -45,6 +45,8 @@ class BiliPlayerActivity : BaseWatchActivity() {
                             val safeLink = link ?: return@BiliPlayerScreen
                             WebViewActivity.open(this, safeLink)
                         },
+                        onPreviewSourceInvalidated = viewModel::onPreviewPlaybackFailed,
+                        onUpgradeSourceActivated = viewModel::promoteUpgradeSource,
                         onPanStateChange = { offsetX, rangeX ->
                             panOffsetX = offsetX
                             panRangeX = rangeX
