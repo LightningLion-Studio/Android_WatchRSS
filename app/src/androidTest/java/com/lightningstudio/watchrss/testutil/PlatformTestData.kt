@@ -24,6 +24,7 @@ import com.lightningstudio.watchrss.sdk.bili.BiliSearchResultItem
 import com.lightningstudio.watchrss.sdk.bili.BiliStat
 import com.lightningstudio.watchrss.sdk.bili.BiliToViewPage
 import com.lightningstudio.watchrss.sdk.bili.BiliTrendingWord
+import com.lightningstudio.watchrss.sdk.bili.BiliVideoInteraction
 import com.lightningstudio.watchrss.sdk.bili.BiliVideoDetail
 import com.lightningstudio.watchrss.sdk.bili.BiliSearchedVideo
 import com.lightningstudio.watchrss.sdk.douyin.DouyinContent
@@ -83,11 +84,15 @@ fun sampleBiliFeedPage(items: List<BiliItem> = listOf(sampleBiliItem())): BiliFe
     return BiliFeedPage(items = items, source = BiliFeedSource.WEB)
 }
 
-fun sampleBiliVideoDetail(item: BiliItem = sampleBiliItem()): BiliVideoDetail {
+fun sampleBiliVideoDetail(
+    item: BiliItem = sampleBiliItem(),
+    interaction: BiliVideoInteraction? = null
+): BiliVideoDetail {
     return BiliVideoDetail(
         item = item,
         desc = "这是一个用于自动化测试的 B 站详情",
-        pages = listOf(BiliPage(cid = item.cid, page = 1, part = "P1", duration = item.duration))
+        pages = listOf(BiliPage(cid = item.cid, page = 1, part = "P1", duration = item.duration)),
+        interaction = interaction
     )
 }
 

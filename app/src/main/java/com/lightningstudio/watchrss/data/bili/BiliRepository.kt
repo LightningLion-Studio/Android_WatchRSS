@@ -160,8 +160,61 @@ class BiliRepository(
         }
     }
 
-    override suspend fun fetchVideoDetail(aid: Long?, bvid: String?): BiliResult<BiliVideoDetail> =
-        safeCall { client.video.fetchView(aid = aid, bvid = bvid, useWbi = true) }
+    override suspend fun fetchVideoDetail(aid: Long?, bvid: String?): BiliResult<BiliVideoDetail> {
+        debugLogDetail(
+            phase = "start",
+            aid = aid,
+            bvid = bvid
+        )
+        val result = safeCall { client.video.fetchView(aid = aid, bvid = bvid, useWbi = true) }
+        debugLogDetail(
+            phase = "result",
+            aid = aid,
+            bvid = bvid,
+            result = result
+        )
+        return result
+    }
+
+    override suspend fun fetchRemoteInteractionState(
+        aid: Long?,
+        bvid: String?
+    ): BiliResult<BiliInteractionState> {
+        debugLogRelation(
+            phase = "start",
+            aid = aid,
+            bvid = bvid
+        )
+        val result = safeCall {
+            val relation = client.video.fetchRelation(aid = aid, bvid = bvid)
+            if (!relation.isSuccess) {
+                return@safeCall BiliResult(
+                    code = relation.code,
+                    message = relation.message,
+                    httpCode = relation.httpCode,
+                    requestMode = relation.requestMode
+                )
+            }
+            val data = relation.data ?: com.lightningstudio.watchrss.sdk.bili.BiliVideoInteraction()
+            BiliResult(
+                code = relation.code,
+                message = relation.message,
+                data = BiliInteractionState(
+                    isLiked = data.like == true,
+                    isCoined = data.coin == true
+                ),
+                httpCode = relation.httpCode,
+                requestMode = relation.requestMode
+            )
+        }
+        debugLogRelation(
+            phase = "result",
+            aid = aid,
+            bvid = bvid,
+            result = result
+        )
+        return result
+    }
 
     override suspend fun readLocalInteractionState(aid: Long?, bvid: String?): BiliInteractionState =
         withContext(Dispatchers.IO) {
@@ -888,6 +941,58 @@ class BiliRepository(
             "feed phase=$phase source=$sourcePart items=$countPart accessKey=${flags.hasAccessKey} " +
                 "sess=${flags.hasSessdata} csrf=${flags.hasCsrf} buvid3=${flags.hasBuvid3} " +
                 "buvid4=${flags.hasBuvid4} bnut=${flags.hasBNut} ticket=${flags.hasTicket}$resultPart"
+        )
+    }
+
+    private suspend fun debugLogDetail(
+        phase: String,
+        aid: Long?,
+        bvid: String?,
+        result: BiliResult<BiliVideoDetail>? = null
+    ) {
+        if (!DebugLogBuffer.isEnabled()) return
+        val flags = readDebugAccountFlags()
+        val interaction = result?.data?.interaction
+        val aidPart = result?.data?.item?.aid ?: aid
+        val bvidPart = result?.data?.item?.bvid ?: bvid
+        val interactionPart = if (interaction == null) {
+            " interaction=-"
+        } else {
+            " interaction.like=${interaction.like} interaction.coin=${interaction.coin} " +
+                "interaction.favorite=${interaction.favorite}"
+        }
+        val resultPart = result?.let {
+            " code=${it.code} http=${it.httpCode} mode=${it.requestMode} msg=${it.message}"
+        }.orEmpty()
+        DebugLogBuffer.log(
+            "bili",
+            "detail phase=$phase aid=$aidPart bvid=$bvidPart accessKey=${flags.hasAccessKey} " +
+                "sess=${flags.hasSessdata} csrf=${flags.hasCsrf} buvid3=${flags.hasBuvid3} " +
+                "buvid4=${flags.hasBuvid4} bnut=${flags.hasBNut} ticket=${flags.hasTicket}" +
+                "$interactionPart$resultPart"
+        )
+    }
+
+    private suspend fun debugLogRelation(
+        phase: String,
+        aid: Long?,
+        bvid: String?,
+        result: BiliResult<BiliInteractionState>? = null
+    ) {
+        if (!DebugLogBuffer.isEnabled()) return
+        val flags = readDebugAccountFlags()
+        val statePart = result?.data?.let {
+            " state.like=${it.isLiked} state.coin=${it.isCoined}"
+        }.orEmpty()
+        val resultPart = result?.let {
+            " code=${it.code} http=${it.httpCode} mode=${it.requestMode} msg=${it.message}"
+        }.orEmpty()
+        DebugLogBuffer.log(
+            "bili",
+            "relation phase=$phase aid=$aid bvid=$bvid accessKey=${flags.hasAccessKey} " +
+                "sess=${flags.hasSessdata} csrf=${flags.hasCsrf} buvid3=${flags.hasBuvid3} " +
+                "buvid4=${flags.hasBuvid4} bnut=${flags.hasBNut} ticket=${flags.hasTicket}" +
+                "$statePart$resultPart"
         )
     }
 

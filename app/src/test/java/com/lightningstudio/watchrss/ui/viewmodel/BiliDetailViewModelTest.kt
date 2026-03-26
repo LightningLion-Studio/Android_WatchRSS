@@ -15,6 +15,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -225,6 +226,74 @@ class BiliDetailViewModelTest {
     }
 
     @Test
+    fun loadDetail_syncsLikeAndCoinState_fromRemoteDetail_whenLoggedIn() = runTest {
+        val repo = TestBiliRepository(initialLoggedIn = true).apply {
+            val item = sampleBiliItem(aid = 41L, bvid = "BV41", cid = 501L)
+            videoDetailResult = BiliResult(
+                code = 0,
+                data = sampleBiliVideoDetail(item = item)
+            )
+            remoteInteractionStateResult = BiliResult(
+                code = 0,
+                data = BiliInteractionState(
+                    isLiked = false,
+                    isCoined = false
+                )
+            )
+            localInteractionStates["bv:BV41"] = BiliInteractionState(
+                isLiked = true,
+                isCoined = true
+            )
+        }
+
+        val viewModel = BiliDetailViewModel(
+            savedStateHandle = SavedStateHandle(mapOf("aid" to "41", "bvid" to "BV41")),
+            repository = repo,
+            rssRepository = TestRssRepository()
+        )
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isLiked)
+        assertFalse(viewModel.uiState.value.isCoined)
+        assertNull(repo.localInteractionStates["bv:BV41"])
+        assertEquals(listOf(41L to "BV41"), repo.remoteInteractionRequests)
+    }
+
+    @Test
+    fun loadDetail_keepsLocalInteractionState_whenNotLoggedIn() = runTest {
+        val repo = TestBiliRepository(initialLoggedIn = false).apply {
+            val item = sampleBiliItem(aid = 42L, bvid = "BV42", cid = 502L)
+            videoDetailResult = BiliResult(
+                code = 0,
+                data = sampleBiliVideoDetail(item = item)
+            )
+            remoteInteractionStateResult = BiliResult(
+                code = 0,
+                data = BiliInteractionState(
+                    isLiked = false,
+                    isCoined = false
+                )
+            )
+            localInteractionStates["bv:BV42"] = BiliInteractionState(
+                isLiked = true,
+                isCoined = true
+            )
+        }
+
+        val viewModel = BiliDetailViewModel(
+            savedStateHandle = SavedStateHandle(mapOf("aid" to "42", "bvid" to "BV42")),
+            repository = repo,
+            rssRepository = TestRssRepository()
+        )
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.isLiked)
+        assertTrue(viewModel.uiState.value.isCoined)
+        assertTrue(repo.localInteractionWriteRequests.isEmpty())
+        assertTrue(repo.remoteInteractionRequests.isEmpty())
+    }
+
+    @Test
     fun like_positive_updatesUiImmediately_and_runsActionWithoutWarmupGate() = runTest {
         val repo = TestBiliRepository(initialLoggedIn = true).apply {
             val item = sampleBiliItem(aid = 55L, bvid = "BV55", cid = 77L)
@@ -252,6 +321,7 @@ class BiliDetailViewModelTest {
         )
         assertEquals(
             listOf(
+                "relation:55:BV55",
                 "warmup:55:BV55:77",
                 "like:55:true"
             ),

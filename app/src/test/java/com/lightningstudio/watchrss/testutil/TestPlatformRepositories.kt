@@ -4,6 +4,7 @@ import com.lightningstudio.watchrss.data.bili.BiliInteractionState
 import com.lightningstudio.watchrss.data.bili.BiliPlaybackProgress
 import com.lightningstudio.watchrss.data.bili.BiliResolvedPlaybackSource
 import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
+import com.lightningstudio.watchrss.data.bili.BiliErrorCodes
 import com.lightningstudio.watchrss.data.douyin.DouyinErrorCodes
 import com.lightningstudio.watchrss.data.douyin.DouyinRepositoryContract
 import com.lightningstudio.watchrss.data.douyin.DouyinResult
@@ -19,6 +20,7 @@ import com.lightningstudio.watchrss.sdk.bili.BiliResult
 import com.lightningstudio.watchrss.sdk.bili.BiliSearchResponse
 import com.lightningstudio.watchrss.sdk.bili.BiliStat
 import com.lightningstudio.watchrss.sdk.bili.BiliTrendingWord
+import com.lightningstudio.watchrss.sdk.bili.BiliVideoInteraction
 import com.lightningstudio.watchrss.sdk.bili.BiliVideoDetail
 import com.lightningstudio.watchrss.sdk.bili.QrPollResult
 import com.lightningstudio.watchrss.sdk.bili.QrPollStatus
@@ -42,6 +44,8 @@ class TestBiliRepository(
         code = 0,
         data = sampleBiliVideoDetail(initialFeedItems.first())
     )
+    var remoteInteractionStateResult: BiliResult<BiliInteractionState> =
+        BiliResult(code = BiliErrorCodes.REQUEST_FAILED, message = "relation_not_stubbed")
     var likeResult: BiliResult<Unit> = BiliResult(code = 0, data = Unit)
     var coinResult: BiliResult<Boolean> = BiliResult(code = 0, data = false)
     var favoriteResult: BiliResult<Boolean> = BiliResult(code = 0, data = true)
@@ -85,6 +89,7 @@ class TestBiliRepository(
     val coinRequests = mutableListOf<Triple<Long, Int, Boolean>>()
     val localInteractionReadRequests = mutableListOf<Pair<Long?, String?>>()
     val localInteractionWriteRequests = mutableListOf<Triple<Long?, String?, BiliInteractionState>>()
+    val remoteInteractionRequests = mutableListOf<Pair<Long?, String?>>()
     val localInteractionStates = mutableMapOf<String, BiliInteractionState>()
     val playbackProgressRecords = mutableListOf<BiliPlaybackProgress>()
     val latestPlaybackProgressReadRequests = mutableListOf<Pair<Long?, String?>>()
@@ -104,6 +109,15 @@ class TestBiliRepository(
             delay(videoDetailDelayMs)
         }
         return videoDetailResult
+    }
+
+    override suspend fun fetchRemoteInteractionState(
+        aid: Long?,
+        bvid: String?
+    ): BiliResult<BiliInteractionState> {
+        remoteInteractionRequests += aid to bvid
+        callLog += "relation:$aid:$bvid"
+        return remoteInteractionStateResult
     }
 
     override suspend fun fetchPlayUrlMp4(
@@ -414,12 +428,14 @@ fun sampleBiliVideoDetail(
             part = "P1",
             duration = item.duration
         )
-    )
+    ),
+    interaction: BiliVideoInteraction? = null
 ): BiliVideoDetail {
     return BiliVideoDetail(
         item = item,
         desc = "测试简介",
-        pages = pages
+        pages = pages,
+        interaction = interaction
     )
 }
 

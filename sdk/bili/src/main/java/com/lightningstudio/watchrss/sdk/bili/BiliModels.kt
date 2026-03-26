@@ -38,7 +38,14 @@ data class BiliPage(
 data class BiliVideoDetail(
     val item: BiliItem,
     val desc: String? = null,
-    val pages: List<BiliPage> = emptyList()
+    val pages: List<BiliPage> = emptyList(),
+    val interaction: BiliVideoInteraction? = null
+)
+
+data class BiliVideoInteraction(
+    val like: Boolean? = null,
+    val coin: Boolean? = null,
+    val favorite: Boolean? = null
 )
 
 enum class BiliFeedSource {

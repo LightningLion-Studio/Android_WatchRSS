@@ -2,6 +2,7 @@ package com.lightningstudio.watchrss.testutil
 
 import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
 import com.lightningstudio.watchrss.data.bili.BiliErrorCodes
+import com.lightningstudio.watchrss.data.bili.BiliInteractionState
 import com.lightningstudio.watchrss.data.bili.BiliPlaybackProgress
 import com.lightningstudio.watchrss.data.bili.BiliResolvedPlaybackSource
 import com.lightningstudio.watchrss.sdk.bili.BiliAccount
@@ -85,6 +86,8 @@ class FakeBiliRepository(
             )
         )
     )
+    var remoteInteractionStateResult: BiliResult<BiliInteractionState> =
+        BiliResult(code = BiliErrorCodes.REQUEST_FAILED, message = "relation_not_stubbed")
     var resolvedPlaybackSourceValue: BiliResolvedPlaybackSource? = null
     var likeResult: BiliResult<Unit> = BiliResult(0, data = Unit)
     var coinResult: BiliResult<Boolean> = BiliResult(0, data = true)
@@ -181,6 +184,7 @@ class FakeBiliRepository(
     val favoriteRequests = mutableListOf<Pair<Long, Boolean>>()
     val likeRequests = mutableListOf<Pair<Long, Boolean>>()
     val coinRequests = mutableListOf<Triple<Long, Int, Boolean>>()
+    val remoteInteractionRequests = mutableListOf<Pair<Long?, String?>>()
 
     override suspend fun isLoggedIn(): Boolean = loggedIn
 
@@ -224,6 +228,14 @@ class FakeBiliRepository(
 
     override suspend fun fetchVideoDetail(aid: Long?, bvid: String?): BiliResult<BiliVideoDetail> {
         return videoDetailResults[aid to bvid] ?: videoDetailResult
+    }
+
+    override suspend fun fetchRemoteInteractionState(
+        aid: Long?,
+        bvid: String?
+    ): BiliResult<BiliInteractionState> {
+        remoteInteractionRequests += aid to bvid
+        return remoteInteractionStateResult
     }
 
     override suspend fun fetchPlayUrlMp4(

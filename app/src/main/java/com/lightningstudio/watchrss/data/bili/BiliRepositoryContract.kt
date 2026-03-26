@@ -36,6 +36,10 @@ interface BiliRepositoryContract {
     suspend fun writeFeedCache(items: List<BiliItem>): Unit = unsupportedBiliRepositoryMethod()
     suspend fun fetchVideoDetail(aid: Long? = null, bvid: String? = null): BiliResult<BiliVideoDetail> =
         unsupportedBiliRepositoryMethod()
+    suspend fun fetchRemoteInteractionState(
+        aid: Long? = null,
+        bvid: String? = null
+    ): BiliResult<BiliInteractionState> = unsupportedBiliRepositoryMethod()
     suspend fun readLocalInteractionState(aid: Long? = null, bvid: String? = null): BiliInteractionState =
         unsupportedBiliRepositoryMethod()
     suspend fun writeLocalInteractionState(

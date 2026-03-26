@@ -33,9 +33,49 @@ class BiliVideo(private val client: BiliClient) {
         return BiliResult(status.code, status.message, detail)
     }
 
+    suspend fun fetchRelation(
+        aid: Long? = null,
+        bvid: String? = null
+    ): BiliResult<BiliVideoInteraction> {
+        if (aid == null && bvid.isNullOrBlank()) {
+            return BiliResult(-1, "missing_id")
+        }
+        val params = mutableMapOf<String, String>()
+        if (aid != null) params["aid"] = aid.toString()
+        if (!bvid.isNullOrBlank()) params["bvid"] = bvid
+
+        val response = client.httpClient.get(
+            "${client.config.webBaseUrl}/x/web-interface/archive/relation",
+            params = params
+        )
+        val status = parseBiliStatus(response, REQUEST_MODE_WEB)
+        if (status.code != 0) {
+            return BiliResult(
+                code = status.code,
+                message = status.message,
+                httpCode = status.httpCode,
+                requestMode = status.requestMode
+            )
+        }
+        val data = status.data?.asObjectOrNull() ?: return BiliResult(
+            code = -1,
+            message = "empty_data",
+            httpCode = status.httpCode,
+            requestMode = status.requestMode
+        )
+        return BiliResult(
+            code = status.code,
+            message = status.message,
+            data = data.toVideoInteraction() ?: BiliVideoInteraction(),
+            httpCode = status.httpCode,
+            requestMode = status.requestMode
+        )
+    }
+
     private fun parseVideoDetail(data: JsonObject): BiliVideoDetail {
         val ownerObj = data.objOrNull("owner")
         val statObj = data.objOrNull("stat")
+        val reqUserObj = data.objOrNull("req_user")
         val item = BiliItem(
             aid = data.longOrNull("aid"),
             bvid = data.stringOrNull("bvid"),
@@ -77,7 +117,33 @@ class BiliVideo(private val client: BiliClient) {
         return BiliVideoDetail(
             item = item,
             desc = data.stringOrNull("desc"),
-            pages = pages
+            pages = pages,
+            interaction = reqUserObj?.toVideoInteraction()
         )
+    }
+
+    private fun JsonObject.toVideoInteraction(): BiliVideoInteraction? {
+        val like = flagOrNull("like")
+        val coin = flagOrNull("coin")
+        val favorite = flagOrNull("favorite")
+        if (like == null && coin == null && favorite == null) {
+            return null
+        }
+        return BiliVideoInteraction(
+            like = like,
+            coin = coin,
+            favorite = favorite
+        )
+    }
+
+    private fun JsonObject.flagOrNull(key: String): Boolean? {
+        booleanOrNull(key)?.let { return it }
+        longOrNull(key)?.let { return it > 0L }
+        intOrNull(key)?.let { return it > 0 }
+        return stringOrNull(key)?.toLongOrNull()?.let { it > 0L }
+    }
+
+    private companion object {
+        private const val REQUEST_MODE_WEB = "web"
     }
 }

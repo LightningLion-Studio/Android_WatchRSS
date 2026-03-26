@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.lightningstudio.watchrss.data.bili.BiliInteractionState
 import com.lightningstudio.watchrss.data.bili.formatBiliError
 import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
+import com.lightningstudio.watchrss.debug.DebugLogBuffer
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.rss.ExternalSavedItem
 import com.lightningstudio.watchrss.data.rss.RssItem
@@ -67,6 +68,7 @@ class BiliDetailViewModel(
                 val detail = result.data
                 val safeAid = detail?.item?.aid ?: aid
                 val safeBvid = detail?.item?.bvid ?: bvid
+                val isLoggedIn = repository.isLoggedIn()
                 val latestPlayback = repository.readLatestPlaybackProgress(
                     aid = safeAid,
                     bvid = safeBvid
@@ -80,6 +82,26 @@ class BiliDetailViewModel(
                     aid = safeAid,
                     bvid = safeBvid
                 )
+                val remoteInteractionState = if (isLoggedIn && hasVideoIdentity(safeAid, safeBvid)) {
+                    repository.fetchRemoteInteractionState(
+                        aid = safeAid,
+                        bvid = safeBvid
+                    ).data
+                } else {
+                    null
+                }
+                val resolvedInteractionState = resolveInteractionState(
+                    detail = detail,
+                    localState = interactionState,
+                    remoteState = remoteInteractionState,
+                    isLoggedIn = isLoggedIn
+                )
+                logInteractionResolution(
+                    detail = detail,
+                    localState = interactionState,
+                    remoteState = remoteInteractionState,
+                    resolvedState = resolvedInteractionState
+                )
                 _uiState.update {
                     val selectedPageIndex = if (hasUserSelectedPage) {
                         clampPageIndex(detail?.pages, it.selectedPageIndex)
@@ -90,9 +112,16 @@ class BiliDetailViewModel(
                         isLoading = false,
                         detail = detail,
                         selectedPageIndex = selectedPageIndex,
-                        isLiked = interactionState.isLiked,
-                        isCoined = interactionState.isCoined,
+                        isLiked = resolvedInteractionState.isLiked,
+                        isCoined = resolvedInteractionState.isCoined,
                         message = null
+                    )
+                }
+                if (resolvedInteractionState != interactionState) {
+                    repository.writeLocalInteractionState(
+                        aid = safeAid,
+                        bvid = safeBvid,
+                        state = resolvedInteractionState
                     )
                 }
                 scheduleWarmupForSelection()
@@ -313,6 +342,47 @@ class BiliDetailViewModel(
                 isCoined = state.isCoined
             )
         }
+    }
+
+    private fun resolveInteractionState(
+        detail: BiliVideoDetail?,
+        localState: BiliInteractionState,
+        remoteState: BiliInteractionState?,
+        isLoggedIn: Boolean
+    ): BiliInteractionState {
+        if (!isLoggedIn) return localState
+        if (remoteState != null) return remoteState
+        val remoteInteraction = detail?.interaction ?: return localState
+        if (remoteInteraction.like == null && remoteInteraction.coin == null) {
+            return localState
+        }
+        return BiliInteractionState(
+            isLiked = remoteInteraction.like ?: localState.isLiked,
+            isCoined = remoteInteraction.coin ?: localState.isCoined
+        )
+    }
+
+    private suspend fun logInteractionResolution(
+        detail: BiliVideoDetail?,
+        localState: BiliInteractionState,
+        remoteState: BiliInteractionState?,
+        resolvedState: BiliInteractionState
+    ) {
+        if (!DebugLogBuffer.isEnabled()) return
+        val remote = detail?.interaction
+        DebugLogBuffer.log(
+            "bili_detail_vm",
+            "aid=${detail?.item?.aid ?: aid} bvid=${detail?.item?.bvid ?: bvid} " +
+                "loggedIn=${repository.isLoggedIn()} " +
+                "local.like=${localState.isLiked} local.coin=${localState.isCoined} " +
+                "remoteQuery.like=${remoteState?.isLiked} remoteQuery.coin=${remoteState?.isCoined} " +
+                "remote.like=${remote?.like} remote.coin=${remote?.coin} remote.favorite=${remote?.favorite} " +
+                "resolved.like=${resolvedState.isLiked} resolved.coin=${resolvedState.isCoined}"
+        )
+    }
+
+    private fun hasVideoIdentity(aid: Long?, bvid: String?): Boolean {
+        return aid != null || !bvid.isNullOrBlank()
     }
 
     private suspend fun persistInteractionState(
