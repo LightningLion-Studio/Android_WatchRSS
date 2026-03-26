@@ -223,7 +223,9 @@ private fun RubberBandOverscrollContainer(content: @Composable () -> Unit) {
                 flingImpactLocked = false
                 if (abs(rawOverscrollY) >= 0.5f) {
                     startRebound()
-                    return available
+                    // 仅触发回弹，不提前吞掉子滚动容器的 fling，
+                    // 否则快速甩手时会出现“撞一下就停住”的感觉。
+                    return Velocity.Zero
                 }
                 return Velocity.Zero
             }
