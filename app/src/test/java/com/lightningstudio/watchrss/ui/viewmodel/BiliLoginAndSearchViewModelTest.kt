@@ -19,22 +19,48 @@ class BiliLoginAndSearchViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     @Test
-    fun startLogin_successfullyPollsQrState() = runTest {
+    fun startLogin_prefersTvQr_and_successfullyPollsQrState() = runTest {
         val repo = TestBiliRepository().apply {
-            qrPollResult = QrPollResult(status = QrPollStatus.SUCCESS, rawCode = 0)
+            tvQrPollResult = QrPollResult(status = QrPollStatus.SUCCESS, rawCode = 0)
         }
         val viewModel = BiliLoginViewModel(repo)
 
         viewModel.startLogin()
         advanceUntilIdle()
 
-        assertEquals("test-key", viewModel.uiState.value.qrKey)
+        assertEquals("tv-test-auth", viewModel.uiState.value.pollToken)
+        assertEquals(BiliQrLoginMode.TV, viewModel.uiState.value.loginMode)
+        assertEquals(1, repo.requestTvQrCodeCalls)
+        assertEquals(0, repo.requestWebQrCodeCalls)
 
         advanceTimeBy(2_100)
         advanceUntilIdle()
 
         assertEquals(true, viewModel.uiState.value.isSuccess)
         assertEquals("登录成功", viewModel.uiState.value.message)
+        assertEquals("tv-test-auth", repo.lastTvPollToken)
+    }
+
+    @Test
+    fun startLogin_fallsBackToWebQr_whenTvQrUnavailable() = runTest {
+        val repo = TestBiliRepository().apply {
+            tvQrCode = null
+            webQrPollResult = QrPollResult(status = QrPollStatus.SUCCESS, rawCode = 0)
+        }
+        val viewModel = BiliLoginViewModel(repo)
+
+        viewModel.startLogin()
+        advanceUntilIdle()
+
+        assertEquals("web-test-key", viewModel.uiState.value.pollToken)
+        assertEquals(BiliQrLoginMode.WEB, viewModel.uiState.value.loginMode)
+        assertEquals(1, repo.requestTvQrCodeCalls)
+        assertEquals(1, repo.requestWebQrCodeCalls)
+
+        advanceTimeBy(2_100)
+        advanceUntilIdle()
+
+        assertEquals("web-test-key", repo.lastWebPollToken)
     }
 
     @Test

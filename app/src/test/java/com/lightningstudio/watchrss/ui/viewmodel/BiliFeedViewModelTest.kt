@@ -59,6 +59,35 @@ class BiliFeedViewModelTest {
     }
 
     @Test
+    fun refresh_withEmptyFreshFeed_keepsExistingCache_and_doesNotOverwriteIt() = runTest {
+        val cached = listOf(
+            sampleBiliItem(aid = 1L, bvid = "BV-cache-1", title = "缓存视频1"),
+            sampleBiliItem(aid = 2L, bvid = "BV-cache-2", title = "缓存视频2"),
+            sampleBiliItem(aid = 3L, bvid = "BV-cache-3", title = "缓存视频3"),
+            sampleBiliItem(aid = 4L, bvid = "BV-cache-4", title = "缓存视频4"),
+            sampleBiliItem(aid = 5L, bvid = "BV-cache-5", title = "缓存视频5"),
+            sampleBiliItem(aid = 6L, bvid = "BV-cache-6", title = "缓存视频6")
+        )
+        val repo = TestBiliRepository(initialLoggedIn = true, initialFeedItems = cached).apply {
+            feedResult = com.lightningstudio.watchrss.sdk.bili.BiliResult(
+                code = 0,
+                data = com.lightningstudio.watchrss.sdk.bili.BiliFeedPage(
+                    items = emptyList(),
+                    source = com.lightningstudio.watchrss.sdk.bili.BiliFeedSource.APP
+                )
+            )
+        }
+        val viewModel = BiliFeedViewModel(repo)
+        advanceUntilIdle()
+
+        viewModel.refresh()
+        advanceUntilIdle()
+
+        assertEquals(cached.mapNotNull { it.aid }, viewModel.uiState.value.items.mapNotNull { it.aid })
+        assertEquals(0, repo.writtenFeedCaches.size)
+    }
+
+    @Test
     fun favorite_and_watchLater_syncLocalSavedState() = runTest {
         val platformRepo = TestBiliRepository(initialLoggedIn = true)
         val rssRepo = TestRssRepository()

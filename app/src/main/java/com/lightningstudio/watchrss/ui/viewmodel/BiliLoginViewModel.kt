@@ -14,9 +14,15 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
+enum class BiliQrLoginMode {
+    TV,
+    WEB
+}
+
 data class BiliLoginUiState(
     val qrUrl: String? = null,
-    val qrKey: String? = null,
+    val pollToken: String? = null,
+    val loginMode: BiliQrLoginMode? = null,
     val status: QrPollStatus = QrPollStatus.PENDING,
     val isLoading: Boolean = false,
     val isSuccess: Boolean = false,
@@ -34,8 +40,24 @@ class BiliLoginViewModel(
         viewModelScope.launch {
             pollingJob?.cancel()
             _uiState.update { it.copy(isLoading = true, message = null, isSuccess = false) }
-            val qr = repository.requestWebQrCode()
-            if (qr == null) {
+            val tvQr = repository.requestTvQrCode()
+            if (tvQr != null) {
+                _uiState.update {
+                    it.copy(
+                        qrUrl = tvQr.url,
+                        pollToken = tvQr.authCode,
+                        loginMode = BiliQrLoginMode.TV,
+                        isLoading = false,
+                        status = QrPollStatus.PENDING,
+                        message = null
+                    )
+                }
+                startPolling(tvQr.authCode, BiliQrLoginMode.TV)
+                return@launch
+            }
+
+            val webQr = repository.requestWebQrCode()
+            if (webQr == null) {
                 _uiState.update {
                     it.copy(isLoading = false, message = formatBiliError(BiliErrorCodes.QR_REQUEST_FAILED))
                 }
@@ -43,14 +65,15 @@ class BiliLoginViewModel(
             }
             _uiState.update {
                 it.copy(
-                    qrUrl = qr.url,
-                    qrKey = qr.qrKey,
+                    qrUrl = webQr.url,
+                    pollToken = webQr.qrKey,
+                    loginMode = BiliQrLoginMode.WEB,
                     isLoading = false,
                     status = QrPollStatus.PENDING,
                     message = null
                 )
             }
-            startPolling(qr.qrKey)
+            startPolling(webQr.qrKey, BiliQrLoginMode.WEB)
         }
     }
 
@@ -76,11 +99,14 @@ class BiliLoginViewModel(
         _uiState.update { it.copy(message = null) }
     }
 
-    private fun startPolling(qrKey: String) {
+    private fun startPolling(pollToken: String, loginMode: BiliQrLoginMode) {
         pollingJob?.cancel()
         pollingJob = viewModelScope.launch {
             while (isActive) {
-                val result = repository.pollWebQrCode(qrKey)
+                val result = when (loginMode) {
+                    BiliQrLoginMode.TV -> repository.pollTvQrCode(pollToken)
+                    BiliQrLoginMode.WEB -> repository.pollWebQrCode(pollToken)
+                }
                 when (result.status) {
                     QrPollStatus.SUCCESS -> {
                         _uiState.update {

@@ -66,7 +66,8 @@ class BiliFeedViewModel(
                 }
                 return@launch
             }
-            val useCachePrefix = _uiState.value.items.isEmpty()
+            val currentItems = _uiState.value.items
+            val useCachePrefix = currentItems.isEmpty()
             val cachedItems = if (useCachePrefix) repository.readFeedCache() else emptyList()
             val cachedPrefix = if (useCachePrefix) cachedItems.take(5) else emptyList()
             _uiState.update {
@@ -84,12 +85,15 @@ class BiliFeedViewModel(
             if (result.isSuccess) {
                 val page = result.data
                 val freshItems = page?.items.orEmpty()
-                val merged = if (cachedPrefix.isNotEmpty()) {
-                    mergeCachedAndFresh(cachedPrefix, freshItems)
-                } else {
-                    freshItems
+                val merged = when {
+                    freshItems.isEmpty() && cachedItems.isNotEmpty() -> cachedItems
+                    freshItems.isEmpty() && currentItems.isNotEmpty() -> currentItems
+                    cachedPrefix.isNotEmpty() -> mergeCachedAndFresh(cachedPrefix, freshItems)
+                    else -> freshItems
                 }
-                repository.writeFeedCache(freshItems)
+                if (freshItems.isNotEmpty()) {
+                    repository.writeFeedCache(freshItems)
+                }
                 updateFeed(page, merged)
             } else {
                 _uiState.update {
