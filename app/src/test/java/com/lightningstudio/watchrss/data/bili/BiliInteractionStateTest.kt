@@ -44,4 +44,9 @@ class BiliInteractionStateTest {
 
         assertTrue(cleared.isEmpty())
     }
+
+    @Test
+    fun hasAnyInteraction_includesFavoriteState() {
+        assertTrue(BiliInteractionState(isFavorited = true).hasAnyInteraction)
+    }
 }

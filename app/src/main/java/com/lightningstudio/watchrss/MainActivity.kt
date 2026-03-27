@@ -95,6 +95,7 @@ class MainActivity : BaseWatchActivity() {
             WatchRSSTheme {
                 val context = LocalContext.current
                 val channels by viewModel.channels.collectAsState()
+                val isRefreshing by viewModel.isRefreshing.collectAsState()
                 val message by viewModel.message.collectAsState()
                 val platformLoginState by viewModel.platformLoginState.collectAsState()
 
@@ -108,6 +109,8 @@ class MainActivity : BaseWatchActivity() {
                 HomeComposeScreen(
                     channels = channels,
                     platformLoginState = platformLoginState,
+                    isRefreshing = isRefreshing,
+                    onRefreshAll = viewModel::refreshAll,
                     openSwipeId = openSwipeKey,
                     onOpenSwipe = { openSwipeKey = it },
                     onCloseSwipe = { openSwipeKey = null },

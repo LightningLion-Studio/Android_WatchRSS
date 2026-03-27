@@ -30,6 +30,25 @@ import com.lightningstudio.watchrss.sdk.douyin.DouyinFeedPage
 import com.lightningstudio.watchrss.sdk.douyin.DouyinVideo
 import kotlinx.coroutines.delay
 
+data class TestBiliFavoriteRequest(
+    val aid: Long,
+    val add: Boolean,
+    val bvid: String?
+)
+
+data class TestBiliLikeRequest(
+    val aid: Long,
+    val like: Boolean,
+    val bvid: String?
+)
+
+data class TestBiliCoinRequest(
+    val aid: Long,
+    val multiply: Int,
+    val selectLike: Boolean,
+    val bvid: String?
+)
+
 class TestBiliRepository(
     initialLoggedIn: Boolean = false,
     initialFeedItems: List<BiliItem> = listOf(sampleBiliItem())
@@ -79,14 +98,14 @@ class TestBiliRepository(
     var webQrPollResult: QrPollResult = QrPollResult(status = QrPollStatus.SUCCESS, rawCode = 0)
     var logoutCalls = 0
     val writtenFeedCaches = mutableListOf<List<BiliItem>>()
-    val favoriteRequests = mutableListOf<Pair<Long, Boolean>>()
+    val favoriteRequests = mutableListOf<TestBiliFavoriteRequest>()
     val addToViewRequests = mutableListOf<Pair<Long?, String?>>()
     val cachedPreviewRequests = mutableListOf<Triple<Long?, String?, Long?>>()
     val clearedPreviewRequests = mutableListOf<Triple<Long?, String?, Long?>>()
     val warmupDetailRequests = mutableListOf<Triple<Long?, String?, Long?>>()
     val ensureInteractionRequests = mutableListOf<Triple<Long?, String?, Long?>>()
-    val likeRequests = mutableListOf<Pair<Long, Boolean>>()
-    val coinRequests = mutableListOf<Triple<Long, Int, Boolean>>()
+    val likeRequests = mutableListOf<TestBiliLikeRequest>()
+    val coinRequests = mutableListOf<TestBiliCoinRequest>()
     val localInteractionReadRequests = mutableListOf<Pair<Long?, String?>>()
     val localInteractionWriteRequests = mutableListOf<Triple<Long?, String?, BiliInteractionState>>()
     val remoteInteractionRequests = mutableListOf<Pair<Long?, String?>>()
@@ -218,21 +237,31 @@ class TestBiliRepository(
         writtenFeedCaches += items
     }
 
-    override suspend fun favorite(aid: Long, add: Boolean): BiliResult<Boolean> {
-        callLog += "favorite:$aid:$add"
-        favoriteRequests += aid to add
+    override suspend fun favorite(aid: Long, add: Boolean, bvid: String?): BiliResult<Boolean> {
+        callLog += "favorite:$aid:$add:$bvid"
+        favoriteRequests += TestBiliFavoriteRequest(aid = aid, add = add, bvid = bvid)
         return favoriteResult
     }
 
-    override suspend fun like(aid: Long, like: Boolean): BiliResult<Unit> {
-        callLog += "like:$aid:$like"
-        likeRequests += aid to like
+    override suspend fun like(aid: Long, like: Boolean, bvid: String?): BiliResult<Unit> {
+        callLog += "like:$aid:$like:$bvid"
+        likeRequests += TestBiliLikeRequest(aid = aid, like = like, bvid = bvid)
         return likeResult
     }
 
-    override suspend fun coin(aid: Long, multiply: Int, selectLike: Boolean): BiliResult<Boolean> {
-        callLog += "coin:$aid:$multiply:$selectLike"
-        coinRequests += Triple(aid, multiply, selectLike)
+    override suspend fun coin(
+        aid: Long,
+        multiply: Int,
+        selectLike: Boolean,
+        bvid: String?
+    ): BiliResult<Boolean> {
+        callLog += "coin:$aid:$multiply:$selectLike:$bvid"
+        coinRequests += TestBiliCoinRequest(
+            aid = aid,
+            multiply = multiply,
+            selectLike = selectLike,
+            bvid = bvid
+        )
         return coinResult
     }
 

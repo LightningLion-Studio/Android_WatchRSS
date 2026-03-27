@@ -15,8 +15,11 @@ data class BiliAccount(
     val wbiImgKey: String? = null,
     val wbiSubKey: String? = null,
     val buvidFetchedAtMillis: Long? = null,
+    val activatedBuvid3: String? = null,
+    val buvidActivatedAtMillis: Long? = null,
     val biliTicketFetchedAtMillis: Long? = null,
     val cookieRefreshCheckedAtMillis: Long? = null,
+    val browserProfile: BiliBrowserProfile? = null,
     val updatedAtMillis: Long? = null
 ) {
     fun csrfToken(): String? = cookies["bili_jct"]

@@ -147,7 +147,7 @@ class BiliFeedViewModel(
     fun favorite(item: BiliItem) {
         val aid = item.aid ?: return
         viewModelScope.launch {
-            val result = repository.favorite(aid, add = true)
+            val result = repository.favorite(aid, add = true, bvid = item.bvid)
             if (result.isSuccess) {
                 _uiState.update { it.copy(message = "已收藏") }
                 syncLocalSaved(item, SaveType.FAVORITE, true)

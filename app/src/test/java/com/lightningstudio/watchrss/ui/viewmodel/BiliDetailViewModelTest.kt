@@ -8,6 +8,8 @@ import com.lightningstudio.watchrss.sdk.bili.BiliPage
 import com.lightningstudio.watchrss.sdk.bili.BiliResult
 import com.lightningstudio.watchrss.testutil.MainDispatcherRule
 import com.lightningstudio.watchrss.testutil.TestBiliRepository
+import com.lightningstudio.watchrss.testutil.TestBiliCoinRequest
+import com.lightningstudio.watchrss.testutil.TestBiliLikeRequest
 import com.lightningstudio.watchrss.testutil.TestRssRepository
 import com.lightningstudio.watchrss.testutil.sampleBiliItem
 import com.lightningstudio.watchrss.testutil.sampleBiliVideoDetail
@@ -210,7 +212,8 @@ class BiliDetailViewModelTest {
             videoDetailResult = BiliResult(code = 0, data = sampleBiliVideoDetail(item))
             localInteractionStates["bv:BV31"] = BiliInteractionState(
                 isLiked = true,
-                isCoined = true
+                isCoined = true,
+                isFavorited = true
             )
         }
 
@@ -223,10 +226,11 @@ class BiliDetailViewModelTest {
 
         assertTrue(viewModel.uiState.value.isLiked)
         assertTrue(viewModel.uiState.value.isCoined)
+        assertTrue(viewModel.uiState.value.isFavorited)
     }
 
     @Test
-    fun loadDetail_syncsLikeAndCoinState_fromRemoteDetail_whenLoggedIn() = runTest {
+    fun loadDetail_mergesLocalAndRemoteInteractionState_whenLoggedIn() = runTest {
         val repo = TestBiliRepository(initialLoggedIn = true).apply {
             val item = sampleBiliItem(aid = 41L, bvid = "BV41", cid = 501L)
             videoDetailResult = BiliResult(
@@ -237,12 +241,14 @@ class BiliDetailViewModelTest {
                 code = 0,
                 data = BiliInteractionState(
                     isLiked = false,
-                    isCoined = false
+                    isCoined = true,
+                    isFavorited = true
                 )
             )
             localInteractionStates["bv:BV41"] = BiliInteractionState(
                 isLiked = true,
-                isCoined = true
+                isCoined = false,
+                isFavorited = false
             )
         }
 
@@ -253,9 +259,17 @@ class BiliDetailViewModelTest {
         )
         advanceUntilIdle()
 
-        assertFalse(viewModel.uiState.value.isLiked)
-        assertFalse(viewModel.uiState.value.isCoined)
-        assertNull(repo.localInteractionStates["bv:BV41"])
+        assertTrue(viewModel.uiState.value.isLiked)
+        assertTrue(viewModel.uiState.value.isCoined)
+        assertTrue(viewModel.uiState.value.isFavorited)
+        assertEquals(
+            BiliInteractionState(
+                isLiked = true,
+                isCoined = true,
+                isFavorited = true
+            ),
+            repo.localInteractionStates["bv:BV41"]
+        )
         assertEquals(listOf(41L to "BV41"), repo.remoteInteractionRequests)
     }
 
@@ -276,7 +290,8 @@ class BiliDetailViewModelTest {
             )
             localInteractionStates["bv:BV42"] = BiliInteractionState(
                 isLiked = true,
-                isCoined = true
+                isCoined = true,
+                isFavorited = true
             )
         }
 
@@ -289,6 +304,7 @@ class BiliDetailViewModelTest {
 
         assertTrue(viewModel.uiState.value.isLiked)
         assertTrue(viewModel.uiState.value.isCoined)
+        assertTrue(viewModel.uiState.value.isFavorited)
         assertTrue(repo.localInteractionWriteRequests.isEmpty())
         assertTrue(repo.remoteInteractionRequests.isEmpty())
     }
@@ -313,7 +329,7 @@ class BiliDetailViewModelTest {
 
         advanceUntilIdle()
 
-        assertEquals(listOf(Pair(55L, true)), repo.likeRequests)
+        assertEquals(listOf(TestBiliLikeRequest(aid = 55L, like = true, bvid = "BV55")), repo.likeRequests)
         assertTrue(repo.ensureInteractionRequests.isEmpty())
         assertEquals(
             BiliInteractionState(isLiked = true, isCoined = false),
@@ -323,7 +339,7 @@ class BiliDetailViewModelTest {
             listOf(
                 "relation:55:BV55",
                 "warmup:55:BV55:77",
-                "like:55:true"
+                "like:55:true:BV55"
             ),
             repo.callLog
         )
@@ -353,7 +369,10 @@ class BiliDetailViewModelTest {
         assertTrue(viewModel.uiState.value.isCoined)
         assertEquals("已投币", viewModel.uiState.value.message)
         assertTrue(repo.ensureInteractionRequests.isEmpty())
-        assertEquals(listOf(Triple(88L, 1, false)), repo.coinRequests)
+        assertEquals(
+            listOf(TestBiliCoinRequest(aid = 88L, multiply = 1, selectLike = false, bvid = "BV88")),
+            repo.coinRequests
+        )
     }
 
     @Test
@@ -376,6 +395,30 @@ class BiliDetailViewModelTest {
         assertEquals(
             BiliInteractionState(isLiked = false, isCoined = true),
             repo.localInteractionStates["bv:BV91"]
+        )
+    }
+
+    @Test
+    fun favorite_success_persistsFavoriteState_forFutureOpen() = runTest {
+        val repo = TestBiliRepository(initialLoggedIn = true).apply {
+            val item = sampleBiliItem(aid = 92L, bvid = "BV92", cid = 192L)
+            videoDetailResult = BiliResult(code = 0, data = sampleBiliVideoDetail(item))
+            favoriteResult = BiliResult(code = 0, data = true)
+        }
+        val viewModel = BiliDetailViewModel(
+            savedStateHandle = SavedStateHandle(mapOf("aid" to "92", "bvid" to "BV92", "cid" to "192")),
+            repository = repo,
+            rssRepository = TestRssRepository()
+        )
+        advanceUntilIdle()
+
+        viewModel.favorite()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.isFavorited)
+        assertEquals(
+            BiliInteractionState(isFavorited = true),
+            repo.localInteractionStates["bv:BV92"]
         )
     }
 
@@ -403,7 +446,7 @@ class BiliDetailViewModelTest {
         assertTrue(viewModel.uiState.value.isLiked)
         assertEquals("已点赞", viewModel.uiState.value.message)
         assertTrue(repo.ensureInteractionRequests.isEmpty())
-        assertEquals(listOf(Pair(77L, true)), repo.likeRequests)
+        assertEquals(listOf(TestBiliLikeRequest(aid = 77L, like = true, bvid = "BV77")), repo.likeRequests)
     }
 
     @Test
@@ -429,10 +472,10 @@ class BiliDetailViewModelTest {
         viewModel.like()
         advanceUntilIdle()
 
-        assertEquals(listOf(Pair(66L, false)), repo.likeRequests)
+        assertEquals(listOf(TestBiliLikeRequest(aid = 66L, like = false, bvid = "BV66")), repo.likeRequests)
         assertTrue(repo.ensureInteractionRequests.isEmpty())
         assertEquals("已取消点赞", viewModel.uiState.value.message)
-        assertEquals(listOf("like:66:false"), repo.callLog)
+        assertEquals(listOf("like:66:false:BV66"), repo.callLog)
         assertTrue(!viewModel.uiState.value.isLiked)
     }
 

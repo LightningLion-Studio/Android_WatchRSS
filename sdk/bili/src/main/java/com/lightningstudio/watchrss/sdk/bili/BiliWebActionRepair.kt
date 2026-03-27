@@ -61,14 +61,27 @@ class BiliWebActionRepair(
         reason: String
     ): ActionRepairResult = repairMutex.withLock {
         var account = client.accountStore?.read() ?: return@withLock ActionRepairResult()
-        val missingBuvid = account.cookies["buvid3"].isNullOrBlank() ||
+        val browserProfile = account.browserProfile
+        if (browserProfile == null || browserProfile.version != BiliBrowserProfile.CURRENT_VERSION) {
+            val profile = client.auth.ensureWebBrowserProfile()
+            BiliDebugLog.log(
+                "bili_action",
+                "action=$action repair=$reason browser_profile=${profile.version}"
+            )
+            account = client.accountStore?.read() ?: account
+        }
+        val currentBuvid3 = account.cookies["buvid3"] ?: account.buvid3
+        val missingBuvid = currentBuvid3.isNullOrBlank() ||
             account.cookies["buvid4"].isNullOrBlank() ||
             account.cookies["b_nut"].isNullOrBlank()
-        if (missingBuvid) {
+        val needsBuvidActivation = !currentBuvid3.isNullOrBlank() &&
+            account.activatedBuvid3 != currentBuvid3
+        if (missingBuvid || needsBuvidActivation) {
             val buvid = client.identity.fetchBuvid()
             BiliDebugLog.log(
                 "bili_action",
-                "action=$action repair=$reason buvid_fetch=${buvid != null}"
+                "action=$action repair=$reason buvid_fetch=${buvid != null} " +
+                    "activate=$needsBuvidActivation"
             )
         }
 

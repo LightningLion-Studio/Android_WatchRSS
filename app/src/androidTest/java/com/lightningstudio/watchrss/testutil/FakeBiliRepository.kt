@@ -304,21 +304,29 @@ class FakeBiliRepository(
         return ensureInteractionReadyResult
     }
 
-    override suspend fun like(aid: Long, like: Boolean): BiliResult<Unit> {
+    override suspend fun like(aid: Long, like: Boolean, bvid: String?): BiliResult<Unit> {
         likeRequests += aid to like
         return likeResult
     }
 
-    override suspend fun coin(aid: Long, multiply: Int, selectLike: Boolean): BiliResult<Boolean> {
+    override suspend fun coin(
+        aid: Long,
+        multiply: Int,
+        selectLike: Boolean,
+        bvid: String?
+    ): BiliResult<Boolean> {
         coinRequests += Triple(aid, multiply, selectLike)
         return coinResult
     }
 
-    override suspend fun triple(aid: Long): BiliResult<com.lightningstudio.watchrss.sdk.bili.BiliTripleResult> {
+    override suspend fun triple(
+        aid: Long,
+        bvid: String?
+    ): BiliResult<com.lightningstudio.watchrss.sdk.bili.BiliTripleResult> {
         return tripleResult
     }
 
-    override suspend fun favorite(aid: Long, add: Boolean): BiliResult<Boolean> {
+    override suspend fun favorite(aid: Long, add: Boolean, bvid: String?): BiliResult<Boolean> {
         favoriteRequests += aid to add
         return favoriteResult
     }

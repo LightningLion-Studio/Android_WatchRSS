@@ -1,19 +1,29 @@
 package com.lightningstudio.watchrss.sdk.bili
 
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import java.security.SecureRandom
+import java.util.Base64
 import java.util.Locale
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
 class BiliIdentity(
+    private val config: BiliSdkConfig,
     private val httpClient: BiliHttpService,
     private val accountStore: BiliAccountStore?
 ) {
     private companion object {
         private const val WEB_TICKET_KEY_ID = "ec02"
         private const val WEB_TICKET_HMAC_KEY = "XgwSnGZ1p"
+        private const val BUVID_ACTIVATE_URL =
+            "https://api.bilibili.com/x/internal/gaia-gateway/ExClimbWuzhi"
+        private val BUVID_ACTIVATE_PNG_SUFFIX =
+            byteArrayOf(0, 0, 0, 0, 73, 69, 78, 68)
     }
 
     suspend fun fetchBuvid(): BuvidResult? {
@@ -30,6 +40,7 @@ class BiliIdentity(
         if (buvid3.isNullOrBlank() && buvid4.isNullOrBlank() && cookieBuvid3.isNullOrBlank() && bNut.isNullOrBlank()) {
             return null
         }
+        val resolvedBuvid3 = buvid3 ?: cookieBuvid3
         accountStore?.update { current ->
             val now = System.currentTimeMillis()
             val updatedCookies = buildMap {
@@ -41,15 +52,18 @@ class BiliIdentity(
             current.copy(
                 cookies = if (updatedCookies.isEmpty()) current.cookies
                 else BiliCookies.merge(current.cookies, updatedCookies),
-                buvid3 = buvid3 ?: cookieBuvid3 ?: current.buvid3,
+                buvid3 = resolvedBuvid3 ?: current.buvid3,
                 buvid4 = buvid4 ?: current.buvid4,
                 bNut = bNut ?: current.bNut,
                 buvidFetchedAtMillis = now,
                 updatedAtMillis = now
             )
         }
+        if (!resolvedBuvid3.isNullOrBlank()) {
+            activateBuvidIfNeeded(resolvedBuvid3)
+        }
         return BuvidResult(
-            buvid3 = buvid3 ?: cookieBuvid3,
+            buvid3 = resolvedBuvid3,
             buvid4 = buvid4,
             bNut = bNut
         )
@@ -128,6 +142,72 @@ class BiliIdentity(
         }
         BiliDebugLog.log("bili_ticket", "ok csrf=${csrf.isNotBlank()}")
         return ticket
+    }
+
+    private suspend fun activateBuvidIfNeeded(buvid3: String) {
+        val account = accountStore?.read()
+        if (account?.activatedBuvid3 == buvid3 && account.buvidActivatedAtMillis != null) {
+            return
+        }
+        val profile = config.resolveWebBrowserProfile(account?.browserProfile)
+        val response = httpClient.postForm(
+            url = BUVID_ACTIVATE_URL,
+            form = mapOf("payload" to buildBuvidActivationPayload(profile.userAgent)),
+            headers = mapOf(
+                "Referer" to profile.referer,
+                "Origin" to profile.origin
+            )
+        )
+        if (response.code != 200) {
+            BiliDebugLog.log("bili_buvid", "activate_http=${response.code}")
+            return
+        }
+        val json = biliJson.parseToJsonElement(response.body).jsonObject
+        val code = json.intOrNull("code") ?: -1
+        if (code != 0) {
+            val message = json.stringOrNull("message").orEmpty()
+            BiliDebugLog.log("bili_buvid", "activate_code=$code msg=$message")
+            return
+        }
+        accountStore?.update { current ->
+            current.copy(
+                activatedBuvid3 = buvid3,
+                buvidActivatedAtMillis = System.currentTimeMillis(),
+                updatedAtMillis = System.currentTimeMillis()
+            )
+        }
+        BiliDebugLog.log("bili_buvid", "activate_ok")
+    }
+
+    private fun buildBuvidActivationPayload(userAgent: String): String {
+        val random = SecureRandom()
+        val randomBytes = ByteArray(32).also(random::nextBytes)
+        val tailBytes = ByteArray(4).also(random::nextBytes)
+        val fingerprintSeed = Base64.getEncoder()
+            .withoutPadding()
+            .encodeToString(randomBytes + BUVID_ACTIVATE_PNG_SUFFIX + tailBytes)
+            .takeLast(50)
+        val payload = buildJsonObject {
+            put("3064", 1)
+            put("39c8", "333.999.fp.risk")
+            put(
+                "3c43",
+                buildJsonObject {
+                    put("adca", resolveActivationPlatform(userAgent))
+                    put("bfe9", fingerprintSeed)
+                }
+            )
+        }
+        return biliJson.encodeToString(payload)
+    }
+
+    private fun resolveActivationPlatform(userAgent: String): String {
+        return when {
+            userAgent.contains("Windows", ignoreCase = true) -> "Windows"
+            userAgent.contains("Mac OS X", ignoreCase = true) -> "Mac"
+            userAgent.contains("Linux", ignoreCase = true) -> "Linux"
+            else -> "Windows"
+        }
     }
 
     private fun buildUrlWithParams(url: String, params: Map<String, String>): String {

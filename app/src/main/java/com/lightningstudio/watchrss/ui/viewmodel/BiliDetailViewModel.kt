@@ -114,6 +114,7 @@ class BiliDetailViewModel(
                         selectedPageIndex = selectedPageIndex,
                         isLiked = resolvedInteractionState.isLiked,
                         isCoined = resolvedInteractionState.isCoined,
+                        isFavorited = resolvedInteractionState.isFavorited,
                         message = null
                     )
                 }
@@ -153,7 +154,7 @@ class BiliDetailViewModel(
         }
         viewModelScope.launch {
             persistInteractionState(isLiked = nextLiked)
-            repository.like(safeAid, like = nextLiked)
+            repository.like(safeAid, like = nextLiked, bvid = currentBvid())
         }
     }
 
@@ -163,7 +164,7 @@ class BiliDetailViewModel(
         _uiState.update { it.copy(isCoined = true, message = "已投币") }
         viewModelScope.launch {
             persistInteractionState(isCoined = true)
-            repository.coin(safeAid)
+            repository.coin(safeAid, bvid = currentBvid())
         }
     }
 
@@ -171,7 +172,7 @@ class BiliDetailViewModel(
         val safeAid = currentAid() ?: return
         viewModelScope.launch {
             val nextFavorited = !_uiState.value.isFavorited
-            val result = repository.favorite(safeAid, add = nextFavorited)
+            val result = repository.favorite(safeAid, add = nextFavorited, bvid = currentBvid())
             if (result.isSuccess) {
                 _uiState.update {
                     it.copy(
@@ -179,6 +180,7 @@ class BiliDetailViewModel(
                         message = if (nextFavorited) "已收藏" else "已取消收藏"
                     )
                 }
+                persistInteractionState(isFavorited = nextFavorited)
                 syncLocalSaved(SaveType.FAVORITE, nextFavorited)
             } else {
                 _uiState.update { it.copy(message = formatBiliError(result.code, result.message)) }
@@ -339,7 +341,8 @@ class BiliDetailViewModel(
         _uiState.update {
             it.copy(
                 isLiked = state.isLiked,
-                isCoined = state.isCoined
+                isCoined = state.isCoined,
+                isFavorited = state.isFavorited
             )
         }
     }
@@ -351,14 +354,17 @@ class BiliDetailViewModel(
         isLoggedIn: Boolean
     ): BiliInteractionState {
         if (!isLoggedIn) return localState
-        if (remoteState != null) return remoteState
-        val remoteInteraction = detail?.interaction ?: return localState
-        if (remoteInteraction.like == null && remoteInteraction.coin == null) {
-            return localState
-        }
+        val remoteInteraction = detail?.interaction
         return BiliInteractionState(
-            isLiked = remoteInteraction.like ?: localState.isLiked,
-            isCoined = remoteInteraction.coin ?: localState.isCoined
+            isLiked = localState.isLiked ||
+                remoteState?.isLiked == true ||
+                remoteInteraction?.like == true,
+            isCoined = localState.isCoined ||
+                remoteState?.isCoined == true ||
+                remoteInteraction?.coin == true,
+            isFavorited = localState.isFavorited ||
+                remoteState?.isFavorited == true ||
+                remoteInteraction?.favorite == true
         )
     }
 
@@ -374,10 +380,10 @@ class BiliDetailViewModel(
             "bili_detail_vm",
             "aid=${detail?.item?.aid ?: aid} bvid=${detail?.item?.bvid ?: bvid} " +
                 "loggedIn=${repository.isLoggedIn()} " +
-                "local.like=${localState.isLiked} local.coin=${localState.isCoined} " +
-                "remoteQuery.like=${remoteState?.isLiked} remoteQuery.coin=${remoteState?.isCoined} " +
+                "local.like=${localState.isLiked} local.coin=${localState.isCoined} local.favorite=${localState.isFavorited} " +
+                "remoteQuery.like=${remoteState?.isLiked} remoteQuery.coin=${remoteState?.isCoined} remoteQuery.favorite=${remoteState?.isFavorited} " +
                 "remote.like=${remote?.like} remote.coin=${remote?.coin} remote.favorite=${remote?.favorite} " +
-                "resolved.like=${resolvedState.isLiked} resolved.coin=${resolvedState.isCoined}"
+                "resolved.like=${resolvedState.isLiked} resolved.coin=${resolvedState.isCoined} resolved.favorite=${resolvedState.isFavorited}"
         )
     }
 
@@ -387,14 +393,16 @@ class BiliDetailViewModel(
 
     private suspend fun persistInteractionState(
         isLiked: Boolean = _uiState.value.isLiked,
-        isCoined: Boolean = _uiState.value.isCoined
+        isCoined: Boolean = _uiState.value.isCoined,
+        isFavorited: Boolean = _uiState.value.isFavorited
     ) {
         repository.writeLocalInteractionState(
             aid = currentAid(),
             bvid = currentBvid(),
             state = BiliInteractionState(
                 isLiked = isLiked,
-                isCoined = isCoined
+                isCoined = isCoined,
+                isFavorited = isFavorited
             )
         )
     }

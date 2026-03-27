@@ -425,37 +425,45 @@ class BiliRepository(
         }
     }
 
-    override suspend fun like(aid: Long, like: Boolean): BiliResult<Unit> {
+    override suspend fun like(aid: Long, like: Boolean, bvid: String?): BiliResult<Unit> {
         return performWebAction(
             action = "like",
             aid = aid,
             startExtra = "like=$like"
         ) {
-            client.action.like(aid, like)
+            client.action.like(aid, like, bvid = bvid)
         }
     }
 
-    override suspend fun coin(aid: Long, multiply: Int, selectLike: Boolean): BiliResult<Boolean> {
+    override suspend fun coin(
+        aid: Long,
+        multiply: Int,
+        selectLike: Boolean,
+        bvid: String?
+    ): BiliResult<Boolean> {
         return performWebAction(
             action = "coin",
             aid = aid,
             startExtra = "multiply=$multiply selectLike=$selectLike",
             resultExtra = { result -> "likeResult=${result.data}" }
         ) {
-            client.action.coin(aid, multiply, selectLike)
+            client.action.coin(aid, multiply, selectLike, bvid = bvid)
         }
     }
 
-    override suspend fun triple(aid: Long): BiliResult<com.lightningstudio.watchrss.sdk.bili.BiliTripleResult> {
+    override suspend fun triple(
+        aid: Long,
+        bvid: String?
+    ): BiliResult<com.lightningstudio.watchrss.sdk.bili.BiliTripleResult> {
         return performWebAction(
             action = "triple",
             aid = aid
         ) {
-            client.action.triple(aid)
+            client.action.triple(aid, bvid = bvid)
         }
     }
 
-    override suspend fun favorite(aid: Long, add: Boolean): BiliResult<Boolean> {
+    override suspend fun favorite(aid: Long, add: Boolean, bvid: String?): BiliResult<Boolean> {
         val folderId = defaultFavoriteFolderId()
             ?: return BiliResult(BiliErrorCodes.MISSING_FAVORITE_FOLDER, "missing_favorite_folder")
         val addIds = if (add) listOf(folderId) else emptyList()
@@ -468,7 +476,8 @@ class BiliRepository(
             client.action.favorite(
                 aid,
                 addMediaIds = addIds,
-                delMediaIds = delIds
+                delMediaIds = delIds,
+                bvid = bvid
             )
         }
     }

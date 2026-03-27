@@ -5,10 +5,11 @@ import org.json.JSONObject
 
 data class BiliInteractionState(
     val isLiked: Boolean = false,
-    val isCoined: Boolean = false
+    val isCoined: Boolean = false,
+    val isFavorited: Boolean = false
 ) {
     val hasAnyInteraction: Boolean
-        get() = isLiked || isCoined
+        get() = isLiked || isCoined || isFavorited
 }
 
 internal data class BiliInteractionRecord(
@@ -30,7 +31,8 @@ internal fun parseBiliInteractionRecords(raw: String): List<BiliInteractionRecor
             val bvid = normalizedBvid(obj.optString("bvid", ""))
             val state = BiliInteractionState(
                 isLiked = obj.optBoolean("isLiked", false),
-                isCoined = obj.optBoolean("isCoined", false)
+                isCoined = obj.optBoolean("isCoined", false),
+                isFavorited = obj.optBoolean("isFavorited", false)
             )
             if ((aid == null && bvid.isNullOrBlank()) || !state.hasAnyInteraction) {
                 continue
@@ -54,6 +56,7 @@ internal fun buildBiliInteractionRecordsJson(records: List<BiliInteractionRecord
         record.bvid?.let { obj.put("bvid", it) }
         obj.put("isLiked", record.state.isLiked)
         obj.put("isCoined", record.state.isCoined)
+        obj.put("isFavorited", record.state.isFavorited)
         obj.put("updatedAt", record.updatedAtMillis)
         array.put(obj)
     }

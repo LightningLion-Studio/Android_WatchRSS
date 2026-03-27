@@ -55,7 +55,7 @@ class BiliHttpClient(
         }.build()
         val request = Request.Builder()
             .url(httpUrl)
-            .headers(buildHeaders(headers, includeCookies))
+            .headers(buildHeaders(method = "GET", url = httpUrl.toString(), headers = headers, includeCookies = includeCookies))
             .get()
             .build()
         execute(request)
@@ -72,7 +72,7 @@ class BiliHttpClient(
         }.build()
         val request = Request.Builder()
             .url(url)
-            .headers(buildHeaders(headers, includeCookies))
+            .headers(buildHeaders(method = "POST", url = url, headers = headers, includeCookies = includeCookies))
             .post(body)
             .build()
         execute(request)
@@ -87,27 +87,30 @@ class BiliHttpClient(
         val body = json.toRequestBody("application/json; charset=utf-8".toMediaType())
         val request = Request.Builder()
             .url(url)
-            .headers(buildHeaders(headers, includeCookies))
+            .headers(buildHeaders(method = "POST", url = url, headers = headers, includeCookies = includeCookies))
             .post(body)
             .build()
         execute(request)
     }
 
     private suspend fun buildHeaders(
+        method: String,
+        url: String,
         headers: Map<String, String>,
         includeCookies: Boolean
     ): Headers {
-        val builder = Headers.Builder()
-        builder.set("User-Agent", config.webUserAgent)
-        builder.set("Referer", config.webReferer)
-        if (includeCookies) {
-            val cookies = accountStore?.read()?.cookies?.takeIf { it.isNotEmpty() }
-            if (cookies != null) {
-                builder.add("Cookie", cookies.entries.joinToString("; ") { (k, v) -> "$k=$v" })
-            }
-        }
-        headers.forEach { (k, v) -> builder.set(k, v) }
-        return builder.build()
+        val account = accountStore?.read()
+        val resolvedHeaders = BiliWebHeaders.build(
+            config = config,
+            account = account,
+            method = method,
+            url = url,
+            headers = headers,
+            includeCookies = includeCookies
+        )
+        return Headers.Builder().apply {
+            resolvedHeaders.forEach { (key, value) -> set(key, value) }
+        }.build()
     }
 
     private fun execute(request: Request): BiliHttpResult {

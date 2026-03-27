@@ -12,10 +12,23 @@ data class BiliSdkConfig(
     val build: Int = 7000000,
     val webUserAgent: String =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    val webAcceptLanguage: String = "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
     val appUserAgent: String =
         "Mozilla/5.0 (Linux; Android 12; WatchRSS) AppleWebKit/537.36 (KHTML, like Gecko) Mobile Safari/537.36",
     val webReferer: String = "https://www.bilibili.com/",
     val webBaseUrl: String = "https://api.bilibili.com",
     val appBaseUrl: String = "https://app.bilibili.com",
     val passportBaseUrl: String = "https://passport.bilibili.com"
-)
+) {
+    fun defaultWebBrowserProfile(): BiliBrowserProfile = BiliBrowserProfile.desktopChrome(
+        userAgent = webUserAgent,
+        acceptLanguage = webAcceptLanguage
+    )
+
+    fun resolveWebBrowserProfile(profile: BiliBrowserProfile?): BiliBrowserProfile {
+        if (profile == null || profile.version != BiliBrowserProfile.CURRENT_VERSION) {
+            return defaultWebBrowserProfile()
+        }
+        return profile
+    }
+}

@@ -5,7 +5,7 @@ class BiliClient(
     val accountStore: BiliAccountStore?,
     val httpClient: BiliHttpService = BiliHttpClient(config, accountStore)
 ) {
-    val identity: BiliIdentity = BiliIdentity(httpClient, accountStore)
+    val identity: BiliIdentity = BiliIdentity(config, httpClient, accountStore)
     val auth: BiliAuth = BiliAuth(this)
     val feed: BiliFeed = BiliFeed(this)
     val video: BiliVideo = BiliVideo(this)

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
 import com.lightningstudio.watchrss.data.douyin.DouyinRepositoryContract
+import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.rss.RssChannel
 import com.lightningstudio.watchrss.data.rss.RssRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -66,7 +67,9 @@ class HomeViewModel(
         viewModelScope.launch {
             if (_isRefreshing.value) return@launch
             _isRefreshing.value = true
-            val snapshot = channels.value
+            val snapshot = channels.value.filter { channel ->
+                BuiltinChannelType.fromUrl(channel.url) == null
+            }
             var errorMessage: String? = null
             for (channel in snapshot) {
                 val result = repository.refreshChannel(channel.id)

@@ -31,6 +31,24 @@ class BiliAuth(private val client: BiliClient) {
         updateAccountStore(cookies = cookies)
     }
 
+    suspend fun ensureWebBrowserProfile(): BiliBrowserProfile {
+        val fallbackProfile = client.config.defaultWebBrowserProfile()
+        val accountStore = client.accountStore ?: return fallbackProfile
+        var resolvedProfile = fallbackProfile
+        accountStore.update { current ->
+            resolvedProfile = client.config.resolveWebBrowserProfile(current.browserProfile)
+            if (current.browserProfile == resolvedProfile) {
+                current
+            } else {
+                current.copy(
+                    browserProfile = resolvedProfile,
+                    updatedAtMillis = System.currentTimeMillis()
+                )
+            }
+        }
+        return resolvedProfile
+    }
+
     suspend fun requestWebQrCode(): WebQrCode? {
         val url = "${client.config.passportBaseUrl}/x/passport-login/web/qrcode/generate"
         val response = client.httpClient.get(url, includeCookies = false)
@@ -177,12 +195,14 @@ class BiliAuth(private val client: BiliClient) {
     ) {
         val now = System.currentTimeMillis()
         client.accountStore?.update { current ->
+            val resolvedProfile = client.config.resolveWebBrowserProfile(current.browserProfile)
             current.copy(
                 cookies = BiliCookies.merge(current.cookies, cookies),
                 accessToken = null,
                 refreshToken = refreshToken ?: current.refreshToken,
                 appRefreshToken = null,
                 cookieRefreshCheckedAtMillis = cookieRefreshCheckedAtMillis ?: current.cookieRefreshCheckedAtMillis,
+                browserProfile = resolvedProfile,
                 updatedAtMillis = now
             )
         }

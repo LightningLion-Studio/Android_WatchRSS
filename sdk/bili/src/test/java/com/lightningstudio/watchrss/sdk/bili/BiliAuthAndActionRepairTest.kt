@@ -88,6 +88,11 @@ class BiliAuthAndActionRepairTest {
                 body = "<html></html>"
             )
             enqueue(
+                method = "POST",
+                urlContains = "/x/internal/gaia-gateway/ExClimbWuzhi",
+                body = """{"code":0}"""
+            )
+            enqueue(
                 method = "GET",
                 urlContains = "/x/web-interface/nav",
                 body = """
@@ -119,9 +124,12 @@ class BiliAuthAndActionRepairTest {
         assertEquals("buvid3-new", account?.buvid3)
         assertEquals("buvid4-new", account?.buvid4)
         assertEquals("bnut-new", account?.bNut)
+        assertEquals("buvid3-new", account?.activatedBuvid3)
         assertEquals("ticket-new", account?.biliTicket)
+        assertEquals(BiliBrowserProfile.CURRENT_VERSION, account?.browserProfile?.version)
         assertNotNull(account?.cookieRefreshCheckedAtMillis)
         assertNotNull(account?.buvidFetchedAtMillis)
+        assertNotNull(account?.buvidActivatedAtMillis)
         assertNotNull(account?.biliTicketFetchedAtMillis)
     }
 
@@ -152,6 +160,11 @@ class BiliAuthAndActionRepairTest {
             )
             enqueue(
                 method = "POST",
+                urlContains = "/x/internal/gaia-gateway/ExClimbWuzhi",
+                body = """{"code":0}"""
+            )
+            enqueue(
+                method = "POST",
                 urlContains = "GenWebTicket",
                 body = """{"code":0,"data":{"ticket":"ticket-ready"}}"""
             )
@@ -171,7 +184,9 @@ class BiliAuthAndActionRepairTest {
         assertEquals("buvid3-ready", account?.buvid3)
         assertEquals("buvid4-ready", account?.buvid4)
         assertEquals("bnut-ready", account?.bNut)
+        assertEquals("buvid3-ready", account?.activatedBuvid3)
         assertEquals("ticket-ready", account?.biliTicket)
+        assertEquals(BiliBrowserProfile.CURRENT_VERSION, account?.browserProfile?.version)
     }
 
     @Test
@@ -191,6 +206,8 @@ class BiliAuthAndActionRepairTest {
                 ),
                 refreshToken = "refresh-old",
                 biliTicket = "ticket-old",
+                activatedBuvid3 = "buvid3-old",
+                buvidActivatedAtMillis = now,
                 biliTicketFetchedAtMillis = now,
                 cookieRefreshCheckedAtMillis = now
             )
@@ -233,6 +250,11 @@ class BiliAuthAndActionRepairTest {
                 body = "<html></html>"
             )
             enqueue(
+                method = "POST",
+                urlContains = "/x/internal/gaia-gateway/ExClimbWuzhi",
+                body = """{"code":0}"""
+            )
+            enqueue(
                 method = "GET",
                 urlContains = "/x/web-interface/nav",
                 body = """
@@ -266,6 +288,7 @@ class BiliAuthAndActionRepairTest {
         assertEquals("refresh-new", account?.refreshToken)
         assertEquals("sess-new", account?.cookies?.get("SESSDATA"))
         assertEquals("csrf-new", account?.cookies?.get("bili_jct"))
+        assertEquals("buvid3-new", account?.activatedBuvid3)
         assertEquals("ticket-new", account?.biliTicket)
     }
 

@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss.ui.viewmodel
 
+import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.testutil.MainDispatcherRule
 import com.lightningstudio.watchrss.testutil.TestBiliRepository
 import com.lightningstudio.watchrss.testutil.TestDouyinRepository
@@ -35,9 +36,14 @@ class HomeViewModelTest {
     }
 
     @Test
-    fun refreshAll_usesAllChannels_and_surfacesFirstFailure() = runTest {
+    fun refreshAll_skipsBuiltinChannels_and_surfacesFirstFailure() = runTest {
         val repo = TestRssRepository(
-            initialChannels = listOf(sampleRssChannel(id = 11L), sampleRssChannel(id = 22L))
+            initialChannels = listOf(
+                sampleRssChannel(id = 11L),
+                sampleRssChannel(id = 12L, url = BuiltinChannelType.BILI.url),
+                sampleRssChannel(id = 13L, url = BuiltinChannelType.DOUYIN.url),
+                sampleRssChannel(id = 22L)
+            )
         )
         repo.refreshResults[22L] = Result.failure(IllegalStateException("第二个频道刷新失败"))
         val viewModel = HomeViewModel(repo, TestBiliRepository(), TestDouyinRepository())

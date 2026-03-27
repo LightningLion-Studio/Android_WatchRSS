@@ -76,14 +76,18 @@ interface BiliRepositoryContract {
         unsupportedBiliRepositoryMethod()
     suspend fun ensureInteractionReady(aid: Long?, bvid: String?, cid: Long?): Result<Unit> =
         unsupportedBiliRepositoryMethod()
-    suspend fun like(aid: Long, like: Boolean): BiliResult<Unit> = unsupportedBiliRepositoryMethod()
+    suspend fun like(aid: Long, like: Boolean, bvid: String? = null): BiliResult<Unit> =
+        unsupportedBiliRepositoryMethod()
     suspend fun coin(
         aid: Long,
         multiply: Int = 1,
-        selectLike: Boolean = false
+        selectLike: Boolean = false,
+        bvid: String? = null
     ): BiliResult<Boolean> = unsupportedBiliRepositoryMethod()
-    suspend fun triple(aid: Long): BiliResult<BiliTripleResult> = unsupportedBiliRepositoryMethod()
-    suspend fun favorite(aid: Long, add: Boolean): BiliResult<Boolean> = unsupportedBiliRepositoryMethod()
+    suspend fun triple(aid: Long, bvid: String? = null): BiliResult<BiliTripleResult> =
+        unsupportedBiliRepositoryMethod()
+    suspend fun favorite(aid: Long, add: Boolean, bvid: String? = null): BiliResult<Boolean> =
+        unsupportedBiliRepositoryMethod()
     suspend fun addToView(aid: Long? = null, bvid: String? = null): BiliResult<Unit> =
         unsupportedBiliRepositoryMethod()
     suspend fun fetchToView(): BiliResult<BiliToViewPage> = unsupportedBiliRepositoryMethod()

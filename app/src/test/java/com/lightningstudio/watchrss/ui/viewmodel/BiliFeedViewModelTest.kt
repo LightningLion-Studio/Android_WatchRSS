@@ -4,6 +4,7 @@ import com.lightningstudio.watchrss.data.bili.BiliErrorCodes
 import com.lightningstudio.watchrss.data.rss.SaveType
 import com.lightningstudio.watchrss.testutil.MainDispatcherRule
 import com.lightningstudio.watchrss.testutil.TestBiliRepository
+import com.lightningstudio.watchrss.testutil.TestBiliFavoriteRequest
 import com.lightningstudio.watchrss.testutil.TestRssRepository
 import com.lightningstudio.watchrss.testutil.sampleBiliItem
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -99,7 +100,10 @@ class BiliFeedViewModelTest {
         viewModel.watchLater(item)
         advanceUntilIdle()
 
-        assertEquals(listOf(55L to true), platformRepo.favoriteRequests)
+        assertEquals(
+            listOf(TestBiliFavoriteRequest(aid = 55L, add = true, bvid = "BV55")),
+            platformRepo.favoriteRequests
+        )
         assertEquals(listOf(55L to "BV55"), platformRepo.addToViewRequests)
         assertEquals(
             listOf(SaveType.FAVORITE, SaveType.WATCH_LATER),
