@@ -2,7 +2,9 @@ package com.lightningstudio.watchrss.ui.activity
 
 import android.os.SystemClock
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -20,6 +22,7 @@ import com.lightningstudio.watchrss.testutil.createTestSettingsRepository
 import com.lightningstudio.watchrss.testutil.sampleDouyinBuiltinChannel
 import com.lightningstudio.watchrss.testutil.sampleDouyinFeedPage
 import com.lightningstudio.watchrss.testutil.sampleDouyinVideo
+import com.lightningstudio.watchrss.ui.testing.DouyinChannelInfoTestTags
 import kotlinx.coroutines.runBlocking
 import org.junit.Rule
 import org.junit.Test
@@ -56,6 +59,14 @@ class DouyinChannelInfoActivityTest {
 
     @get:Rule
     val ruleChain: RuleChain = RuleChain.outerRule(containerRule).around(composeRule)
+
+    @Test
+    fun unreadUiIsHiddenAndMarkReadButtonDisabled() {
+        composeRule.onNodeWithText("未读 0").assertDoesNotExist()
+        composeRule.onNodeWithTag(DouyinChannelInfoTestTags.MARK_READ_BUTTON)
+            .assertExists()
+            .assertIsNotEnabled()
+    }
 
     @Test
     fun logoutFromSettings_returnsToMainActivity() {

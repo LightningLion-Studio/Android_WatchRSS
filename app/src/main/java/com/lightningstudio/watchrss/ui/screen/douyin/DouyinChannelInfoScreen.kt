@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import com.lightningstudio.watchrss.ui.theme.watchColorResource
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.style.TextAlign
@@ -36,6 +37,7 @@ import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownScrollHandler
 import com.lightningstudio.watchrss.ui.theme.ActionButtonTextStyle
+import com.lightningstudio.watchrss.ui.testing.DouyinChannelInfoTestTags
 import com.lightningstudio.watchrss.ui.util.formatTime
 import com.lightningstudio.watchrss.ui.util.normalizeWatchTitleWhitespace
 import kotlin.math.min
@@ -140,14 +142,6 @@ fun DouyinChannelInfoScreen(
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Center
             )
-            Spacer(modifier = Modifier.height(infoSpacing))
-            Text(
-                text = "未读 0",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center
-            )
 
             Spacer(modifier = Modifier.height(buttonSpacing))
             ActionButton(
@@ -164,7 +158,8 @@ fun DouyinChannelInfoScreen(
                 enabled = markReadEnabled,
                 width = buttonWidth,
                 height = buttonHeight,
-                onClick = onMarkReadClick
+                onClick = onMarkReadClick,
+                modifier = Modifier.testTag(DouyinChannelInfoTestTags.MARK_READ_BUTTON)
             )
 
             if (!isLoggedIn) {
@@ -189,7 +184,8 @@ private fun ActionButton(
     enabled: Boolean,
     width: Dp,
     height: Dp,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val pillColor = watchColorResource(R.color.watch_pill_background)
     val pillRadius = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_button_default_radius
@@ -197,6 +193,7 @@ private fun ActionButton(
 
     Box(
         modifier = Modifier
+            .then(modifier)
             .width(width)
             .height(height)
             .clip(RoundedCornerShape(pillRadius))
