@@ -201,7 +201,8 @@ class BiliRepository(
                 message = relation.message,
                 data = BiliInteractionState(
                     isLiked = data.like == true,
-                    isCoined = data.coin == true
+                    isCoined = data.coin == true,
+                    isFavorited = data.favorite == true
                 ),
                 httpCode = relation.httpCode,
                 requestMode = relation.requestMode
@@ -982,7 +983,7 @@ class BiliRepository(
         if (!DebugLogBuffer.isEnabled()) return
         val flags = readDebugAccountFlags()
         val statePart = result?.data?.let {
-            " state.like=${it.isLiked} state.coin=${it.isCoined}"
+            " state.like=${it.isLiked} state.coin=${it.isCoined} state.favorite=${it.isFavorited}"
         }.orEmpty()
         val resultPart = result?.let {
             " code=${it.code} http=${it.httpCode} mode=${it.requestMode} msg=${it.message}"
@@ -1035,7 +1036,11 @@ class BiliRepository(
             modeOverride = "web"
         )
 
-        val result = safeCall { block() }
+        val result = safeCall {
+            client.actionRepair.execute(action = action) {
+                block()
+            }
+        }
         debugLogAction(
             action = action,
             aid = aid,

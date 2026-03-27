@@ -55,6 +55,9 @@ dependencies {
     implementation(libs.grpc.okhttp)
     implementation(libs.grpc.protobuf.lite)
     implementation(libs.grpc.stub)
+
+    testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
 }
 
 protobuf {

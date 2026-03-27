@@ -8,7 +8,7 @@ import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
 class BiliIdentity(
-    private val httpClient: BiliHttpClient,
+    private val httpClient: BiliHttpService,
     private val accountStore: BiliAccountStore?
 ) {
     private companion object {
@@ -31,6 +31,7 @@ class BiliIdentity(
             return null
         }
         accountStore?.update { current ->
+            val now = System.currentTimeMillis()
             val updatedCookies = buildMap {
                 if (!buvid3.isNullOrBlank()) put("buvid3", buvid3)
                 else if (!cookieBuvid3.isNullOrBlank()) put("buvid3", cookieBuvid3)
@@ -43,7 +44,8 @@ class BiliIdentity(
                 buvid3 = buvid3 ?: cookieBuvid3 ?: current.buvid3,
                 buvid4 = buvid4 ?: current.buvid4,
                 bNut = bNut ?: current.bNut,
-                updatedAtMillis = System.currentTimeMillis()
+                buvidFetchedAtMillis = now,
+                updatedAtMillis = now
             )
         }
         return BuvidResult(
@@ -66,10 +68,11 @@ class BiliIdentity(
         val subKey = BiliSigners.extractWbiKey(subUrl)
         if (imgKey.isNullOrBlank() || subKey.isNullOrBlank()) return null
         accountStore?.update { current ->
+            val now = System.currentTimeMillis()
             current.copy(
                 wbiImgKey = imgKey,
                 wbiSubKey = subKey,
-                updatedAtMillis = System.currentTimeMillis()
+                updatedAtMillis = now
             )
         }
         return WbiKeys(imgKey, subKey)
@@ -111,6 +114,7 @@ class BiliIdentity(
             return null
         }
         accountStore?.update { current ->
+            val now = System.currentTimeMillis()
             val updatedCookies = BiliCookies.merge(
                 current.cookies,
                 mapOf("bili_ticket" to ticket)
@@ -118,7 +122,8 @@ class BiliIdentity(
             current.copy(
                 cookies = updatedCookies,
                 biliTicket = ticket,
-                updatedAtMillis = System.currentTimeMillis()
+                biliTicketFetchedAtMillis = now,
+                updatedAtMillis = now
             )
         }
         BiliDebugLog.log("bili_ticket", "ok csrf=${csrf.isNotBlank()}")

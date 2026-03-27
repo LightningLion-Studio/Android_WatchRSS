@@ -11,21 +11,44 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
 
+interface BiliHttpService {
+    suspend fun get(
+        url: String,
+        params: Map<String, String> = emptyMap(),
+        headers: Map<String, String> = emptyMap(),
+        includeCookies: Boolean = true
+    ): BiliHttpResult
+
+    suspend fun postForm(
+        url: String,
+        form: Map<String, String>,
+        headers: Map<String, String> = emptyMap(),
+        includeCookies: Boolean = true
+    ): BiliHttpResult
+
+    suspend fun postJson(
+        url: String,
+        json: String,
+        headers: Map<String, String> = emptyMap(),
+        includeCookies: Boolean = true
+    ): BiliHttpResult
+}
+
 class BiliHttpClient(
     private val config: BiliSdkConfig,
     private val accountStore: BiliAccountStore?
-) {
+) : BiliHttpService {
     private val client: OkHttpClient = OkHttpClient.Builder()
         .callTimeout(20, TimeUnit.SECONDS)
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
         .build()
 
-    suspend fun get(
+    override suspend fun get(
         url: String,
-        params: Map<String, String> = emptyMap(),
-        headers: Map<String, String> = emptyMap(),
-        includeCookies: Boolean = true
+        params: Map<String, String>,
+        headers: Map<String, String>,
+        includeCookies: Boolean
     ): BiliHttpResult = withContext(Dispatchers.IO) {
         val httpUrl = url.toHttpUrl().newBuilder().apply {
             params.forEach { (k, v) -> addQueryParameter(k, v) }
@@ -38,11 +61,11 @@ class BiliHttpClient(
         execute(request)
     }
 
-    suspend fun postForm(
+    override suspend fun postForm(
         url: String,
         form: Map<String, String>,
-        headers: Map<String, String> = emptyMap(),
-        includeCookies: Boolean = true
+        headers: Map<String, String>,
+        includeCookies: Boolean
     ): BiliHttpResult = withContext(Dispatchers.IO) {
         val body = FormBody.Builder().apply {
             form.forEach { (k, v) -> add(k, v) }
@@ -55,11 +78,11 @@ class BiliHttpClient(
         execute(request)
     }
 
-    suspend fun postJson(
+    override suspend fun postJson(
         url: String,
         json: String,
-        headers: Map<String, String> = emptyMap(),
-        includeCookies: Boolean = true
+        headers: Map<String, String>,
+        includeCookies: Boolean
     ): BiliHttpResult = withContext(Dispatchers.IO) {
         val body = json.toRequestBody("application/json; charset=utf-8".toMediaType())
         val request = Request.Builder()
