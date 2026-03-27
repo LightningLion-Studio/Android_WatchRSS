@@ -21,6 +21,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color as ComposeColor
 import androidx.webkit.WebSettingsCompat
@@ -38,6 +39,21 @@ import com.lightningstudio.watchrss.util.AppLogger
 import java.io.File
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlin.math.sqrt
+
+internal enum class WebViewScaleMode {
+    Standard,
+    Expanded,
+    Shrunk;
+
+    fun next(): WebViewScaleMode {
+        return when (this) {
+            Standard -> Expanded
+            Expanded -> Shrunk
+            Shrunk -> Standard
+        }
+    }
+}
 
 class WebViewActivity : BaseWatchActivity() {
     private val settingsRepository by lazy { (application as WatchRssApplication).container.settingsRepository }
@@ -49,8 +65,12 @@ class WebViewActivity : BaseWatchActivity() {
     private var webViewInitialized = false
     private var ringInitialized = false
     private var activityReadingThemeDark = true
+    private var currentScaleMode = WebViewScaleMode.Standard
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        currentScaleMode = savedInstanceState?.getString(KEY_SCALE_MODE)
+            ?.let { value -> runCatching { WebViewScaleMode.valueOf(value) }.getOrNull() }
+            ?: WebViewScaleMode.Standard
         activityReadingThemeDark = runBlocking { settingsRepository.readingThemeDark.first() }
         setTheme(
             if (activityReadingThemeDark) {
@@ -75,11 +95,17 @@ class WebViewActivity : BaseWatchActivity() {
             WatchRSSTheme(darkTheme = readingThemeDark) {
                 var errorMessage by remember { mutableStateOf(initialWebViewError) }
                 var warningMessage by remember { mutableStateOf(initialWebViewError) }
+                var scaleMode by rememberSaveable { mutableStateOf(currentScaleMode) }
 
                 LaunchedEffect(warningMessage) {
                     val message = warningMessage ?: return@LaunchedEffect
                     warnWebViewUnavailable(this@WebViewActivity, message)
                     warningMessage = null
+                }
+
+                LaunchedEffect(scaleMode) {
+                    currentScaleMode = scaleMode
+                    applyCurrentScaleMode()
                 }
 
                 LaunchedEffect(readingThemeDark) {
@@ -97,6 +123,8 @@ class WebViewActivity : BaseWatchActivity() {
                 WebViewScreen(
                     backgroundColor = if (readingThemeDark) ComposeColor.Black else ComposeColor.White,
                     errorMessage = errorMessage,
+                    scaleMode = scaleMode,
+                    onToggleScaleMode = { scaleMode = scaleMode.next() },
                     onWebViewReady = { view ->
                         if (!webViewInitialized) {
                             webViewInitialized = true
@@ -171,6 +199,9 @@ class WebViewActivity : BaseWatchActivity() {
             loadWithOverviewMode = true
             useWideViewPort = true
             allowFileAccess = true
+            setSupportZoom(true)
+            builtInZoomControls = false
+            displayZoomControls = false
         }
         webView.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
@@ -180,6 +211,7 @@ class WebViewActivity : BaseWatchActivity() {
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 animateProgressTo(1f, hideWhenDone = true)
+                view?.post { applyCurrentScaleMode() }
             }
 
             override fun onReceivedError(
@@ -210,6 +242,63 @@ class WebViewActivity : BaseWatchActivity() {
                 }
             }
         }
+    }
+
+    private fun applyCurrentScaleMode() {
+        if (!webViewInitialized) return
+        val scaleFactor = calculateScaleFactor(currentScaleMode)
+        val script = buildScaleScript(scaleFactor)
+        webView.post {
+            runCatching {
+                webView.evaluateJavascript(script, null)
+            }.onFailure { throwable ->
+                AppLogger.e("WebViewActivity", "Failed to apply web scale mode: $currentScaleMode", throwable)
+            }
+        }
+    }
+
+    private fun calculateScaleFactor(scaleMode: WebViewScaleMode): Float {
+        if (!webViewInitialized) return 1f
+        val contentWidth = webView.width.toFloat().coerceAtLeast(1f)
+        val contentHeight = webView.height.toFloat().coerceAtLeast(1f)
+        val screenWidth = (
+            window.decorView.width.takeIf { it > 0 }
+                ?: webView.rootView.width.takeIf { it > 0 }
+                ?: resources.displayMetrics.widthPixels
+            ).toFloat().coerceAtLeast(contentWidth)
+        return when (scaleMode) {
+            WebViewScaleMode.Standard -> 1f
+            WebViewScaleMode.Expanded -> (screenWidth / contentWidth).coerceAtLeast(1f)
+            WebViewScaleMode.Shrunk -> {
+                val diagonal = sqrt(contentWidth * contentWidth + contentHeight * contentHeight)
+                if (diagonal > 0f) {
+                    (screenWidth / diagonal).coerceAtMost(1f)
+                } else {
+                    1f
+                }
+            }
+        }
+    }
+
+    private fun buildScaleScript(scaleFactor: Float): String {
+        val normalized = scaleFactor.coerceAtLeast(0.1f)
+        return """
+            (function() {
+              var zoom = ${normalized};
+              var root = document.documentElement;
+              if (!root) return;
+              if (Math.abs(zoom - 1) < 0.001) {
+                root.style.removeProperty('zoom');
+              } else {
+                root.style.setProperty('zoom', String(zoom));
+              }
+            })();
+        """.trimIndent()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString(KEY_SCALE_MODE, currentScaleMode.name)
     }
 
     override fun onDestroy() {
@@ -278,6 +367,7 @@ class WebViewActivity : BaseWatchActivity() {
 
     companion object {
         private const val EXTRA_URL = "url"
+        private const val KEY_SCALE_MODE = "web_view_scale_mode"
 
         fun open(context: Context, link: String): Boolean {
             if (requiresInternetConnection(link) && !hasValidatedInternetConnection(context)) {
