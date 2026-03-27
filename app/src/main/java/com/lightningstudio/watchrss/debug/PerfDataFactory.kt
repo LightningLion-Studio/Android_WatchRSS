@@ -55,6 +55,7 @@ object PerfDataFactory {
                     "这是一条带图的性能测试摘要内容。"
                 },
                 content = null,
+                originalContent = null,
                 link = null,
                 pubDate = null,
                 imageUrl = image?.url,
@@ -82,6 +83,7 @@ object PerfDataFactory {
             title = "性能测试：这是一个用于阅读页标题断行与圆表安全区验证的超长文章标题，包含 RSS 2026、English words、数字 1234567890 与多段信息",
             description = null,
             content = content,
+            originalContent = null,
             link = null,
             pubDate = null,
             imageUrl = perfImages.firstOrNull()?.url,

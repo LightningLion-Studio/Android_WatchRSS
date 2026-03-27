@@ -169,6 +169,7 @@ private fun buildDouyinRssItem(
         title = safeTitle,
         description = description,
         content = null,
+        originalContent = null,
         link = link,
         pubDate = null,
         imageUrl = coverUrl.ifBlank { null },

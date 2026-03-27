@@ -328,46 +328,17 @@ class DefaultRssRepository(
         val result = runCatching {
             val fetchedAt = System.currentTimeMillis()
             val parsed = fetchService.fetchChannel(channel.url)
-            val baseLink = parsed.link?.trim()?.ifEmpty { null } ?: channel.url
-            val useOriginalContent = channel.useOriginalContent
-            if (useOriginalContent) {
-                DebugLogBuffer.log(
-                    "orig",
-                    "refresh channelId=$channelId items=${parsed.items.size} base=$baseLink"
-                )
-            }
             val items = parsed.items.map { item ->
-                val entity = parseService.toEntityFromParsedItem(
+                parseService.toEntityFromParsedItem(
                     item = item,
                     channelId = channelId,
                     isRead = false,
                     fetchedAt = fetchedAt
                 )
-                if (useOriginalContent) {
-                    val fallbackDescription = if (entity.description.isNullOrBlank()) {
-                        entity.content
-                    } else {
-                        entity.description
-                    }
-                    val summary = entity.summary?.takeIf { it.isNotBlank() } ?: "暂无摘要"
-                    entity.copy(
-                        description = fallbackDescription,
-                        content = null,
-                        summary = summary
-                    )
-                } else {
-                    entity
-                }
-            }
-            if (useOriginalContent) {
-                DebugLogBuffer.log(
-                    "orig",
-                    "store total=${items.size} withContent=${items.count { it.content != null }} refreshAll=$refreshAll"
-                )
             }
             if (items.isNotEmpty()) {
                 val insertResults = itemDao.insertItems(items)
-                if (refreshAll && !useOriginalContent) {
+                if (refreshAll) {
                     var updated = 0
                     insertResults.forEachIndexed { index, rowId ->
                         if (rowId <= 0L) {
@@ -417,18 +388,18 @@ class DefaultRssRepository(
         }
     }
 
-    override fun requestOriginalContent(itemId: Long) {
+    override fun requestOriginalContent(itemId: Long, force: Boolean) {
         if (itemId <= 0L) return
         if (originalContentItemJobs.containsKey(itemId)) return
         val job = appScope.launch(Dispatchers.IO) {
             val startNanos = PerfTrace.now()
             val item = itemDao.getItem(itemId) ?: return@launch
-            if (!item.content.isNullOrBlank()) return@launch
+            if (!item.originalContent.isNullOrBlank()) return@launch
             val channel = channelDao.getChannel(item.channelId) ?: return@launch
-            if (!channel.useOriginalContent) return@launch
+            if (!force && !channel.useOriginalContent) return@launch
             PerfTrace.log(
                 "repo",
-                "requestOriginalContent start itemId=$itemId channelId=${item.channelId} summaryMissing=${item.summary.isNullOrBlank()} pending=${pendingOriginalUpdates[item.channelId]?.size ?: 0}"
+                "requestOriginalContent start itemId=$itemId channelId=${item.channelId} force=$force summaryMissing=${item.summary.isNullOrBlank()} pending=${pendingOriginalUpdates[item.channelId]?.size ?: 0}"
             )
             if (item.summary.isNullOrBlank()) {
                 itemDao.updatePreview(item.id, "暂无摘要", null)
@@ -439,7 +410,8 @@ class DefaultRssRepository(
             val contentSizeBytes = estimateContentSize(
                 title = item.title,
                 description = item.description,
-                content = contentOverride,
+                content = item.content,
+                originalContent = contentOverride,
                 link = item.link,
                 imageUrl = item.imageUrl,
                 audioUrl = item.audioUrl,
@@ -475,9 +447,12 @@ class DefaultRssRepository(
         job.invokeOnCompletion { originalContentItemJobs.remove(itemId) }
     }
 
-    override fun requestOriginalContents(itemIds: List<Long>) {
-        PerfTrace.log("repo", "requestOriginalContents batch size=${itemIds.size} ids=${itemIds.joinToString(",")}")
-        itemIds.forEach { requestOriginalContent(it) }
+    override fun requestOriginalContents(itemIds: List<Long>, force: Boolean) {
+        PerfTrace.log(
+            "repo",
+            "requestOriginalContents batch size=${itemIds.size} force=$force ids=${itemIds.joinToString(",")}"
+        )
+        itemIds.forEach { requestOriginalContent(it, force) }
     }
 
     override fun setOriginalContentUpdatesPaused(channelId: Long, paused: Boolean) {
@@ -645,11 +620,11 @@ class DefaultRssRepository(
             try {
                 PerfTrace.log(
                     "repo",
-                    "preview build start itemId=${item.id} channelId=${item.channelId} hasContent=${!item.content.isNullOrBlank()} hasImage=${!item.imageUrl.isNullOrBlank()} attempt=${attemptKey.take(8)}"
+                    "preview build start itemId=${item.id} channelId=${item.channelId} hasContent=${!previewSourceContent(item).isNullOrBlank()} hasImage=${!item.imageUrl.isNullOrBlank()} attempt=${attemptKey.take(8)}"
                 )
                 val preview = RssPreviewFormatter.buildPreview(
                     description = item.description,
-                    content = item.content,
+                    content = previewSourceContent(item),
                     imageUrl = item.imageUrl,
                     link = item.link
                 )
@@ -873,19 +848,25 @@ class DefaultRssRepository(
         title: String?,
         description: String?,
         content: String?,
+        originalContent: String?,
         link: String?,
         imageUrl: String?,
         audioUrl: String?,
         videoUrl: String?
     ): Long {
         var total = 0L
-        val parts = listOf(title, description, content, link, imageUrl, audioUrl, videoUrl)
+        val parts = listOf(title, description, content, originalContent, link, imageUrl, audioUrl, videoUrl)
         for (part in parts) {
             if (!part.isNullOrEmpty()) {
                 total += part.toByteArray(Charsets.UTF_8).size
             }
         }
         return total
+    }
+
+    private fun previewSourceContent(item: RssItemEntity): String? {
+        return item.originalContent?.trim()?.ifEmpty { null }
+            ?: item.content?.trim()?.ifEmpty { null }
     }
 
     private fun buildSavedState(entries: List<SavedEntryEntity>): SavedState {
@@ -944,6 +925,7 @@ class DefaultRssRepository(
         title = title,
         description = description,
         content = content,
+        originalContent = originalContent,
         link = link,
         pubDate = pubDate,
         imageUrl = imageUrl,

@@ -28,6 +28,8 @@ private val LLM_FEATURE_ENABLED = booleanPreferencesKey("llm_feature_enabled")
 private val LLM_AUTO_SUMMARIZE = booleanPreferencesKey("llm_auto_summarize")
 private val LLM_SHOW_TOKEN_USAGE = booleanPreferencesKey("llm_show_token_usage")
 private val LLM_PROMPT_PRESET = intPreferencesKey("llm_prompt_preset")
+private const val TEMP_ORIGINAL_MODE_HINT_ATTEMPTS_PREFIX = "temp_original_mode_hint_attempts_"
+private const val TEMP_ORIGINAL_MODE_HINT_LAST_TOAST_PREFIX = "temp_original_mode_hint_last_toast_"
 const val MIN_CACHE_LIMIT_MB: Long = 512
 const val MAX_CACHE_LIMIT_MB: Long = 4 * 1024
 const val DEFAULT_CACHE_LIMIT_MB: Long = MIN_CACHE_LIMIT_MB
@@ -35,6 +37,8 @@ val CACHE_LIMIT_OPTIONS_MB: List<Long> = listOf(512L, 768L, 1024L, 1536L, 2048L,
 const val MB_BYTES: Long = 1024 * 1024
 const val DEFAULT_READING_FONT_SIZE_SP: Int = 14
 const val CURRENT_OOBE_VERSION: Int = 3
+const val TEMP_ORIGINAL_MODE_HINT_WINDOW_MS: Long = 12L * 60L * 60L * 1000L
+const val TEMP_ORIGINAL_MODE_HINT_THRESHOLD: Int = 3
 class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     val cacheLimitBytes: Flow<Long> = dataStore.data.map { preferences ->
         clampCacheLimitBytes(preferences[CACHE_LIMIT_BYTES] ?: (DEFAULT_CACHE_LIMIT_MB * MB_BYTES))
@@ -151,9 +155,55 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         dataStore.edit { it[LLM_PROMPT_PRESET] = value }
     }
 
+    suspend fun recordTemporaryOriginalContentEnableAndShouldShowHint(
+        channelId: Long,
+        now: Long = System.currentTimeMillis()
+    ): Boolean {
+        if (channelId <= 0L) return false
+        val attemptsKey = temporaryOriginalModeHintAttemptsKey(channelId)
+        val lastToastKey = temporaryOriginalModeHintLastToastKey(channelId)
+        val windowStart = now - TEMP_ORIGINAL_MODE_HINT_WINDOW_MS
+        var shouldShowHint = false
+
+        dataStore.edit { preferences ->
+            val attempts = decodeTimestampList(preferences[attemptsKey])
+                .filter { it >= windowStart }
+                .toMutableList()
+            attempts += now
+            while (attempts.size > TEMP_ORIGINAL_MODE_HINT_THRESHOLD) {
+                attempts.removeAt(0)
+            }
+            preferences[attemptsKey] = encodeTimestampList(attempts)
+
+            val lastToastAt = preferences[lastToastKey] ?: 0L
+            if (attempts.size >= TEMP_ORIGINAL_MODE_HINT_THRESHOLD && lastToastAt < windowStart) {
+                preferences[lastToastKey] = now
+                shouldShowHint = true
+            }
+        }
+
+        return shouldShowHint
+    }
+
     private fun clampCacheLimitBytes(bytes: Long): Long {
         val minBytes = MIN_CACHE_LIMIT_MB * MB_BYTES
         val maxBytes = MAX_CACHE_LIMIT_MB * MB_BYTES
         return bytes.coerceIn(minBytes, maxBytes)
     }
+
+    private fun temporaryOriginalModeHintAttemptsKey(channelId: Long) =
+        stringPreferencesKey("$TEMP_ORIGINAL_MODE_HINT_ATTEMPTS_PREFIX$channelId")
+
+    private fun temporaryOriginalModeHintLastToastKey(channelId: Long) =
+        longPreferencesKey("$TEMP_ORIGINAL_MODE_HINT_LAST_TOAST_PREFIX$channelId")
+
+    private fun decodeTimestampList(raw: String?): List<Long> {
+        return raw.orEmpty()
+            .split(',')
+            .mapNotNull { value -> value.trim().toLongOrNull() }
+            .sorted()
+    }
+
+    private fun encodeTimestampList(values: List<Long>): String =
+        values.joinToString(",")
 }

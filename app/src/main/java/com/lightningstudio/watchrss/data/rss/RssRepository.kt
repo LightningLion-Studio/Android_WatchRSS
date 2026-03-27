@@ -20,8 +20,8 @@ interface RssRepository {
     suspend fun addChannel(url: String): Result<RssChannel>
     suspend fun refreshChannel(channelId: Long, refreshAll: Boolean = false): Result<Unit>
     fun refreshChannelInBackground(channelId: Long, refreshAll: Boolean = false)
-    fun requestOriginalContent(itemId: Long)
-    fun requestOriginalContents(itemIds: List<Long>)
+    fun requestOriginalContent(itemId: Long, force: Boolean = false)
+    fun requestOriginalContents(itemIds: List<Long>, force: Boolean = false)
     fun setOriginalContentUpdatesPaused(channelId: Long, paused: Boolean)
     suspend fun markItemRead(itemId: Long)
     suspend fun toggleFavorite(itemId: Long): Result<SavedState>

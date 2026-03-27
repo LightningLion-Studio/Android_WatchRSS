@@ -124,6 +124,7 @@ class RssOfflineStore(
         title = title,
         description = description,
         content = content,
+        originalContent = originalContent,
         link = link,
         pubDate = pubDate,
         imageUrl = imageUrl,

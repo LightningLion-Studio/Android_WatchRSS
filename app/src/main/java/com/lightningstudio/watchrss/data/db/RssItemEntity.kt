@@ -28,6 +28,7 @@ data class RssItemEntity(
     val title: String,
     val description: String?,
     val content: String?,
+    val originalContent: String?,
     val link: String?,
     val guid: String?,
     val pubDate: String?,

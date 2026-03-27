@@ -18,6 +18,7 @@ internal object RssPreviewUpdatePlanner {
     fun attemptKeyFor(item: RssItemEntity): String {
         val source = listOf(
             normalize(item.description).orEmpty(),
+            normalize(item.originalContent).orEmpty(),
             normalize(item.content).orEmpty(),
             normalize(item.imageUrl).orEmpty(),
             normalize(item.link).orEmpty(),

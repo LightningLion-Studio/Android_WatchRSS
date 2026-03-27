@@ -19,6 +19,7 @@ data class RssItem(
     val title: String,
     val description: String?,
     val content: String?,
+    val originalContent: String?,
     val link: String?,
     val pubDate: String?,
     val imageUrl: String?,
@@ -31,3 +32,16 @@ data class RssItem(
     val readingProgress: Float,
     val fetchedAt: Long
 )
+
+fun RssItem.effectiveContent(useOriginalContent: Boolean): String? {
+    val safeOriginal = originalContent?.trim()?.ifEmpty { null }
+    val safeContent = content?.trim()?.ifEmpty { null }
+    val safeDescription = description?.trim()?.ifEmpty { null }
+    return if (useOriginalContent) {
+        safeOriginal ?: safeContent ?: safeDescription
+    } else {
+        safeContent ?: safeDescription
+    }
+}
+
+fun RssItem.isOriginalContentMissing(): Boolean = originalContent.isNullOrBlank()

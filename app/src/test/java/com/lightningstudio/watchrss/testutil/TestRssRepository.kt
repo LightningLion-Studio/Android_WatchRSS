@@ -322,6 +322,7 @@ fun sampleRssItem(
         title = title,
         description = description,
         content = content,
+        originalContent = null,
         link = link,
         pubDate = "2024-01-01",
         imageUrl = null,

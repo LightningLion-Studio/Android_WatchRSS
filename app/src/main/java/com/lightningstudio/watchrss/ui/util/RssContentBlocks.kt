@@ -1,9 +1,10 @@
 package com.lightningstudio.watchrss.ui.util
 
 import com.lightningstudio.watchrss.data.rss.RssItem
+import com.lightningstudio.watchrss.data.rss.effectiveContent
 
-fun buildContentBlocks(item: RssItem): List<ContentBlock> {
-    val raw = item.content ?: item.description
+fun buildContentBlocks(item: RssItem, useOriginalContent: Boolean): List<ContentBlock> {
+    val raw = item.effectiveContent(useOriginalContent)
     val blocks = if (raw.isNullOrBlank()) {
         mutableListOf()
     } else {

@@ -3,6 +3,8 @@ package com.lightningstudio.watchrss.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lightningstudio.watchrss.data.rss.RssRepository
+import com.lightningstudio.watchrss.data.rss.effectiveContent
+import com.lightningstudio.watchrss.data.rss.isOriginalContentMissing
 import com.lightningstudio.watchrss.data.settings.LlmApiKeyProvider
 import com.lightningstudio.watchrss.data.settings.SettingsRepository
 import com.lightningstudio.watchrss.util.AppLogger
@@ -135,7 +137,7 @@ class LlmSummaryViewModel(
                 pendingTitle = item.title.orEmpty()
 
                 val waitingForOriginalContent = channel?.useOriginalContent == true &&
-                    item.content.isNullOrBlank()
+                    item.isOriginalContentMissing()
                 if (waitingForOriginalContent) {
                     pendingContent = ""
                     if (_state.value.status == SummaryStatus.Idle ||
@@ -146,7 +148,9 @@ class LlmSummaryViewModel(
                     return@collect
                 }
 
-                val rawHtml = item.content ?: item.description ?: ""
+                val rawHtml = item.effectiveContent(
+                    useOriginalContent = channel?.useOriginalContent == true || !item.isOriginalContentMissing()
+                ).orEmpty()
                 pendingContent = if (rawHtml.isNotBlank()) {
                     withContext(Dispatchers.Default) {
                         Jsoup.parse(rawHtml).text().take(MAX_CONTENT_CHARS)

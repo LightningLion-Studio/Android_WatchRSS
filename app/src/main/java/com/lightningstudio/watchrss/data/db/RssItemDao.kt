@@ -34,6 +34,7 @@ interface RssItemDao {
             title LIKE :keyword ESCAPE '\' OR
             description LIKE :keyword ESCAPE '\' OR
             content LIKE :keyword ESCAPE '\' OR
+            originalContent LIKE :keyword ESCAPE '\' OR
             summary LIKE :keyword ESCAPE '\'
         )
         ORDER BY fetchedAt DESC, id DESC
@@ -62,6 +63,7 @@ interface RssItemDao {
         UPDATE rss_items SET
             description = :description,
             content = :content,
+            originalContent = NULL,
             imageUrl = :imageUrl,
             audioUrl = :audioUrl,
             videoUrl = :videoUrl,
@@ -103,7 +105,7 @@ interface RssItemDao {
     @Query(
         """
         UPDATE rss_items SET
-            content = :content,
+            originalContent = :content,
             contentSizeBytes = :contentSizeBytes
         WHERE channelId = :channelId AND dedupKey = :dedupKey
         """

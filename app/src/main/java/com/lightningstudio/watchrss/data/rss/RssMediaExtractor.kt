@@ -14,7 +14,8 @@ object RssMediaExtractor {
             refs.add(RssMediaRef(OfflineMediaType.VIDEO, it))
         }
 
-        val html = item.content?.takeIf { it.isNotBlank() }
+        val html = item.originalContent?.takeIf { it.isNotBlank() }
+            ?: item.content?.takeIf { it.isNotBlank() }
             ?: item.description?.takeIf { it.isNotBlank() }
         if (!html.isNullOrBlank()) {
             refs.addAll(extractFromHtml(html))
