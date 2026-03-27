@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.rss.RssItem
+import com.lightningstudio.watchrss.data.rss.effectiveContent
 import com.lightningstudio.watchrss.ui.components.SearchInputBar
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
@@ -158,7 +159,11 @@ private fun EmptyHint(text: String) {
 
 private fun buildSearchSnippet(item: RssItem, keyword: String): String {
     val normalizedKeyword = keyword.trim()
-    val candidates = listOf(item.description, item.content, item.summary)
+    val candidates = listOf(
+        item.description,
+        item.effectiveContent(useOriginalContent = !item.originalContent.isNullOrBlank()),
+        item.summary
+    )
     if (normalizedKeyword.isNotEmpty()) {
         candidates.forEach { value ->
             if (!value.isNullOrBlank()) {

@@ -38,7 +38,7 @@ class PerfLargeArticleActivity : BaseWatchActivity() {
                 val contentBlocks by produceState<List<ContentBlock>>(initialValue = emptyList(), item) {
                     val current = item ?: return@produceState
                     value = withContext(Dispatchers.Default) {
-                        buildContentBlocks(current)
+                        buildContentBlocks(current, useOriginalContent = false)
                     }
                 }
 

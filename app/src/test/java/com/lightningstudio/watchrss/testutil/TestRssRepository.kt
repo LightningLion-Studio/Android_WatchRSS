@@ -37,8 +37,8 @@ class TestRssRepository(
     val refreshRequests = mutableListOf<Pair<Long, Boolean>>()
     val refreshResults = mutableMapOf<Long, Result<Unit>>()
     val refreshBackgroundRequests = mutableListOf<Pair<Long, Boolean>>()
-    val requestedOriginalContentIds = mutableListOf<Long>()
-    val requestedOriginalContentBatchIds = mutableListOf<List<Long>>()
+    val requestedOriginalContentIds = mutableListOf<Pair<Long, Boolean>>()
+    val requestedOriginalContentBatchIds = mutableListOf<Pair<List<Long>, Boolean>>()
     val pausedOriginalContentUpdates = mutableListOf<Pair<Long, Boolean>>()
     val markedReadItemIds = mutableListOf<Long>()
     val toggledFavoriteIds = mutableListOf<Long>()
@@ -119,7 +119,8 @@ class TestRssRepository(
                     .filter { item ->
                         item.title.contains(query, ignoreCase = true) ||
                             item.description.orEmpty().contains(query, ignoreCase = true) ||
-                            item.content.orEmpty().contains(query, ignoreCase = true)
+                            item.content.orEmpty().contains(query, ignoreCase = true) ||
+                            item.originalContent.orEmpty().contains(query, ignoreCase = true)
                     }
                     .take(limit.coerceAtLeast(0))
             }
@@ -163,12 +164,12 @@ class TestRssRepository(
         refreshBackgroundRequests += channelId to refreshAll
     }
 
-    override fun requestOriginalContent(itemId: Long) {
-        requestedOriginalContentIds += itemId
+    override fun requestOriginalContent(itemId: Long, force: Boolean) {
+        requestedOriginalContentIds += itemId to force
     }
 
-    override fun requestOriginalContents(itemIds: List<Long>) {
-        requestedOriginalContentBatchIds += itemIds
+    override fun requestOriginalContents(itemIds: List<Long>, force: Boolean) {
+        requestedOriginalContentBatchIds += itemIds to force
     }
 
     override fun setOriginalContentUpdatesPaused(channelId: Long, paused: Boolean) {
@@ -313,6 +314,7 @@ fun sampleRssItem(
     title: String = "测试条目 $id",
     description: String? = "摘要 $id",
     content: String? = "正文 $id",
+    originalContent: String? = null,
     link: String? = "https://example.com/items/$id",
     readingProgress: Float = 0f
 ): RssItem {
@@ -322,7 +324,7 @@ fun sampleRssItem(
         title = title,
         description = description,
         content = content,
-        originalContent = null,
+        originalContent = originalContent,
         link = link,
         pubDate = "2024-01-01",
         imageUrl = null,

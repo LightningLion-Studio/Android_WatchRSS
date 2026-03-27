@@ -2,14 +2,18 @@ package com.lightningstudio.watchrss
 
 import android.content.Intent
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.lifecycleScope
 import com.lightningstudio.watchrss.phoneconnection.PhoneConnectionAbility
 import com.lightningstudio.watchrss.ui.screen.rss.DetailScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
+import com.lightningstudio.watchrss.ui.util.showAppToast
 import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
 import com.lightningstudio.watchrss.ui.viewmodel.DetailViewModel
 import com.lightningstudio.watchrss.ui.viewmodel.LlmSummaryViewModel
@@ -38,7 +42,13 @@ class DetailActivity : BaseWatchActivity() {
 
         setContent {
             WatchRSSTheme {
+                val context = LocalContext.current
                 val llmSummaryState by llmSummaryViewModel.state.collectAsState()
+                LaunchedEffect(viewModel) {
+                    viewModel.messages.collect { message ->
+                        showAppToast(context, message, Toast.LENGTH_SHORT)
+                    }
+                }
                 DetailScreen(
                     viewModel = viewModel,
                     llmSummaryState = llmSummaryState,

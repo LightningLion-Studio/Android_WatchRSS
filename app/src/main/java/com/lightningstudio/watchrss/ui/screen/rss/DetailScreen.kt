@@ -57,6 +57,7 @@ import com.lightningstudio.watchrss.data.rss.OfflineMedia
 import com.lightningstudio.watchrss.data.rss.RssItem
 import com.lightningstudio.watchrss.data.settings.RssInlineImagePrefetchMode
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
+import com.lightningstudio.watchrss.ui.screen.WarningConfirmDialog
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
 import com.lightningstudio.watchrss.ui.theme.WatchReadingBackgroundLight
 import com.lightningstudio.watchrss.ui.theme.WatchReadingTextLight
@@ -98,6 +99,7 @@ fun DetailScreen(
     val rssInlineImagePrefetchMode by viewModel.rssInlineImagePrefetchMode.collectAsState()
     val llmFeatureEnabled by viewModel.llmFeatureEnabled.collectAsState()
     val llmAutoSummarize by viewModel.llmAutoSummarize.collectAsState()
+    val effectiveUseOriginalContent by viewModel.effectiveUseOriginalContent.collectAsState()
 
     val hasOfflineFailures = remember(offlineMedia) { offlineMedia.any { it.localPath == null } }
     val offlineMap = remember(offlineMedia) { offlineMedia.associateBy { it.originUrl } }
@@ -106,14 +108,15 @@ fun DetailScreen(
     CompositionLocalProvider(LocalDensity provides Density(2f, baseDensity.fontScale)) {
         DetailContent(
             item = item,
-            showOriginalLoadingNotice = channel?.useOriginalContent == true &&
-                item?.content.isNullOrBlank(),
+            showOriginalLoadingNotice = effectiveUseOriginalContent &&
+                item?.originalContent.isNullOrBlank(),
             contentBlocks = contentBlocks,
             offlineMedia = offlineMap,
             hasOfflineFailures = hasOfflineFailures,
             isRetryingOfflineMedia = isRetryingOfflineMedia,
             isFavorite = savedState.isFavorite,
             isWatchLater = savedState.isWatchLater,
+            originalContentEnabled = effectiveUseOriginalContent,
             readingThemeDark = readingThemeDark,
             readingFontSizeSp = readingFontSizeSp,
             shareUseSystem = shareUseSystem,
@@ -122,6 +125,7 @@ fun DetailScreen(
             llmAutoSummarize = llmAutoSummarize,
             llmSummaryState = llmSummaryState,
             onToggleFavorite = viewModel::toggleFavorite,
+            onToggleOriginalContent = viewModel::toggleOriginalContent,
             onRetryOfflineMedia = viewModel::retryOfflineMedia,
             onSaveReadingProgress = viewModel::updateReadingProgress,
             onOpenAiSummary = onOpenAiSummary,
@@ -141,6 +145,7 @@ internal fun DetailContent(
     isRetryingOfflineMedia: Boolean,
     isFavorite: Boolean,
     isWatchLater: Boolean,
+    originalContentEnabled: Boolean,
     readingThemeDark: Boolean,
     readingFontSizeSp: Int,
     shareUseSystem: Boolean,
@@ -149,6 +154,7 @@ internal fun DetailContent(
     llmAutoSummarize: Boolean = false,
     llmSummaryState: LlmSummaryUiState = LlmSummaryUiState(),
     onToggleFavorite: () -> Unit,
+    onToggleOriginalContent: () -> Unit,
     onRetryOfflineMedia: () -> Unit,
     onSaveReadingProgress: (Float) -> Unit,
     onOpenAiSummary: () -> Unit = {},
@@ -202,6 +208,7 @@ internal fun DetailContent(
     }
     val mediaCardBorderColor = Color.Transparent
     val prefetchScope = rememberCoroutineScope()
+    var showOriginalModeWarning by remember(item?.id, item?.link) { mutableStateOf(false) }
 
     val maxImageWidthPx = remember(context) {
         val pagePaddingPx = with(density) { pagePadding.roundToPx() }
@@ -501,12 +508,13 @@ internal fun DetailContent(
                 item(key = "linkAction") {
                     Spacer(modifier = Modifier.height(blockSpacing))
                     DetailActionButton(
-                        text = "打开原文",
+                        text = if (originalContentEnabled) "取消阅读原文" else "阅读原文",
                         fontSize = bodyFontSize,
                         containerColor = actionContainerColor,
                         contentColor = textColor,
                         borderColor = actionBorderColor,
-                        onClick = { openLinkInApp(context, link) }
+                        onClick = onToggleOriginalContent,
+                        onLongClick = { showOriginalModeWarning = true }
                     )
                 }
             }
@@ -729,6 +737,18 @@ internal fun DetailContent(
                     onClick = onOpenAiSummary
                 )
             }
+        }
+
+        if (showOriginalModeWarning && link.isNotEmpty()) {
+            WarningConfirmDialog(
+                title = "内测功能",
+                message = "原文网页阅读仍在内测，可能出现加载慢、排版异常或兼容性问题，确定继续吗？",
+                onConfirm = {
+                    showOriginalModeWarning = false
+                    openLinkInApp(context, link)
+                },
+                onCancel = { showOriginalModeWarning = false }
+            )
         }
     }
 }

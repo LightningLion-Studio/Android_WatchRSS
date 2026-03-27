@@ -62,9 +62,9 @@ class FakeRssRepository(
 
     override fun refreshChannelInBackground(channelId: Long, refreshAll: Boolean) = Unit
 
-    override fun requestOriginalContent(itemId: Long) = Unit
+    override fun requestOriginalContent(itemId: Long, force: Boolean) = Unit
 
-    override fun requestOriginalContents(itemIds: List<Long>) = Unit
+    override fun requestOriginalContents(itemIds: List<Long>, force: Boolean) = Unit
 
     override fun setOriginalContentUpdatesPaused(channelId: Long, paused: Boolean) = Unit
 

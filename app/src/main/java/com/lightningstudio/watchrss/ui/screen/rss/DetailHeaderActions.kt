@@ -8,6 +8,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -227,13 +228,15 @@ internal fun DetailActionButton(
     contentColor: Color,
     borderColor: Color,
     enabled: Boolean = true,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null
 ) {
     val shape = RoundedCornerShape(WatchDimens.hey_button_default_radius)
     val padding = PaddingValues(
         horizontal = WatchDimens.hey_content_horizontal_distance,
         vertical = watchDimensionResource(R.dimen.hey_distance_6dp)
     )
+    val interactionSource = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
             .clip(shape)
@@ -249,7 +252,13 @@ internal fun DetailActionButton(
                     Modifier
                 }
             )
-            .clickableWithoutRipple(enabled = enabled, onClick = onClick)
+            .combinedClickable(
+                enabled = enabled,
+                interactionSource = interactionSource,
+                indication = null,
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
             .padding(padding)
     ) {
         Text(

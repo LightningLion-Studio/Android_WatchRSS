@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Cancel
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material3.Icon
@@ -43,6 +44,47 @@ fun DeleteConfirmDialog(
     message: String,
     onConfirm: () -> Unit,
     onCancel: () -> Unit
+) {
+    WatchConfirmDialog(
+        title = title,
+        message = message,
+        confirmBackground = watchColorResource(R.color.danger_red),
+        confirmIcon = Icons.Outlined.DeleteForever,
+        onConfirm = onConfirm,
+        onCancel = onCancel
+    )
+}
+
+@Composable
+fun WarningConfirmDialog(
+    title: String,
+    message: String,
+    onConfirm: () -> Unit,
+    onCancel: () -> Unit
+) {
+    WatchConfirmDialog(
+        title = title,
+        message = message,
+        confirmBackground = MaterialTheme.colorScheme.primary,
+        confirmIcon = Icons.Filled.Check,
+        confirmIconTint = MaterialTheme.colorScheme.onPrimary,
+        onConfirm = onConfirm,
+        onCancel = onCancel
+    )
+}
+
+@Composable
+fun WatchConfirmDialog(
+    title: String,
+    message: String,
+    confirmBackground: Color,
+    confirmIcon: ImageVector,
+    onConfirm: () -> Unit,
+    onCancel: () -> Unit,
+    confirmIconTint: Color = MaterialTheme.colorScheme.onSurface,
+    cancelBackground: Color = MaterialTheme.colorScheme.surfaceVariant,
+    cancelIcon: ImageVector = Icons.Outlined.Cancel,
+    cancelIconTint: Color = MaterialTheme.colorScheme.onSurface
 ) {
     Box(
         modifier = Modifier.fillMaxSize(),
@@ -80,6 +122,12 @@ fun DeleteConfirmDialog(
                     scaleDp = scaleDp
                 )
                 DialogButtons(
+                    confirmBackground = confirmBackground,
+                    confirmIcon = confirmIcon,
+                    confirmIconTint = confirmIconTint,
+                    cancelBackground = cancelBackground,
+                    cancelIcon = cancelIcon,
+                    cancelIconTint = cancelIconTint,
                     onConfirm = onConfirm,
                     onCancel = onCancel,
                     scaleDp = scaleDp
@@ -131,6 +179,12 @@ private fun DialogContent(
 
 @Composable
 private fun DialogButtons(
+    confirmBackground: Color,
+    confirmIcon: ImageVector,
+    confirmIconTint: Color,
+    cancelBackground: Color,
+    cancelIcon: ImageVector,
+    cancelIconTint: Color,
     onConfirm: () -> Unit,
     onCancel: () -> Unit,
     scaleDp: (Dp) -> Dp
@@ -140,14 +194,16 @@ private fun DialogButtons(
         verticalAlignment = Alignment.CenterVertically
     ) {
         RoundIconButton(
-            background = MaterialTheme.colorScheme.surfaceVariant,
-            icon = Icons.Outlined.Cancel,
+            background = cancelBackground,
+            icon = cancelIcon,
+            iconTint = cancelIconTint,
             onClick = onCancel,
             scaleDp = scaleDp
         )
         RoundIconButton(
-            background = watchColorResource(R.color.danger_red),
-            icon = Icons.Outlined.DeleteForever,
+            background = confirmBackground,
+            icon = confirmIcon,
+            iconTint = confirmIconTint,
             onClick = onConfirm,
             scaleDp = scaleDp
         )
@@ -158,6 +214,7 @@ private fun DialogButtons(
 private fun RoundIconButton(
     background: Color,
     icon: ImageVector,
+    iconTint: Color,
     onClick: () -> Unit,
     scaleDp: (Dp) -> Dp
 ) {
@@ -174,7 +231,7 @@ private fun RoundIconButton(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurface,
+            tint = iconTint,
             modifier = Modifier.size(iconSize)
         )
     }
