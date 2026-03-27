@@ -3,9 +3,11 @@ package com.lightningstudio.watchrss.ui.screen.home
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.rss.RssChannel
 import com.lightningstudio.watchrss.testutil.setWatchContent
 import com.lightningstudio.watchrss.ui.testing.HomeTestTags
@@ -24,6 +26,8 @@ class HomeComposeScreenTest {
         composeRule.setWatchContent {
             HomeComposeScreen(
                 channels = emptyList(),
+                isRefreshing = false,
+                onRefreshAll = {},
                 openSwipeId = null,
                 onOpenSwipe = {},
                 onCloseSwipe = {},
@@ -65,6 +69,8 @@ class HomeComposeScreenTest {
         composeRule.setWatchContent {
             HomeComposeScreen(
                 channels = emptyList(),
+                isRefreshing = false,
+                onRefreshAll = {},
                 openSwipeId = null,
                 onOpenSwipe = {},
                 onCloseSwipe = {},
@@ -109,6 +115,8 @@ class HomeComposeScreenTest {
         composeRule.setWatchContent {
             HomeComposeScreen(
                 channels = listOf(sampleChannel(id = 42L)),
+                isRefreshing = false,
+                onRefreshAll = {},
                 openSwipeId = null,
                 onOpenSwipe = {},
                 onCloseSwipe = {},
@@ -134,6 +142,71 @@ class HomeComposeScreenTest {
         }
     }
 
+    @Test
+    fun douyinChannel_hidesUnreadTextAndIndicator() {
+        composeRule.setWatchContent {
+            HomeComposeScreen(
+                channels = listOf(
+                    sampleChannel(
+                        id = 1002L,
+                        url = BuiltinChannelType.DOUYIN.url,
+                        unreadCount = 7
+                    )
+                ),
+                isRefreshing = false,
+                onRefreshAll = {},
+                openSwipeId = null,
+                onOpenSwipe = {},
+                onCloseSwipe = {},
+                draggingSwipeId = null,
+                onDragStart = {},
+                onDragEnd = {},
+                onProfileClick = {},
+                onRecommendClick = {},
+                onChannelClick = {},
+                onChannelLongClick = {},
+                onSwipeBack = {},
+                onAddRssClick = {},
+                onMoveTopClick = {},
+                onMarkReadClick = {},
+                onBeianClick = {}
+            )
+        }
+
+        composeRule.onNodeWithTag(HomeTestTags.channelCard(1002L)).assertExists()
+        composeRule.onNodeWithText("未读 7", substring = true).assertDoesNotExist()
+        composeRule.onNodeWithTag(HomeTestTags.channelIndicator(1002L)).assertDoesNotExist()
+    }
+
+    @Test
+    fun rssChannel_keepsUnreadTextAndIndicator() {
+        composeRule.setWatchContent {
+            HomeComposeScreen(
+                channels = listOf(sampleChannel(id = 99L, unreadCount = 7)),
+                isRefreshing = false,
+                onRefreshAll = {},
+                openSwipeId = null,
+                onOpenSwipe = {},
+                onCloseSwipe = {},
+                draggingSwipeId = null,
+                onDragStart = {},
+                onDragEnd = {},
+                onProfileClick = {},
+                onRecommendClick = {},
+                onChannelClick = {},
+                onChannelLongClick = {},
+                onSwipeBack = {},
+                onAddRssClick = {},
+                onMoveTopClick = {},
+                onMarkReadClick = {},
+                onBeianClick = {}
+            )
+        }
+
+        composeRule.onNodeWithText("未读 7", substring = true).assertExists()
+        composeRule.onNodeWithTag(HomeTestTags.channelIndicator(99L)).assertExists()
+    }
+
     private fun sampleChannel(id: Long): RssChannel {
         return RssChannel(
             id = id,
@@ -147,5 +220,20 @@ class HomeComposeScreenTest {
             useOriginalContent = false,
             unreadCount = 3
         )
+    }
+
+    private fun sampleChannel(
+        id: Long,
+        url: String,
+        unreadCount: Int
+    ): RssChannel {
+        return sampleChannel(id = id).copy(url = url, unreadCount = unreadCount)
+    }
+
+    private fun sampleChannel(
+        id: Long,
+        unreadCount: Int
+    ): RssChannel {
+        return sampleChannel(id = id).copy(unreadCount = unreadCount)
     }
 }

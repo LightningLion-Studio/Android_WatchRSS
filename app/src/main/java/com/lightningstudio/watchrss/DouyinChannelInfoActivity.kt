@@ -57,7 +57,7 @@ class DouyinChannelInfoActivity : BaseWatchActivity() {
                                 com.lightningstudio.watchrss.ui.util.showAppToast(context, "已标记为已读", android.widget.Toast.LENGTH_SHORT)
                             }
                         },
-                        markReadEnabled = channel != null
+                        markReadEnabled = false
                     )
                 }
             }

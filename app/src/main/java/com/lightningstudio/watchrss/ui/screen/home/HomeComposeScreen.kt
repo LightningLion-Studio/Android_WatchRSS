@@ -402,7 +402,8 @@ private fun HomeChannelEntry(
                     MaterialTheme.colorScheme.surface
                 },
                 titleFontSize = 16.sp,
-                showIndicator = builtinType != BuiltinChannelType.BILI && channel.unreadCount > 0,
+                showIndicator = shouldShowUnreadUi(builtinType) && channel.unreadCount > 0,
+                indicatorTestTag = HomeTestTags.channelIndicator(channel.id),
                 testTag = HomeTestTags.channelCard(channel.id),
                 modifier = Modifier
                     .then(cardScaleModifier)
@@ -662,6 +663,7 @@ private fun HomeDefaultItem(
     backgroundColor: Color,
     titleFontSize: TextUnit? = null,
     showIndicator: Boolean,
+    indicatorTestTag: String? = null,
     testTag: String? = null,
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null
@@ -720,6 +722,7 @@ private fun HomeDefaultItem(
                     .offset(x = minorMarginRight)
                     .size(indicatorSize)
                     .clip(CircleShape)
+                    .then(indicatorTestTag?.let(Modifier::testTag) ?: Modifier)
                     .background(MaterialTheme.colorScheme.primary)
             )
         }
@@ -745,7 +748,7 @@ private fun buildChannelSummary(
     }
     val pinLabel = if (channel.isPinned) "置顶 · " else ""
     val unreadLabel = if (
-        builtinType != BuiltinChannelType.BILI &&
+        shouldShowUnreadUi(builtinType) &&
         channel.unreadCount > 0
     ) {
         "未读 ${channel.unreadCount} · "
@@ -758,6 +761,11 @@ private fun buildChannelSummary(
         "更新: ${formatTime(channel.lastFetchedAt)}"
     }
     return "$pinLabel$summary\n${unreadLabel}$updateLabel"
+}
+
+private fun shouldShowUnreadUi(builtinType: BuiltinChannelType?): Boolean {
+    return builtinType != BuiltinChannelType.BILI &&
+        builtinType != BuiltinChannelType.DOUYIN
 }
 
 @Composable

@@ -33,9 +33,15 @@ object HomeTestTags {
 
     fun channelCard(channelId: Long): String = "home/channel_card/$channelId"
 
+    fun channelIndicator(channelId: Long): String = "home/channel_indicator/$channelId"
+
     fun moveTopAction(channelId: Long): String = "home/channel_move_top/$channelId"
 
     fun markReadAction(channelId: Long): String = "home/channel_mark_read/$channelId"
+}
+
+object DouyinChannelInfoTestTags {
+    const val MARK_READ_BUTTON = "douyin/channel_info/mark_read_button"
 }
 
 object ProfileTestTags {

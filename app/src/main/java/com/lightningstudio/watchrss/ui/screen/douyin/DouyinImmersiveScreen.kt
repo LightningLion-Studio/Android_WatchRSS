@@ -26,7 +26,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
-import androidx.compose.material.icons.filled.ZoomIn
+import androidx.compose.material.icons.filled.PanoramaFishEye
 import androidx.compose.material.icons.outlined.ArrowUpward
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.Icon
@@ -40,9 +40,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
@@ -72,6 +72,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.lightningstudio.watchrss.R
+import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackSourceKind
 import com.lightningstudio.watchrss.data.douyin.DouyinStreamItem
 import com.lightningstudio.watchrss.ui.components.ToastMessage
 import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
@@ -111,6 +112,7 @@ fun DouyinImmersiveScreen(
     uiState: DouyinFeedUiState,
     onPageSettled: (Int) -> Unit,
     onEnterFlow: () -> Unit,
+    onRequestPlaybackRefresh: (String, DouyinPlaybackSourceKind) -> Unit,
     onMessageShown: () -> Unit,
     onHeaderClick: () -> Unit
 ) {
@@ -173,7 +175,8 @@ fun DouyinImmersiveScreen(
                     controlsVisible = controlsVisible,
                     scaleMode = scaleMode,
                     onToggleControls = { controlsVisible = !controlsVisible },
-                    onToggleScaleMode = { scaleMode = scaleMode.next() }
+                    onToggleScaleMode = { scaleMode = scaleMode.next() },
+                    onRequestPlaybackRefresh = onRequestPlaybackRefresh
                 )
             }
         }
@@ -273,7 +276,8 @@ private fun DouyinVideoPage(
     controlsVisible: Boolean,
     scaleMode: DouyinPlayerScaleMode,
     onToggleControls: () -> Unit,
-    onToggleScaleMode: () -> Unit
+    onToggleScaleMode: () -> Unit,
+    onRequestPlaybackRefresh: (String, DouyinPlaybackSourceKind) -> Unit
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -286,13 +290,16 @@ private fun DouyinVideoPage(
     val controlsIconSize = watchDimensionResource(R.dimen.hey_listitem_widget_size)
     val titleFontSize = with(density) { watchDimensionResource(R.dimen.feed_card_title_text_size).toSp() }
 
-    val localUri = remember(item.awemeId) { localPlayPath?.let { "file://$it" } }
-    val remoteUri = remember(item.awemeId) { item.playUrl }
+    val localUri = localPlayPath?.takeIf { it.isNotBlank() }?.let { "file://$it" }
+    val remoteUri = item.playUrl.takeIf { it.isNotBlank() }
     var mediaUri by remember(item.awemeId) {
         mutableStateOf(localUri ?: remoteUri)
     }
+    var remoteResolvedAtMs by remember(item.awemeId) {
+        mutableStateOf(item.playUrlResolvedAtMs)
+    }
     val headersSignature = remember(headers) { headers.entries.sortedBy { it.key }.joinToString(";") }
-    var preparedUri by remember(item.awemeId) { mutableStateOf<String?>(null) }
+    var preparedSourceKey by remember(item.awemeId) { mutableStateOf<String?>(null) }
     var retryCount by remember(item.awemeId) { mutableIntStateOf(0) }
     var pausedByGesture by remember(item.awemeId) { mutableStateOf(false) }
     var isBuffering by remember(item.awemeId) { mutableStateOf(false) }
@@ -321,9 +328,20 @@ private fun DouyinVideoPage(
         }
     }
 
-    LaunchedEffect(item.awemeId, localPlayPath, remoteUri) {
-        if (mediaUri.isNullOrBlank()) {
-            mediaUri = localPlayPath?.let { "file://$it" } ?: remoteUri
+    LaunchedEffect(localUri, remoteUri, item.playUrlResolvedAtMs) {
+        val resolvedState = resolveDouyinPlaybackState(
+            currentUri = mediaUri,
+            currentRemoteResolvedAtMs = remoteResolvedAtMs,
+            localUri = localUri,
+            remoteUri = remoteUri,
+            remoteResolvedAtMs = item.playUrlResolvedAtMs
+        )
+        if (resolvedState.mediaUri != mediaUri || resolvedState.remoteResolvedAtMs != remoteResolvedAtMs) {
+            mediaUri = resolvedState.mediaUri
+            remoteResolvedAtMs = resolvedState.remoteResolvedAtMs
+            preparedSourceKey = null
+            hasError = false
+            isBuffering = resolvedState.mediaUri != null
         }
     }
 
@@ -344,27 +362,25 @@ private fun DouyinVideoPage(
             }
     }
 
-    fun retryPlayback() {
+    fun requestPlaybackRefresh() {
+        val sourceKind = currentDouyinPlaybackSourceKind(mediaUri)
         val targetUri = mediaUri?.trim()?.takeIf { it.isNotBlank() }
-            ?: localUri?.trim()?.takeIf { it.isNotBlank() }
-            ?: remoteUri?.trim()?.takeIf { it.isNotBlank() }
+            ?: localUri
+            ?: remoteUri
         if (targetUri.isNullOrBlank()) {
             hasError = true
             return
         }
-        mediaUri = targetUri
-        preparedUri = targetUri
-        retryCount = 0
-        hasError = false
-        isBuffering = true
+        hasError = sourceKind == DouyinPlaybackSourceKind.REMOTE ||
+            (sourceKind == DouyinPlaybackSourceKind.LOCAL && remoteUri.isNullOrBlank())
+        isBuffering = sourceKind == DouyinPlaybackSourceKind.LOCAL && !remoteUri.isNullOrBlank()
         pausedByGesture = false
-        player.stop()
-        player.setMediaItem(MediaItem.fromUri(targetUri))
-        player.prepare()
-        if (isActive) {
-            player.playWhenReady = true
-            player.play()
+        if (sourceKind == DouyinPlaybackSourceKind.LOCAL && !remoteUri.isNullOrBlank()) {
+            mediaUri = remoteUri
+            remoteResolvedAtMs = item.playUrlResolvedAtMs
+            preparedSourceKey = null
         }
+        onRequestPlaybackRefresh(item.awemeId, sourceKind)
     }
 
     fun stopPlayback() {
@@ -376,7 +392,7 @@ private fun DouyinVideoPage(
 
     val latestHasError = rememberUpdatedState(hasError)
     val latestIsActive = rememberUpdatedState(isActive)
-    val latestRetryPlayback = rememberUpdatedState(newValue = { retryPlayback() })
+    val latestRequestPlaybackRefresh = rememberUpdatedState(newValue = { requestPlaybackRefresh() })
 
     DisposableEffect(player, item.awemeId, remoteUri) {
         val listener = object : Player.Listener {
@@ -406,15 +422,10 @@ private fun DouyinVideoPage(
                 AppLogger.w(TAG, "playback error awemeId=${item.awemeId}, uri=$mediaUri", error)
                 if (retryCount < 1) {
                     retryCount += 1
-                    if (!mediaUri.isNullOrBlank() && mediaUri?.startsWith("file://") == true && !remoteUri.isNullOrBlank()) {
-                        mediaUri = remoteUri
-                        preparedUri = null
-                    } else {
-                        player.seekTo(0)
-                        player.prepare()
-                    }
+                    latestRequestPlaybackRefresh.value()
                 } else {
                     hasError = true
+                    isBuffering = false
                 }
             }
         }
@@ -454,18 +465,25 @@ private fun DouyinVideoPage(
         }
     }
 
-    LaunchedEffect(mediaUri, player) {
+    val prepareKey = remember(mediaUri, remoteResolvedAtMs) {
+        buildDouyinPlaybackPrepareKey(mediaUri, remoteResolvedAtMs)
+    }
+
+    LaunchedEffect(prepareKey, player) {
+        val targetPrepareKey = prepareKey
         val targetUri = mediaUri?.trim().orEmpty()
-        if (targetUri.isBlank()) {
+        if (targetPrepareKey.isNullOrBlank() || targetUri.isBlank()) {
             hasError = true
+            isBuffering = false
             return@LaunchedEffect
         }
-        if (preparedUri == targetUri) {
+        if (preparedSourceKey == targetPrepareKey) {
             return@LaunchedEffect
         }
         hasError = false
         retryCount = 0
-        preparedUri = targetUri
+        isBuffering = true
+        preparedSourceKey = targetPrepareKey
         player.setMediaItem(MediaItem.fromUri(targetUri))
         player.prepare()
     }
@@ -489,7 +507,7 @@ private fun DouyinVideoPage(
                     onTap = { onToggleControls() },
                     onDoubleTap = {
                         if (latestHasError.value) {
-                            latestRetryPlayback.value()
+                            latestRequestPlaybackRefresh.value()
                         } else if (player.isPlaying) {
                             pausedByGesture = true
                             player.pause()
@@ -768,13 +786,21 @@ private fun DouyinPlayerScaleMode.toggleAction(): DouyinPlayerScaleToggleAction 
             contentDescription = "放大"
         )
         DouyinPlayerScaleMode.Expanded -> DouyinPlayerScaleToggleAction(
-            icon = Icons.Filled.ZoomIn,
+            icon = Icons.Filled.PanoramaFishEye,
             contentDescription = "缩小"
         )
         DouyinPlayerScaleMode.Shrunk -> DouyinPlayerScaleToggleAction(
             icon = Icons.Filled.FullscreenExit,
             contentDescription = "标准"
         )
+    }
+}
+
+private fun currentDouyinPlaybackSourceKind(mediaUri: String?): DouyinPlaybackSourceKind {
+    return if (mediaUri?.startsWith("file://") == true) {
+        DouyinPlaybackSourceKind.LOCAL
+    } else {
+        DouyinPlaybackSourceKind.REMOTE
     }
 }
 

@@ -6,8 +6,14 @@ import com.lightningstudio.watchrss.data.bili.BiliResolvedPlaybackSource
 import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
 import com.lightningstudio.watchrss.data.bili.BiliErrorCodes
 import com.lightningstudio.watchrss.data.douyin.DouyinErrorCodes
+import com.lightningstudio.watchrss.data.douyin.DouyinFeedCacheStoreContract
+import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackSourceKind
+import com.lightningstudio.watchrss.data.douyin.DouyinPreloadManagerContract
 import com.lightningstudio.watchrss.data.douyin.DouyinRepositoryContract
 import com.lightningstudio.watchrss.data.douyin.DouyinResult
+import com.lightningstudio.watchrss.data.douyin.DouyinSourceOrigin
+import com.lightningstudio.watchrss.data.douyin.DouyinStreamItem
+import com.lightningstudio.watchrss.data.douyin.DouyinWatchHistoryStoreContract
 import com.lightningstudio.watchrss.sdk.bili.BiliDurl
 import com.lightningstudio.watchrss.sdk.bili.BiliFeedPage
 import com.lightningstudio.watchrss.sdk.bili.BiliFeedSource
@@ -386,6 +392,28 @@ class TestDouyinRepository(
     var loggedIn = initialLoggedIn
     var clearCookieCalls = 0
     var logoutCalls = 0
+    var feedPageResults: ArrayDeque<DouyinResult<DouyinFeedPage>> = ArrayDeque(
+        listOf(
+            DouyinResult(
+                code = DouyinErrorCodes.OK,
+                data = DouyinFeedPage(items = listOf(sampleDouyinVideo()), nextCursor = null, hasMore = false)
+            )
+        )
+    )
+    var videoResult: DouyinResult<DouyinContent> = DouyinResult(
+        code = DouyinErrorCodes.OK,
+        data = DouyinContent.Video(
+            awemeId = "7357000000000000001",
+            desc = "测试抖音详情",
+            authorName = "测试作者",
+            diggCount = 9L,
+            playUrl = "https://example.com/video.mp4",
+            coverUrl = "https://example.com/cover.jpg"
+        )
+    )
+    private val videoResults = mutableMapOf<String, DouyinResult<DouyinContent>>()
+    var headers: Map<String, String> = mapOf("User-Agent" to "TestDouyinRepository")
+    val fetchVideoCalls = mutableListOf<String>()
 
     override suspend fun isLoggedIn(): Boolean = loggedIn
 
@@ -404,29 +432,118 @@ class TestDouyinRepository(
     }
 
     override suspend fun fetchFeedPage(cursor: String?, count: Int): DouyinResult<DouyinFeedPage> {
-        return DouyinResult(
-            code = DouyinErrorCodes.OK,
-            data = DouyinFeedPage(items = listOf(sampleDouyinVideo()), nextCursor = null, hasMore = false)
-        )
+        return if (feedPageResults.isEmpty()) {
+            DouyinResult(
+                code = DouyinErrorCodes.OK,
+                data = DouyinFeedPage(items = listOf(sampleDouyinVideo()), nextCursor = null, hasMore = false)
+            )
+        } else {
+            feedPageResults.removeFirst()
+        }
     }
 
     override suspend fun fetchVideo(awemeId: String): DouyinResult<DouyinContent> {
-        return DouyinResult(
-            code = DouyinErrorCodes.OK,
-            data = DouyinContent.Video(
-                awemeId = awemeId,
-                desc = "测试抖音详情",
-                authorName = "测试作者",
-                diggCount = 9L,
-                playUrl = "https://example.com/video.mp4",
-                coverUrl = "https://example.com/cover.jpg"
-            )
-        )
+        fetchVideoCalls += awemeId
+        return videoResults[awemeId] ?: videoResult
     }
 
     override suspend fun buildPlayHeaders(): Map<String, String> {
-        return mapOf("User-Agent" to "TestDouyinRepository")
+        return headers
     }
+
+    fun setVideoResult(awemeId: String, result: DouyinResult<DouyinContent>) {
+        videoResults[awemeId] = result
+    }
+}
+
+class TestDouyinPreloadManager : DouyinPreloadManagerContract {
+    val localPaths = linkedMapOf<String, String>()
+    val invalidatedIds = mutableListOf<String>()
+    var ensureCalls = 0
+
+    override suspend fun localPathFor(awemeId: String): String? = localPaths[awemeId]
+
+    override suspend fun resolveLocalPaths(awemeIds: List<String>): Map<String, String> {
+        val result = linkedMapOf<String, String>()
+        awemeIds.distinct().forEach { awemeId ->
+            localPaths[awemeId]?.let { result[awemeId] = it }
+        }
+        return result
+    }
+
+    override suspend fun ensureUnwatchedCache(
+        items: List<DouyinStreamItem>,
+        watchedIds: Set<String>,
+        headers: Map<String, String>,
+        targetUnwatchedCount: Int
+    ) {
+        ensureCalls += 1
+    }
+
+    override suspend fun invalidate(awemeId: String): Boolean {
+        invalidatedIds += awemeId
+        return localPaths.remove(awemeId) != null
+    }
+}
+
+class TestDouyinWatchHistoryStore : DouyinWatchHistoryStoreContract {
+    val watchedIds = linkedSetOf<String>()
+
+    override fun markWatched(awemeId: String) {
+        watchedIds += awemeId
+    }
+
+    override fun readWatchedIds(): Set<String> = watchedIds.toSet()
+
+    override fun clear() {
+        watchedIds.clear()
+    }
+}
+
+class TestDouyinFeedCacheStore(
+    initialItems: List<DouyinStreamItem> = emptyList()
+) : DouyinFeedCacheStoreContract {
+    var cachedItems: List<DouyinStreamItem> = initialItems
+    val savedSnapshots = mutableListOf<List<DouyinStreamItem>>()
+
+    override fun save(items: List<DouyinStreamItem>, savedAtMs: Long) {
+        cachedItems = items
+        savedSnapshots += items
+    }
+
+    override fun read(limit: Int): List<DouyinStreamItem> {
+        return if (limit > 0) cachedItems.take(limit) else cachedItems
+    }
+
+    override fun readSnapshot(limit: Int): com.lightningstudio.watchrss.data.douyin.DouyinFeedCacheSnapshot {
+        val items = if (limit > 0) cachedItems.take(limit) else cachedItems
+        return com.lightningstudio.watchrss.data.douyin.DouyinFeedCacheSnapshot(
+            items = items,
+            savedAtMs = items.maxOfOrNull { it.playUrlResolvedAtMs } ?: 0L
+        )
+    }
+}
+
+fun sampleDouyinStreamItem(
+    awemeId: String = "7357000000000000001",
+    playUrl: String = "https://example.com/douyin.mp4",
+    coverUrl: String? = "https://example.com/douyin.jpg",
+    title: String? = "测试抖音视频",
+    author: String? = "测试作者",
+    likeCount: Long = 12L,
+    playUrlResolvedAtMs: Long = 1_700_000_000_000L,
+    sourceOrigin: DouyinSourceOrigin = DouyinSourceOrigin.NETWORK_FEED
+): DouyinStreamItem {
+    return DouyinStreamItem(
+        awemeId = awemeId,
+        playUrl = playUrl,
+        coverUrl = coverUrl,
+        title = title,
+        author = author,
+        likeCount = likeCount,
+        playUrlResolvedAtMs = playUrlResolvedAtMs,
+        sourceOrigin = sourceOrigin
+    )
 }
 
 fun sampleBiliItem(

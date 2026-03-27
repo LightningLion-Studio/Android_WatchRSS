@@ -2,10 +2,16 @@ package com.lightningstudio.watchrss.data.douyin
 
 import android.content.Context
 
-class DouyinWatchHistoryStore(context: Context) {
+interface DouyinWatchHistoryStoreContract {
+    fun markWatched(awemeId: String)
+    fun readWatchedIds(): Set<String>
+    fun clear()
+}
+
+class DouyinWatchHistoryStore(context: Context) : DouyinWatchHistoryStoreContract {
     private val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    fun markWatched(awemeId: String) {
+    override fun markWatched(awemeId: String) {
         val id = awemeId.trim()
         if (id.isEmpty()) return
         val current = prefs.getStringSet(KEY_WATCHED_IDS, emptySet()).orEmpty().toMutableSet()
@@ -16,11 +22,11 @@ class DouyinWatchHistoryStore(context: Context) {
         }
     }
 
-    fun readWatchedIds(): Set<String> {
+    override fun readWatchedIds(): Set<String> {
         return prefs.getStringSet(KEY_WATCHED_IDS, emptySet()).orEmpty()
     }
 
-    fun clear() {
+    override fun clear() {
         prefs.edit().remove(KEY_WATCHED_IDS).apply()
     }
 

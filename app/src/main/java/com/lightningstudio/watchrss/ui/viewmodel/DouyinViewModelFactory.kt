@@ -2,16 +2,16 @@ package com.lightningstudio.watchrss.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import com.lightningstudio.watchrss.data.douyin.DouyinFeedCacheStore
-import com.lightningstudio.watchrss.data.douyin.DouyinPreloadManager
+import com.lightningstudio.watchrss.data.douyin.DouyinFeedCacheStoreContract
+import com.lightningstudio.watchrss.data.douyin.DouyinPreloadManagerContract
 import com.lightningstudio.watchrss.data.douyin.DouyinRepositoryContract
-import com.lightningstudio.watchrss.data.douyin.DouyinWatchHistoryStore
+import com.lightningstudio.watchrss.data.douyin.DouyinWatchHistoryStoreContract
 
 class DouyinViewModelFactory(
     private val repository: DouyinRepositoryContract,
-    private val preloadManager: DouyinPreloadManager,
-    private val watchHistoryStore: DouyinWatchHistoryStore,
-    private val feedCacheStore: DouyinFeedCacheStore
+    private val preloadManager: DouyinPreloadManagerContract,
+    private val watchHistoryStore: DouyinWatchHistoryStoreContract,
+    private val feedCacheStore: DouyinFeedCacheStoreContract
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
