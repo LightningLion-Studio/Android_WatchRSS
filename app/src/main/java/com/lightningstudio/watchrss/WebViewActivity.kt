@@ -41,7 +41,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlin.math.sqrt
 
-internal enum class WebViewScaleMode {
+enum class WebViewScaleMode {
     Standard,
     Expanded,
     Shrunk;
