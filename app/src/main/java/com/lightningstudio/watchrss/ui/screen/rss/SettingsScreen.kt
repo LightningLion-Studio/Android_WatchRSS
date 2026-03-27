@@ -100,6 +100,7 @@ fun SettingsScreen(
     onOpenLlmConnectivity: () -> Unit,
     onOpenLlmPhoneConfig: () -> Unit,
     onOpenLlmPromptPreset: () -> Unit,
+    onOpenReadAloudSettings: () -> Unit,
     onBeianClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -147,6 +148,7 @@ fun SettingsScreen(
             onOpenLlmConnectivity = onOpenLlmConnectivity,
             onOpenLlmPhoneConfig = onOpenLlmPhoneConfig,
             onOpenLlmPromptPreset = onOpenLlmPromptPreset,
+            onOpenReadAloudSettings = onOpenReadAloudSettings,
             onBeianClick = onBeianClick
         )
         SettingsPage.Advanced -> AdvancedSettingsPage(
@@ -186,6 +188,7 @@ private fun MainSettingsPage(
     onOpenLlmConnectivity: () -> Unit,
     onOpenLlmPhoneConfig: () -> Unit,
     onOpenLlmPromptPreset: () -> Unit,
+    onOpenReadAloudSettings: () -> Unit,
     onBeianClick: () -> Unit
 ) {
     val fontOptions = remember { (12..32 step 2).toList() }
@@ -373,6 +376,18 @@ private fun MainSettingsPage(
                 )
                 Text(
                     text = "直接进入手机互联扫码配置，并固定为 LLM 配置能力",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+                )
+
+                Spacer(modifier = Modifier.height(entrySpacing))
+                WatchSettingsPillRow(
+                    label = "朗读 API",
+                    onClick = onOpenReadAloudSettings
+                )
+                Text(
+                    text = "配置 OpenAI、微软 Azure、ElevenLabs 等朗读服务",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = valueIndent, top = valueSpacing)

@@ -16,6 +16,7 @@ class PhoneConnectionActivity : BaseWatchActivity() {
     private var preferredAbility: PhoneConnectionAbility? = null
     private var returnRemoteUrl: Boolean = false
     private var llmSummaryItemId: Long = 0L
+    private var readAloudItemId: Long = 0L
 
     private val manualServerLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -35,6 +36,7 @@ class PhoneConnectionActivity : BaseWatchActivity() {
         preferredAbility = PhoneConnectionAbility.fromNameOrNull(intent.getStringExtra(EXTRA_PREFERRED_ABILITY))
         returnRemoteUrl = intent.getBooleanExtra(EXTRA_RETURN_REMOTE_URL, false)
         llmSummaryItemId = intent.getLongExtra(EXTRA_LLM_SUMMARY_ITEM_ID, 0L)
+        readAloudItemId = intent.getLongExtra(EXTRA_READ_ALOUD_ITEM_ID, 0L)
 
         setContent {
             WatchRSSTheme {
@@ -55,6 +57,7 @@ class PhoneConnectionActivity : BaseWatchActivity() {
                     PhoneConnectionAbility.SYNC_FAVORITES -> ServerActivity.ServerType.SYNC_FAVORITES
                     PhoneConnectionAbility.SYNC_WATCH_LATER -> ServerActivity.ServerType.SYNC_WATCH_LATER
                     PhoneConnectionAbility.LLM_SUMMARY_CONFIG -> ServerActivity.ServerType.LLM_CONFIG
+                    PhoneConnectionAbility.READ_ALOUD_CONFIG -> ServerActivity.ServerType.READ_ALOUD_CONFIG
                     null -> ServerActivity.ServerType.REMOTE_INPUT
                 }
                 val intent = Intent(this, ServerActivity::class.java).apply {
@@ -64,6 +67,7 @@ class PhoneConnectionActivity : BaseWatchActivity() {
                     putExtra(ServerActivity.EXTRA_SCREEN_HINT, MANUAL_WIFI_HINT)
                     putExtra(ServerActivity.EXTRA_RETURN_REMOTE_URL, returnRemoteUrl)
                     putExtra(ServerActivity.EXTRA_LLM_SUMMARY_ITEM_ID, llmSummaryItemId)
+                    putExtra(ServerActivity.EXTRA_READ_ALOUD_ITEM_ID, readAloudItemId)
                 }
                 if (returnRemoteUrl) {
                     manualServerLauncher.launch(intent)
@@ -92,6 +96,7 @@ class PhoneConnectionActivity : BaseWatchActivity() {
             PhoneConnectionAbility.SYNC_FAVORITES -> "同步收藏"
             PhoneConnectionAbility.SYNC_WATCH_LATER -> "同步稍后再看"
             PhoneConnectionAbility.LLM_SUMMARY_CONFIG -> "配置大模型"
+            PhoneConnectionAbility.READ_ALOUD_CONFIG -> "配置朗读"
             null -> "连接手机"
         }
     }
@@ -100,6 +105,7 @@ class PhoneConnectionActivity : BaseWatchActivity() {
         private const val EXTRA_PREFERRED_ABILITY = "preferred_ability"
         private const val EXTRA_RETURN_REMOTE_URL = "return_remote_url"
         private const val EXTRA_LLM_SUMMARY_ITEM_ID = "llm_summary_item_id"
+        private const val EXTRA_READ_ALOUD_ITEM_ID = "read_aloud_item_id"
         private const val MANUAL_WIFI_HINT =
             "请先让手表与手机位于同一 WiFi，或让手表连接到手机热点，再使用手机版扫码"
 
@@ -107,12 +113,14 @@ class PhoneConnectionActivity : BaseWatchActivity() {
             context: Context,
             preferredAbility: PhoneConnectionAbility? = null,
             returnRemoteUrl: Boolean = false,
-            llmSummaryItemId: Long = 0L
+            llmSummaryItemId: Long = 0L,
+            readAloudItemId: Long = 0L
         ): Intent {
             return Intent(context, PhoneConnectionActivity::class.java).apply {
                 putExtra(EXTRA_PREFERRED_ABILITY, preferredAbility?.name)
                 putExtra(EXTRA_RETURN_REMOTE_URL, returnRemoteUrl)
                 putExtra(EXTRA_LLM_SUMMARY_ITEM_ID, llmSummaryItemId)
+                putExtra(EXTRA_READ_ALOUD_ITEM_ID, readAloudItemId)
             }
         }
     }

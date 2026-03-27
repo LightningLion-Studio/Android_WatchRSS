@@ -26,6 +26,7 @@ class ServerActivity : BaseWatchActivity() {
     private var returnRemoteInputToCaller by mutableStateOf(false)
     private var preferredAbility: PhoneConnectionAbility? by mutableStateOf(null)
     private var llmSummaryItemId by mutableStateOf(0L)
+    private var readAloudItemId by mutableStateOf(0L)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -38,6 +39,7 @@ class ServerActivity : BaseWatchActivity() {
         screenHint = intent.getStringExtra(EXTRA_SCREEN_HINT).orEmpty()
         returnRemoteInputToCaller = intent.getBooleanExtra(EXTRA_RETURN_REMOTE_URL, false)
         llmSummaryItemId = intent.getLongExtra(EXTRA_LLM_SUMMARY_ITEM_ID, 0L)
+        readAloudItemId = intent.getLongExtra(EXTRA_READ_ALOUD_ITEM_ID, 0L)
 
         setContent {
             WatchRSSTheme {
@@ -77,6 +79,11 @@ class ServerActivity : BaseWatchActivity() {
                     ServerType.LLM_CONFIG -> {
                         LocalHttpServer.createLlmConfigServer(app.container) {
                             handleLlmConfigComplete()
+                        }
+                    }
+                    ServerType.READ_ALOUD_CONFIG -> {
+                        LocalHttpServer.createReadAloudConfigServer(app.container) {
+                            handleReadAloudConfigComplete()
                         }
                     }
                 }
@@ -128,6 +135,21 @@ class ServerActivity : BaseWatchActivity() {
         }
     }
 
+    private fun handleReadAloudConfigComplete() {
+        lifecycleScope.launch {
+            withContext(Dispatchers.Main) {
+                if (readAloudItemId > 0L) {
+                    val controller = (application as WatchRssApplication).container.readAloudController
+                    controller.startFromItem(readAloudItemId)
+                    startActivity(ReadAloudPlaybackActivity.createIntent(this@ServerActivity))
+                    finish()
+                } else {
+                    synced = true
+                }
+            }
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         server?.stop()
@@ -141,13 +163,15 @@ class ServerActivity : BaseWatchActivity() {
         const val EXTRA_SCREEN_HINT = "screen_hint"
         const val EXTRA_RETURN_REMOTE_URL = "return_remote_url"
         const val EXTRA_LLM_SUMMARY_ITEM_ID = "llm_summary_item_id"
+        const val EXTRA_READ_ALOUD_ITEM_ID = "read_aloud_item_id"
     }
 
     enum class ServerType {
         REMOTE_INPUT,
         SYNC_FAVORITES,
         SYNC_WATCH_LATER,
-        LLM_CONFIG
+        LLM_CONFIG,
+        READ_ALOUD_CONFIG
     }
 
     private fun resolveTitle(): String {
@@ -157,6 +181,7 @@ class ServerActivity : BaseWatchActivity() {
             ServerType.SYNC_FAVORITES -> "同步收藏"
             ServerType.SYNC_WATCH_LATER -> "同步稍后再看"
             ServerType.LLM_CONFIG -> "配置大模型"
+            ServerType.READ_ALOUD_CONFIG -> "配置朗读"
         }
     }
 
@@ -167,6 +192,7 @@ class ServerActivity : BaseWatchActivity() {
             ServerType.SYNC_FAVORITES -> "请使用手机版扫描下方二维码"
             ServerType.SYNC_WATCH_LATER -> "请使用手机版扫描下方二维码"
             ServerType.LLM_CONFIG -> "请使用手机版扫描下方二维码"
+            ServerType.READ_ALOUD_CONFIG -> "请使用手机版扫描下方二维码"
         }
     }
 }

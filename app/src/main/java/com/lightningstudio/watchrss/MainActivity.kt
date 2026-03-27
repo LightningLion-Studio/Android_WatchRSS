@@ -12,10 +12,15 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.rss.RssChannel
 import com.lightningstudio.watchrss.data.settings.CURRENT_OOBE_VERSION
+import com.lightningstudio.watchrss.ui.screen.common.ReadAloudBubbleDock
+import com.lightningstudio.watchrss.ui.screen.common.ReadAloudFloatingBubbleOverlay
 import com.lightningstudio.watchrss.ui.screen.home.HomeComposeScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
@@ -98,6 +103,11 @@ class MainActivity : BaseWatchActivity() {
                 val isRefreshing by viewModel.isRefreshing.collectAsState()
                 val message by viewModel.message.collectAsState()
                 val platformLoginState by viewModel.platformLoginState.collectAsState()
+                val readAloudState by (application as WatchRssApplication)
+                    .container
+                    .readAloudController
+                    .uiState
+                    .collectAsState()
 
                 LaunchedEffect(message) {
                     if (message != null) {
@@ -106,54 +116,64 @@ class MainActivity : BaseWatchActivity() {
                     }
                 }
 
-                HomeComposeScreen(
-                    channels = channels,
-                    platformLoginState = platformLoginState,
-                    isRefreshing = isRefreshing,
-                    onRefreshAll = viewModel::refreshAll,
-                    openSwipeId = openSwipeKey,
-                    onOpenSwipe = { openSwipeKey = it },
-                    onCloseSwipe = { openSwipeKey = null },
-                    draggingSwipeId = draggingSwipeKey,
-                    onDragStart = { draggingSwipeKey = it },
-                    onDragEnd = { draggingSwipeKey = null },
-                    onProfileClick = {
-                        if (!allowNavigation()) return@HomeComposeScreen
-                        startActivity(Intent(this, ProfileActivity::class.java))
-                    },
-                    onRecommendClick = {
-                        if (closeOpenSwipe()) return@HomeComposeScreen
-                        if (!allowNavigation()) return@HomeComposeScreen
-                        startActivity(Intent(this, RssRecommendActivity::class.java))
-                    },
-                    onChannelClick = { channel ->
-                        if (closeOpenSwipe()) return@HomeComposeScreen
-                        if (!allowNavigation()) return@HomeComposeScreen
-                        openChannel(channel)
-                    },
-                    onChannelLongClick = { channel ->
-                        showChannelActions(channel, quick = false)
-                    },
-                    onSwipeBack = {
-                        onBackPressedDispatcher.onBackPressed()
-                    },
-                    onAddRssClick = {
-                        if (!allowNavigation()) return@HomeComposeScreen
-                        startActivity(Intent(this, AddRssActivity::class.java))
-                    },
-                    onMoveTopClick = { channel ->
-                        closeOpenSwipe()
-                        viewModel.moveToTop(channel)
-                    },
-                    onMarkReadClick = { channel ->
-                        closeOpenSwipe()
-                        viewModel.markChannelRead(channel)
-                    },
-                    onBeianClick = {
-                        if (!allowNavigation()) return@HomeComposeScreen
-                        startActivity(BeianActivity.createIntent(this))
-                    }
-                )
+                Box(modifier = Modifier.fillMaxSize()) {
+                    HomeComposeScreen(
+                        channels = channels,
+                        platformLoginState = platformLoginState,
+                        isRefreshing = isRefreshing,
+                        onRefreshAll = viewModel::refreshAll,
+                        openSwipeId = openSwipeKey,
+                        onOpenSwipe = { openSwipeKey = it },
+                        onCloseSwipe = { openSwipeKey = null },
+                        draggingSwipeId = draggingSwipeKey,
+                        onDragStart = { draggingSwipeKey = it },
+                        onDragEnd = { draggingSwipeKey = null },
+                        onProfileClick = {
+                            if (!allowNavigation()) return@HomeComposeScreen
+                            startActivity(Intent(this@MainActivity, ProfileActivity::class.java))
+                        },
+                        onRecommendClick = {
+                            if (closeOpenSwipe()) return@HomeComposeScreen
+                            if (!allowNavigation()) return@HomeComposeScreen
+                            startActivity(Intent(this@MainActivity, RssRecommendActivity::class.java))
+                        },
+                        onChannelClick = { channel ->
+                            if (closeOpenSwipe()) return@HomeComposeScreen
+                            if (!allowNavigation()) return@HomeComposeScreen
+                            openChannel(channel)
+                        },
+                        onChannelLongClick = { channel ->
+                            showChannelActions(channel, quick = false)
+                        },
+                        onSwipeBack = {
+                            onBackPressedDispatcher.onBackPressed()
+                        },
+                        onAddRssClick = {
+                            if (!allowNavigation()) return@HomeComposeScreen
+                            startActivity(Intent(this@MainActivity, AddRssActivity::class.java))
+                        },
+                        onMoveTopClick = { channel ->
+                            closeOpenSwipe()
+                            viewModel.moveToTop(channel)
+                        },
+                        onMarkReadClick = { channel ->
+                            closeOpenSwipe()
+                            viewModel.markChannelRead(channel)
+                        },
+                        onBeianClick = {
+                            if (!allowNavigation()) return@HomeComposeScreen
+                            startActivity(BeianActivity.createIntent(this@MainActivity))
+                        }
+                    )
+                    ReadAloudFloatingBubbleOverlay(
+                        state = readAloudState,
+                        defaultDock = ReadAloudBubbleDock.RIGHT,
+                        onClick = {
+                            if (!allowNavigation()) return@ReadAloudFloatingBubbleOverlay
+                            startActivity(ReadAloudPlaybackActivity.createIntent(this@MainActivity))
+                        }
+                    )
+                }
             }
         }
     }

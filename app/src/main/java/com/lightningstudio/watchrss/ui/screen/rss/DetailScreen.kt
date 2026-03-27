@@ -84,6 +84,7 @@ fun DetailScreen(
     viewModel: DetailViewModel,
     llmSummaryState: LlmSummaryUiState = LlmSummaryUiState(),
     onOpenAiSummary: () -> Unit = {},
+    onOpenReadAloud: () -> Unit = {},
     onBack: (Long, Boolean, Boolean) -> Unit
 ) {
     val item by viewModel.item.collectAsState()
@@ -125,6 +126,7 @@ fun DetailScreen(
             onRetryOfflineMedia = viewModel::retryOfflineMedia,
             onSaveReadingProgress = viewModel::updateReadingProgress,
             onOpenAiSummary = onOpenAiSummary,
+            onOpenReadAloud = onOpenReadAloud,
             onBack = onBack
         )
     }
@@ -152,6 +154,7 @@ internal fun DetailContent(
     onRetryOfflineMedia: () -> Unit,
     onSaveReadingProgress: (Float) -> Unit,
     onOpenAiSummary: () -> Unit = {},
+    onOpenReadAloud: () -> Unit = {},
     onBack: (Long, Boolean, Boolean) -> Unit
 ) {
     val context = LocalContext.current
@@ -507,6 +510,19 @@ internal fun DetailContent(
                         contentColor = textColor,
                         borderColor = actionBorderColor,
                         onClick = { openLinkInApp(context, link) }
+                    )
+                }
+            }
+            if (item != null) {
+                item(key = "readAloudAction") {
+                    Spacer(modifier = Modifier.height(blockSpacing))
+                    DetailActionButton(
+                        text = "大声朗读",
+                        fontSize = bodyFontSize,
+                        containerColor = activeActionContainerColor,
+                        contentColor = activeColor,
+                        borderColor = activeActionBorderColor,
+                        onClick = onOpenReadAloud
                     )
                 }
             }

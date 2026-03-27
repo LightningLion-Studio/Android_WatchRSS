@@ -27,6 +27,7 @@ fun SettingsScreenHost(
     onOpenLlmConnectivity: () -> Unit,
     onOpenLlmPhoneConfig: () -> Unit,
     onOpenLlmPromptPreset: () -> Unit,
+    onOpenReadAloudSettings: () -> Unit,
     onBeianClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -67,6 +68,7 @@ fun SettingsScreenHost(
         onOpenLlmConnectivity = onOpenLlmConnectivity,
         onOpenLlmPhoneConfig = onOpenLlmPhoneConfig,
         onOpenLlmPromptPreset = onOpenLlmPromptPreset,
+        onOpenReadAloudSettings = onOpenReadAloudSettings,
         onBeianClick = onBeianClick
     )
 
