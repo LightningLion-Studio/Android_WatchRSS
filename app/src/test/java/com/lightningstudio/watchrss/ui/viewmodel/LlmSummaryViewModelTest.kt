@@ -39,7 +39,7 @@ class LlmSummaryViewModelTest {
                     sampleRssItem(
                         id = 42L,
                         channelId = 7L,
-                        description = "RSS 简介",
+                        description = null,
                         content = null
                     )
                 )
@@ -65,7 +65,7 @@ class LlmSummaryViewModelTest {
     }
 
     private fun createSettingsRepository(fileName: String): TestEnvironment {
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val scope = CoroutineScope(SupervisorJob() + mainDispatcherRule.dispatcher)
         val dataStore = PreferenceDataStoreFactory.create(
             scope = scope,
             produceFile = { tempFolder.newFile(fileName) }

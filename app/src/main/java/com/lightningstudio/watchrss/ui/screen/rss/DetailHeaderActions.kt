@@ -6,6 +6,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
@@ -53,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.res.ResourcesCompat
 import com.lightningstudio.watchrss.R
+import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
 import com.lightningstudio.watchrss.ui.theme.rememberWatchTitleLineLimitsPx
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
@@ -88,10 +90,10 @@ internal fun AiSummaryBanner(
             modifier = Modifier.fillMaxWidth()
         ) {
             if (isGenerating && !hasText) {
-                androidx.compose.material3.CircularProgressIndicator(
+                WatchCircularProgressIndicator(
                     modifier = Modifier.size(12.dp),
-                    strokeWidth = 1.5.dp,
-                    color = activeColor
+                    color = activeColor,
+                    strokeWidth = 1.5.dp
                 )
             } else {
                 androidx.compose.material3.Icon(
@@ -220,6 +222,7 @@ internal fun DetailTitle(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun DetailActionButton(
     text: String,

@@ -14,10 +14,8 @@ import com.lightningstudio.watchrss.ui.util.RssContentCache
 import com.lightningstudio.watchrss.ui.util.buildContentBlocks
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
@@ -29,7 +27,7 @@ import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DetailViewModel(
-    savedStateHandle: SavedStateHandle,
+    private val savedStateHandle: SavedStateHandle,
     private val repository: RssRepository,
     private val settingsRepository: SettingsRepository
 ) : ViewModel() {
@@ -37,8 +35,8 @@ class DetailViewModel(
     private val temporaryOriginalContentOverride = MutableStateFlow<Boolean?>(
         savedStateHandle[TEMPORARY_ORIGINAL_CONTENT_OVERRIDE_KEY]
     )
-    private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 1)
-    val messages = _messages.asSharedFlow()
+    private val _message = MutableStateFlow<String?>(null)
+    val message = _message.asStateFlow()
 
     val item = repository.observeItem(itemId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -143,7 +141,7 @@ class DetailViewModel(
             if (!channelOriginalEnabled &&
                 settingsRepository.recordTemporaryOriginalContentEnableAndShouldShowHint(currentItem.channelId)
             ) {
-                _messages.tryEmit(ORIGINAL_CONTENT_MODE_HINT_MESSAGE)
+                _message.value = ORIGINAL_CONTENT_MODE_HINT_MESSAGE
             }
         }
     }
@@ -179,6 +177,10 @@ class DetailViewModel(
         viewModelScope.launch {
             repository.updateItemReadingProgress(itemId, progress)
         }
+    }
+
+    fun clearMessage() {
+        _message.value = null
     }
 
     private fun setTemporaryOriginalContentOverride(value: Boolean?) {

@@ -94,6 +94,7 @@ class RssPreviewUpdatePlannerTest {
             title = "标题",
             description = description,
             content = null,
+            originalContent = null,
             link = "https://example.com/post",
             guid = "guid-1",
             pubDate = null,

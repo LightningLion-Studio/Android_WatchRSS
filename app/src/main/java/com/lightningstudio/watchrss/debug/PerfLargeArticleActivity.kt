@@ -52,11 +52,13 @@ class PerfLargeArticleActivity : BaseWatchActivity() {
                         isRetryingOfflineMedia = false,
                         isFavorite = false,
                         isWatchLater = false,
+                        originalContentEnabled = false,
                         readingThemeDark = true,
                         readingFontSizeSp = 18,
                         shareUseSystem = true,
                         rssInlineImagePrefetchMode = DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE,
                         onToggleFavorite = {},
+                        onToggleOriginalContent = {},
                         onRetryOfflineMedia = {},
                         onSaveReadingProgress = {},
                         onBack = { _, _, _ -> finish() }

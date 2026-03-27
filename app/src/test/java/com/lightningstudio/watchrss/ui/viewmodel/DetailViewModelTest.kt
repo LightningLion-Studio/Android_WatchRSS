@@ -14,8 +14,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -119,10 +117,6 @@ class DetailViewModelTest {
                 repository = repo,
                 settingsRepository = env.repository
             )
-            val messages = mutableListOf<String>()
-            val messageCollection = backgroundScope.launch {
-                viewModel.messages.collect { messages += it }
-            }
             val originalCollection = collectFlow(viewModel.effectiveUseOriginalContent)
             advanceUntilIdle()
 
@@ -139,19 +133,18 @@ class DetailViewModelTest {
             assertEquals(listOf(42L to true, 42L to true, 42L to true), repo.requestedOriginalContentIds)
             assertTrue(repo.setOriginalContentRequests.isEmpty())
             assertEquals(
-                listOf(DetailViewModel.ORIGINAL_CONTENT_MODE_HINT_MESSAGE),
-                messages
+                DetailViewModel.ORIGINAL_CONTENT_MODE_HINT_MESSAGE,
+                viewModel.message.value
             )
 
             originalCollection.cancel()
-            messageCollection.cancel()
         } finally {
             env.scope.cancel()
         }
     }
 
     private fun createSettingsRepository(fileName: String): TestEnvironment {
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        val scope = CoroutineScope(SupervisorJob() + mainDispatcherRule.dispatcher)
         val dataStore = PreferenceDataStoreFactory.create(
             scope = scope,
             produceFile = { tempFolder.newFile(fileName) }

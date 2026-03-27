@@ -119,6 +119,7 @@ class RssOfflineStoreTest {
         title = "title",
         description = null,
         content = content,
+        originalContent = null,
         link = null,
         guid = null,
         pubDate = null,

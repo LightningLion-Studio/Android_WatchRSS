@@ -44,9 +44,11 @@ class DetailActivity : BaseWatchActivity() {
             WatchRSSTheme {
                 val context = LocalContext.current
                 val llmSummaryState by llmSummaryViewModel.state.collectAsState()
-                LaunchedEffect(viewModel) {
-                    viewModel.messages.collect { message ->
+                val message by viewModel.message.collectAsState()
+                LaunchedEffect(message) {
+                    if (message != null) {
                         showAppToast(context, message, Toast.LENGTH_SHORT)
+                        viewModel.clearMessage()
                     }
                 }
                 DetailScreen(

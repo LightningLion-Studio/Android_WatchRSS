@@ -71,6 +71,7 @@ class DouyinDetailActivity : BaseWatchActivity() {
                         isRetryingOfflineMedia = false,
                         isFavorite = isFavorite,
                         isWatchLater = false,
+                        originalContentEnabled = false,
                         readingThemeDark = readingThemeDark,
                         readingFontSizeSp = readingFontSizeSp,
                         shareUseSystem = shareUseSystem,
@@ -83,6 +84,7 @@ class DouyinDetailActivity : BaseWatchActivity() {
                                 android.widget.Toast.LENGTH_SHORT
                             )
                         },
+                        onToggleOriginalContent = {},
                         onRetryOfflineMedia = {},
                         onSaveReadingProgress = {},
                         onBack = { _, _, _ -> finish() }

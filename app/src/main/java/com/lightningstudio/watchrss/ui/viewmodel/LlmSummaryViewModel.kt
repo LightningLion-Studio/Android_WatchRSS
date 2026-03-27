@@ -135,9 +135,13 @@ class LlmSummaryViewModel(
                 if (item == null) return@collect
 
                 pendingTitle = item.title.orEmpty()
+                val rawHtml = item.effectiveContent(
+                    useOriginalContent = channel?.useOriginalContent == true || !item.isOriginalContentMissing()
+                ).orEmpty()
 
-                val waitingForOriginalContent = channel?.useOriginalContent == true &&
-                    item.isOriginalContentMissing()
+                val waitingForOriginalContent = item.isOriginalContentMissing() &&
+                    channel?.useOriginalContent == true &&
+                    rawHtml.isBlank()
                 if (waitingForOriginalContent) {
                     pendingContent = ""
                     if (_state.value.status == SummaryStatus.Idle ||
@@ -148,9 +152,6 @@ class LlmSummaryViewModel(
                     return@collect
                 }
 
-                val rawHtml = item.effectiveContent(
-                    useOriginalContent = channel?.useOriginalContent == true || !item.isOriginalContentMissing()
-                ).orEmpty()
                 pendingContent = if (rawHtml.isNotBlank()) {
                     withContext(Dispatchers.Default) {
                         Jsoup.parse(rawHtml).text().take(MAX_CONTENT_CHARS)

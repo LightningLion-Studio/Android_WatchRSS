@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
 
@@ -134,13 +135,14 @@ fun WatchCard(
 fun WatchCircularProgressIndicator(
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.primary,
-    trackColor: Color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f)
+    trackColor: Color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.35f),
+    strokeWidth: Dp = 3.dp
 ) {
     CircularProgressIndicator(
         modifier = modifier,
         color = color,
         trackColor = trackColor,
-        strokeWidth = 3.dp
+        strokeWidth = strokeWidth
     )
 }
 
