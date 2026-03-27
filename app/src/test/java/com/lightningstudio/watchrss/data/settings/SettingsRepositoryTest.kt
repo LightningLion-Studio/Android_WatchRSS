@@ -11,6 +11,8 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -111,6 +113,60 @@ class SettingsRepositoryTest {
 
             env.repository.setRssInlineImagePrefetchMode(RssInlineImagePrefetchMode.ALL)
             assertEquals(RssInlineImagePrefetchMode.ALL, env.repository.rssInlineImagePrefetchMode.first())
+        } finally {
+            env.scope.cancel()
+        }
+    }
+
+    @Test
+    fun temporaryOriginalContentHint_showsOnThirdEnableWithinWindow_andOnlyOncePerWindow() = runBlocking {
+        val env = createRepository("temporary-original-hint.preferences_pb")
+        val baseTime = 1_700_000_000_000L
+        try {
+            assertFalse(env.repository.recordTemporaryOriginalContentEnableAndShouldShowHint(7L, baseTime))
+            assertFalse(
+                env.repository.recordTemporaryOriginalContentEnableAndShouldShowHint(
+                    7L,
+                    baseTime + 1_000L
+                )
+            )
+            assertTrue(
+                env.repository.recordTemporaryOriginalContentEnableAndShouldShowHint(
+                    7L,
+                    baseTime + 2_000L
+                )
+            )
+            assertFalse(
+                env.repository.recordTemporaryOriginalContentEnableAndShouldShowHint(
+                    7L,
+                    baseTime + 3_000L
+                )
+            )
+        } finally {
+            env.scope.cancel()
+        }
+    }
+
+    @Test
+    fun temporaryOriginalContentHint_resetsAfterWindow_and_isolatedPerChannel() = runBlocking {
+        val env = createRepository("temporary-original-hint-window.preferences_pb")
+        val baseTime = 1_700_000_000_000L
+        try {
+            repeat(3) { index ->
+                env.repository.recordTemporaryOriginalContentEnableAndShouldShowHint(
+                    7L,
+                    baseTime + index * 1_000L
+                )
+            }
+
+            val afterWindow = baseTime + TEMP_ORIGINAL_MODE_HINT_WINDOW_MS + 1_000L
+            assertFalse(env.repository.recordTemporaryOriginalContentEnableAndShouldShowHint(7L, afterWindow))
+            assertFalse(env.repository.recordTemporaryOriginalContentEnableAndShouldShowHint(7L, afterWindow + 1_000L))
+            assertTrue(env.repository.recordTemporaryOriginalContentEnableAndShouldShowHint(7L, afterWindow + 2_000L))
+
+            assertFalse(env.repository.recordTemporaryOriginalContentEnableAndShouldShowHint(9L, baseTime))
+            assertFalse(env.repository.recordTemporaryOriginalContentEnableAndShouldShowHint(9L, baseTime + 1_000L))
+            assertTrue(env.repository.recordTemporaryOriginalContentEnableAndShouldShowHint(9L, baseTime + 2_000L))
         } finally {
             env.scope.cancel()
         }

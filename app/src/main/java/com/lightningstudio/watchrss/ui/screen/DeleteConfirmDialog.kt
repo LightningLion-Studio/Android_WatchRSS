@@ -81,11 +81,27 @@ fun WatchConfirmDialog(
     confirmIcon: ImageVector,
     onConfirm: () -> Unit,
     onCancel: () -> Unit,
-    confirmIconTint: Color = MaterialTheme.colorScheme.onSurface,
-    cancelBackground: Color = MaterialTheme.colorScheme.surfaceVariant,
+    confirmIconTint: Color = Color.Unspecified,
+    cancelBackground: Color = Color.Unspecified,
     cancelIcon: ImageVector = Icons.Outlined.Cancel,
-    cancelIconTint: Color = MaterialTheme.colorScheme.onSurface
+    cancelIconTint: Color = Color.Unspecified
 ) {
+    val resolvedConfirmIconTint = if (confirmIconTint == Color.Unspecified) {
+        MaterialTheme.colorScheme.onSurface
+    } else {
+        confirmIconTint
+    }
+    val resolvedCancelBackground = if (cancelBackground == Color.Unspecified) {
+        MaterialTheme.colorScheme.surfaceVariant
+    } else {
+        cancelBackground
+    }
+    val resolvedCancelIconTint = if (cancelIconTint == Color.Unspecified) {
+        MaterialTheme.colorScheme.onSurface
+    } else {
+        cancelIconTint
+    }
+
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
@@ -124,10 +140,10 @@ fun WatchConfirmDialog(
                 DialogButtons(
                     confirmBackground = confirmBackground,
                     confirmIcon = confirmIcon,
-                    confirmIconTint = confirmIconTint,
-                    cancelBackground = cancelBackground,
+                    confirmIconTint = resolvedConfirmIconTint,
+                    cancelBackground = resolvedCancelBackground,
                     cancelIcon = cancelIcon,
-                    cancelIconTint = cancelIconTint,
+                    cancelIconTint = resolvedCancelIconTint,
                     onConfirm = onConfirm,
                     onCancel = onCancel,
                     scaleDp = scaleDp
