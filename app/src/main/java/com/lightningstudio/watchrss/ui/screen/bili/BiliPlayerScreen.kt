@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PanoramaFishEye
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material3.Icon
@@ -1222,7 +1223,7 @@ private fun PlayerScaleMode.toggleAction(): PlayerScaleToggleAction {
             contentDescription = "放大"
         )
         PlayerScaleMode.Expanded -> PlayerScaleToggleAction(
-            icon = Icons.Filled.Fullscreen,
+            icon = Icons.Filled.PanoramaFishEye,
             contentDescription = "缩小"
         )
         PlayerScaleMode.Shrunk -> PlayerScaleToggleAction(

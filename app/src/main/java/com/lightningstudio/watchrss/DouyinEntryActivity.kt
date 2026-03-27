@@ -82,6 +82,7 @@ class DouyinEntryActivity : BaseWatchActivity() {
                                 uiState = uiState,
                                 onPageSettled = viewModel::onPageSettled,
                                 onEnterFlow = viewModel::enterVideoFlow,
+                                onRequestPlaybackRefresh = viewModel::refreshPlaybackSource,
                                 onMessageShown = viewModel::clearMessage,
                                 onHeaderClick = {
                                     startActivity(DouyinChannelInfoActivity.createIntent(this@DouyinEntryActivity))

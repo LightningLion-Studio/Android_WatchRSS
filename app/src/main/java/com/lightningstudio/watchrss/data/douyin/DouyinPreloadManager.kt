@@ -10,10 +10,22 @@ import java.io.File
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 
+interface DouyinPreloadManagerContract {
+    suspend fun localPathFor(awemeId: String): String?
+    suspend fun resolveLocalPaths(awemeIds: List<String>): Map<String, String>
+    suspend fun ensureUnwatchedCache(
+        items: List<DouyinStreamItem>,
+        watchedIds: Set<String>,
+        headers: Map<String, String>,
+        targetUnwatchedCount: Int = 2
+    )
+    suspend fun invalidate(awemeId: String): Boolean
+}
+
 class DouyinPreloadManager(
     context: Context,
     private val cacheService: ManagedCacheService? = null
-) {
+) : DouyinPreloadManagerContract {
     private val appContext = context.applicationContext
     private val cacheDir = File(appContext.cacheDir, CACHE_DIR_NAME).apply { mkdirs() }
     private val httpClient = OkHttpClient.Builder()
@@ -21,7 +33,7 @@ class DouyinPreloadManager(
         .readTimeout(20, TimeUnit.SECONDS)
         .build()
 
-    suspend fun localPathFor(awemeId: String): String? {
+    override suspend fun localPathFor(awemeId: String): String? {
         val file = mediaFileFor(awemeId) ?: return null
         if (!file.exists()) return null
         if (file.length() < MIN_VALID_FILE_BYTES) {
@@ -33,7 +45,7 @@ class DouyinPreloadManager(
         return file.absolutePath
     }
 
-    suspend fun resolveLocalPaths(awemeIds: List<String>): Map<String, String> {
+    override suspend fun resolveLocalPaths(awemeIds: List<String>): Map<String, String> {
         if (awemeIds.isEmpty()) return emptyMap()
         val result = linkedMapOf<String, String>()
         awemeIds.distinct().forEach { awemeId ->
@@ -45,11 +57,11 @@ class DouyinPreloadManager(
         return result
     }
 
-    suspend fun ensureUnwatchedCache(
+    override suspend fun ensureUnwatchedCache(
         items: List<DouyinStreamItem>,
         watchedIds: Set<String>,
         headers: Map<String, String>,
-        targetUnwatchedCount: Int = 2
+        targetUnwatchedCount: Int
     ) {
         if (targetUnwatchedCount <= 0 || items.isEmpty()) return
 
@@ -84,6 +96,15 @@ class DouyinPreloadManager(
     }
 
     fun toLocalUri(path: String): Uri = Uri.fromFile(File(path))
+
+    override suspend fun invalidate(awemeId: String): Boolean {
+        val target = mediaFileFor(awemeId) ?: return false
+        val deleted = target.exists() && target.delete()
+        if (deleted) {
+            cacheService?.scheduleMaintenance(CacheTrimReason.CACHE_DELETE)
+        }
+        return deleted
+    }
 
     private fun downloadToCache(item: DouyinStreamItem, headers: Map<String, String>): Boolean {
         val target = mediaFileFor(item.awemeId) ?: return false

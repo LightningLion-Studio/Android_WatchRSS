@@ -2,14 +2,18 @@ package com.lightningstudio.watchrss.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.Job
 import com.lightningstudio.watchrss.data.douyin.DouyinErrorCodes
-import com.lightningstudio.watchrss.data.douyin.DouyinFeedCacheStore
-import com.lightningstudio.watchrss.data.douyin.DouyinPreloadManager
+import com.lightningstudio.watchrss.data.douyin.DouyinFeedCacheStoreContract
+import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackSourceKind
+import com.lightningstudio.watchrss.data.douyin.DouyinPreloadManagerContract
 import com.lightningstudio.watchrss.data.douyin.DouyinRepositoryContract
+import com.lightningstudio.watchrss.data.douyin.DouyinSourceOrigin
 import com.lightningstudio.watchrss.data.douyin.DouyinStreamItem
-import com.lightningstudio.watchrss.data.douyin.DouyinWatchHistoryStore
+import com.lightningstudio.watchrss.data.douyin.DouyinWatchHistoryStoreContract
+import com.lightningstudio.watchrss.data.douyin.DOUYIN_PLAY_URL_TTL_MS
 import com.lightningstudio.watchrss.data.douyin.formatDouyinError
+import com.lightningstudio.watchrss.sdk.douyin.DouyinContent
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -30,9 +34,9 @@ data class DouyinFeedUiState(
 
 class DouyinFeedViewModel(
     private val repository: DouyinRepositoryContract,
-    private val preloadManager: DouyinPreloadManager,
-    private val watchHistoryStore: DouyinWatchHistoryStore,
-    private val feedCacheStore: DouyinFeedCacheStore
+    private val preloadManager: DouyinPreloadManagerContract,
+    private val watchHistoryStore: DouyinWatchHistoryStoreContract,
+    private val feedCacheStore: DouyinFeedCacheStoreContract
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(DouyinFeedUiState())
     val uiState: StateFlow<DouyinFeedUiState> = _uiState
@@ -41,6 +45,7 @@ class DouyinFeedViewModel(
     private var isRequestingMore: Boolean = false
     private val awemeIdSet = linkedSetOf<String>()
     private var preloadJob: Job? = null
+    private val playbackRefreshJobs = linkedMapOf<String, Job>()
 
     init {
         viewModelScope.launch {
@@ -101,12 +106,10 @@ class DouyinFeedViewModel(
                 } else {
                     emptyList()
                 }
-                val preserveIds = preservePrefix.map { it.awemeId }.toHashSet()
-                val mergedItems = if (preservePrefix.isEmpty()) {
-                    mapped
-                } else {
-                    preservePrefix + mapped.filterNot { preserveIds.contains(it.awemeId) }
-                }
+                val mergedItems = mergeFreshItemsWithPreservedPrefix(
+                    preservedPrefix = preservePrefix,
+                    freshItems = mapped
+                )
                 mergedItems.forEach { awemeIdSet.add(it.awemeId) }
                 nextCursor = page?.nextCursor
                 val hasMore = page?.hasMore ?: false
@@ -129,35 +132,99 @@ class DouyinFeedViewModel(
                         message = null
                     )
                 }
-                feedCacheStore.save(mapped)
+                cacheBootstrapPage(mapped)
                 schedulePreload(mergedItems, headers)
             } else {
-                if (result.code == DouyinErrorCodes.NOT_LOGGED_IN) {
-                    repository.clearCookie()
-                    _uiState.update {
-                        it.copy(isLoading = false, isLoggedIn = false, items = emptyList())
+                handleFeedFailure(
+                    code = result.code,
+                    message = result.message,
+                    isLoadingMore = false
+                )
+            }
+        }
+    }
+
+    fun refreshPlaybackSource(
+        awemeId: String,
+        failedSource: DouyinPlaybackSourceKind
+    ) {
+        val normalizedAwemeId = awemeId.trim()
+        if (normalizedAwemeId.isEmpty()) return
+        if (playbackRefreshJobs[normalizedAwemeId]?.isActive == true) return
+
+        playbackRefreshJobs[normalizedAwemeId] = viewModelScope.launch {
+            val localFallbackAvailable = _uiState.value.items.any {
+                it.awemeId == normalizedAwemeId && it.playUrl.isNotBlank()
+            }
+            if (failedSource == DouyinPlaybackSourceKind.LOCAL) {
+                preloadManager.invalidate(normalizedAwemeId)
+                _uiState.update { state ->
+                    state.copy(localPlayPaths = state.localPlayPaths - normalizedAwemeId)
+                }
+            }
+
+            val result = repository.fetchVideo(normalizedAwemeId)
+            if (result.isSuccess) {
+                when (val content = result.data) {
+                    is DouyinContent.Video -> {
+                        val updated = updatePlaybackSource(normalizedAwemeId, content)
+                        if (updated) {
+                            cacheBootstrapPage(_uiState.value.items.take(PAGE_SIZE))
+                            schedulePreload(_uiState.value.items, _uiState.value.playHeaders)
+                        }
                     }
-                } else {
+                    is DouyinContent.Note -> {
+                        _uiState.update {
+                            it.copy(message = "当前内容暂无可播放视频")
+                        }
+                    }
+                    null -> {
+                        _uiState.update {
+                            it.copy(message = "加载失败")
+                        }
+                    }
+                }
+            } else if (result.code == DouyinErrorCodes.NOT_LOGGED_IN) {
+                repository.clearCookie()
+                _uiState.update {
+                    it.copy(
+                        isLoggedIn = false,
+                        items = emptyList(),
+                        localPlayPaths = emptyMap(),
+                        message = "需要登录"
+                    )
+                }
+            } else {
+                val shouldSuppressMessage =
+                    failedSource == DouyinPlaybackSourceKind.LOCAL && localFallbackAvailable
+                if (!shouldSuppressMessage) {
                     _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            message = formatDouyinError(result.code, result.message)
-                        )
+                        it.copy(message = formatDouyinError(result.code, result.message))
                     }
                 }
             }
+
+            playbackRefreshJobs.remove(normalizedAwemeId)
         }
     }
 
     private suspend fun loadCachedBootstrap(headers: Map<String, String>) {
         val cachedItems = feedCacheStore.read(limit = BOOTSTRAP_ITEMS)
+            .map { it.copy(sourceOrigin = DouyinSourceOrigin.BOOTSTRAP_CACHE) }
         if (cachedItems.isEmpty()) return
+
         val localPaths = preloadManager.resolveLocalPaths(cachedItems.map { it.awemeId })
         val localFirstItems = cachedItems
-            .sortedByDescending { item -> localPaths[item.awemeId] != null }
+            .sortedWith(
+                compareByDescending<DouyinStreamItem> { item -> localPaths[item.awemeId] != null }
+                    .thenByDescending { item -> isPlayUrlFresh(item.playUrlResolvedAtMs) }
+            )
             .take(BOOTSTRAP_ITEMS)
         if (localFirstItems.isEmpty()) return
-        val playablePaths = localPaths.filterKeys { awemeId -> localFirstItems.any { it.awemeId == awemeId } }
+
+        val playablePaths = localPaths.filterKeys { awemeId ->
+            localFirstItems.any { it.awemeId == awemeId }
+        }
         _uiState.update {
             it.copy(
                 items = localFirstItems,
@@ -222,30 +289,51 @@ class DouyinFeedViewModel(
                 }
                 schedulePreload(merged, _uiState.value.playHeaders)
             } else {
-                if (result.code == DouyinErrorCodes.NOT_LOGGED_IN) {
-                    repository.clearCookie()
-                    _uiState.update {
-                        it.copy(
-                            isLoadingMore = false,
-                            isLoggedIn = false,
-                            items = emptyList(),
-                            localPlayPaths = emptyMap()
-                        )
-                    }
-                } else {
-                    _uiState.update {
-                        it.copy(
-                            isLoadingMore = false,
-                            message = formatDouyinError(result.code, result.message)
-                        )
-                    }
-                }
+                handleFeedFailure(
+                    code = result.code,
+                    message = result.message,
+                    isLoadingMore = true
+                )
             }
             isRequestingMore = false
         }
     }
 
-    private fun mapToStreamItems(items: List<com.lightningstudio.watchrss.sdk.douyin.DouyinVideo>): List<DouyinStreamItem> {
+    private fun handleFeedFailure(
+        code: Int,
+        message: String?,
+        isLoadingMore: Boolean
+    ) {
+        if (code == DouyinErrorCodes.NOT_LOGGED_IN) {
+            viewModelScope.launch {
+                repository.clearCookie()
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        isLoadingMore = false,
+                        isLoggedIn = false,
+                        items = emptyList(),
+                        localPlayPaths = emptyMap()
+                    )
+                }
+            }
+            return
+        }
+
+        _uiState.update {
+            it.copy(
+                isLoading = false,
+                isLoadingMore = false,
+                message = formatDouyinError(code, message)
+            )
+        }
+    }
+
+    private fun mapToStreamItems(
+        items: List<com.lightningstudio.watchrss.sdk.douyin.DouyinVideo>,
+        resolvedAtMs: Long = System.currentTimeMillis(),
+        sourceOrigin: DouyinSourceOrigin = DouyinSourceOrigin.NETWORK_FEED
+    ): List<DouyinStreamItem> {
         return items.mapNotNull { video ->
             val awemeId = video.awemeId?.trim().orEmpty()
             val playUrl = video.playUrl?.trim().orEmpty()
@@ -258,7 +346,9 @@ class DouyinFeedViewModel(
                     coverUrl = video.coverUrl?.takeIf { it.isNotBlank() },
                     title = video.desc?.takeIf { it.isNotBlank() },
                     author = video.authorName?.takeIf { it.isNotBlank() },
-                    likeCount = video.likeCount
+                    likeCount = video.likeCount,
+                    playUrlResolvedAtMs = resolvedAtMs,
+                    sourceOrigin = sourceOrigin
                 )
             }
         }
@@ -287,6 +377,58 @@ class DouyinFeedViewModel(
                 }
             }
         }
+    }
+
+    private fun updatePlaybackSource(
+        awemeId: String,
+        content: DouyinContent.Video
+    ): Boolean {
+        val resolvedAtMs = System.currentTimeMillis()
+        var updated = false
+        _uiState.update { state ->
+            val refreshedItems = state.items.map { item ->
+                if (item.awemeId != awemeId) {
+                    item
+                } else {
+                    updated = true
+                    item.copy(
+                        playUrl = content.playUrl.trim(),
+                        coverUrl = content.coverUrl.takeIf { it.isNotBlank() } ?: item.coverUrl,
+                        title = content.desc.takeIf { it.isNotBlank() } ?: item.title,
+                        author = content.authorName.takeIf { it.isNotBlank() } ?: item.author,
+                        likeCount = content.diggCount,
+                        playUrlResolvedAtMs = resolvedAtMs,
+                        sourceOrigin = DouyinSourceOrigin.VIDEO_REFRESH
+                    )
+                }
+            }
+            if (!updated) state else state.copy(items = refreshedItems)
+        }
+        return updated
+    }
+
+    private fun cacheBootstrapPage(items: List<DouyinStreamItem>) {
+        if (items.isEmpty()) return
+        feedCacheStore.save(items.take(PAGE_SIZE))
+    }
+
+    private fun mergeFreshItemsWithPreservedPrefix(
+        preservedPrefix: List<DouyinStreamItem>,
+        freshItems: List<DouyinStreamItem>
+    ): List<DouyinStreamItem> {
+        if (preservedPrefix.isEmpty()) return freshItems
+
+        val freshById = freshItems.associateBy { it.awemeId }
+        val mergedPrefix = preservedPrefix.map { preserved ->
+            freshById[preserved.awemeId] ?: preserved
+        }
+        val preserveIds = mergedPrefix.map { it.awemeId }.toHashSet()
+        return mergedPrefix + freshItems.filterNot { preserveIds.contains(it.awemeId) }
+    }
+
+    private fun isPlayUrlFresh(resolvedAtMs: Long, nowMs: Long = System.currentTimeMillis()): Boolean {
+        if (resolvedAtMs <= 0L) return false
+        return nowMs - resolvedAtMs <= DOUYIN_PLAY_URL_TTL_MS
     }
 
     companion object {

@@ -6,5 +6,7 @@ data class DouyinStreamItem(
     val coverUrl: String?,
     val title: String?,
     val author: String?,
-    val likeCount: Long
+    val likeCount: Long,
+    val playUrlResolvedAtMs: Long,
+    val sourceOrigin: DouyinSourceOrigin
 )
