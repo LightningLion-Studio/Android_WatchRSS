@@ -742,7 +742,7 @@ internal fun DetailContent(
         if (showOriginalModeWarning && link.isNotEmpty()) {
             WarningConfirmDialog(
                 title = "内测功能",
-                message = "原文网页阅读仍在内测，可能出现加载慢、排版异常或兼容性问题，确定继续吗？",
+                message = "原文网页阅读仍在内测，可能出现排版异常或兼容性问题，确定继续吗？",
                 onConfirm = {
                     showOriginalModeWarning = false
                     openLinkInApp(context, link)

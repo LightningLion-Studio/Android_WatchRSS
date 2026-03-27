@@ -15,7 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.outlined.Cancel
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -83,7 +83,7 @@ fun WatchConfirmDialog(
     onCancel: () -> Unit,
     confirmIconTint: Color = Color.Unspecified,
     cancelBackground: Color = Color.Unspecified,
-    cancelIcon: ImageVector = Icons.Outlined.Cancel,
+    cancelIcon: ImageVector = Icons.Filled.Close,
     cancelIconTint: Color = Color.Unspecified
 ) {
     val resolvedConfirmIconTint = if (confirmIconTint == Color.Unspecified) {
