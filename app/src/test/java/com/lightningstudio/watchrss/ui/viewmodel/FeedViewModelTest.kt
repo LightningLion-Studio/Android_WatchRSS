@@ -56,7 +56,10 @@ class FeedViewModelTest {
         viewModel.setOriginalContentUpdatesPaused(true)
         advanceUntilIdle()
 
-        assertEquals(listOf(listOf(1L, 2L), listOf(3L)), repo.requestedOriginalContentBatchIds)
+        assertEquals(
+            listOf(listOf(1L, 2L) to false, listOf(3L) to false),
+            repo.requestedOriginalContentBatchIds
+        )
         assertEquals(listOf(3L to true), repo.pausedOriginalContentUpdates)
     }
 

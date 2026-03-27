@@ -115,7 +115,7 @@ private fun SearchResultCard(
     val summaryLineHeight = summarySize * 1.1f
     val summaryTop = watchDimensionResource(R.dimen.hey_distance_2dp)
     val highlightColor = MaterialTheme.colorScheme.primary
-    val snippet = remember(item.id, item.summary, item.description, item.content, keyword) {
+    val snippet = remember(item.id, item.summary, item.description, item.content, item.originalContent, keyword) {
         buildSearchSnippet(item, keyword)
     }
 
