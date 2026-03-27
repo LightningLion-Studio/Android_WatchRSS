@@ -3,10 +3,8 @@ package com.lightningstudio.watchrss.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
+import com.lightningstudio.watchrss.data.bili.buildBiliExternalSavedItem
 import com.lightningstudio.watchrss.data.bili.formatBiliError
-import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
-import com.lightningstudio.watchrss.data.rss.ExternalSavedItem
-import com.lightningstudio.watchrss.data.rss.RssPreviewItem
 import com.lightningstudio.watchrss.data.rss.RssRepository
 import com.lightningstudio.watchrss.data.rss.SaveType
 import com.lightningstudio.watchrss.sdk.bili.BiliFeedPage
@@ -214,43 +212,12 @@ class BiliFeedViewModel(
 
     private suspend fun syncLocalSaved(item: BiliItem, saveType: SaveType, saved: Boolean) {
         val rss = rssRepository ?: return
-        val external = buildExternalSavedItem(item)
+        val external = buildBiliExternalSavedItem(item)
         rss.syncExternalSavedItem(external, saveType, saved)
         if (saved) {
             repository.cachePreviewClip(aid = item.aid, bvid = item.bvid, cid = item.cid)
         } else {
             repository.clearCachedPreview(aid = item.aid, bvid = item.bvid, cid = item.cid)
         }
-    }
-
-    private fun buildExternalSavedItem(item: BiliItem): ExternalSavedItem {
-        val title = item.title?.trim().takeUnless { it.isNullOrBlank() }
-            ?: item.bvid?.let { "BV号 $it" }
-            ?: item.aid?.let { "av$it" }
-            ?: "哔哩哔哩视频"
-        val link = repository.savedLink(item.bvid, item.aid, item.cid)
-        val guid = when {
-            !item.bvid.isNullOrBlank() -> "bili:${item.bvid}"
-            item.aid != null -> "bili:av${item.aid}"
-            !link.isNullOrBlank() -> "bili:$link"
-            else -> null
-        }
-        val owner = item.owner?.name?.trim().takeUnless { it.isNullOrBlank() }
-        val description = owner?.let { "UP主：$it" }
-        val preview = RssPreviewItem(
-            title = title,
-            description = description,
-            content = description,
-            link = link,
-            guid = guid,
-            pubDate = null,
-            imageUrl = item.cover,
-            audioUrl = null,
-            videoUrl = null
-        )
-        return ExternalSavedItem(
-            channelUrl = BuiltinChannelType.BILI.url,
-            item = preview
-        )
     }
 }

@@ -82,8 +82,10 @@ import com.lightningstudio.watchrss.ui.components.PlayerVolumeOverlay
 import com.lightningstudio.watchrss.ui.components.rememberPlayerVolumeState
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownPagerHandler
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownVolumeHandler
+import com.lightningstudio.watchrss.ui.util.hasValidatedInternetConnection
 import com.lightningstudio.watchrss.ui.viewmodel.DouyinFeedUiState
 import com.lightningstudio.watchrss.util.AppLogger
+import kotlinx.coroutines.delay
 import okhttp3.OkHttpClient
 import kotlin.math.min
 import kotlin.math.sqrt
@@ -112,6 +114,7 @@ fun DouyinImmersiveScreen(
     uiState: DouyinFeedUiState,
     onPageSettled: (Int) -> Unit,
     onEnterFlow: () -> Unit,
+    onItemLongPress: (DouyinStreamItem) -> Unit,
     onRequestPlaybackRefresh: (String, DouyinPlaybackSourceKind) -> Unit,
     onMessageShown: () -> Unit,
     onHeaderClick: () -> Unit
@@ -121,6 +124,8 @@ fun DouyinImmersiveScreen(
         initialPage = uiState.currentPage.coerceIn(0, (pageCount - 1).coerceAtLeast(0)),
         pageCount = { pageCount.coerceAtLeast(1) }
     )
+    var pendingAutoSkipPage by remember { mutableIntStateOf(-1) }
+    var autoSkipMessage by remember { mutableStateOf<String?>(null) }
     var controlsVisible by rememberSaveable { mutableStateOf(true) }
     var scaleMode by rememberSaveable { mutableStateOf(DouyinPlayerScaleMode.Standard) }
     val volumeState = rememberPlayerVolumeState()
@@ -151,6 +156,25 @@ fun DouyinImmersiveScreen(
         }
     }
 
+    LaunchedEffect(pendingAutoSkipPage, pageCount) {
+        val failingPage = pendingAutoSkipPage
+        if (failingPage <= 0) return@LaunchedEffect
+        pendingAutoSkipPage = -1
+        if (failingPage != pagerState.currentPage) return@LaunchedEffect
+
+        val nextPage = (failingPage + 1).coerceAtMost(pageCount - 1)
+        if (nextPage == failingPage) return@LaunchedEffect
+
+        autoSkipMessage = DOUYIN_AUTO_SKIP_MESSAGE
+        pagerState.scrollToPage(nextPage)
+    }
+
+    LaunchedEffect(autoSkipMessage) {
+        if (autoSkipMessage.isNullOrBlank()) return@LaunchedEffect
+        delay(DOUYIN_AUTO_SKIP_MESSAGE_DURATION_MS)
+        autoSkipMessage = null
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -176,7 +200,15 @@ fun DouyinImmersiveScreen(
                     scaleMode = scaleMode,
                     onToggleControls = { controlsVisible = !controlsVisible },
                     onToggleScaleMode = { scaleMode = scaleMode.next() },
-                    onRequestPlaybackRefresh = onRequestPlaybackRefresh
+                    onLongPress = { onItemLongPress(item) },
+                    onRequestPlaybackRefresh = onRequestPlaybackRefresh,
+                    pageIndex = page,
+                    hasNextItem = page < pageCount - 1,
+                    onAutoSkipCurrentItem = { failingPage ->
+                        if (failingPage == pagerState.currentPage) {
+                            pendingAutoSkipPage = failingPage
+                        }
+                    }
                 )
             }
         }
@@ -193,8 +225,17 @@ fun DouyinImmersiveScreen(
             )
         }
 
+        when {
+            !autoSkipMessage.isNullOrBlank() -> {
+                ToastMessage(text = autoSkipMessage!!)
+            }
+
+            !uiState.message.isNullOrBlank() -> {
+                ToastMessage(text = uiState.message)
+            }
+        }
+
         if (!uiState.message.isNullOrBlank()) {
-            ToastMessage(text = uiState.message)
             LaunchedEffect(uiState.message) {
                 onMessageShown()
             }
@@ -277,7 +318,11 @@ private fun DouyinVideoPage(
     scaleMode: DouyinPlayerScaleMode,
     onToggleControls: () -> Unit,
     onToggleScaleMode: () -> Unit,
-    onRequestPlaybackRefresh: (String, DouyinPlaybackSourceKind) -> Unit
+    onLongPress: () -> Unit,
+    onRequestPlaybackRefresh: (String, DouyinPlaybackSourceKind) -> Unit,
+    pageIndex: Int,
+    hasNextItem: Boolean,
+    onAutoSkipCurrentItem: (Int) -> Unit
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
@@ -362,7 +407,7 @@ private fun DouyinVideoPage(
             }
     }
 
-    fun requestPlaybackRefresh() {
+    fun requestPlaybackRefresh(resetRetryCount: Boolean = false) {
         val sourceKind = currentDouyinPlaybackSourceKind(mediaUri)
         val targetUri = mediaUri?.trim()?.takeIf { it.isNotBlank() }
             ?: localUri
@@ -370,6 +415,9 @@ private fun DouyinVideoPage(
         if (targetUri.isNullOrBlank()) {
             hasError = true
             return
+        }
+        if (resetRetryCount) {
+            retryCount = 0
         }
         hasError = sourceKind == DouyinPlaybackSourceKind.REMOTE ||
             (sourceKind == DouyinPlaybackSourceKind.LOCAL && remoteUri.isNullOrBlank())
@@ -392,7 +440,10 @@ private fun DouyinVideoPage(
 
     val latestHasError = rememberUpdatedState(hasError)
     val latestIsActive = rememberUpdatedState(isActive)
-    val latestRequestPlaybackRefresh = rememberUpdatedState(newValue = { requestPlaybackRefresh() })
+    val latestRequestPlaybackRefresh = rememberUpdatedState(
+        newValue = { resetRetryCount: Boolean -> requestPlaybackRefresh(resetRetryCount) }
+    )
+    val latestAutoSkipCurrentItem = rememberUpdatedState(newValue = { onAutoSkipCurrentItem(pageIndex) })
 
     DisposableEffect(player, item.awemeId, remoteUri) {
         val listener = object : Player.Listener {
@@ -407,6 +458,7 @@ private fun DouyinVideoPage(
                 }
                 if (playbackState == Player.STATE_READY) {
                     hasError = false
+                    retryCount = 0
                 }
             }
 
@@ -420,12 +472,30 @@ private fun DouyinVideoPage(
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 AppLogger.w(TAG, "playback error awemeId=${item.awemeId}, uri=$mediaUri", error)
-                if (retryCount < 1) {
-                    retryCount += 1
-                    latestRequestPlaybackRefresh.value()
-                } else {
-                    hasError = true
-                    isBuffering = false
+                when (
+                    resolveDouyinPlaybackFailureAction(
+                        retryCount = retryCount,
+                        maxAutoRetryCount = DOUYIN_MAX_AUTO_RETRY_COUNT,
+                        hasValidatedInternetConnection = hasValidatedInternetConnection(context),
+                        hasNextItem = hasNextItem
+                    )
+                ) {
+                    DouyinPlaybackFailureAction.Retry -> {
+                        retryCount += 1
+                        latestRequestPlaybackRefresh.value(false)
+                    }
+
+                    DouyinPlaybackFailureAction.AutoSkip -> {
+                        hasError = false
+                        isBuffering = false
+                        stopPlayback()
+                        latestAutoSkipCurrentItem.value()
+                    }
+
+                    DouyinPlaybackFailureAction.ShowError -> {
+                        hasError = true
+                        isBuffering = false
+                    }
                 }
             }
         }
@@ -481,7 +551,6 @@ private fun DouyinVideoPage(
             return@LaunchedEffect
         }
         hasError = false
-        retryCount = 0
         isBuffering = true
         preparedSourceKey = targetPrepareKey
         player.setMediaItem(MediaItem.fromUri(targetUri))
@@ -505,9 +574,10 @@ private fun DouyinVideoPage(
             .pointerInput(item.awemeId, controlsVisible) {
                 detectTapGestures(
                     onTap = { onToggleControls() },
+                    onLongPress = { onLongPress() },
                     onDoubleTap = {
                         if (latestHasError.value) {
-                            latestRequestPlaybackRefresh.value()
+                            latestRequestPlaybackRefresh.value(true)
                         } else if (player.isPlaying) {
                             pausedByGesture = true
                             player.pause()
@@ -806,4 +876,7 @@ private fun currentDouyinPlaybackSourceKind(mediaUri: String?): DouyinPlaybackSo
 
 private const val TITLE_ORIGINAL_FIRST_LINE_RATIO = 0.68f
 private const val TITLE_ORIGINAL_SECOND_LINE_RATIO = 0.82f
+private const val DOUYIN_MAX_AUTO_RETRY_COUNT = 2
+private const val DOUYIN_AUTO_SKIP_MESSAGE = "当前视频无法播放，已为您自动跳过"
+private const val DOUYIN_AUTO_SKIP_MESSAGE_DURATION_MS = 2_000L
 private const val TAG = "DouyinImmersive"

@@ -175,6 +175,10 @@
             android:exported="false"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
+            android:name=".BiliVideoActionsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.WatchRSS.Translucent" />
+        <activity
             android:name=".ImagePreviewActivity"
             android:exported="false"
             android:theme="@style/Theme.WatchRSS.Translucent" />
@@ -216,6 +220,10 @@
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".DouyinPlayerActivity"
+            android:exported="false"
+            android:theme="@style/Theme.WatchRSS.Translucent" />
+        <activity
+            android:name=".DouyinVideoActionsActivity"
             android:exported="false"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity

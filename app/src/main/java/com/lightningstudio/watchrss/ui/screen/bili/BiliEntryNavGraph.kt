@@ -13,6 +13,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.lightningstudio.watchrss.BiliChannelInfoActivity
 import com.lightningstudio.watchrss.BiliDetailActivity
+import com.lightningstudio.watchrss.BiliVideoActionsActivity
 import com.lightningstudio.watchrss.BiliLoginActivity
 import com.lightningstudio.watchrss.BiliListActivity
 import com.lightningstudio.watchrss.BiliSearchActivity
@@ -112,6 +113,23 @@ fun BiliEntryNavGraph(repository: BiliRepositoryContract, rssRepository: RssRepo
                             BiliDetailActivity.createIntent(context, item.aid, item.bvid, item.cid)
                         )
                     },
+                    onItemLongClick = { item ->
+                        val hostActivity = context as? BaseWatchActivity
+                        if (hostActivity != null && !hostActivity.tryAllowNavigation()) {
+                            return@BiliFeedScreen
+                        }
+                        context.startActivity(
+                            BiliVideoActionsActivity.createIntent(
+                                context = context,
+                                aid = item.aid,
+                                bvid = item.bvid,
+                                cid = item.cid,
+                                title = item.title,
+                                owner = item.owner?.name,
+                                coverUrl = item.cover
+                            )
+                        )
+                    },
                     onSearchClick = {
                         val hostActivity = context as? BaseWatchActivity
                         if (hostActivity != null && !hostActivity.tryAllowNavigation()) {
@@ -137,6 +155,23 @@ fun BiliEntryNavGraph(repository: BiliRepositoryContract, rssRepository: RssRepo
                                 bvid = item.bvid,
                                 cid = item.cid,
                                 rssMode = true
+                            )
+                        )
+                    },
+                    onItemLongClick = { item ->
+                        val hostActivity = context as? BaseWatchActivity
+                        if (hostActivity != null && !hostActivity.tryAllowNavigation()) {
+                            return@BiliRssFeedScreen
+                        }
+                        context.startActivity(
+                            BiliVideoActionsActivity.createIntent(
+                                context = context,
+                                aid = item.aid,
+                                bvid = item.bvid,
+                                cid = item.cid,
+                                title = item.title,
+                                owner = item.owner?.name,
+                                coverUrl = item.cover
                             )
                         )
                     }

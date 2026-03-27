@@ -37,6 +37,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -50,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.sdk.bili.BiliItem
@@ -73,7 +75,8 @@ fun BiliRssFeedScreen(
     onLoadMore: () -> Unit,
     onFavoriteClick: (BiliItem) -> Unit,
     onWatchLaterClick: (BiliItem) -> Unit,
-    onItemClick: (BiliItem) -> Unit
+    onItemClick: (BiliItem) -> Unit,
+    onItemLongClick: (BiliItem) -> Unit
 ) {
     val baseDensity = LocalDensity.current
     CompositionLocalProvider(LocalDensity provides Density(2f, baseDensity.fontScale)) {
@@ -176,7 +179,8 @@ fun BiliRssFeedScreen(
                                 onItemClick(item)
                             },
                             onLongClick = {
-                                openSwipeId = if (openSwipeId == itemId) null else itemId
+                                openSwipeId = null
+                                onItemLongClick(item)
                             },
                             onFavoriteClick = { onFavoriteClick(item) },
                             onWatchLaterClick = { onWatchLaterClick(item) }
@@ -222,6 +226,59 @@ private fun BiliRssFeedItemEntry(
     }
     val revealGapPx = with(LocalDensity.current) { (actionPadding * 2).toPx() }
     var actionsWidthPx by remember { mutableStateOf(fallbackActionsWidthPx) }
+    var cardHeightPx by remember { mutableStateOf(0) }
+    val density = LocalDensity.current
+    val cardHeightModifier = if (cardHeightPx > 0) {
+        Modifier.height(with(density) { cardHeightPx.toDp() })
+    } else {
+        Modifier
+    }
+    val pressState = rememberPressScaleState(enabled = !isScrolling)
+    val pressScale = pressState.scale
+    val cardScaleModifier = if (pressScale != 1f) {
+        Modifier.graphicsLayer(
+            scaleX = pressScale,
+            scaleY = pressScale
+        )
+    } else {
+        Modifier
+    }
+    val backgroundScaleModifier = if (pressScale != 1f) {
+        Modifier.graphicsLayer(
+            scaleX = pressScale,
+            scaleY = 1f
+        )
+    } else {
+        Modifier
+    }
+    val cardContent: @Composable (Modifier) -> Unit = { offsetModifier ->
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(offsetModifier)
+                .onSizeChanged { size ->
+                    if (cardHeightPx == 0 || !isScrolling) {
+                        cardHeightPx = size.height
+                    }
+                }
+        ) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .then(backgroundScaleModifier)
+                    .background(Color.Black)
+            )
+            BiliRssTextCard(
+                title = title,
+                summary = summary,
+                enabled = !isScrolling,
+                interactionSource = pressState.interactionSource,
+                modifier = cardScaleModifier,
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
+        }
+    }
 
     SwipeActionRow(
         itemId = itemId,
@@ -243,8 +300,11 @@ private fun BiliRssFeedItemEntry(
             Row(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
-                    .fillMaxHeight()
-                    .padding(horizontal = actionPadding),
+                    .then(cardHeightModifier)
+                    .padding(horizontal = actionPadding)
+                    .onSizeChanged { size ->
+                        actionsWidthPx = size.width.toFloat()
+                    },
                 horizontalArrangement = Arrangement.spacedBy(actionPadding),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -268,16 +328,7 @@ private fun BiliRssFeedItemEntry(
                 )
             }
 
-            BiliRssTextCard(
-                title = title,
-                summary = summary,
-                enabled = !isScrolling,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .then(offsetModifier),
-                onClick = onClick,
-                onLongClick = onLongClick
-            )
+            cardContent(offsetModifier)
         }
     }
 }
@@ -287,6 +338,7 @@ private fun BiliRssTextCard(
     title: String,
     summary: String,
     enabled: Boolean,
+    interactionSource: androidx.compose.foundation.interaction.MutableInteractionSource,
     modifier: Modifier,
     onClick: () -> Unit,
     onLongClick: () -> Unit
@@ -307,7 +359,8 @@ private fun BiliRssTextCard(
             .clickableWithoutRipple(
                 enabled = enabled,
                 onClick = onClick,
-                onLongClick = onLongClick
+                onLongClick = onLongClick,
+                interactionSource = interactionSource
             )
             .padding(padding)
     ) {
@@ -411,11 +464,13 @@ private fun textSize(id: Int): TextUnit {
 private fun Modifier.clickableWithoutRipple(
     enabled: Boolean = true,
     onClick: () -> Unit,
-    onLongClick: (() -> Unit)? = null
+    onLongClick: (() -> Unit)? = null,
+    interactionSource: androidx.compose.foundation.interaction.MutableInteractionSource =
+        remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
 ): Modifier {
     return combinedClickable(
         enabled = enabled,
-        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+        interactionSource = interactionSource,
         indication = null,
         onClick = onClick,
         onLongClick = onLongClick

@@ -1,8 +1,6 @@
 package com.lightningstudio.watchrss.ui.screen.douyin
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -19,39 +17,33 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalDensity
-import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.unit.TextUnit
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.douyin.DouyinStreamItem
+import com.lightningstudio.watchrss.data.douyin.buildDouyinShareLink
+import com.lightningstudio.watchrss.data.rss.RssItem
 import com.lightningstudio.watchrss.ui.components.EmptyStateCard
 import com.lightningstudio.watchrss.ui.components.PullRefreshBox
-import com.lightningstudio.watchrss.ui.components.ToastMessage
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
-import com.lightningstudio.watchrss.ui.screen.bili.BiliPillButton
+import com.lightningstudio.watchrss.ui.screen.rss.FeedActions
+import com.lightningstudio.watchrss.ui.screen.rss.FeedHeader
+import com.lightningstudio.watchrss.ui.screen.rss.FeedItemEntry
+import com.lightningstudio.watchrss.ui.screen.rss.FeedPillButton
 import com.lightningstudio.watchrss.ui.screen.bili.formatBiliCount
+import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import com.lightningstudio.watchrss.ui.viewmodel.DouyinFeedUiState
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
-
-private const val CHANNEL_TITLE_CLICK_HINT_SYMBOL = "ⓘ"
 
 @Composable
 fun DouyinRssFeedScreen(
@@ -59,6 +51,9 @@ fun DouyinRssFeedScreen(
     onRefresh: () -> Unit,
     onLoadMore: () -> Unit,
     onItemClick: (DouyinStreamItem, Int) -> Unit,
+    onItemLongClick: (DouyinStreamItem) -> Unit,
+    onFavoriteClick: (DouyinStreamItem) -> Unit,
+    onWatchLaterClick: (DouyinStreamItem) -> Unit,
     onLoginClick: () -> Unit,
     onHeaderClick: () -> Unit
 ) {
@@ -66,10 +61,31 @@ fun DouyinRssFeedScreen(
     val itemSpacing = watchDimensionResource(R.dimen.hey_distance_8dp)
     val listState = rememberLazyListState()
     InstallDigitalCrownLazyListHandler(listState)
-    val isAtTop = rememberTopState(listState)
+    val isAtTop by remember(listState) {
+        derivedStateOf {
+            listState.firstVisibleItemIndex == 0 &&
+                listState.firstVisibleItemScrollOffset == 0
+        }
+    }
+    val isScrolling by remember(listState) {
+        derivedStateOf { listState.isScrollInProgress }
+    }
     val isLoadingState = rememberUpdatedState(uiState.isLoading)
     val isLoadingMoreState = rememberUpdatedState(uiState.isLoadingMore)
     val hasMoreState = rememberUpdatedState(uiState.hasMore)
+    var openSwipeId by remember { mutableStateOf<Long?>(null) }
+    var draggingSwipeId by remember { mutableStateOf<Long?>(null) }
+    val feedItems = remember(uiState.items) {
+        uiState.items.map(::buildDouyinFeedItem)
+    }
+
+    fun closeOpenSwipe(): Boolean {
+        val hasOpen = openSwipeId != null
+        if (hasOpen) {
+            openSwipeId = null
+        }
+        return hasOpen
+    }
 
     LaunchedEffect(listState) {
         snapshotFlow {
@@ -96,7 +112,7 @@ fun DouyinRssFeedScreen(
         onRefresh = onRefresh,
         modifier = Modifier.fillMaxSize(),
         indicatorPadding = safePadding,
-        isAtTop = { isAtTop.value }
+        isAtTop = { isAtTop }
     ) {
         LazyColumn(
             modifier = Modifier
@@ -110,16 +126,35 @@ fun DouyinRssFeedScreen(
             verticalArrangement = Arrangement.spacedBy(itemSpacing)
         ) {
             item {
-                DouyinRssFeedHeader(
-                    isLoggedIn = uiState.isLoggedIn,
-                    onLoginClick = onLoginClick,
-                    onHeaderClick = onHeaderClick
+                FeedHeader(
+                    title = "抖音",
+                    isRefreshing = uiState.isLoading,
+                    enabled = !isScrolling,
+                    onClick = {
+                        if (!closeOpenSwipe()) {
+                            onHeaderClick()
+                        }
+                    }
                 )
             }
 
             if (!uiState.isLoggedIn) {
                 item {
-                    EmptyStateCard(title = "需要登录", subtitle = "登录后查看推荐内容")
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "未登录",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(itemSpacing))
+                        FeedPillButton(text = "登录", onClick = onLoginClick)
+                    }
                 }
             } else if (uiState.items.isEmpty()) {
                 item {
@@ -128,178 +163,70 @@ fun DouyinRssFeedScreen(
                     EmptyStateCard(title = title, subtitle = subtitle)
                 }
             } else {
-                itemsIndexed(uiState.items) { index, item ->
-                    val title = item.title?.ifBlank { "抖音视频" } ?: "抖音视频"
-                    DouyinRssTextCard(
-                        title = title,
-                        summary = buildSummary(item),
-                        onClick = { onItemClick(item, index) },
-                        enabled = true
+                itemsIndexed(feedItems, key = { _, item -> item.id }) { index, feedItem ->
+                    val item = uiState.items[index]
+                    FeedItemEntry(
+                        item = feedItem,
+                        thumbUrl = null,
+                        maxImageWidthPx = 1,
+                        isScrolling = isScrolling,
+                        useOriginalContent = false,
+                        openSwipeId = openSwipeId,
+                        onOpenSwipe = { openSwipeId = it },
+                        onCloseSwipe = { openSwipeId = null },
+                        draggingSwipeId = draggingSwipeId,
+                        onDragStart = { draggingSwipeId = it },
+                        onDragEnd = { draggingSwipeId = null },
+                        onClick = {
+                            if (!closeOpenSwipe()) {
+                                onItemClick(item, index)
+                            }
+                        },
+                        onLongClick = {
+                            if (!closeOpenSwipe()) {
+                                onItemLongClick(item)
+                            }
+                        },
+                        onFavoriteClick = { onFavoriteClick(item) },
+                        onWatchLaterClick = { onWatchLaterClick(item) }
                     )
                 }
                 item {
-                    if (uiState.isLoadingMore) {
-                        Text(
-                            text = "加载中...",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
+                    FeedActions(
+                        canLoadMore = uiState.hasMore && !uiState.isLoadingMore,
+                        onLoadMore = onLoadMore
+                    )
                 }
             }
         }
     }
-
-    if (!uiState.message.isNullOrBlank()) {
-        ToastMessage(text = uiState.message)
-    }
-}
-
-@Composable
-private fun DouyinRssFeedHeader(
-    isLoggedIn: Boolean,
-    onLoginClick: () -> Unit,
-    onHeaderClick: () -> Unit
-) {
-    val titleSize = textSize(R.dimen.hey_m_title)
-    val captionSize = textSize(R.dimen.hey_caption)
-    val spacing = watchDimensionResource(R.dimen.hey_distance_6dp)
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(spacing),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickableWithoutRipple(onClick = onHeaderClick),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(spacing)
-        ) {
-            Text(
-                text = channelTitleWithStyledHint("抖音", titleSize),
-                color = MaterialTheme.colorScheme.onSurface,
-                fontSize = titleSize,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Text(
-                text = if (isLoggedIn) "已登录" else "未登录",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = captionSize,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-        if (!isLoggedIn) {
-            Spacer(modifier = Modifier.height(spacing))
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                BiliPillButton(text = "登录", onClick = onLoginClick)
-            }
-        }
-    }
-}
-
-@Composable
-private fun DouyinRssTextCard(
-    title: String,
-    summary: String,
-    onClick: () -> Unit,
-    enabled: Boolean
-) {
-    val background = MaterialTheme.colorScheme.surface
-    val shape = androidx.compose.foundation.shape.RoundedCornerShape(
-        watchDimensionResource(R.dimen.hey_card_normal_bg_radius)
-    )
-    val padding = watchDimensionResource(R.dimen.hey_content_horizontal_distance)
-    val titleSize = textSize(R.dimen.feed_card_title_text_size)
-    val summarySize = textSize(R.dimen.feed_card_summary_text_size)
-    val summaryLineHeight = summarySize * 1.1f
-    val summaryTop = watchDimensionResource(R.dimen.hey_distance_2dp)
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .background(background)
-            .clickableWithoutRipple(enabled = enabled, onClick = onClick)
-            .padding(padding)
-    ) {
-        Text(
-            text = title,
-            color = MaterialTheme.colorScheme.onSurface,
-            fontSize = titleSize,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
-        )
-        Text(
-            text = summary,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-            fontSize = summarySize,
-            lineHeight = summaryLineHeight,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = summaryTop)
-        )
-    }
-}
-
-@Composable
-private fun rememberTopState(
-    listState: androidx.compose.foundation.lazy.LazyListState
-): State<Boolean> {
-    return remember(listState) {
-        derivedStateOf {
-            listState.firstVisibleItemIndex == 0 &&
-                listState.firstVisibleItemScrollOffset == 0
-        }
-    }
-}
-
-private fun channelTitleWithStyledHint(
-    title: String,
-    titleSize: TextUnit
-): androidx.compose.ui.text.AnnotatedString {
-    val hintSize = (titleSize.value - 2f).coerceAtLeast(8f).sp
-    return buildAnnotatedString {
-        append("$title ")
-        withStyle(
-            SpanStyle(
-                color = Color(0xFFBDBDBD),
-                fontWeight = FontWeight.Bold,
-                fontSize = hintSize
-            )
-        ) {
-            append(CHANNEL_TITLE_CLICK_HINT_SYMBOL)
-        }
-    }
-}
-
-@Composable
-private fun textSize(id: Int): TextUnit {
-    return LocalDensity.current.run {
-        watchDimensionResource(id).toSp()
-    }
-}
-
-@Composable
-@OptIn(ExperimentalFoundationApi::class)
-private fun Modifier.clickableWithoutRipple(
-    enabled: Boolean = true,
-    onClick: () -> Unit
-): Modifier {
-    return combinedClickable(
-        enabled = enabled,
-        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-        indication = null,
-        onClick = onClick
-    )
 }
 
 private fun buildSummary(item: DouyinStreamItem): String {
     val author = item.author?.takeIf { it.isNotBlank() } ?: "未知作者"
     val like = if (item.likeCount > 0) "赞 ${formatBiliCount(item.likeCount)}" else null
     return listOfNotNull(author, like).joinToString(" · ")
+}
+
+private fun buildDouyinFeedItem(item: DouyinStreamItem): RssItem {
+    val summary = buildSummary(item)
+    return RssItem(
+        id = item.awemeId.hashCode().toLong(),
+        channelId = 0L,
+        title = item.title?.ifBlank { "抖音视频" } ?: "抖音视频",
+        description = summary,
+        content = null,
+        originalContent = null,
+        link = buildDouyinShareLink(item.awemeId),
+        pubDate = null,
+        imageUrl = null,
+        audioUrl = null,
+        videoUrl = item.playUrl,
+        summary = summary,
+        previewImageUrl = null,
+        isRead = true,
+        isLiked = false,
+        readingProgress = 0f,
+        fetchedAt = item.playUrlResolvedAtMs.takeIf { it > 0L } ?: System.currentTimeMillis()
+    )
 }

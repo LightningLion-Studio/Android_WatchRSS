@@ -1,11 +1,14 @@
 package com.lightningstudio.watchrss.ui.screen.bili
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.Stable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -173,6 +177,7 @@ fun BiliFeedCard(
     coverUrl: String?,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
+    interactionSource: MutableInteractionSource? = null,
     modifier: Modifier = Modifier
 ) {
     val background = MaterialTheme.colorScheme.surface
@@ -187,13 +192,18 @@ fun BiliFeedCard(
     )
     val context = LocalContext.current
     val maxWidthPx = remember(context) { context.resources.displayMetrics.widthPixels }
+    val resolvedInteractionSource = interactionSource ?: remember { MutableInteractionSource() }
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .clip(shape)
             .background(background)
-            .clickableWithoutRipple(onClick, onLongClick)
+            .clickableWithoutRipple(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                interactionSource = resolvedInteractionSource
+            )
     ) {
         val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, coverUrl, maxWidthPx) {
             value = if (coverUrl.isNullOrBlank()) null else {
@@ -247,13 +257,47 @@ fun BiliFeedCard(
     }
 }
 
+@Stable
+data class PressScaleState(
+    val scale: Float,
+    val interactionSource: MutableInteractionSource
+)
+
+@Composable
+fun rememberPressScaleState(enabled: Boolean): PressScaleState {
+    val interactionSource = remember { MutableInteractionSource() }
+    if (!enabled) {
+        return PressScaleState(1f, interactionSource)
+    }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.97f else 1f,
+        animationSpec = tween(durationMillis = if (pressed) 240 else 360),
+        label = "biliPressScale"
+    )
+    return PressScaleState(scale, interactionSource)
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun Modifier.clickableWithoutRipple(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null
 ): Modifier {
-    val interactionSource = remember { MutableInteractionSource() }
+    return clickableWithoutRipple(
+        onClick = onClick,
+        onLongClick = onLongClick,
+        interactionSource = remember { MutableInteractionSource() }
+    )
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun Modifier.clickableWithoutRipple(
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
+    interactionSource: MutableInteractionSource
+): Modifier {
     return if (onLongClick == null) {
         clickable(
             interactionSource = interactionSource,

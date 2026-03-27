@@ -5,6 +5,12 @@ internal data class DouyinResolvedPlaybackState(
     val remoteResolvedAtMs: Long
 )
 
+internal enum class DouyinPlaybackFailureAction {
+    Retry,
+    AutoSkip,
+    ShowError
+}
+
 internal fun resolveDouyinPlaybackState(
     currentUri: String?,
     currentRemoteResolvedAtMs: Long,
@@ -40,6 +46,19 @@ internal fun resolveDouyinPlaybackState(
             mediaUri = normalizedCurrent,
             remoteResolvedAtMs = currentRemoteResolvedAtMs
         )
+    }
+}
+
+internal fun resolveDouyinPlaybackFailureAction(
+    retryCount: Int,
+    maxAutoRetryCount: Int,
+    hasValidatedInternetConnection: Boolean,
+    hasNextItem: Boolean
+): DouyinPlaybackFailureAction {
+    return when {
+        retryCount < maxAutoRetryCount -> DouyinPlaybackFailureAction.Retry
+        hasValidatedInternetConnection && hasNextItem -> DouyinPlaybackFailureAction.AutoSkip
+        else -> DouyinPlaybackFailureAction.ShowError
     }
 }
 

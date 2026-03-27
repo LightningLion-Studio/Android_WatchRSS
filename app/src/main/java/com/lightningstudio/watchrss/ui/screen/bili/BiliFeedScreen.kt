@@ -43,6 +43,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.graphics.graphicsLayer
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -81,6 +82,7 @@ fun BiliFeedScreen(
     onFavoriteClick: (BiliItem) -> Unit,
     onWatchLaterClick: (BiliItem) -> Unit,
     onItemClick: (BiliItem) -> Unit,
+    onItemLongClick: (BiliItem) -> Unit,
     onSearchClick: () -> Unit = {}
 ) {
     val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
@@ -197,7 +199,8 @@ fun BiliFeedScreen(
                                 onItemClick(item)
                             },
                             onLongClick = {
-                                openSwipeId = if (openSwipeId == itemId) null else itemId
+                                openSwipeId = null
+                                onItemLongClick(item)
                             },
                             onFavoriteClick = { onFavoriteClick(item) },
                             onWatchLaterClick = { onWatchLaterClick(item) }
@@ -323,6 +326,59 @@ private fun BiliFeedItemEntry(
     }
     val revealGapPx = with(LocalDensity.current) { (actionPadding * 2).toPx() }
     var actionsWidthPx by remember { mutableStateOf(fallbackActionsWidthPx) }
+    var cardHeightPx by remember { mutableStateOf(0) }
+    val density = LocalDensity.current
+    val cardHeightModifier = if (cardHeightPx > 0) {
+        Modifier.height(with(density) { cardHeightPx.toDp() })
+    } else {
+        Modifier
+    }
+    val pressState = rememberPressScaleState(enabled = !isScrolling)
+    val pressScale = pressState.scale
+    val cardScaleModifier = if (pressScale != 1f) {
+        Modifier.graphicsLayer(
+            scaleX = pressScale,
+            scaleY = pressScale
+        )
+    } else {
+        Modifier
+    }
+    val backgroundScaleModifier = if (pressScale != 1f) {
+        Modifier.graphicsLayer(
+            scaleX = pressScale,
+            scaleY = 1f
+        )
+    } else {
+        Modifier
+    }
+    val cardContent: @Composable (Modifier) -> Unit = { offsetModifier ->
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(offsetModifier)
+                .onSizeChanged { size ->
+                    if (cardHeightPx == 0 || !isScrolling) {
+                        cardHeightPx = size.height
+                    }
+                }
+        ) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .then(backgroundScaleModifier)
+                    .background(Color.Black)
+            )
+            BiliFeedCard(
+                title = item.title.orEmpty(),
+                summary = summary,
+                coverUrl = item.cover,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                interactionSource = pressState.interactionSource,
+                modifier = cardScaleModifier
+            )
+        }
+    }
 
     SwipeActionRow(
         itemId = itemId,
@@ -344,7 +400,7 @@ private fun BiliFeedItemEntry(
             Row(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
-                    .fillMaxHeight()
+                    .then(cardHeightModifier)
                     .padding(horizontal = actionPadding)
                     .onSizeChanged { size ->
                         actionsWidthPx = size.width.toFloat()
@@ -372,16 +428,7 @@ private fun BiliFeedItemEntry(
                 )
             }
 
-            BiliFeedCard(
-                title = item.title.orEmpty(),
-                summary = summary,
-                coverUrl = item.cover,
-                onClick = onClick,
-                onLongClick = onLongClick,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .then(offsetModifier)
-            )
+            cardContent(offsetModifier)
         }
     }
 }

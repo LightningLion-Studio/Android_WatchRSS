@@ -46,4 +46,52 @@ class DouyinPlaybackStateResolverTest {
 
         assertNotEquals(oldKey, refreshedKey)
     }
+
+    @Test
+    fun resolveDouyinPlaybackFailureAction_retriesWhileBudgetRemains() {
+        val action = resolveDouyinPlaybackFailureAction(
+            retryCount = 1,
+            maxAutoRetryCount = 2,
+            hasValidatedInternetConnection = true,
+            hasNextItem = true
+        )
+
+        assertEquals(DouyinPlaybackFailureAction.Retry, action)
+    }
+
+    @Test
+    fun resolveDouyinPlaybackFailureAction_autoSkipsWhenRetryBudgetExhausted_online_andHasNextItem() {
+        val action = resolveDouyinPlaybackFailureAction(
+            retryCount = 2,
+            maxAutoRetryCount = 2,
+            hasValidatedInternetConnection = true,
+            hasNextItem = true
+        )
+
+        assertEquals(DouyinPlaybackFailureAction.AutoSkip, action)
+    }
+
+    @Test
+    fun resolveDouyinPlaybackFailureAction_showsErrorWhenOfflineAfterRetryBudgetExhausted() {
+        val action = resolveDouyinPlaybackFailureAction(
+            retryCount = 2,
+            maxAutoRetryCount = 2,
+            hasValidatedInternetConnection = false,
+            hasNextItem = true
+        )
+
+        assertEquals(DouyinPlaybackFailureAction.ShowError, action)
+    }
+
+    @Test
+    fun resolveDouyinPlaybackFailureAction_showsErrorAtLastItemAfterRetryBudgetExhausted() {
+        val action = resolveDouyinPlaybackFailureAction(
+            retryCount = 2,
+            maxAutoRetryCount = 2,
+            hasValidatedInternetConnection = true,
+            hasNextItem = false
+        )
+
+        assertEquals(DouyinPlaybackFailureAction.ShowError, action)
+    }
 }

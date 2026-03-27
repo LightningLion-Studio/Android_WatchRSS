@@ -367,7 +367,7 @@ fun FeedScreen(
 }
 
 @Composable
-private fun FeedHeader(
+internal fun FeedHeader(
     title: String,
     isRefreshing: Boolean,
     enabled: Boolean,
@@ -490,7 +490,7 @@ private fun FeedEmpty(
 }
 
 @Composable
-private fun FeedActions(
+internal fun FeedActions(
     canLoadMore: Boolean,
     onLoadMore: () -> Unit
 ) {
@@ -512,7 +512,7 @@ private fun FeedActions(
 }
 
 @Composable
-private fun FeedPillButton(
+internal fun FeedPillButton(
     text: String,
     enabled: Boolean = true,
     onClick: () -> Unit
@@ -544,7 +544,7 @@ private fun FeedPillButton(
 }
 
 @Composable
-private fun FeedItemEntry(
+internal fun FeedItemEntry(
     item: RssItem,
     thumbUrl: String?,
     maxImageWidthPx: Int,
@@ -762,9 +762,9 @@ private fun FeedTextCard(
     val summarySize = textSize(R.dimen.feed_card_summary_text_size)
     val summaryLineHeight = summarySize * 1.1f
     val summaryTop = watchDimensionResource(R.dimen.hey_distance_2dp)
-    val summary = remember(item.id, item.summary, item.content, useOriginalContent) {
+    val summary = remember(item.id, item.summary, item.originalContent, useOriginalContent) {
         val baseSummary = item.summary ?: "暂无摘要"
-        if (useOriginalContent && item.content.isNullOrBlank()) {
+        if (useOriginalContent && item.originalContent.isNullOrBlank()) {
             "$baseSummary\n原文加载中..."
         } else {
             baseSummary
@@ -824,9 +824,9 @@ private fun FeedImageCard(
     val summarySize = textSize(R.dimen.feed_card_summary_text_size)
     val summaryLineHeight = summarySize * 1.1f
     val summaryTop = watchDimensionResource(R.dimen.hey_distance_2dp)
-    val summary = remember(item.id, item.summary, item.content, useOriginalContent) {
+    val summary = remember(item.id, item.summary, item.originalContent, useOriginalContent) {
         val baseSummary = item.summary ?: "暂无摘要"
-        if (useOriginalContent && item.content.isNullOrBlank()) {
+        if (useOriginalContent && item.originalContent.isNullOrBlank()) {
             "$baseSummary\n原文加载中..."
         } else {
             baseSummary

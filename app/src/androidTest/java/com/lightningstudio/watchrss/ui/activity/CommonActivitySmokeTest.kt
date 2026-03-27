@@ -12,6 +12,7 @@ import com.lightningstudio.watchrss.CollaboratorsActivity
 import com.lightningstudio.watchrss.ContactDeveloperActivity
 import com.lightningstudio.watchrss.ImagePreviewActivity
 import com.lightningstudio.watchrss.InfoActivity
+import com.lightningstudio.watchrss.ItemActionsActivity
 import com.lightningstudio.watchrss.JoinGroupActivity
 import com.lightningstudio.watchrss.LogUploadPrivacyActivity
 import com.lightningstudio.watchrss.OobeActivity
@@ -71,6 +72,16 @@ class CommonActivitySmokeTest {
     @Test
     fun joinGroupActivity_launches() {
         launchAndAssertResumed(JoinGroupActivity::class.java)
+    }
+
+    @Test
+    fun itemActionsActivity_launches() {
+        launchAndAssertResumed(
+            Intent(context(), ItemActionsActivity::class.java).apply {
+                putExtra(ItemActionsActivity.EXTRA_ITEM_ID, 1L)
+                putExtra(ItemActionsActivity.EXTRA_ITEM_TITLE, "测试条目")
+            }
+        )
     }
 
     @Test
