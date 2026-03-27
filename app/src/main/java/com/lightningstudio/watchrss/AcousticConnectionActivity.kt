@@ -140,7 +140,7 @@ class AcousticConnectionActivity : BaseWatchActivity() {
                     PhoneConnectionMode.SOUND_GUIDED_WIFI -> "选择要通过声波引导 WiFi 完成的操作"
                     PhoneConnectionMode.MANUAL_WIFI -> "请选择手动 WiFi 连接"
                 }
-                detailMessage = "从手机输入支持手机播音到手表；收藏和稍后再看支持手表发给手机"
+                detailMessage = "从手机输入支持手机播音到手表；收藏/稍后再看支持手表发给手机；B站观看记录仅支持 WiFi"
                 primaryButtonLabel = null
                 isBusy = false
             }
@@ -186,6 +186,13 @@ class AcousticConnectionActivity : BaseWatchActivity() {
             PhoneConnectionAbility.LLM_SUMMARY_CONFIG -> {
                 statusMessage = "LLM 配置不支持声波连接"
                 detailMessage = "请使用 WiFi 扫码方式配置大模型"
+                primaryButtonLabel = null
+                isBusy = false
+            }
+
+            PhoneConnectionAbility.SYNC_BILI_WATCH_RECORDS -> {
+                statusMessage = "B站观看记录不支持声波连接"
+                detailMessage = "请使用 WiFi 扫码方式同步观看历史和播放进度"
                 primaryButtonLabel = null
                 isBusy = false
             }
@@ -245,6 +252,7 @@ class AcousticConnectionActivity : BaseWatchActivity() {
 
                 PhoneConnectionAbility.SYNC_FAVORITES,
                 PhoneConnectionAbility.SYNC_WATCH_LATER -> startPureSoundPlayback()
+                PhoneConnectionAbility.SYNC_BILI_WATCH_RECORDS,
                 PhoneConnectionAbility.LLM_SUMMARY_CONFIG -> Unit
                 null -> Unit
             }
@@ -333,6 +341,7 @@ class AcousticConnectionActivity : BaseWatchActivity() {
                         }
 
                         PhoneConnectionAbility.LLM_SUMMARY_CONFIG -> Unit
+                        PhoneConnectionAbility.SYNC_BILI_WATCH_RECORDS -> Unit
 
                         PhoneConnectionAbility.SYNC_FAVORITES,
                         PhoneConnectionAbility.SYNC_WATCH_LATER -> {

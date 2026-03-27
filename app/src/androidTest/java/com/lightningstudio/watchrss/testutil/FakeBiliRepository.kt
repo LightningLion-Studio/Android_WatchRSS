@@ -3,6 +3,7 @@ package com.lightningstudio.watchrss.testutil
 import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
 import com.lightningstudio.watchrss.data.bili.BiliErrorCodes
 import com.lightningstudio.watchrss.data.bili.BiliInteractionState
+import com.lightningstudio.watchrss.data.bili.BiliPlaybackCheckpointTrigger
 import com.lightningstudio.watchrss.data.bili.BiliPlaybackProgress
 import com.lightningstudio.watchrss.data.bili.BiliResolvedPlaybackSource
 import com.lightningstudio.watchrss.sdk.bili.BiliAccount
@@ -293,6 +294,15 @@ class FakeBiliRepository(
     override suspend fun clearPlaybackProgress(aid: Long?, bvid: String?, cid: Long) {
         playbackProgressRecords.removeAll { matchesPlaybackIdentity(it, aid, bvid, cid) }
     }
+
+    override suspend fun reportPlaybackHistory(
+        aid: Long?,
+        bvid: String?,
+        cid: Long,
+        positionMs: Long,
+        durationMs: Long,
+        trigger: BiliPlaybackCheckpointTrigger
+    ): BiliResult<Unit> = BiliResult(code = 0, data = Unit)
 
     override suspend fun warmupDetailPreview(aid: Long?, bvid: String?, cid: Long?): Result<Unit> {
         warmupDetailRequests += Triple(aid, bvid, cid)

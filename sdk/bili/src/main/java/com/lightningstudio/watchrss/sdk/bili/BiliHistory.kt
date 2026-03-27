@@ -98,6 +98,40 @@ class BiliHistory(private val client: BiliClient) {
         return BiliResult(status.code, status.message)
     }
 
+    suspend fun reportHistory(
+        aid: Long,
+        cid: Long,
+        progressSeconds: Long = 0L,
+        bvid: String? = null,
+        platform: String = "android"
+    ): BiliResult<Unit> {
+        if (cid <= 0L) {
+            return BiliResult(-1, "missing_cid")
+        }
+        val csrf = client.csrfToken()
+        if (csrf.isNullOrBlank()) {
+            return BiliResult(-111, "missing_csrf", requestMode = REQUEST_MODE_WEB)
+        }
+        val response = client.httpClient.postForm(
+            url = "${client.config.webBaseUrl}/x/v2/history/report",
+            form = mapOf(
+                "aid" to aid.toString(),
+                "cid" to cid.toString(),
+                "progress" to progressSeconds.coerceAtLeast(0L).toString(),
+                "platform" to platform,
+                "csrf" to csrf
+            ),
+            headers = videoPageHeaders(aid = aid, bvid = bvid)
+        )
+        val status = parseBiliStatus(response, requestMode = REQUEST_MODE_WEB)
+        return BiliResult(
+            code = status.code,
+            message = status.message,
+            httpCode = status.httpCode,
+            requestMode = status.requestMode
+        )
+    }
+
     private fun kotlinx.serialization.json.JsonObject.toBiliItem(): BiliItem {
         val ownerObj = objOrNull("owner")
         val statObj = objOrNull("stat")
@@ -128,5 +162,21 @@ class BiliHistory(private val client: BiliClient) {
                 )
             }
         )
+    }
+
+    private fun videoPageHeaders(aid: Long, bvid: String?): Map<String, String> {
+        return mapOf(
+            "Referer" to videoPageReferer(aid = aid, bvid = bvid),
+            "Origin" to BiliBrowserProfile.DEFAULT_ORIGIN
+        )
+    }
+
+    private fun videoPageReferer(aid: Long, bvid: String?): String {
+        val videoId = bvid?.trim()?.takeIf { it.isNotEmpty() } ?: "av$aid"
+        return "${client.config.webReferer.trimEnd('/')}/video/$videoId"
+    }
+
+    private companion object {
+        private const val REQUEST_MODE_WEB = "web"
     }
 }

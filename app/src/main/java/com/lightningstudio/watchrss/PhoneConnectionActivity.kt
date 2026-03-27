@@ -54,6 +54,9 @@ class PhoneConnectionActivity : BaseWatchActivity() {
                     PhoneConnectionAbility.REMOTE_INPUT -> ServerActivity.ServerType.REMOTE_INPUT
                     PhoneConnectionAbility.SYNC_FAVORITES -> ServerActivity.ServerType.SYNC_FAVORITES
                     PhoneConnectionAbility.SYNC_WATCH_LATER -> ServerActivity.ServerType.SYNC_WATCH_LATER
+                    PhoneConnectionAbility.SYNC_BILI_WATCH_RECORDS -> {
+                        ServerActivity.ServerType.SYNC_BILI_WATCH_RECORDS
+                    }
                     PhoneConnectionAbility.LLM_SUMMARY_CONFIG -> ServerActivity.ServerType.LLM_CONFIG
                     null -> ServerActivity.ServerType.REMOTE_INPUT
                 }
@@ -91,6 +94,7 @@ class PhoneConnectionActivity : BaseWatchActivity() {
             PhoneConnectionAbility.REMOTE_INPUT -> "从手机输入"
             PhoneConnectionAbility.SYNC_FAVORITES -> "同步收藏"
             PhoneConnectionAbility.SYNC_WATCH_LATER -> "同步稍后再看"
+            PhoneConnectionAbility.SYNC_BILI_WATCH_RECORDS -> "同步B站观看记录"
             PhoneConnectionAbility.LLM_SUMMARY_CONFIG -> "配置大模型"
             null -> "连接手机"
         }

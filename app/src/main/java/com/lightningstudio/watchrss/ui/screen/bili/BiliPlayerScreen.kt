@@ -134,8 +134,11 @@ fun BiliPlayerScreen(
     onOpenWeb: () -> Unit,
     onPlaybackError: () -> Boolean = { false },
     onPanStateChange: (Float, Float) -> Unit,
-    onPlaybackProgress: (positionMs: Int, durationMs: Int, force: Boolean) -> Unit = { _, _, _ -> },
-    onPlaybackEnded: () -> Unit = {},
+    onPlaybackReady: (positionMs: Int, durationMs: Int) -> Unit = { _, _ -> },
+    onPlaybackProgress: (positionMs: Int, durationMs: Int) -> Unit = { _, _ -> },
+    onPlaybackPauseOrExit: (positionMs: Int, durationMs: Int) -> Unit = { _, _ -> },
+    onPlaybackErrorCheckpoint: (positionMs: Int, durationMs: Int) -> Unit = { _, _ -> },
+    onPlaybackEnded: (positionMs: Int, durationMs: Int) -> Unit = { _, _ -> },
     playbackDataSourceFactoryProvider: ((Map<String, String>, String?) -> DataSource.Factory)? = null,
     allowPan: Boolean = true,
     isActive: Boolean = true,
@@ -216,7 +219,7 @@ fun BiliPlayerScreen(
             }
         }
         if (!playbackCompleted && (positionMs > 0 || durationMs > 0 || isPrepared)) {
-            onPlaybackProgress(positionMs, durationMs, true)
+            onPlaybackPauseOrExit(positionMs, durationMs)
         }
         isPlaying = false
         isBuffering = false
@@ -494,6 +497,9 @@ fun BiliPlayerScreen(
                             player.play()
                         }
                         pendingPreparedPlayWhenReady = false
+                        if (!playbackCompleted) {
+                            onPlaybackReady(positionMs, durationMs)
+                        }
                     }
                     Player.STATE_ENDED -> {
                         positionMs = durationMs.takeIf { it > 0 } ?: currentPlayerPosition()
@@ -503,7 +509,7 @@ fun BiliPlayerScreen(
                         playWhenReady = false
                         pendingPreparedPlayWhenReady = false
                         playbackCompleted = true
-                        onPlaybackEnded()
+                        onPlaybackEnded(positionMs, durationMs)
                     }
                 }
             }
@@ -525,7 +531,7 @@ fun BiliPlayerScreen(
                 playWhenReady = false
                 runCatching { player.playWhenReady = false }
                 if (!playbackCompleted && (positionMs > 0 || durationMs > 0)) {
-                    onPlaybackProgress(positionMs, durationMs, true)
+                    onPlaybackErrorCheckpoint(positionMs, durationMs)
                 }
                 playbackError = if (onPlaybackError()) null else "播放失败"
             }
@@ -604,7 +610,7 @@ fun BiliPlayerScreen(
                 }
                 isPlaying = player.isPlaying
                 if (!playbackCompleted && (positionMs > 0 || durationMs > 0)) {
-                    onPlaybackProgress(positionMs, durationMs, false)
+                    onPlaybackProgress(positionMs, durationMs)
                 }
             }
             delay(400)

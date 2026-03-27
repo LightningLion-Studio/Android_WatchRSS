@@ -1,6 +1,7 @@
 package com.lightningstudio.watchrss.testutil
 
 import com.lightningstudio.watchrss.data.bili.BiliInteractionState
+import com.lightningstudio.watchrss.data.bili.BiliPlaybackCheckpointTrigger
 import com.lightningstudio.watchrss.data.bili.BiliPlaybackProgress
 import com.lightningstudio.watchrss.data.bili.BiliResolvedPlaybackSource
 import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
@@ -55,6 +56,15 @@ data class TestBiliCoinRequest(
     val bvid: String?
 )
 
+data class TestBiliPlaybackHistoryReportRequest(
+    val aid: Long?,
+    val bvid: String?,
+    val cid: Long,
+    val positionMs: Long,
+    val durationMs: Long,
+    val trigger: BiliPlaybackCheckpointTrigger
+)
+
 class TestBiliRepository(
     initialLoggedIn: Boolean = false,
     initialFeedItems: List<BiliItem> = listOf(sampleBiliItem())
@@ -86,6 +96,8 @@ class TestBiliRepository(
         "Referer" to "https://www.bilibili.com"
     )
     var resolvedPlaybackSourceValue: BiliResolvedPlaybackSource? = null
+    var reportPlaybackHistoryResult: BiliResult<Unit> = BiliResult(code = 0, data = Unit)
+    var reportPlaybackHistoryDelayMs: Long = 0L
     val resolvedPlaybackSourceResultQueueByCid = mutableMapOf<Long, MutableList<BiliResult<BiliResolvedPlaybackSource>>>()
     val resolvedPlaybackSourceResultsByCid = mutableMapOf<Long, BiliResult<BiliResolvedPlaybackSource>>()
     val resolvePlaybackSourceDelayMsByCid = mutableMapOf<Long, Long>()
@@ -121,6 +133,7 @@ class TestBiliRepository(
     val exactPlaybackProgressReadRequests = mutableListOf<Triple<Long?, String?, Long>>()
     val playbackProgressWrites = mutableListOf<BiliPlaybackProgress>()
     val clearedPlaybackProgressRequests = mutableListOf<Triple<Long?, String?, Long>>()
+    val reportPlaybackHistoryRequests = mutableListOf<TestBiliPlaybackHistoryReportRequest>()
     val callLog = mutableListOf<String>()
     var requestWebQrCodeCalls = 0
     var lastWebPollToken: String? = null
@@ -223,6 +236,10 @@ class TestBiliRepository(
             .maxByOrNull { it.updatedAtMillis }
     }
 
+    override suspend fun readAllPlaybackProgress(): List<BiliPlaybackProgress> {
+        return playbackProgressRecords.sortedByDescending { it.updatedAtMillis }
+    }
+
     override suspend fun writePlaybackProgress(progress: BiliPlaybackProgress) {
         playbackProgressWrites += progress
         playbackProgressRecords.removeAll {
@@ -234,6 +251,29 @@ class TestBiliRepository(
     override suspend fun clearPlaybackProgress(aid: Long?, bvid: String?, cid: Long) {
         clearedPlaybackProgressRequests += Triple(aid, bvid, cid)
         playbackProgressRecords.removeAll { matchesPlaybackIdentity(it, aid, bvid, cid) }
+    }
+
+    override suspend fun reportPlaybackHistory(
+        aid: Long?,
+        bvid: String?,
+        cid: Long,
+        positionMs: Long,
+        durationMs: Long,
+        trigger: BiliPlaybackCheckpointTrigger
+    ): BiliResult<Unit> {
+        callLog += "historyReport:$aid:$bvid:$cid:$positionMs:$durationMs:${trigger.name}"
+        reportPlaybackHistoryRequests += TestBiliPlaybackHistoryReportRequest(
+            aid = aid,
+            bvid = bvid,
+            cid = cid,
+            positionMs = positionMs,
+            durationMs = durationMs,
+            trigger = trigger
+        )
+        if (reportPlaybackHistoryDelayMs > 0L) {
+            delay(reportPlaybackHistoryDelayMs)
+        }
+        return reportPlaybackHistoryResult
     }
 
     override suspend fun readFeedCache(): List<BiliItem> = feedCache

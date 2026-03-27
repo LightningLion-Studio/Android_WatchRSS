@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,6 +28,7 @@ import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.EmptyStateCard
 import com.lightningstudio.watchrss.ui.components.PullRefreshBox
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
+import com.lightningstudio.watchrss.ui.settings.WatchSettingsPillRow
 import com.lightningstudio.watchrss.ui.viewmodel.BiliListItem
 import com.lightningstudio.watchrss.ui.viewmodel.BiliListUiState
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -36,6 +39,8 @@ fun BiliListScreen(
     uiState: BiliListUiState,
     onRefresh: () -> Unit,
     onLoadMore: () -> Unit,
+    onSyncToPhone: () -> Unit = {},
+    showSyncToPhone: Boolean = false,
     onItemClick: (BiliListItem) -> Unit
 ) {
     val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
@@ -113,6 +118,13 @@ fun BiliListScreen(
                         textAlign = TextAlign.Center,
                         modifier = Modifier.fillMaxWidth()
                     )
+                    if (showSyncToPhone) {
+                        WatchSettingsPillRow(
+                            label = "同步到手机",
+                            leadingIcon = Icons.Outlined.PhoneAndroid,
+                            onClick = onSyncToPhone
+                        )
+                    }
                 }
             }
             if (uiState.items.isEmpty() && !uiState.isRefreshing) {

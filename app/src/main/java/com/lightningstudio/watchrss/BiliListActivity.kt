@@ -12,6 +12,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
+import com.lightningstudio.watchrss.phoneconnection.PhoneConnectionAbility
+import com.lightningstudio.watchrss.phoneconnection.PhoneConnectionFeature
 import com.lightningstudio.watchrss.ui.screen.bili.BiliListScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.BiliListType
@@ -32,27 +34,41 @@ class BiliListActivity : BaseWatchActivity() {
             WatchRSSTheme {
                 val baseDensity = LocalDensity.current
                 CompositionLocalProvider(LocalDensity provides Density(2f, baseDensity.fontScale)) {
-                val context = LocalContext.current
-                val uiState by viewModel.uiState.collectAsState()
+                    val context = LocalContext.current
+                    val uiState by viewModel.uiState.collectAsState()
 
-                LaunchedEffect(uiState.message) {
-                    val message = uiState.message
-                    if (!message.isNullOrBlank()) {
-                        com.lightningstudio.watchrss.ui.util.showAppToast(context, message, android.widget.Toast.LENGTH_SHORT)
-                        viewModel.clearMessage()
+                    LaunchedEffect(uiState.message) {
+                        val message = uiState.message
+                        if (!message.isNullOrBlank()) {
+                            com.lightningstudio.watchrss.ui.util.showAppToast(
+                                context,
+                                message,
+                                android.widget.Toast.LENGTH_SHORT
+                            )
+                            viewModel.clearMessage()
+                        }
                     }
-                }
 
-                BiliListScreen(
-                    uiState = uiState,
-                    onRefresh = viewModel::refresh,
-                    onLoadMore = viewModel::loadMore,
-                    onItemClick = { item ->
-                        context.startActivity(
-                        BiliDetailActivity.createIntent(context, item.aid, item.bvid, item.cid)
+                    BiliListScreen(
+                        uiState = uiState,
+                        onRefresh = viewModel::refresh,
+                        onLoadMore = viewModel::loadMore,
+                        onSyncToPhone = {
+                            context.startActivity(
+                                PhoneConnectionActivity.createIntent(
+                                    context = context,
+                                    preferredAbility = PhoneConnectionAbility.SYNC_BILI_WATCH_RECORDS
+                                )
+                            )
+                        },
+                        showSyncToPhone = uiState.type == BiliListType.HISTORY &&
+                            PhoneConnectionFeature.isDebugBuild,
+                        onItemClick = { item ->
+                            context.startActivity(
+                                BiliDetailActivity.createIntent(context, item.aid, item.bvid, item.cid)
+                            )
+                        }
                     )
-                }
-            )
                 }
             }
         }

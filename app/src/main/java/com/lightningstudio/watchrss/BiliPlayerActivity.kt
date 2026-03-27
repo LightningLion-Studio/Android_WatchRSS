@@ -47,8 +47,15 @@ class BiliPlayerActivity : BaseWatchActivity() {
                             val safeLink = link ?: return@BiliPlayerScreen
                             WebViewActivity.open(this, safeLink)
                         },
-                        onPlaybackProgress = viewModel::onPlaybackProgress,
-                        onPlaybackEnded = viewModel::onPlaybackEnded,
+                        onPlaybackReady = viewModel::onPlaybackReady,
+                        onPlaybackProgress = { positionMs, durationMs ->
+                            viewModel.onPlaybackProgress(positionMs, durationMs)
+                        },
+                        onPlaybackPauseOrExit = viewModel::onPlaybackPauseOrExit,
+                        onPlaybackErrorCheckpoint = viewModel::onPlaybackErrorCheckpoint,
+                        onPlaybackEnded = { positionMs, durationMs ->
+                            viewModel.onPlaybackEnded(positionMs, durationMs)
+                        },
                         playbackDataSourceFactoryProvider = playbackCacheManager::buildPlaybackDataSourceFactory,
                         onPanStateChange = { offsetX, rangeX ->
                             panOffsetX = offsetX

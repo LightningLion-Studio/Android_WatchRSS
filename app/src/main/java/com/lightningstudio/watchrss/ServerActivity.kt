@@ -74,6 +74,11 @@ class ServerActivity : BaseWatchActivity() {
                             handleSyncComplete()
                         }
                     }
+                    ServerType.SYNC_BILI_WATCH_RECORDS -> {
+                        LocalHttpServer.createSyncBiliWatchRecordsServer(app.container) {
+                            handleSyncComplete()
+                        }
+                    }
                     ServerType.LLM_CONFIG -> {
                         LocalHttpServer.createLlmConfigServer(app.container) {
                             handleLlmConfigComplete()
@@ -147,6 +152,7 @@ class ServerActivity : BaseWatchActivity() {
         REMOTE_INPUT,
         SYNC_FAVORITES,
         SYNC_WATCH_LATER,
+        SYNC_BILI_WATCH_RECORDS,
         LLM_CONFIG
     }
 
@@ -156,6 +162,7 @@ class ServerActivity : BaseWatchActivity() {
             ServerType.REMOTE_INPUT -> "从手机输入"
             ServerType.SYNC_FAVORITES -> "同步收藏"
             ServerType.SYNC_WATCH_LATER -> "同步稍后再看"
+            ServerType.SYNC_BILI_WATCH_RECORDS -> "同步B站观看记录"
             ServerType.LLM_CONFIG -> "配置大模型"
         }
     }
@@ -166,6 +173,7 @@ class ServerActivity : BaseWatchActivity() {
             ServerType.REMOTE_INPUT -> "请使用手机版扫描下方二维码"
             ServerType.SYNC_FAVORITES -> "请使用手机版扫描下方二维码"
             ServerType.SYNC_WATCH_LATER -> "请使用手机版扫描下方二维码"
+            ServerType.SYNC_BILI_WATCH_RECORDS -> "请使用手机版扫描下方二维码"
             ServerType.LLM_CONFIG -> "请使用手机版扫描下方二维码"
         }
     }

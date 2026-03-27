@@ -1,7 +1,9 @@
 package com.lightningstudio.watchrss.ui.viewmodel
 
 import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.ViewModel
 import com.lightningstudio.watchrss.data.bili.BiliErrorCodes
+import com.lightningstudio.watchrss.data.bili.BiliPlaybackCheckpointTrigger
 import com.lightningstudio.watchrss.data.bili.BiliPlaybackProgress
 import com.lightningstudio.watchrss.data.bili.BiliResolvedPlaybackSource
 import com.lightningstudio.watchrss.data.bili.formatBiliError
@@ -12,7 +14,11 @@ import com.lightningstudio.watchrss.sdk.bili.BiliResult
 import com.lightningstudio.watchrss.sdk.bili.BiliVideoDetail
 import com.lightningstudio.watchrss.testutil.MainDispatcherRule
 import com.lightningstudio.watchrss.testutil.TestBiliRepository
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -670,6 +676,242 @@ class BiliPlayerViewModelTest {
     }
 
     @Test
+    fun onPlaybackReady_reportsHistoryImmediately() = runTest {
+        val repo = TestBiliRepository().apply {
+            videoDetailResult = BiliResult(
+                code = 0,
+                data = BiliVideoDetail(
+                    item = BiliItem(
+                        aid = 12L,
+                        bvid = "BV12",
+                        cid = 34L,
+                        title = "标题",
+                        owner = BiliOwner(name = "UP主")
+                    ),
+                    pages = listOf(BiliPage(cid = 34L, part = "P1"))
+                )
+            )
+            resolvedPlaybackSourceValue = BiliResolvedPlaybackSource(
+                cid = 34L,
+                url = "https://example.com/full.mp4",
+                headers = playHeaders,
+                cacheKey = "bili:bv:BV12:34:q32",
+                quality = 32
+            )
+        }
+
+        val viewModel = createViewModel(repo)
+        advanceUntilIdle()
+
+        viewModel.onPlaybackReady(positionMs = 0, durationMs = 60_000)
+        advanceUntilIdle()
+
+        assertEquals(1, repo.reportPlaybackHistoryRequests.size)
+        assertEquals(BiliPlaybackCheckpointTrigger.READY, repo.reportPlaybackHistoryRequests.single().trigger)
+        assertEquals(0L, repo.reportPlaybackHistoryRequests.single().positionMs)
+        assertEquals(60_000L, repo.reportPlaybackHistoryRequests.single().durationMs)
+    }
+
+    @Test
+    fun onPlaybackProgress_reportsRemotelyEveryTwoMinutes() = runTest {
+        val repo = TestBiliRepository().apply {
+            videoDetailResult = BiliResult(
+                code = 0,
+                data = BiliVideoDetail(
+                    item = BiliItem(
+                        aid = 12L,
+                        bvid = "BV12",
+                        cid = 34L,
+                        title = "标题",
+                        owner = BiliOwner(name = "UP主")
+                    ),
+                    pages = listOf(BiliPage(cid = 34L, part = "P1"))
+                )
+            )
+            resolvedPlaybackSourceValue = BiliResolvedPlaybackSource(
+                cid = 34L,
+                url = "https://example.com/full.mp4",
+                headers = playHeaders,
+                cacheKey = "bili:bv:BV12:34:q32",
+                quality = 32
+            )
+        }
+
+        val viewModel = createViewModel(repo)
+        advanceUntilIdle()
+
+        viewModel.onPlaybackReady(positionMs = 0, durationMs = 600_000)
+        advanceUntilIdle()
+
+        viewModel.onPlaybackProgress(positionMs = 119_000, durationMs = 600_000, force = false)
+        advanceUntilIdle()
+        assertEquals(listOf(0L), repo.reportPlaybackHistoryRequests.map { it.positionMs })
+
+        viewModel.onPlaybackProgress(positionMs = 120_000, durationMs = 600_000, force = false)
+        advanceUntilIdle()
+        viewModel.onPlaybackProgress(positionMs = 240_000, durationMs = 600_000, force = false)
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(0L, 120_000L, 240_000L),
+            repo.reportPlaybackHistoryRequests.map { it.positionMs }
+        )
+        assertEquals(
+            listOf(
+                BiliPlaybackCheckpointTrigger.READY,
+                BiliPlaybackCheckpointTrigger.TICK,
+                BiliPlaybackCheckpointTrigger.TICK
+            ),
+            repo.reportPlaybackHistoryRequests.map { it.trigger }
+        )
+    }
+
+    @Test
+    fun onPlaybackPauseOrExit_reportsLatestProgressBeforeTwoMinuteBoundary() = runTest {
+        val repo = TestBiliRepository().apply {
+            videoDetailResult = BiliResult(
+                code = 0,
+                data = BiliVideoDetail(
+                    item = BiliItem(
+                        aid = 12L,
+                        bvid = "BV12",
+                        cid = 34L,
+                        title = "标题",
+                        owner = BiliOwner(name = "UP主")
+                    ),
+                    pages = listOf(BiliPage(cid = 34L, part = "P1"))
+                )
+            )
+            resolvedPlaybackSourceValue = BiliResolvedPlaybackSource(
+                cid = 34L,
+                url = "https://example.com/full.mp4",
+                headers = playHeaders,
+                cacheKey = "bili:bv:BV12:34:q32",
+                quality = 32
+            )
+        }
+
+        val viewModel = createViewModel(repo)
+        advanceUntilIdle()
+
+        viewModel.onPlaybackReady(positionMs = 0, durationMs = 600_000)
+        advanceUntilIdle()
+        viewModel.onPlaybackPauseOrExit(positionMs = 30_000, durationMs = 600_000)
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(0L, 30_000L),
+            repo.reportPlaybackHistoryRequests.map { it.positionMs }
+        )
+        assertEquals(
+            listOf(
+                BiliPlaybackCheckpointTrigger.READY,
+                BiliPlaybackCheckpointTrigger.PAUSE_OR_EXIT
+            ),
+            repo.reportPlaybackHistoryRequests.map { it.trigger }
+        )
+    }
+
+    @Test
+    fun onCleared_drainsPendingRemoteHistoryReport() = runTest {
+        val repo = TestBiliRepository().apply {
+            videoDetailResult = BiliResult(
+                code = 0,
+                data = BiliVideoDetail(
+                    item = BiliItem(
+                        aid = 12L,
+                        bvid = "BV12",
+                        cid = 34L,
+                        title = "标题",
+                        owner = BiliOwner(name = "UP主")
+                    ),
+                    pages = listOf(BiliPage(cid = 34L, part = "P1"))
+                )
+            )
+            resolvedPlaybackSourceValue = BiliResolvedPlaybackSource(
+                cid = 34L,
+                url = "https://example.com/full.mp4",
+                headers = playHeaders,
+                cacheKey = "bili:bv:BV12:34:q32",
+                quality = 32
+            )
+            reportPlaybackHistoryDelayMs = 1_000L
+        }
+        val remoteReportScope = CoroutineScope(StandardTestDispatcher(testScheduler) + SupervisorJob())
+
+        val viewModel = createViewModel(repo, remoteReportScope = remoteReportScope)
+        advanceUntilIdle()
+
+        viewModel.onPlaybackReady(positionMs = 0, durationMs = 600_000)
+        runCurrent()
+        viewModel.onPlaybackPauseOrExit(positionMs = 30_000, durationMs = 600_000)
+        runCurrent()
+        clearViewModel(viewModel)
+        advanceUntilIdle()
+        remoteReportScope.cancel()
+
+        assertEquals(
+            listOf(
+                BiliPlaybackCheckpointTrigger.READY,
+                BiliPlaybackCheckpointTrigger.PAUSE_OR_EXIT
+            ),
+            repo.reportPlaybackHistoryRequests.map { it.trigger }
+        )
+        assertEquals(
+            listOf(0L, 30_000L),
+            repo.reportPlaybackHistoryRequests.map { it.positionMs }
+        )
+    }
+
+    @Test
+    fun onPlaybackEnded_reportsFinalProgressAfterReadySync() = runTest {
+        val repo = TestBiliRepository().apply {
+            videoDetailResult = BiliResult(
+                code = 0,
+                data = BiliVideoDetail(
+                    item = BiliItem(
+                        aid = 12L,
+                        bvid = "BV12",
+                        cid = 34L,
+                        title = "标题",
+                        owner = BiliOwner(name = "UP主")
+                    ),
+                    pages = listOf(BiliPage(cid = 34L, part = "P1"))
+                )
+            )
+            resolvedPlaybackSourceValue = BiliResolvedPlaybackSource(
+                cid = 34L,
+                url = "https://example.com/full.mp4",
+                headers = playHeaders,
+                cacheKey = "bili:bv:BV12:34:q32",
+                quality = 32
+            )
+            reportPlaybackHistoryResult = BiliResult(code = 0, data = Unit)
+        }
+
+        val viewModel = createViewModel(repo)
+        advanceUntilIdle()
+
+        viewModel.onPlaybackReady(positionMs = 0, durationMs = 60_000)
+        runCurrent()
+
+        viewModel.onPlaybackEnded(positionMs = 59_000, durationMs = 60_000)
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(0L, 60_000L),
+            repo.reportPlaybackHistoryRequests.map { it.positionMs }
+        )
+        assertEquals(
+            listOf(
+                BiliPlaybackCheckpointTrigger.READY,
+                BiliPlaybackCheckpointTrigger.ENDED
+            ),
+            repo.reportPlaybackHistoryRequests.map { it.trigger }
+        )
+    }
+
+    @Test
     fun onPlaybackEnded_clearsExactProgress_andResetsResumePosition() = runTest {
         val repo = TestBiliRepository().apply {
             videoDetailResult = BiliResult(
@@ -705,18 +947,20 @@ class BiliPlayerViewModelTest {
         val viewModel = createViewModel(repo)
         advanceUntilIdle()
 
-        viewModel.onPlaybackEnded()
+        viewModel.onPlaybackEnded(positionMs = 59_000, durationMs = 60_000)
         advanceUntilIdle()
 
         assertEquals(0, viewModel.uiState.value.resumePositionMs)
         assertEquals(listOf(Triple(12L, "BV12", 34L)), repo.clearedPlaybackProgressRequests)
+        assertEquals(listOf(BiliPlaybackCheckpointTrigger.ENDED), repo.reportPlaybackHistoryRequests.map { it.trigger })
     }
 
     private fun createViewModel(
         repository: TestBiliRepository,
         aid: String = "12",
         bvid: String = "BV12",
-        cid: String = "34"
+        cid: String = "34",
+        remoteReportScope: CoroutineScope? = null
     ): BiliPlayerViewModel {
         return BiliPlayerViewModel(
             savedStateHandle = SavedStateHandle(
@@ -726,8 +970,19 @@ class BiliPlayerViewModelTest {
                     "cid" to cid
                 )
             ),
-            repository = repository
+            repository = repository,
+            detachedRemoteReportScope = remoteReportScope
         )
+    }
+
+    private fun clearViewModel(viewModel: BiliPlayerViewModel) {
+        val clearMethod = (ViewModel::class.java.declaredMethods + ViewModel::class.java.methods)
+            .firstOrNull { method ->
+                method.parameterCount == 0 && method.name.contains("clear")
+            }
+            ?: throw NoSuchMethodException("ViewModel clear method not found")
+        clearMethod.isAccessible = true
+        clearMethod.invoke(viewModel)
     }
 
     private fun assertNoPreviewCalls(repository: TestBiliRepository) {

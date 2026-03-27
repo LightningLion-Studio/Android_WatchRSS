@@ -1,7 +1,10 @@
 package com.lightningstudio.watchrss.phoneconnection
 
 import com.lightningstudio.watchrss.data.AppContainer
+import com.lightningstudio.watchrss.data.bili.BiliErrorCodes
+import com.lightningstudio.watchrss.data.bili.formatBiliError
 import com.lightningstudio.watchrss.data.rss.SaveType
+import com.lightningstudio.watchrss.sdk.bili.BiliHistoryCursor
 import com.lightningstudio.watchrss.util.AppLogger
 import fi.iki.elonen.NanoHTTPD
 import kotlinx.coroutines.CoroutineScope
@@ -34,6 +37,7 @@ import org.json.JSONObject
  * - [createRemoteInputServer]    — 仅开放远程输入 RSS URL 端点（适用于添加订阅场景）
  * - [createSyncFavoritesServer]  — 仅开放获取收藏夹数据端点
  * - [createSyncWatchLaterServer] — 仅开放获取稍后阅读列表端点
+ * - [createSyncBiliWatchRecordsServer] — 仅开放 B 站观看历史/进度端点
  * - [createLlmConfigServer]      — 仅开放 LLM 配置的读写端点
  *
  * ## 典型调用流程
@@ -65,6 +69,8 @@ import org.json.JSONObject
  * | POST /remoteEnterRSSURL       | REMOTE_INPUT           | 手机端推送 RSS URL 到手表                  |
  * | GET  /getFavorites            | SYNC_FAVORITES         | 手机端拉取手表收藏夹数据                   |
  * | GET  /getWatchlaterList       | SYNC_WATCH_LATER       | 手机端拉取手表稍后阅读数据                 |
+ * | GET  /getBiliWatchHistory     | SYNC_BILI_WATCH_RECORDS | 手机端拉取手表上的 B 站观看历史             |
+ * | GET  /getBiliPlaybackProgress | SYNC_BILI_WATCH_RECORDS | 手机端拉取手表本地 B 站断点续播进度         |
  * | GET  /getLLMSummaryConfig     | LLM_SUMMARY_CONFIG     | 手机端读取手表当前 LLM 配置（API Key 脱敏）|
  * | POST /setLLMSummaryConfig     | LLM_SUMMARY_CONFIG     | 手机端写入 LLM 配置到手表                  |
  *
@@ -101,6 +107,8 @@ class LocalHttpServer private constructor(
         SYNC_FAVORITES,
         /** 仅支持手机端同步稍后阅读列表 */
         SYNC_WATCH_LATER,
+        /** 仅支持手机端同步 B 站观看历史和本地播放进度 */
+        SYNC_BILI_WATCH_RECORDS,
         /** 仅支持手机端读写 LLM 摘要配置 */
         LLM_CONFIG
     }
@@ -110,6 +118,7 @@ class LocalHttpServer private constructor(
         ServerType.REMOTE_INPUT -> setOf(PhoneConnectionAbility.REMOTE_INPUT)
         ServerType.SYNC_FAVORITES -> setOf(PhoneConnectionAbility.SYNC_FAVORITES)
         ServerType.SYNC_WATCH_LATER -> setOf(PhoneConnectionAbility.SYNC_WATCH_LATER)
+        ServerType.SYNC_BILI_WATCH_RECORDS -> setOf(PhoneConnectionAbility.SYNC_BILI_WATCH_RECORDS)
         ServerType.LLM_CONFIG -> setOf(PhoneConnectionAbility.LLM_SUMMARY_CONFIG)
     }
 
@@ -145,6 +154,12 @@ class LocalHttpServer private constructor(
             }
             uri == "/getWatchlaterList" && supports(PhoneConnectionAbility.SYNC_WATCH_LATER) -> {
                 handleGetWatchLater()
+            }
+            uri == "/getBiliWatchHistory" && supports(PhoneConnectionAbility.SYNC_BILI_WATCH_RECORDS) -> {
+                handleGetBiliWatchHistory(session)
+            }
+            uri == "/getBiliPlaybackProgress" && supports(PhoneConnectionAbility.SYNC_BILI_WATCH_RECORDS) -> {
+                handleGetBiliPlaybackProgress()
             }
             uri == "/getLLMSummaryConfig" && supports(PhoneConnectionAbility.LLM_SUMMARY_CONFIG) -> {
                 handleGetLlmSummaryConfig()
@@ -505,6 +520,108 @@ class LocalHttpServer private constructor(
         }
     }
 
+    private fun handleGetBiliWatchHistory(session: IHTTPSession): Response {
+        return try {
+            val cursor = parseBiliHistoryCursor(session)
+            val result = kotlinx.coroutines.runBlocking {
+                container.biliRepository.fetchHistory(cursor)
+            }
+            val page = result.data
+            if (!result.isSuccess || page == null) {
+                val code = if (result.isSuccess) BiliErrorCodes.REQUEST_FAILED else result.code
+                return newFixedLengthResponse(
+                    Response.Status.OK,
+                    "application/json",
+                    JSONObject().apply {
+                        put("success", false)
+                        put("code", code)
+                        put("message", formatBiliError(code, result.message))
+                        put("data", JSONObject.NULL)
+                    }.toString()
+                )
+            }
+
+            onSyncComplete?.invoke()
+
+            newFixedLengthResponse(
+                Response.Status.OK,
+                "application/json",
+                JSONObject().apply {
+                    put("success", true)
+                    put(
+                        "data",
+                        BiliWatchSyncPayload
+                            .buildHistoryPayload(page, container.biliRepository::savedLink)
+                            .toJsonObject()
+                    )
+                }.toString()
+            )
+        } catch (e: Exception) {
+            AppLogger.e("LocalHttpServer", "handleGetBiliWatchHistory failed", e)
+            newFixedLengthResponse(
+                Response.Status.INTERNAL_ERROR,
+                "application/json",
+                JSONObject().apply {
+                    put("success", false)
+                    put("message", e.message ?: "Unknown error")
+                    put("data", JSONObject.NULL)
+                }.toString()
+            )
+        }
+    }
+
+    private fun handleGetBiliPlaybackProgress(): Response {
+        return try {
+            val records = kotlinx.coroutines.runBlocking {
+                container.biliRepository.readAllPlaybackProgress()
+            }
+
+            onSyncComplete?.invoke()
+
+            newFixedLengthResponse(
+                Response.Status.OK,
+                "application/json",
+                JSONObject().apply {
+                    put("success", true)
+                    put(
+                        "data",
+                        BiliWatchSyncPayload.buildPlaybackProgressPayload(
+                            records,
+                            container.biliRepository::savedLink
+                        ).toJsonArray()
+                    )
+                }.toString()
+            )
+        } catch (e: Exception) {
+            AppLogger.e("LocalHttpServer", "handleGetBiliPlaybackProgress failed", e)
+            newFixedLengthResponse(
+                Response.Status.INTERNAL_ERROR,
+                "application/json",
+                JSONObject().apply {
+                    put("success", false)
+                    put("message", e.message ?: "Unknown error")
+                    put("data", JSONObject.NULL)
+                }.toString()
+            )
+        }
+    }
+
+    private fun parseBiliHistoryCursor(session: IHTTPSession): BiliHistoryCursor? {
+        val max = session.parameters["max"]?.firstOrNull()?.toLongOrNull()
+        val viewAt = session.parameters["view_at"]?.firstOrNull()?.toLongOrNull()
+            ?: session.parameters["viewAt"]?.firstOrNull()?.toLongOrNull()
+        val business = session.parameters["business"]
+            ?.firstOrNull()
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+        if (max == null && viewAt == null && business == null) return null
+        return BiliHistoryCursor(
+            max = max,
+            viewAt = viewAt,
+            business = business
+        )
+    }
+
     private fun handleGetLlmSummaryConfig(): Response {
         return try {
             val settingsRepository = container.settingsRepository
@@ -690,6 +807,29 @@ class LocalHttpServer private constructor(
                 container,
                 ServerType.SYNC_WATCH_LATER,
                 preferredAbility = PhoneConnectionAbility.SYNC_WATCH_LATER,
+                onSyncComplete = onSyncComplete
+            )
+        }
+
+        /**
+         * 创建"B 站观看记录同步"专用服务器。
+         *
+         * 手机 App 可通过以下端点拉取数据：
+         * - GET `/getBiliWatchHistory`：返回当前账号的 B 站观看历史；支持 `max` / `viewAt` / `view_at`
+         *   / `business` 查询参数，用于按服务端 cursor 继续翻页。
+         * - GET `/getBiliPlaybackProgress`：返回手表本地保存的 B 站断点续播进度。
+         *
+         * @param onSyncComplete 手机端成功拉取任一数据后的回调。
+         */
+        fun createSyncBiliWatchRecordsServer(
+            container: AppContainer,
+            onSyncComplete: () -> Unit
+        ): LocalHttpServer {
+            return LocalHttpServer(
+                DEFAULT_PORT,
+                container,
+                ServerType.SYNC_BILI_WATCH_RECORDS,
+                preferredAbility = PhoneConnectionAbility.SYNC_BILI_WATCH_RECORDS,
                 onSyncComplete = onSyncComplete
             )
         }

@@ -272,6 +272,12 @@ class BiliRepository(
             )
         }
 
+    override suspend fun readAllPlaybackProgress(): List<BiliPlaybackProgress> = withContext(Dispatchers.IO) {
+        val raw = dataStore.data.first()[LOCAL_PLAYBACK_PROGRESS_JSON].orEmpty()
+        if (raw.isBlank()) return@withContext emptyList()
+        parseBiliPlaybackProgressRecords(raw)
+    }
+
     override suspend fun writePlaybackProgress(progress: BiliPlaybackProgress) {
         withContext(Dispatchers.IO) {
             dataStore.edit { preferences ->
@@ -309,6 +315,40 @@ class BiliRepository(
                     preferences[LOCAL_PLAYBACK_PROGRESS_JSON] = buildBiliPlaybackProgressRecordsJson(updated)
                 }
             }
+        }
+    }
+
+    override suspend fun reportPlaybackHistory(
+        aid: Long?,
+        bvid: String?,
+        cid: Long,
+        positionMs: Long,
+        durationMs: Long,
+        trigger: BiliPlaybackCheckpointTrigger
+    ): BiliResult<Unit> {
+        val safeAid = aid ?: return BiliResult(BiliErrorCodes.PLAY_PARAM_MISSING, "missing_aid")
+        if (cid <= 0L) {
+            return BiliResult(BiliErrorCodes.PLAY_PARAM_MISSING, "missing_cid")
+        }
+        val progressSeconds = historyReportProgressSeconds(
+            positionMs = positionMs,
+            durationMs = durationMs,
+            trigger = trigger
+        )
+        return performWebAction(
+            action = "history_report",
+            aid = safeAid,
+            startExtra = "trigger=${trigger.name.lowercase()} cid=$cid progress=$progressSeconds",
+            resultExtra = { result ->
+                "trigger=${trigger.name.lowercase()} cid=$cid progress=$progressSeconds code=${result.code}"
+            }
+        ) {
+            client.history.reportHistory(
+                aid = safeAid,
+                cid = cid,
+                progressSeconds = progressSeconds,
+                bvid = bvid
+            )
         }
     }
 
@@ -1058,6 +1098,29 @@ class BiliRepository(
             result = result
         )
         return result
+    }
+
+    private fun historyReportProgressSeconds(
+        positionMs: Long,
+        durationMs: Long,
+        trigger: BiliPlaybackCheckpointTrigger
+    ): Long {
+        val safeDurationMs = durationMs.coerceAtLeast(0L)
+        val safePositionMs = positionMs.coerceAtLeast(0L)
+        val cappedPositionMs = if (safeDurationMs > 0L) {
+            safePositionMs.coerceAtMost(safeDurationMs)
+        } else {
+            safePositionMs
+        }
+        val reportMs = when (trigger) {
+            BiliPlaybackCheckpointTrigger.ENDED -> safeDurationMs.takeIf { it > 0L } ?: cappedPositionMs
+            else -> cappedPositionMs
+        }
+        return if (trigger == BiliPlaybackCheckpointTrigger.ENDED) {
+            if (reportMs <= 0L) 0L else (reportMs + 999L) / 1000L
+        } else {
+            reportMs / 1000L
+        }
     }
 
     private suspend fun <T> safeCall(block: suspend () -> BiliResult<T>): BiliResult<T> {

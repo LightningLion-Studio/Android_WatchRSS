@@ -16,6 +16,10 @@ enum class PhoneConnectionAbility(
         wireCode = "f1aa43bd-0fe3-4771-ae6b-d4799ecf84b5",
         displayName = "稍后阅读"
     ),
+    SYNC_BILI_WATCH_RECORDS(
+        wireCode = "9a88f4ec-a071-4cf4-8b25-e735836ebb0d",
+        displayName = "B站观看历史/进度"
+    ),
     LLM_SUMMARY_CONFIG(
         wireCode = "a3e72c1d-5f84-4b90-9d16-e8c047f2b3a1",
         displayName = "LLM总结配置"
@@ -26,6 +30,7 @@ enum class PhoneConnectionAbility(
             REMOTE_INPUT,
             SYNC_FAVORITES,
             SYNC_WATCH_LATER,
+            SYNC_BILI_WATCH_RECORDS,
             LLM_SUMMARY_CONFIG
         )
 
