@@ -22,6 +22,10 @@ import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
 import com.lightningstudio.watchrss.ui.viewmodel.HomeViewModel
 import androidx.lifecycle.lifecycleScope
+import com.lightningstudio.watchrss.data.douyin.DouyinFeedCacheStore
+import com.lightningstudio.watchrss.data.douyin.DouyinSourceOrigin
+import com.lightningstudio.watchrss.data.douyin.DouyinStreamItem
+import com.lightningstudio.watchrss.sdk.douyin.DouyinVideo
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -68,6 +72,14 @@ class MainActivity : BaseWatchActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        if (isLauncherEntry(intent)) {
+            lifecycleScope.launch {
+                AppLaunchSignal.markLauncherOpen()
+                prewarmDouyinFeed()
+                maybeResumeLastContent(intent)
+            }
+            return
+        }
         maybeResumeLastContent(intent)
     }
 
@@ -88,8 +100,16 @@ class MainActivity : BaseWatchActivity() {
                 finish()
                 return@launch
             }
-            maybeResumeLastContent(intent)
             keepSplashOnScreen = false
+            if (isLauncherEntry(intent)) {
+                AppLaunchSignal.markLauncherOpen()
+                launch {
+                    prewarmDouyinFeed()
+                    maybeResumeLastContent(intent)
+                }
+            } else {
+                maybeResumeLastContent(intent)
+            }
         }
     }
 
@@ -188,6 +208,20 @@ class MainActivity : BaseWatchActivity() {
         return intent.categories?.contains(Intent.CATEGORY_LAUNCHER) == true
     }
 
+    private suspend fun prewarmDouyinFeed() {
+        val container = (application as WatchRssApplication).container
+        if (!container.douyinRepository.isLoggedIn()) return
+        val result = container.douyinRepository.fetchFeedPage(
+            cursor = null,
+            count = DOUYIN_APP_OPEN_REFRESH_COUNT
+        )
+        val items = result.data?.items.orEmpty()
+            .mapNotNull(::toDouyinStreamItem)
+        if (items.isNotEmpty()) {
+            DouyinFeedCacheStore(this@MainActivity).save(items)
+        }
+    }
+
     private fun showChannelActions(channel: RssChannel, quick: Boolean) {
         val intent = Intent(this, ChannelActionsActivity::class.java)
         intent.putExtra(ChannelActionsActivity.EXTRA_CHANNEL_ID, channel.id)
@@ -205,5 +239,25 @@ class MainActivity : BaseWatchActivity() {
                 startActivity(intent)
             }
         }
+    }
+
+    private fun toDouyinStreamItem(video: DouyinVideo): DouyinStreamItem? {
+        val awemeId = video.awemeId?.trim().orEmpty()
+        val playUrl = video.playUrl?.trim().orEmpty()
+        if (awemeId.isEmpty() || playUrl.isEmpty()) return null
+        return DouyinStreamItem(
+            awemeId = awemeId,
+            playUrl = playUrl,
+            coverUrl = video.coverUrl?.takeIf { it.isNotBlank() },
+            title = video.desc?.takeIf { it.isNotBlank() },
+            author = video.authorName?.takeIf { it.isNotBlank() },
+            likeCount = video.likeCount,
+            playUrlResolvedAtMs = System.currentTimeMillis(),
+            sourceOrigin = DouyinSourceOrigin.NETWORK_FEED
+        )
+    }
+
+    companion object {
+        private const val DOUYIN_APP_OPEN_REFRESH_COUNT = 16
     }
 }

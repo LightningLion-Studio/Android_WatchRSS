@@ -43,6 +43,18 @@ class DouyinEntryActivity : BaseWatchActivity() {
         DouyinViewModelFactory(repository, preloadManager, watchHistoryStore, feedCacheStore)
     }
     private var disableSwipeBack = false
+    private var handledLauncherOpenToken = AppLaunchSignal.currentToken()
+
+    override fun onResume() {
+        super.onResume()
+        val currentToken = AppLaunchSignal.currentToken()
+        if (currentToken != handledLauncherOpenToken) {
+            handledLauncherOpenToken = currentToken
+            if (viewModel.uiState.value.isLoggedIn) {
+                viewModel.loadCachedFeedForAppLaunch()
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -105,6 +117,7 @@ class DouyinEntryActivity : BaseWatchActivity() {
                         if (originalContentEnabled) {
                             DouyinImmersiveScreen(
                                 uiState = uiState,
+                                onRefresh = viewModel::loadInitial,
                                 onPageSettled = viewModel::onPageSettled,
                                 onEnterFlow = viewModel::enterVideoFlow,
                                 onItemLongPress = { item ->
@@ -133,6 +146,7 @@ class DouyinEntryActivity : BaseWatchActivity() {
                                 onLoadMore = viewModel::loadMoreForList,
                                 onItemClick = { item, _ ->
                                     if (allowNavigation()) {
+                                        watchHistoryStore.markWatched(item)
                                         startActivity(
                                             DouyinDetailActivity.createIntent(
                                                 context = this@DouyinEntryActivity,

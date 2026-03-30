@@ -10,7 +10,6 @@ import com.lightningstudio.watchrss.data.douyin.DouyinRepositoryContract
 import com.lightningstudio.watchrss.data.douyin.DouyinSourceOrigin
 import com.lightningstudio.watchrss.data.douyin.DouyinStreamItem
 import com.lightningstudio.watchrss.data.douyin.DouyinWatchHistoryStoreContract
-import com.lightningstudio.watchrss.data.douyin.DOUYIN_PLAY_URL_TTL_MS
 import com.lightningstudio.watchrss.data.douyin.formatDouyinError
 import com.lightningstudio.watchrss.sdk.douyin.DouyinContent
 import kotlinx.coroutines.Job
@@ -32,6 +31,12 @@ data class DouyinFeedUiState(
     val showTitlePage: Boolean = true
 )
 
+private data class DouyinBootstrapState(
+    val items: List<DouyinStreamItem>,
+    val localPaths: Map<String, String>,
+    val savedAtMs: Long
+)
+
 class DouyinFeedViewModel(
     private val repository: DouyinRepositoryContract,
     private val preloadManager: DouyinPreloadManagerContract,
@@ -50,12 +55,18 @@ class DouyinFeedViewModel(
     init {
         viewModelScope.launch {
             val loggedIn = repository.isLoggedIn()
-            _uiState.update { it.copy(isLoggedIn = loggedIn) }
             if (loggedIn) {
                 val headers = repository.buildPlayHeaders()
-                _uiState.update { it.copy(playHeaders = headers) }
-                loadCachedBootstrap(headers)
-                loadInitial()
+                _uiState.update {
+                    it.copy(
+                        isLoggedIn = true,
+                        playHeaders = headers,
+                        message = null
+                    )
+                }
+                restoreEntryPlayback(headers)
+            } else {
+                _uiState.update { it.copy(isLoggedIn = false) }
             }
         }
     }
@@ -79,6 +90,21 @@ class DouyinFeedViewModel(
                     it.copy(message = result.exceptionOrNull()?.message ?: "登录失败")
                 }
             }
+        }
+    }
+
+    fun loadCachedFeedForAppLaunch() {
+        if (_uiState.value.isLoading) return
+        viewModelScope.launch {
+            val headers = repository.buildPlayHeaders()
+            _uiState.update {
+                it.copy(
+                    isLoggedIn = true,
+                    playHeaders = headers,
+                    message = null
+                )
+            }
+            restoreEntryPlayback(headers)
         }
     }
 
@@ -208,47 +234,141 @@ class DouyinFeedViewModel(
         }
     }
 
-    private suspend fun loadCachedBootstrap(headers: Map<String, String>) {
-        val cachedItems = feedCacheStore.read(limit = BOOTSTRAP_ITEMS)
-            .map { it.copy(sourceOrigin = DouyinSourceOrigin.BOOTSTRAP_CACHE) }
-        if (cachedItems.isEmpty()) return
-
-        val localPaths = preloadManager.resolveLocalPaths(cachedItems.map { it.awemeId })
-        val localFirstItems = cachedItems
-            .sortedWith(
-                compareByDescending<DouyinStreamItem> { item -> localPaths[item.awemeId] != null }
-                    .thenByDescending { item -> isPlayUrlFresh(item.playUrlResolvedAtMs) }
-            )
-            .take(BOOTSTRAP_ITEMS)
-        if (localFirstItems.isEmpty()) return
-
-        val playablePaths = localPaths.filterKeys { awemeId ->
-            localFirstItems.any { it.awemeId == awemeId }
-        }
+    private suspend fun loadCachedBootstrap(headers: Map<String, String>): Long {
+        val bootstrapState = readBootstrapState()
+        seedFeedWindow(bootstrapState.items)
         _uiState.update {
             it.copy(
-                items = localFirstItems,
+                items = bootstrapState.items,
                 hasMore = true,
                 playHeaders = headers,
-                localPlayPaths = playablePaths
+                localPlayPaths = bootstrapState.localPaths
             )
         }
+        return bootstrapState.savedAtMs
+    }
+
+    private suspend fun restoreEntryPlayback(headers: Map<String, String>) {
+        val bootstrapState = readBootstrapState()
+        val latestAwemeId = watchHistoryStore.readHistory()
+            .firstOrNull()
+            ?.awemeId
+            ?.takeIf { it.isNotBlank() }
+
+        if (latestAwemeId == null) {
+            seedFeedWindow(bootstrapState.items)
+            _uiState.update {
+                it.copy(
+                    items = bootstrapState.items,
+                    hasMore = true,
+                    playHeaders = headers,
+                    localPlayPaths = bootstrapState.localPaths,
+                    currentPage = 0,
+                    showTitlePage = true,
+                    message = null
+                )
+            }
+            schedulePreload(bootstrapState.items, headers)
+            return
+        }
+
+        val cachedTargetPage = resolveNextPageAfter(
+            awemeId = latestAwemeId,
+            items = bootstrapState.items
+        )
+        if (cachedTargetPage != null) {
+            seedFeedWindow(bootstrapState.items)
+            _uiState.update {
+                it.copy(
+                    items = bootstrapState.items,
+                    hasMore = true,
+                    playHeaders = headers,
+                    localPlayPaths = bootstrapState.localPaths,
+                    currentPage = cachedTargetPage,
+                    showTitlePage = true,
+                    message = null
+                )
+            }
+            schedulePreload(bootstrapState.items, headers)
+            return
+        }
+
+        val fallbackPage = if (bootstrapState.items.isNotEmpty()) 1 else 0
+        seedFeedWindow(bootstrapState.items)
+        _uiState.update {
+            it.copy(
+                items = bootstrapState.items,
+                hasMore = true,
+                playHeaders = headers,
+                localPlayPaths = bootstrapState.localPaths,
+                currentPage = fallbackPage,
+                showTitlePage = true,
+                message = null
+            )
+        }
+        schedulePreload(bootstrapState.items, headers)
+    }
+
+    private suspend fun readBootstrapState(): DouyinBootstrapState {
+        val snapshot = feedCacheStore.readSnapshot(limit = BOOTSTRAP_ITEMS)
+        val cachedItems = snapshot.items
+            .map { it.copy(sourceOrigin = DouyinSourceOrigin.BOOTSTRAP_CACHE) }
+        if (cachedItems.isEmpty()) {
+            return DouyinBootstrapState(
+                items = emptyList(),
+                localPaths = emptyMap(),
+                savedAtMs = snapshot.savedAtMs
+            )
+        }
+
+        val localPaths = preloadManager.resolveLocalPaths(cachedItems.map { it.awemeId })
+        if (cachedItems.isEmpty()) {
+            return DouyinBootstrapState(
+                items = emptyList(),
+                localPaths = emptyMap(),
+                savedAtMs = snapshot.savedAtMs
+            )
+        }
+
+        val playablePaths = localPaths.filterKeys { awemeId ->
+            cachedItems.any { it.awemeId == awemeId }
+        }
+        return DouyinBootstrapState(
+            items = cachedItems,
+            localPaths = playablePaths,
+            savedAtMs = snapshot.savedAtMs
+        )
     }
 
     fun onPageSettled(page: Int) {
         val safePage = page.coerceAtLeast(0)
+        val previousState = _uiState.value
+        val deferredTargetPage = if (
+            previousState.showTitlePage &&
+            safePage > 0 &&
+            previousState.currentPage > safePage
+        ) {
+            previousState.currentPage
+        } else {
+            null
+        }
+        val resolvedPage = when {
+            safePage > 0 && deferredTargetPage != null -> deferredTargetPage
+            safePage > 0 -> safePage
+            else -> previousState.currentPage
+        }
         _uiState.update {
             it.copy(
-                currentPage = safePage,
+                currentPage = resolvedPage,
                 showTitlePage = if (safePage > 0) false else it.showTitlePage
             )
         }
-        if (safePage <= 0) return
+        if (safePage <= 0 || deferredTargetPage != null) return
 
-        val itemIndex = safePage - 1
+        val itemIndex = resolvedPage - 1
         val currentItems = _uiState.value.items
         val current = currentItems.getOrNull(itemIndex) ?: return
-        watchHistoryStore.markWatched(current.awemeId)
+        watchHistoryStore.markWatched(current)
 
         schedulePreload(currentItems, _uiState.value.playHeaders)
 
@@ -258,7 +378,17 @@ class DouyinFeedViewModel(
     }
 
     fun enterVideoFlow() {
-        _uiState.update { it.copy(showTitlePage = false, currentPage = 1) }
+        _uiState.update {
+            val targetPage = when {
+                it.currentPage > 0 -> it.currentPage.coerceAtMost(it.items.size)
+                it.items.isNotEmpty() -> 1
+                else -> 0
+            }
+            it.copy(
+                showTitlePage = false,
+                currentPage = targetPage
+            )
+        }
     }
 
     fun loadMoreForList() {
@@ -426,15 +556,27 @@ class DouyinFeedViewModel(
         return mergedPrefix + freshItems.filterNot { preserveIds.contains(it.awemeId) }
     }
 
-    private fun isPlayUrlFresh(resolvedAtMs: Long, nowMs: Long = System.currentTimeMillis()): Boolean {
-        if (resolvedAtMs <= 0L) return false
-        return nowMs - resolvedAtMs <= DOUYIN_PLAY_URL_TTL_MS
+    private fun resolveNextPageAfter(
+        awemeId: String,
+        items: List<DouyinStreamItem>
+    ): Int? {
+        val currentIndex = items.indexOfFirst { it.awemeId == awemeId }
+        if (currentIndex < 0) return null
+        val nextIndex = currentIndex + 1
+        if (nextIndex >= items.size) return null
+        return nextIndex + 1
+    }
+
+    private fun seedFeedWindow(items: List<DouyinStreamItem>) {
+        awemeIdSet.clear()
+        items.forEach { awemeIdSet.add(it.awemeId) }
+        nextCursor = null
     }
 
     companion object {
         private const val PAGE_SIZE = 16
         private const val LOAD_MORE_THRESHOLD = 3
         private const val TARGET_PRELOAD_UNWATCHED = 2
-        private const val BOOTSTRAP_ITEMS = 2
+        private const val BOOTSTRAP_ITEMS = PAGE_SIZE
     }
 }

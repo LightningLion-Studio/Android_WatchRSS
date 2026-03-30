@@ -28,6 +28,205 @@ class DouyinFeedViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     @Test
+    fun init_whenLatestWatchedExistsInCachedItems_startsFromNextItem() = runTest {
+        val first = sampleDouyinStreamItem(awemeId = "aweme-a")
+        val second = sampleDouyinStreamItem(awemeId = "aweme-b")
+        val third = sampleDouyinStreamItem(awemeId = "aweme-c")
+        val historyStore = TestDouyinWatchHistoryStore().apply {
+            markWatched(second)
+        }
+
+        val viewModel = DouyinFeedViewModel(
+            repository = TestDouyinRepository(initialLoggedIn = true),
+            preloadManager = TestDouyinPreloadManager(),
+            watchHistoryStore = historyStore,
+            feedCacheStore = TestDouyinFeedCacheStore(initialItems = listOf(first, second, third))
+        )
+        advanceUntilIdle()
+
+        assertEquals(listOf("aweme-a", "aweme-b", "aweme-c"), viewModel.uiState.value.items.map { it.awemeId })
+        assertTrue(viewModel.uiState.value.showTitlePage)
+        assertEquals(3, viewModel.uiState.value.currentPage)
+    }
+
+    @Test
+    fun init_preservesCachedSequenceEvenWhenLocalCacheExistsOnDifferentItem() = runTest {
+        val first = sampleDouyinStreamItem(awemeId = "aweme-a")
+        val second = sampleDouyinStreamItem(awemeId = "aweme-b")
+        val third = sampleDouyinStreamItem(awemeId = "aweme-c")
+        val preloadManager = TestDouyinPreloadManager().apply {
+            localPaths["aweme-c"] = "/tmp/aweme-c.mp4"
+        }
+        val historyStore = TestDouyinWatchHistoryStore().apply {
+            markWatched(second)
+        }
+
+        val viewModel = DouyinFeedViewModel(
+            repository = TestDouyinRepository(initialLoggedIn = true),
+            preloadManager = preloadManager,
+            watchHistoryStore = historyStore,
+            feedCacheStore = TestDouyinFeedCacheStore(initialItems = listOf(first, second, third))
+        )
+        advanceUntilIdle()
+
+        assertEquals(listOf("aweme-a", "aweme-b", "aweme-c"), viewModel.uiState.value.items.map { it.awemeId })
+        assertEquals(3, viewModel.uiState.value.currentPage)
+    }
+
+    @Test
+    fun init_whenLatestWatchedIsLastCachedItem_usesCachedFirstItemWithoutRefreshing() = runTest {
+        val cachedFirst = sampleDouyinStreamItem(awemeId = "cached-a")
+        val cachedLast = sampleDouyinStreamItem(awemeId = "cached-b")
+        val historyStore = TestDouyinWatchHistoryStore().apply {
+            markWatched(cachedLast)
+        }
+        val repo = TestDouyinRepository(initialLoggedIn = true).apply {
+            feedPageResults = ArrayDeque(
+                listOf(
+                    DouyinResult(
+                        code = DouyinErrorCodes.OK,
+                        data = DouyinFeedPage(
+                            items = listOf(
+                                sampleDouyinVideo(awemeId = "fresh-a"),
+                                sampleDouyinVideo(awemeId = "fresh-b")
+                            ),
+                            nextCursor = "cursor-next",
+                            hasMore = true
+                        )
+                    )
+                )
+            )
+        }
+
+        val viewModel = DouyinFeedViewModel(
+            repository = repo,
+            preloadManager = TestDouyinPreloadManager(),
+            watchHistoryStore = historyStore,
+            feedCacheStore = TestDouyinFeedCacheStore(initialItems = listOf(cachedFirst, cachedLast))
+        )
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.showTitlePage)
+        assertEquals(1, viewModel.uiState.value.currentPage)
+        assertEquals(listOf("cached-a", "cached-b"), viewModel.uiState.value.items.map { it.awemeId })
+        assertTrue(viewModel.uiState.value.hasMore)
+    }
+
+    @Test
+    fun enterVideoFlow_fromDeferredEntryTarget_revealsStoredTargetPage() = runTest {
+        val first = sampleDouyinStreamItem(awemeId = "aweme-a")
+        val second = sampleDouyinStreamItem(awemeId = "aweme-b")
+        val third = sampleDouyinStreamItem(awemeId = "aweme-c")
+        val historyStore = TestDouyinWatchHistoryStore().apply {
+            markWatched(second)
+        }
+        val viewModel = DouyinFeedViewModel(
+            repository = TestDouyinRepository(initialLoggedIn = true),
+            preloadManager = TestDouyinPreloadManager(),
+            watchHistoryStore = historyStore,
+            feedCacheStore = TestDouyinFeedCacheStore(initialItems = listOf(first, second, third))
+        )
+        advanceUntilIdle()
+
+        viewModel.enterVideoFlow()
+
+        assertFalse(viewModel.uiState.value.showTitlePage)
+        assertEquals(3, viewModel.uiState.value.currentPage)
+    }
+
+    @Test
+    fun onPageSettled_fromTitlePageTransition_preservesDeferredTargetUntilActualTargetSettles() = runTest {
+        val first = sampleDouyinStreamItem(awemeId = "aweme-a")
+        val second = sampleDouyinStreamItem(awemeId = "aweme-b")
+        val third = sampleDouyinStreamItem(awemeId = "aweme-c")
+        val historyStore = TestDouyinWatchHistoryStore().apply {
+            markWatched(second)
+        }
+        val viewModel = DouyinFeedViewModel(
+            repository = TestDouyinRepository(initialLoggedIn = true),
+            preloadManager = TestDouyinPreloadManager(),
+            watchHistoryStore = historyStore,
+            feedCacheStore = TestDouyinFeedCacheStore(initialItems = listOf(first, second, third))
+        )
+        advanceUntilIdle()
+
+        viewModel.onPageSettled(1)
+
+        assertFalse(viewModel.uiState.value.showTitlePage)
+        assertEquals(3, viewModel.uiState.value.currentPage)
+        assertEquals("aweme-b", historyStore.readHistory().first().awemeId)
+    }
+
+    @Test
+    fun init_withoutHistory_keepsTitlePage() = runTest {
+        val viewModel = DouyinFeedViewModel(
+            repository = TestDouyinRepository(initialLoggedIn = true),
+            preloadManager = TestDouyinPreloadManager(),
+            watchHistoryStore = TestDouyinWatchHistoryStore(),
+            feedCacheStore = TestDouyinFeedCacheStore(
+                initialItems = listOf(
+                    sampleDouyinStreamItem(awemeId = "aweme-a"),
+                    sampleDouyinStreamItem(awemeId = "aweme-b")
+                )
+            )
+        )
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.showTitlePage)
+        assertEquals(0, viewModel.uiState.value.currentPage)
+        assertEquals(listOf("aweme-a", "aweme-b"), viewModel.uiState.value.items.map { it.awemeId })
+    }
+
+    @Test
+    fun loadInitial_manualRefresh_preservesCurrentPageInsteadOfReapplyingEntryResume() = runTest {
+        val first = sampleDouyinStreamItem(awemeId = "aweme-a")
+        val second = sampleDouyinStreamItem(awemeId = "aweme-b")
+        val third = sampleDouyinStreamItem(awemeId = "aweme-c")
+        val fourth = sampleDouyinStreamItem(awemeId = "aweme-d")
+        val fifth = sampleDouyinStreamItem(awemeId = "aweme-e")
+        val sixth = sampleDouyinStreamItem(awemeId = "aweme-f")
+        val historyStore = TestDouyinWatchHistoryStore().apply {
+            markWatched(first)
+        }
+        val repo = TestDouyinRepository(initialLoggedIn = true)
+        val viewModel = DouyinFeedViewModel(
+            repository = repo,
+            preloadManager = TestDouyinPreloadManager(),
+            watchHistoryStore = historyStore,
+            feedCacheStore = TestDouyinFeedCacheStore(
+                initialItems = listOf(first, second, third, fourth, fifth, sixth)
+            )
+        )
+        advanceUntilIdle()
+
+        viewModel.onPageSettled(3)
+        repo.feedPageResults = ArrayDeque(
+            listOf(
+                DouyinResult(
+                    code = DouyinErrorCodes.OK,
+                    data = DouyinFeedPage(
+                        items = listOf(
+                            sampleDouyinVideo(awemeId = "aweme-a"),
+                            sampleDouyinVideo(awemeId = "aweme-b"),
+                            sampleDouyinVideo(awemeId = "aweme-c"),
+                            sampleDouyinVideo(awemeId = "aweme-d")
+                        ),
+                        nextCursor = null,
+                        hasMore = false
+                    )
+                )
+            )
+        )
+
+        viewModel.loadInitial()
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.showTitlePage)
+        assertEquals(3, viewModel.uiState.value.currentPage)
+        assertEquals(listOf("aweme-a", "aweme-b", "aweme-c", "aweme-d"), viewModel.uiState.value.items.map { it.awemeId })
+    }
+
+    @Test
     fun loadInitial_replacesPreservedCachedPrefix_withFreshPlaybackMetadata() = runTest {
         val awemeId = "aweme-cache"
         val cachedItem = sampleDouyinStreamItem(
@@ -42,7 +241,6 @@ class DouyinFeedViewModelTest {
         val repo = TestDouyinRepository(initialLoggedIn = true).apply {
             feedPageResults = ArrayDeque(
                 listOf(
-                    DouyinResult(code = DouyinErrorCodes.REQUEST_FAILED),
                     DouyinResult(
                         code = DouyinErrorCodes.OK,
                         data = DouyinFeedPage(
@@ -86,26 +284,14 @@ class DouyinFeedViewModelTest {
     @Test
     fun refreshPlaybackSource_localFailure_invalidatesLocalCache_and_updatesVideoSource() = runTest {
         val awemeId = "aweme-local"
+        val cachedItem = sampleDouyinStreamItem(
+            awemeId = awemeId,
+            playUrl = "https://example.com/original.mp4"
+        )
         val preloadManager = TestDouyinPreloadManager().apply {
             localPaths[awemeId] = "/tmp/$awemeId.mp4"
         }
         val repo = TestDouyinRepository(initialLoggedIn = true).apply {
-            feedPageResults = ArrayDeque(
-                listOf(
-                    DouyinResult(
-                        code = DouyinErrorCodes.OK,
-                        data = DouyinFeedPage(
-                            items = listOf(
-                                sampleDouyinVideo(awemeId = awemeId).apply {
-                                    playUrl = "https://example.com/original.mp4"
-                                }
-                            ),
-                            nextCursor = null,
-                            hasMore = false
-                        )
-                    )
-                )
-            )
             setVideoResult(
                 awemeId,
                 DouyinResult(
@@ -125,7 +311,7 @@ class DouyinFeedViewModelTest {
             repository = repo,
             preloadManager = preloadManager,
             watchHistoryStore = TestDouyinWatchHistoryStore(),
-            feedCacheStore = TestDouyinFeedCacheStore()
+            feedCacheStore = TestDouyinFeedCacheStore(initialItems = listOf(cachedItem))
         )
         advanceUntilIdle()
 

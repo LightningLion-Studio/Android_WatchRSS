@@ -50,6 +50,9 @@ class DouyinChannelInfoActivity : BaseWatchActivity() {
                         onOpenSettings = {
                             context.startActivity(DouyinSettingsActivity.createIntent(context))
                         },
+                        onOpenHistory = {
+                            context.startActivity(DouyinHistoryActivity.createIntent(context))
+                        },
                         onMarkReadClick = {
                             val channelId = channel?.id ?: return@DouyinChannelInfoScreen
                             scope.launch {

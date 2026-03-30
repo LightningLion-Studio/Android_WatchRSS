@@ -48,6 +48,7 @@ fun DouyinChannelInfoScreen(
     lastRefreshAt: Long?,
     onLoginClick: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenHistory: () -> Unit,
     onMarkReadClick: () -> Unit,
     markReadEnabled: Boolean
 ) {
@@ -150,6 +151,15 @@ fun DouyinChannelInfoScreen(
                 width = buttonWidth,
                 height = buttonHeight,
                 onClick = onOpenSettings
+            )
+
+            Spacer(modifier = Modifier.height(buttonSpacing))
+            ActionButton(
+                label = "播放历史",
+                enabled = true,
+                width = buttonWidth,
+                height = buttonHeight,
+                onClick = onOpenHistory
             )
 
             Spacer(modifier = Modifier.height(buttonSpacing))

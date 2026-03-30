@@ -18,8 +18,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -81,6 +84,8 @@ import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.components.WatchIconButton
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.components.PlayerVolumeOverlay
+import com.lightningstudio.watchrss.ui.components.PullRefreshBox
+import com.lightningstudio.watchrss.ui.components.rememberPullRefreshEnabled
 import com.lightningstudio.watchrss.ui.components.rememberPlayerVolumeState
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownPagerHandler
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownVolumeHandler
@@ -114,6 +119,7 @@ private data class DouyinPlayerScaleToggleAction(
 @Composable
 fun DouyinImmersiveScreen(
     uiState: DouyinFeedUiState,
+    onRefresh: () -> Unit,
     onPageSettled: (Int) -> Unit,
     onEnterFlow: () -> Unit,
     onItemLongPress: (DouyinStreamItem) -> Unit,
@@ -121,9 +127,37 @@ fun DouyinImmersiveScreen(
     onMessageShown: () -> Unit,
     onHeaderClick: () -> Unit
 ) {
-    val pageCount = uiState.items.size + 1
+    var entryStartIndex by rememberSaveable {
+        mutableIntStateOf(
+            resolveDouyinEntryStartIndex(
+                currentPage = uiState.currentPage,
+                itemCount = uiState.items.size
+            )
+        )
+    }
+    LaunchedEffect(uiState.showTitlePage, uiState.currentPage, uiState.items.size) {
+        if (uiState.showTitlePage || entryStartIndex > uiState.items.lastIndex.coerceAtLeast(0)) {
+            entryStartIndex = resolveDouyinEntryStartIndex(
+                currentPage = uiState.currentPage,
+                itemCount = uiState.items.size
+            )
+        }
+    }
+    val pageCount = resolveDouyinPageCount(
+        itemCount = uiState.items.size,
+        entryStartIndex = entryStartIndex
+    )
+    val initialPage = if (uiState.showTitlePage) {
+        0
+    } else {
+        resolveDouyinPagerPage(
+            currentPage = uiState.currentPage,
+            entryStartIndex = entryStartIndex,
+            pageCount = pageCount
+        )
+    }
     val pagerState = rememberPagerState(
-        initialPage = uiState.currentPage.coerceIn(0, (pageCount - 1).coerceAtLeast(0)),
+        initialPage = initialPage,
         pageCount = { pageCount.coerceAtLeast(1) }
     )
     var pendingAutoSkipPage by remember { mutableIntStateOf(-1) }
@@ -144,20 +178,29 @@ fun DouyinImmersiveScreen(
         onVolumeAdjust = volumeState::adjustByDelta
     )
 
-    LaunchedEffect(pagerState.currentPage) {
-        onPageSettled(pagerState.currentPage)
+    LaunchedEffect(pagerState.currentPage, entryStartIndex) {
+        val settledPage = resolveDouyinSettledPage(
+            pagerPage = pagerState.currentPage,
+            entryStartIndex = entryStartIndex
+        )
+        onPageSettled(settledPage)
     }
 
-    LaunchedEffect(pagerState.currentPage, uiState.items) {
-        val activeAwemeId = if (pagerState.currentPage > 0) {
-            uiState.items.getOrNull(pagerState.currentPage - 1)?.awemeId
+    LaunchedEffect(pagerState.currentPage, uiState.items, uiState.showTitlePage, entryStartIndex) {
+        val activeItemIndex = resolveDouyinItemIndexForPagerPage(
+            pagerPage = pagerState.currentPage,
+            entryStartIndex = entryStartIndex
+        )
+        val activeAwemeId = if (!uiState.showTitlePage) {
+            uiState.items.getOrNull(activeItemIndex ?: -1)?.awemeId
         } else {
             null
         }
         val nextAwemeId = when {
             uiState.items.isEmpty() -> null
-            pagerState.currentPage <= 0 -> uiState.items.firstOrNull()?.awemeId
-            else -> uiState.items.getOrNull(pagerState.currentPage)?.awemeId
+            pagerState.currentPage <= 0 -> uiState.items.getOrNull(entryStartIndex)?.awemeId
+            activeItemIndex == null -> null
+            else -> uiState.items.getOrNull(activeItemIndex + 1)?.awemeId
         }
         DouyinPlaybackDebugController.updatePlaybackContext(
             activeAwemeId = activeAwemeId,
@@ -174,13 +217,17 @@ fun DouyinImmersiveScreen(
         }
     }
 
-    LaunchedEffect(uiState.currentPage, uiState.showTitlePage, pageCount) {
+    LaunchedEffect(uiState.currentPage, uiState.showTitlePage, pageCount, entryStartIndex) {
         val target = when {
             uiState.showTitlePage || uiState.items.isEmpty() -> 0
-            else -> uiState.currentPage.coerceIn(1, (pageCount - 1).coerceAtLeast(1))
+            else -> resolveDouyinPagerPage(
+                currentPage = uiState.currentPage,
+                entryStartIndex = entryStartIndex,
+                pageCount = pageCount
+            )
         }
         if (target != pagerState.currentPage && !pagerState.isScrollInProgress) {
-            pagerState.scrollToPage(target)
+            pagerState.animateScrollToPage(target)
         }
     }
 
@@ -212,15 +259,30 @@ fun DouyinImmersiveScreen(
     ) {
         VerticalPager(
             state = pagerState,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize(),
+            userScrollEnabled = pageCount > 1
         ) { page ->
             if (page == 0) {
                 DouyinTitlePage(
+                    isRefreshing = uiState.isLoading,
+                    onRefresh = onRefresh,
                     onEnterFlow = onEnterFlow,
                     onHeaderClick = onHeaderClick
                 )
             } else {
-                val item = uiState.items[page - 1]
+                val itemIndex = resolveDouyinItemIndexForPagerPage(
+                    pagerPage = page,
+                    entryStartIndex = entryStartIndex
+                )
+                val item = uiState.items.getOrNull(itemIndex ?: -1)
+                if (item == null) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black)
+                    )
+                    return@VerticalPager
+                }
                 DouyinVideoPage(
                     item = item,
                     headers = uiState.playHeaders,
@@ -233,7 +295,7 @@ fun DouyinImmersiveScreen(
                     onLongPress = { onItemLongPress(item) },
                     onRequestPlaybackRefresh = onRequestPlaybackRefresh,
                     pageIndex = page,
-                    hasNextItem = page < pageCount - 1,
+                    hasNextItem = (itemIndex ?: -1) < uiState.items.lastIndex,
                     onAutoSkipCurrentItem = { failingPage ->
                         if (failingPage == pagerState.currentPage) {
                             pendingAutoSkipPage = failingPage
@@ -276,6 +338,8 @@ fun DouyinImmersiveScreen(
 
 @Composable
 private fun DouyinTitlePage(
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
     onEnterFlow: () -> Unit,
     onHeaderClick: () -> Unit
 ) {
@@ -283,51 +347,75 @@ private fun DouyinTitlePage(
     val subtitleSpacing = watchDimensionResource(R.dimen.hey_distance_2dp)
     val buttonBottom = watchDimensionResource(R.dimen.hey_distance_12dp)
     val buttonSize = watchDimensionResource(R.dimen.hey_button_height)
+    val listState = rememberLazyListState()
+    val canRefresh = rememberPullRefreshEnabled(listState)
 
-    WatchSurface(pureBlack = true) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(safePadding)
-        ) {
-            Column(
+    PullRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black),
+        indicatorPadding = safePadding,
+        canRefresh = canRefresh
+    ) {
+        WatchSurface(pureBlack = true) {
+            LazyColumn(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.TopCenter)
-                    .clickable(onClick = onHeaderClick),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .fillMaxSize()
+                    .background(Color.Black),
+                state = listState,
+                contentPadding = PaddingValues(safePadding)
             ) {
-                Text(
-                    text = "抖音",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(modifier = Modifier.height(subtitleSpacing))
-                Text(
-                    text = "向上进入短视频流",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
-            }
+                item {
+                    Box(
+                        modifier = Modifier.fillParentMaxSize()
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .align(Alignment.TopCenter)
+                                .clickable(onClick = onHeaderClick),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "抖音",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(subtitleSpacing))
+                            Text(
+                                text = if (isRefreshing) {
+                                    "刷新中，向上进入短视频流"
+                                } else {
+                                    "下拉刷新，向上进入短视频流"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            )
+                        }
 
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f),
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = buttonBottom)
-                    .size(buttonSize)
-                    .clickable { onEnterFlow() }
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Outlined.ArrowUpward,
-                        contentDescription = "向上进入视频流",
-                        tint = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(watchDimensionResource(R.dimen.hey_distance_16dp))
-                    )
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f),
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = buttonBottom)
+                                .size(buttonSize)
+                                .clickable { onEnterFlow() }
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Outlined.ArrowUpward,
+                                    contentDescription = "向上进入视频流",
+                                    tint = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.size(watchDimensionResource(R.dimen.hey_distance_16dp))
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -958,6 +1046,53 @@ internal fun resolveDouyinAutoSkipTargetPage(
     } else {
         0
     }
+}
+
+internal fun resolveDouyinEntryStartIndex(currentPage: Int, itemCount: Int): Int {
+    if (itemCount <= 0) return 0
+    if (currentPage <= 1) return 0
+    return (currentPage - 1).coerceIn(0, itemCount - 1)
+}
+
+internal fun resolveDouyinPageCount(itemCount: Int, entryStartIndex: Int): Int {
+    val visibleVideoCount = (itemCount - entryStartIndex).coerceAtLeast(0)
+    return visibleVideoCount + 1
+}
+
+internal fun resolveDouyinPagerPage(
+    currentPage: Int,
+    entryStartIndex: Int,
+    pageCount: Int
+): Int {
+    if (currentPage <= 0 || pageCount <= 1) return 0
+    return (currentPage - entryStartIndex).coerceIn(1, pageCount - 1)
+}
+
+internal fun resolveDouyinAbsolutePage(
+    pagerPage: Int,
+    entryStartIndex: Int
+): Int {
+    if (pagerPage <= 0) return 0
+    return entryStartIndex + pagerPage
+}
+
+internal fun resolveDouyinSettledPage(
+    pagerPage: Int,
+    entryStartIndex: Int
+): Int {
+    if (pagerPage <= 0) return 0
+    return resolveDouyinAbsolutePage(
+        pagerPage = pagerPage,
+        entryStartIndex = entryStartIndex
+    )
+}
+
+internal fun resolveDouyinItemIndexForPagerPage(
+    pagerPage: Int,
+    entryStartIndex: Int
+): Int? {
+    if (pagerPage <= 0) return null
+    return entryStartIndex + pagerPage - 1
 }
 
 private const val TITLE_ORIGINAL_FIRST_LINE_RATIO = 0.68f

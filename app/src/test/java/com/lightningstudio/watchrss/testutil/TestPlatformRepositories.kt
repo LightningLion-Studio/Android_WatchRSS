@@ -14,6 +14,7 @@ import com.lightningstudio.watchrss.data.douyin.DouyinRepositoryContract
 import com.lightningstudio.watchrss.data.douyin.DouyinResult
 import com.lightningstudio.watchrss.data.douyin.DouyinSourceOrigin
 import com.lightningstudio.watchrss.data.douyin.DouyinStreamItem
+import com.lightningstudio.watchrss.data.douyin.DouyinWatchHistoryEntry
 import com.lightningstudio.watchrss.data.douyin.DouyinWatchHistoryStoreContract
 import com.lightningstudio.watchrss.sdk.bili.BiliDurl
 import com.lightningstudio.watchrss.sdk.bili.BiliFeedPage
@@ -528,15 +529,40 @@ class TestDouyinPreloadManager : DouyinPreloadManagerContract {
 
 class TestDouyinWatchHistoryStore : DouyinWatchHistoryStoreContract {
     val watchedIds = linkedSetOf<String>()
+    val historyEntries = mutableListOf<DouyinWatchHistoryEntry>()
+
+    override fun markWatched(item: DouyinStreamItem) {
+        val awemeId = item.awemeId.trim()
+        if (awemeId.isEmpty()) return
+        watchedIds += awemeId
+        historyEntries.removeAll { it.awemeId == awemeId }
+        historyEntries.add(
+            0,
+            DouyinWatchHistoryEntry(
+                awemeId = awemeId,
+                title = item.title,
+                author = item.author,
+                coverUrl = item.coverUrl,
+                playUrl = item.playUrl,
+                likeCount = item.likeCount,
+                watchedAt = System.currentTimeMillis()
+            )
+        )
+    }
 
     override fun markWatched(awemeId: String) {
-        watchedIds += awemeId
+        val normalizedAwemeId = awemeId.trim()
+        if (normalizedAwemeId.isEmpty()) return
+        watchedIds += normalizedAwemeId
     }
 
     override fun readWatchedIds(): Set<String> = watchedIds.toSet()
 
+    override fun readHistory(): List<DouyinWatchHistoryEntry> = historyEntries.toList()
+
     override fun clear() {
         watchedIds.clear()
+        historyEntries.clear()
     }
 }
 
