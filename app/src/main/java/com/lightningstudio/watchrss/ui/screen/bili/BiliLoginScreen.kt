@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.sdk.bili.QrPollStatus
 import com.lightningstudio.watchrss.ui.components.PullRefreshBox
+import com.lightningstudio.watchrss.ui.components.rememberPullRefreshEnabled
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownScrollHandler
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
 import com.lightningstudio.watchrss.ui.theme.watchQrSizeFor
@@ -45,6 +46,7 @@ fun BiliLoginScreen(
     val titleSpacing = spacing / 4
     val scrollState = rememberScrollState()
     InstallDigitalCrownScrollHandler(scrollState)
+    val canRefresh = rememberPullRefreshEnabled(scrollState)
 
     LaunchedEffect(uiState.isSuccess) {
         if (uiState.isSuccess) {
@@ -59,7 +61,7 @@ fun BiliLoginScreen(
             .fillMaxSize()
             .background(androidx.compose.ui.graphics.Color.Black),
         indicatorPadding = safePadding,
-        isAtTop = { scrollState.value == 0 }
+        canRefresh = canRefresh
     ) {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val qrSize = watchQrSizeFor(

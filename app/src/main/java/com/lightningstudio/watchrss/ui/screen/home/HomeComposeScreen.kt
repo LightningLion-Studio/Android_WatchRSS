@@ -72,6 +72,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.PullRefreshBox
+import com.lightningstudio.watchrss.ui.components.rememberPullRefreshEnabled
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.rss.RssChannel
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
@@ -110,6 +111,7 @@ fun HomeComposeScreen(
         val itemSpacing = watchDimensionResource(R.dimen.hey_distance_6dp)
         val listState = rememberLazyListState()
         InstallDigitalCrownLazyListHandler(listState)
+        val canRefresh = rememberPullRefreshEnabled(listState)
         // 滚动时仅禁用横向手势，保留相同的组合结构，避免开始/停止滚动时
         // 所有可见卡片在 HomeSwipeRow 与普通 Box 之间切换。
         val isScrolling by remember(listState) {
@@ -124,10 +126,7 @@ fun HomeComposeScreen(
                 .background(Color.Black)
                 .testTag(HomeTestTags.ROOT),
             indicatorPadding = safePadding,
-            isAtTop = {
-                listState.firstVisibleItemIndex == 0 &&
-                    listState.firstVisibleItemScrollOffset == 0
-            }
+            canRefresh = canRefresh
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
                 LazyColumn(

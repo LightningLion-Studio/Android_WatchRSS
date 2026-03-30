@@ -29,6 +29,7 @@ import com.lightningstudio.watchrss.ui.components.EmptyCommentState
 import com.lightningstudio.watchrss.ui.components.LoadingIndicator
 import com.lightningstudio.watchrss.ui.components.PullRefreshBox
 import com.lightningstudio.watchrss.ui.components.WatchIconButton
+import com.lightningstudio.watchrss.ui.components.rememberPullRefreshEnabled
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
 import com.lightningstudio.watchrss.ui.viewmodel.BiliCommentViewModel
@@ -52,6 +53,7 @@ fun BiliCommentScreen(
     val listState = rememberLazyListState()
     var isRefreshing by remember { mutableStateOf(false) }
     InstallDigitalCrownLazyListHandler(listState)
+    val canRefresh = rememberPullRefreshEnabled(listState)
 
     Scaffold(
         topBar = {
@@ -91,7 +93,8 @@ fun BiliCommentScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(horizontal = safePadding)
+                .padding(horizontal = safePadding),
+            canRefresh = canRefresh
         ) {
             when {
                 comments.loadState.refresh is LoadState.Loading -> {

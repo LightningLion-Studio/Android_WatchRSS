@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextAlign
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.EmptyStateCard
 import com.lightningstudio.watchrss.ui.components.PullRefreshBox
+import com.lightningstudio.watchrss.ui.components.rememberPullRefreshEnabled
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.settings.WatchSettingsPillRow
 import com.lightningstudio.watchrss.ui.viewmodel.BiliListItem
@@ -48,6 +49,7 @@ fun BiliListScreen(
     val spacing = watchDimensionResource(R.dimen.hey_distance_6dp)
     val listState = rememberLazyListState()
     InstallDigitalCrownLazyListHandler(listState)
+    val canRefresh = rememberPullRefreshEnabled(listState)
 
     val canLoadMoreState = rememberUpdatedState(uiState.canLoadMore)
     val isLoadingMoreState = rememberUpdatedState(uiState.isLoadingMore)
@@ -82,10 +84,7 @@ fun BiliListScreen(
             .fillMaxSize()
             .background(androidx.compose.ui.graphics.Color.Black),
         indicatorPadding = safePadding,
-        isAtTop = {
-            listState.firstVisibleItemIndex == 0 &&
-                listState.firstVisibleItemScrollOffset == 0
-        }
+        canRefresh = canRefresh
     ) {
         LazyColumn(
             modifier = Modifier

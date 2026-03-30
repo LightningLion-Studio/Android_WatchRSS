@@ -27,6 +27,15 @@ Notes: list/article screenshots captured on 2026-01-26 via Android MCP.
   - `adb shell dumpsys gfxinfo com.lightningstudio.watchrss`
   - `adb logcat -d -v time | rg 'PerfTrace'`
 
+## Home Cold Start Triage
+- Scenario tag: `home_cold_start`
+- Clear runtime logs before sampling: `adb logcat -c`
+- Reset frame stats: `adb shell dumpsys gfxinfo com.lightningstudio.watchrss reset`
+- Cold launch the app: `adb shell am start -S -W -n com.lightningstudio.watchrss/.MainActivity`
+- Wait until the home list is visible, then collect:
+  - `adb shell dumpsys gfxinfo com.lightningstudio.watchrss`
+  - `adb logcat -d -v time | rg 'PerfTrace' | rg 'home_cold_start|cat=frame'`
+
 ## PerfTrace Filters
 - Unified logcat tag: `PerfTrace`
 - Categories:

@@ -16,6 +16,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.rss.RssChannel
 import com.lightningstudio.watchrss.data.settings.CURRENT_OOBE_VERSION
+import com.lightningstudio.watchrss.debug.PerformanceMonitor
 import com.lightningstudio.watchrss.ui.screen.home.HomeComposeScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
@@ -73,20 +74,22 @@ class MainActivity : BaseWatchActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen().setKeepOnScreenCondition { keepSplashOnScreen }
         super.onCreate(savedInstanceState)
+        PerformanceMonitor.setScenario(this, "home_cold_start")
         onBackPressedDispatcher.addCallback(this, closeOpenSwipeBackCallback)
+        setupSystemBars()
+        renderHomeContent()
 
         lifecycleScope.launch {
             val settingsRepository = (application as WatchRssApplication).container.settingsRepository
             val shouldShowOobe = settingsRepository.oobeSeenVersion.first() < CURRENT_OOBE_VERSION
-            keepSplashOnScreen = false
             if (shouldShowOobe) {
                 startActivity(OobeActivity.createIntent(this@MainActivity))
+                keepSplashOnScreen = false
                 finish()
                 return@launch
             }
             maybeResumeLastContent(intent)
-            setupSystemBars()
-            renderHomeContent()
+            keepSplashOnScreen = false
         }
     }
 

@@ -29,6 +29,7 @@ import com.lightningstudio.watchrss.data.douyin.DouyinStreamItem
 import com.lightningstudio.watchrss.ui.components.EmptyStateCard
 import com.lightningstudio.watchrss.ui.components.PullRefreshBox
 import com.lightningstudio.watchrss.ui.components.ToastMessage
+import com.lightningstudio.watchrss.ui.components.rememberPullRefreshEnabled
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.screen.bili.BiliFeedCard
 import com.lightningstudio.watchrss.ui.screen.bili.formatBiliCount
@@ -46,12 +47,7 @@ fun DouyinFeedScreen(
     val itemSpacing = watchDimensionResource(R.dimen.hey_distance_8dp)
     val listState = rememberLazyListState()
     InstallDigitalCrownLazyListHandler(listState)
-    val isAtTop = remember(listState) {
-        derivedStateOf {
-            listState.firstVisibleItemIndex == 0 &&
-                listState.firstVisibleItemScrollOffset == 0
-        }
-    }
+    val canRefresh = rememberPullRefreshEnabled(listState)
 
     BoxWithConstraints(
         modifier = Modifier
@@ -63,7 +59,7 @@ fun DouyinFeedScreen(
             onRefresh = onRefresh,
             modifier = Modifier.fillMaxSize(),
             indicatorPadding = safePadding,
-            isAtTop = { isAtTop.value }
+            canRefresh = canRefresh
         ) {
             LazyColumn(
                 modifier = Modifier

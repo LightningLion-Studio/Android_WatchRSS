@@ -32,6 +32,7 @@ import com.lightningstudio.watchrss.ui.components.PullRefreshBox
 import com.lightningstudio.watchrss.ui.components.ToastMessage
 import com.lightningstudio.watchrss.ui.components.WatchTextButton
 import com.lightningstudio.watchrss.ui.components.WatchSurface
+import com.lightningstudio.watchrss.ui.components.rememberPullRefreshEnabled
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.theme.BrandOrange
 import com.lightningstudio.watchrss.ui.util.formatTime
@@ -54,6 +55,7 @@ fun HomeScreen(
     val toastMessage by message.collectAsState()
     val listState = rememberLazyListState()
     InstallDigitalCrownLazyListHandler(listState)
+    val canRefresh = rememberPullRefreshEnabled(listState)
 
     LaunchedEffect(toastMessage) {
         if (toastMessage != null) {
@@ -68,10 +70,7 @@ fun HomeScreen(
             onRefresh = onRefreshAll,
             modifier = Modifier.fillMaxSize(),
             indicatorPadding = 9.dp,
-            isAtTop = {
-                listState.firstVisibleItemIndex == 0 &&
-                    listState.firstVisibleItemScrollOffset == 0
-            }
+            canRefresh = canRefresh
         ) {
             Column(
                 modifier = Modifier

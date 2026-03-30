@@ -60,6 +60,7 @@ import com.lightningstudio.watchrss.ui.components.EmptyStateCard
 import com.lightningstudio.watchrss.ui.components.PullRefreshBox
 import com.lightningstudio.watchrss.ui.components.SwipeActionButton
 import com.lightningstudio.watchrss.ui.components.SwipeActionRow
+import com.lightningstudio.watchrss.ui.components.rememberPullRefreshEnabled
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.viewmodel.BiliFeedUiState
 import com.lightningstudio.watchrss.sdk.bili.BiliItem
@@ -89,6 +90,7 @@ fun BiliFeedScreen(
     val itemSpacing = watchDimensionResource(R.dimen.hey_distance_8dp)
     val listState = rememberLazyListState()
     InstallDigitalCrownLazyListHandler(listState)
+    val canRefresh = rememberPullRefreshEnabled(listState)
     val isScrolling by remember(listState) {
         derivedStateOf { listState.isScrollInProgress }
     }
@@ -142,10 +144,7 @@ fun BiliFeedScreen(
             onRefresh = onRefresh,
             modifier = Modifier.fillMaxSize(),
             indicatorPadding = safePadding,
-            isAtTop = {
-                listState.firstVisibleItemIndex == 0 &&
-                    listState.firstVisibleItemScrollOffset == 0
-            }
+            canRefresh = canRefresh
         ) {
             LazyColumn(
                 modifier = Modifier

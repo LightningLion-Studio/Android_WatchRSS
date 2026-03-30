@@ -82,6 +82,7 @@ import com.lightningstudio.watchrss.data.rss.RssUrlResolver
 import com.lightningstudio.watchrss.ui.components.PullRefreshBox
 import com.lightningstudio.watchrss.ui.components.SwipeActionButton
 import com.lightningstudio.watchrss.ui.components.SwipeActionRow
+import com.lightningstudio.watchrss.ui.components.rememberPullRefreshEnabled
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.util.formatWatchTitleForWidthLimits
 import com.lightningstudio.watchrss.ui.util.RssImageLoader
@@ -129,6 +130,7 @@ fun FeedScreen(
         val textItemSpacing = watchDimensionResource(R.dimen.hey_distance_8dp)
         val listState = rememberLazyListState()
         InstallDigitalCrownLazyListHandler(listState)
+        val canRefresh = rememberPullRefreshEnabled(listState)
         val context = LocalContext.current
         val canLoadMoreState = rememberUpdatedState(hasMore)
         val isRefreshingState = rememberUpdatedState(isRefreshing)
@@ -144,12 +146,6 @@ fun FeedScreen(
             (context.resources.displayMetrics.widthPixels - safePaddingPx * 2).coerceAtLeast(1)
         }
         val prefetchedUrls = remember(channel?.id) { mutableSetOf<String>() }
-        val isAtTop by remember(listState) {
-            derivedStateOf {
-                listState.firstVisibleItemIndex == 0 &&
-                    listState.firstVisibleItemScrollOffset == 0
-            }
-        }
         val isScrolling by remember(listState) {
             derivedStateOf { listState.isScrollInProgress }
         }
@@ -286,7 +282,7 @@ fun FeedScreen(
                 .fillMaxSize()
                 .background(Color.Black),
             indicatorPadding = safePadding,
-            isAtTop = { isAtTop }
+            canRefresh = canRefresh
         ) {
             LazyColumn(
                 modifier = Modifier
