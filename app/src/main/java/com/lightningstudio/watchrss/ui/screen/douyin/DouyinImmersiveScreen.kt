@@ -34,6 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -74,6 +75,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackSourceKind
 import com.lightningstudio.watchrss.data.douyin.DouyinStreamItem
+import com.lightningstudio.watchrss.debug.DouyinPlaybackDebugController
 import com.lightningstudio.watchrss.ui.components.ToastMessage
 import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.components.WatchIconButton
@@ -146,6 +148,32 @@ fun DouyinImmersiveScreen(
         onPageSettled(pagerState.currentPage)
     }
 
+    LaunchedEffect(pagerState.currentPage, uiState.items) {
+        val activeAwemeId = if (pagerState.currentPage > 0) {
+            uiState.items.getOrNull(pagerState.currentPage - 1)?.awemeId
+        } else {
+            null
+        }
+        val nextAwemeId = when {
+            uiState.items.isEmpty() -> null
+            pagerState.currentPage <= 0 -> uiState.items.firstOrNull()?.awemeId
+            else -> uiState.items.getOrNull(pagerState.currentPage)?.awemeId
+        }
+        DouyinPlaybackDebugController.updatePlaybackContext(
+            activeAwemeId = activeAwemeId,
+            nextAwemeId = nextAwemeId
+        )
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            DouyinPlaybackDebugController.updatePlaybackContext(
+                activeAwemeId = null,
+                nextAwemeId = null
+            )
+        }
+    }
+
     LaunchedEffect(uiState.currentPage, uiState.showTitlePage, pageCount) {
         val target = when {
             uiState.showTitlePage || uiState.items.isEmpty() -> 0
@@ -162,8 +190,10 @@ fun DouyinImmersiveScreen(
         pendingAutoSkipPage = -1
         if (failingPage != pagerState.currentPage) return@LaunchedEffect
 
-        val nextPage = (failingPage + 1).coerceAtMost(pageCount - 1)
-        if (nextPage == failingPage) return@LaunchedEffect
+        val nextPage = resolveDouyinAutoSkipTargetPage(
+            failingPage = failingPage,
+            pageCount = pageCount
+        ) ?: return@LaunchedEffect
 
         autoSkipMessage = DOUYIN_AUTO_SKIP_MESSAGE
         pagerState.scrollToPage(nextPage)
@@ -217,17 +247,13 @@ fun DouyinImmersiveScreen(
             WatchCircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
         }
 
-        if (uiState.isLoadingMore) {
-            WatchCircularProgressIndicator(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(12.dp)
-            )
-        }
-
         when {
             !autoSkipMessage.isNullOrBlank() -> {
-                ToastMessage(text = autoSkipMessage!!)
+                ToastMessage(
+                    text = autoSkipMessage!!,
+                    modifier = Modifier.align(Alignment.Center),
+                    contentAlignment = Alignment.Center
+                )
             }
 
             !uiState.message.isNullOrBlank() -> {
@@ -335,14 +361,29 @@ private fun DouyinVideoPage(
     val controlsIconSize = watchDimensionResource(R.dimen.hey_listitem_widget_size)
     val titleFontSize = with(density) { watchDimensionResource(R.dimen.feed_card_title_text_size).toSp() }
 
-    val localUri = localPlayPath?.takeIf { it.isNotBlank() }?.let { "file://$it" }
-    val remoteUri = item.playUrl.takeIf { it.isNotBlank() }
+    val poisonedAwemeIds by DouyinPlaybackDebugController.poisonedAwemeIds.collectAsState()
+    val isPoisoned = poisonedAwemeIds.contains(item.awemeId)
+    var injectedFailureNonce by remember(item.awemeId) { mutableStateOf(0L) }
+    val localUri = if (isPoisoned) {
+        null
+    } else {
+        localPlayPath?.takeIf { it.isNotBlank() }?.let { "file://$it" }
+    }
+    val remoteUri = if (isPoisoned) {
+        buildDouyinInjectedFailureUri(
+            awemeId = item.awemeId,
+            sequence = injectedFailureNonce
+        )
+    } else {
+        item.playUrl.takeIf { it.isNotBlank() }
+    }
     var mediaUri by remember(item.awemeId) {
         mutableStateOf(localUri ?: remoteUri)
     }
     var remoteResolvedAtMs by remember(item.awemeId) {
         mutableStateOf(item.playUrlResolvedAtMs)
     }
+    var prepareAttemptNonce by remember(item.awemeId) { mutableIntStateOf(0) }
     val headersSignature = remember(headers) { headers.entries.sortedBy { it.key }.joinToString(";") }
     var preparedSourceKey by remember(item.awemeId) { mutableStateOf<String?>(null) }
     var retryCount by remember(item.awemeId) { mutableIntStateOf(0) }
@@ -384,6 +425,7 @@ private fun DouyinVideoPage(
         if (resolvedState.mediaUri != mediaUri || resolvedState.remoteResolvedAtMs != remoteResolvedAtMs) {
             mediaUri = resolvedState.mediaUri
             remoteResolvedAtMs = resolvedState.remoteResolvedAtMs
+            prepareAttemptNonce = 0
             preparedSourceKey = null
             hasError = false
             isBuffering = resolvedState.mediaUri != null
@@ -407,35 +449,58 @@ private fun DouyinVideoPage(
             }
     }
 
+    fun stopPlayback() {
+        player.playWhenReady = false
+        player.pause()
+        isPlaying = false
+        isBuffering = false
+    }
+
     fun requestPlaybackRefresh(resetRetryCount: Boolean = false) {
+        if (isPoisoned) {
+            if (resetRetryCount) {
+                retryCount = 0
+            }
+            val nextFailureSequence = injectedFailureNonce + 1L
+            injectedFailureNonce = nextFailureSequence
+            hasError = false
+            isBuffering = true
+            pausedByGesture = false
+            preparedSourceKey = null
+            mediaUri = buildDouyinInjectedFailureUri(
+                awemeId = item.awemeId,
+                sequence = nextFailureSequence
+            )
+            AppLogger.d(
+                TAG,
+                "retry poisoned video with injected uri awemeId=${item.awemeId} sequence=$nextFailureSequence"
+            )
+            return
+        }
         val sourceKind = currentDouyinPlaybackSourceKind(mediaUri)
         val targetUri = mediaUri?.trim()?.takeIf { it.isNotBlank() }
             ?: localUri
             ?: remoteUri
         if (targetUri.isNullOrBlank()) {
-            hasError = true
+            hasError = false
+            pausedByGesture = false
+            stopPlayback()
+            onAutoSkipCurrentItem(pageIndex)
             return
         }
         if (resetRetryCount) {
             retryCount = 0
         }
-        hasError = sourceKind == DouyinPlaybackSourceKind.REMOTE ||
-            (sourceKind == DouyinPlaybackSourceKind.LOCAL && remoteUri.isNullOrBlank())
-        isBuffering = sourceKind == DouyinPlaybackSourceKind.LOCAL && !remoteUri.isNullOrBlank()
+        hasError = false
+        isBuffering = true
         pausedByGesture = false
+        prepareAttemptNonce += 1
         if (sourceKind == DouyinPlaybackSourceKind.LOCAL && !remoteUri.isNullOrBlank()) {
             mediaUri = remoteUri
             remoteResolvedAtMs = item.playUrlResolvedAtMs
             preparedSourceKey = null
         }
         onRequestPlaybackRefresh(item.awemeId, sourceKind)
-    }
-
-    fun stopPlayback() {
-        player.playWhenReady = false
-        player.pause()
-        isPlaying = false
-        isBuffering = false
     }
 
     val latestHasError = rememberUpdatedState(hasError)
@@ -472,6 +537,18 @@ private fun DouyinVideoPage(
 
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                 AppLogger.w(TAG, "playback error awemeId=${item.awemeId}, uri=$mediaUri", error)
+                if (isDouyinInjectedFailureUri(mediaUri)) {
+                    if (retryCount < DOUYIN_MAX_AUTO_RETRY_COUNT) {
+                        retryCount += 1
+                        latestRequestPlaybackRefresh.value(false)
+                    } else {
+                        hasError = false
+                        pausedByGesture = false
+                        stopPlayback()
+                        latestAutoSkipCurrentItem.value()
+                    }
+                    return
+                }
                 when (
                     resolveDouyinPlaybackFailureAction(
                         retryCount = retryCount,
@@ -487,14 +564,9 @@ private fun DouyinVideoPage(
 
                     DouyinPlaybackFailureAction.AutoSkip -> {
                         hasError = false
-                        isBuffering = false
+                        pausedByGesture = false
                         stopPlayback()
                         latestAutoSkipCurrentItem.value()
-                    }
-
-                    DouyinPlaybackFailureAction.ShowError -> {
-                        hasError = true
-                        isBuffering = false
                     }
                 }
             }
@@ -535,16 +607,22 @@ private fun DouyinVideoPage(
         }
     }
 
-    val prepareKey = remember(mediaUri, remoteResolvedAtMs) {
-        buildDouyinPlaybackPrepareKey(mediaUri, remoteResolvedAtMs)
+    val prepareKey = remember(mediaUri, remoteResolvedAtMs, prepareAttemptNonce) {
+        buildDouyinPlaybackPrepareKey(
+            mediaUri = mediaUri,
+            remoteResolvedAtMs = remoteResolvedAtMs,
+            attemptNonce = prepareAttemptNonce
+        )
     }
 
     LaunchedEffect(prepareKey, player) {
         val targetPrepareKey = prepareKey
         val targetUri = mediaUri?.trim().orEmpty()
         if (targetPrepareKey.isNullOrBlank() || targetUri.isBlank()) {
-            hasError = true
-            isBuffering = false
+            hasError = false
+            pausedByGesture = false
+            stopPlayback()
+            onAutoSkipCurrentItem(pageIndex)
             return@LaunchedEffect
         }
         if (preparedSourceKey == targetPrepareKey) {
@@ -613,18 +691,6 @@ private fun DouyinVideoPage(
 
         if (isBuffering && !hasError && isActive) {
             WatchCircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-        }
-
-        if (hasError && isActive) {
-            Text(
-                text = "播放失败，双击重试",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .padding(horizontal = safePadding)
-            )
         }
 
         if (controlsVisible) {
@@ -874,9 +940,30 @@ private fun currentDouyinPlaybackSourceKind(mediaUri: String?): DouyinPlaybackSo
     }
 }
 
+private fun buildDouyinInjectedFailureUri(awemeId: String, sequence: Long): String {
+    return "$DOUYIN_INJECTED_FAILURE_URI_PREFIX$awemeId?sequence=$sequence"
+}
+
+private fun isDouyinInjectedFailureUri(mediaUri: String?): Boolean {
+    return mediaUri?.startsWith(DOUYIN_INJECTED_FAILURE_URI_PREFIX) == true
+}
+
+internal fun resolveDouyinAutoSkipTargetPage(
+    failingPage: Int,
+    pageCount: Int
+): Int? {
+    if (failingPage <= 0 || pageCount <= 1) return null
+    return if (failingPage < pageCount - 1) {
+        failingPage + 1
+    } else {
+        0
+    }
+}
+
 private const val TITLE_ORIGINAL_FIRST_LINE_RATIO = 0.68f
 private const val TITLE_ORIGINAL_SECOND_LINE_RATIO = 0.82f
-private const val DOUYIN_MAX_AUTO_RETRY_COUNT = 2
-private const val DOUYIN_AUTO_SKIP_MESSAGE = "当前视频无法播放，已为您自动跳过"
+private const val DOUYIN_MAX_AUTO_RETRY_COUNT = 1
+private const val DOUYIN_AUTO_SKIP_MESSAGE = "当前视频无法播放\n已为您自动跳过"
 private const val DOUYIN_AUTO_SKIP_MESSAGE_DURATION_MS = 2_000L
+private const val DOUYIN_INJECTED_FAILURE_URI_PREFIX = "watchrss-debug://douyin/force-fail/"
 private const val TAG = "DouyinImmersive"

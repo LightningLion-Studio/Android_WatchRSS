@@ -7,8 +7,7 @@ internal data class DouyinResolvedPlaybackState(
 
 internal enum class DouyinPlaybackFailureAction {
     Retry,
-    AutoSkip,
-    ShowError
+    AutoSkip
 }
 
 internal fun resolveDouyinPlaybackState(
@@ -57,19 +56,19 @@ internal fun resolveDouyinPlaybackFailureAction(
 ): DouyinPlaybackFailureAction {
     return when {
         retryCount < maxAutoRetryCount -> DouyinPlaybackFailureAction.Retry
-        hasValidatedInternetConnection && hasNextItem -> DouyinPlaybackFailureAction.AutoSkip
-        else -> DouyinPlaybackFailureAction.ShowError
+        else -> DouyinPlaybackFailureAction.AutoSkip
     }
 }
 
 internal fun buildDouyinPlaybackPrepareKey(
     mediaUri: String?,
-    remoteResolvedAtMs: Long
+    remoteResolvedAtMs: Long,
+    attemptNonce: Int = 0
 ): String? {
     val normalizedMediaUri = mediaUri?.takeIf { it.isNotBlank() } ?: return null
     return if (normalizedMediaUri.startsWith("file://")) {
-        normalizedMediaUri
+        "$normalizedMediaUri#$attemptNonce"
     } else {
-        "$normalizedMediaUri#$remoteResolvedAtMs"
+        "$normalizedMediaUri#$remoteResolvedAtMs#$attemptNonce"
     }
 }

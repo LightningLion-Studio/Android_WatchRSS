@@ -48,6 +48,22 @@ class DouyinPlaybackStateResolverTest {
     }
 
     @Test
+    fun buildDouyinPlaybackPrepareKey_changesWhenRetryingSameLocalSource() {
+        val firstKey = buildDouyinPlaybackPrepareKey(
+            mediaUri = "file:///tmp/aweme.mp4",
+            remoteResolvedAtMs = 0L,
+            attemptNonce = 0
+        )
+        val retriedKey = buildDouyinPlaybackPrepareKey(
+            mediaUri = "file:///tmp/aweme.mp4",
+            remoteResolvedAtMs = 0L,
+            attemptNonce = 1
+        )
+
+        assertNotEquals(firstKey, retriedKey)
+    }
+
+    @Test
     fun resolveDouyinPlaybackFailureAction_retriesWhileBudgetRemains() {
         val action = resolveDouyinPlaybackFailureAction(
             retryCount = 1,
@@ -72,7 +88,7 @@ class DouyinPlaybackStateResolverTest {
     }
 
     @Test
-    fun resolveDouyinPlaybackFailureAction_showsErrorWhenOfflineAfterRetryBudgetExhausted() {
+    fun resolveDouyinPlaybackFailureAction_autoSkipsWhenOfflineAfterRetryBudgetExhausted() {
         val action = resolveDouyinPlaybackFailureAction(
             retryCount = 2,
             maxAutoRetryCount = 2,
@@ -80,11 +96,11 @@ class DouyinPlaybackStateResolverTest {
             hasNextItem = true
         )
 
-        assertEquals(DouyinPlaybackFailureAction.ShowError, action)
+        assertEquals(DouyinPlaybackFailureAction.AutoSkip, action)
     }
 
     @Test
-    fun resolveDouyinPlaybackFailureAction_showsErrorAtLastItemAfterRetryBudgetExhausted() {
+    fun resolveDouyinPlaybackFailureAction_autoSkipsAtLastItemAfterRetryBudgetExhausted() {
         val action = resolveDouyinPlaybackFailureAction(
             retryCount = 2,
             maxAutoRetryCount = 2,
@@ -92,6 +108,26 @@ class DouyinPlaybackStateResolverTest {
             hasNextItem = false
         )
 
-        assertEquals(DouyinPlaybackFailureAction.ShowError, action)
+        assertEquals(DouyinPlaybackFailureAction.AutoSkip, action)
+    }
+
+    @Test
+    fun resolveDouyinAutoSkipTargetPage_prefersNextVideo() {
+        val targetPage = resolveDouyinAutoSkipTargetPage(
+            failingPage = 2,
+            pageCount = 5
+        )
+
+        assertEquals(3, targetPage)
+    }
+
+    @Test
+    fun resolveDouyinAutoSkipTargetPage_fallsBackToTitlePageWhenLastVideoFails() {
+        val targetPage = resolveDouyinAutoSkipTargetPage(
+            failingPage = 3,
+            pageCount = 4
+        )
+
+        assertEquals(0, targetPage)
     }
 }

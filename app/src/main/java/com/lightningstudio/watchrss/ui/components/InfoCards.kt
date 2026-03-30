@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.ui.util.normalizeUserFacingMessage
 
@@ -45,14 +46,18 @@ fun EmptyStateCard(title: String, subtitle: String) {
 }
 
 @Composable
-fun ToastMessage(text: String) {
+fun ToastMessage(
+    text: String,
+    modifier: Modifier = Modifier,
+    contentAlignment: Alignment = Alignment.BottomCenter
+) {
     val context = LocalContext.current
     val displayText = normalizeUserFacingMessage(context, text)?.toString() ?: return
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 12.dp),
-        contentAlignment = Alignment.BottomCenter
+        contentAlignment = contentAlignment
     ) {
         Surface(
             color = MaterialTheme.colorScheme.surface,
@@ -63,6 +68,7 @@ fun ToastMessage(text: String) {
                 text = displayText,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center,
                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
             )
         }
