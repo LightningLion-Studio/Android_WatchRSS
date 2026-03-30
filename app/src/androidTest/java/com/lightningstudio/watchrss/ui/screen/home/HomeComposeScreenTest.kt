@@ -179,6 +179,42 @@ class HomeComposeScreenTest {
     }
 
     @Test
+    fun biliChannel_hidesUnreadTextAndIndicator() {
+        composeRule.setWatchContent {
+            HomeComposeScreen(
+                channels = listOf(
+                    sampleChannel(
+                        id = 1001L,
+                        url = BuiltinChannelType.BILI.url,
+                        unreadCount = 7
+                    )
+                ),
+                isRefreshing = false,
+                onRefreshAll = {},
+                openSwipeId = null,
+                onOpenSwipe = {},
+                onCloseSwipe = {},
+                draggingSwipeId = null,
+                onDragStart = {},
+                onDragEnd = {},
+                onProfileClick = {},
+                onRecommendClick = {},
+                onChannelClick = {},
+                onChannelLongClick = {},
+                onSwipeBack = {},
+                onAddRssClick = {},
+                onMoveTopClick = {},
+                onMarkReadClick = {},
+                onBeianClick = {}
+            )
+        }
+
+        composeRule.onNodeWithTag(HomeTestTags.channelCard(1001L)).assertExists()
+        composeRule.onNodeWithText("未读 7", substring = true).assertDoesNotExist()
+        composeRule.onNodeWithTag(HomeTestTags.channelIndicator(1001L)).assertDoesNotExist()
+    }
+
+    @Test
     fun rssChannel_keepsUnreadTextAndIndicator() {
         composeRule.setWatchContent {
             HomeComposeScreen(

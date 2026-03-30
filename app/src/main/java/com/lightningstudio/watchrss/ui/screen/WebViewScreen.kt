@@ -4,6 +4,7 @@ import android.webkit.WebView
 import android.widget.FrameLayout
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -18,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.viewinterop.AndroidView
 import com.lightningstudio.watchrss.R
@@ -31,6 +33,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.PanoramaFishEye
+import kotlin.math.sqrt
 
 @Composable
 fun WebViewScreen(
@@ -46,12 +49,37 @@ fun WebViewScreen(
     val safeVerticalPadding = WatchDimens.watch_safe_vertical_padding
     val controlSize = watchDimensionResource(R.dimen.hey_button_height)
     val iconSize = watchDimensionResource(R.dimen.hey_listitem_widget_size)
+    val density = LocalDensity.current
 
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .background(backgroundColor)
     ) {
+        val viewportWidth = (maxWidth - safePadding * 2).coerceAtLeast(maxWidth * 0.1f)
+        val viewportHeight = (maxHeight - safeVerticalPadding * 2).coerceAtLeast(maxHeight * 0.1f)
+        val expandedScale = (maxWidth / viewportWidth).coerceAtLeast(1f)
+        val shrunkScale = run {
+            val diagonal = sqrt(
+                viewportWidth.value * viewportWidth.value +
+                    viewportHeight.value * viewportHeight.value
+            )
+            if (diagonal > 0f) {
+                (maxWidth.value / diagonal).coerceAtMost(1f)
+            } else {
+                1f
+            }
+        }
+        val viewportScale = when (scaleMode) {
+            WebViewScaleMode.Standard -> 1f
+            WebViewScaleMode.Expanded -> expandedScale
+            WebViewScaleMode.Shrunk -> shrunkScale
+        }
+        val targetWidth = viewportWidth * viewportScale
+        val targetHeight = viewportHeight * viewportScale
+        val targetWidthPx = with(density) { targetWidth.roundToPx() }
+        val targetHeightPx = with(density) { targetHeight.roundToPx() }
+
         if (!errorMessage.isNullOrBlank()) {
             Box(
                 modifier = Modifier
@@ -86,14 +114,21 @@ fun WebViewScreen(
                         }
                     }
                 },
+                update = { view ->
+                    val existing = view.layoutParams
+                    val needsUpdate = existing == null ||
+                        existing.width != targetWidthPx ||
+                        existing.height != targetHeightPx
+                    if (needsUpdate) {
+                        view.layoutParams = FrameLayout.LayoutParams(targetWidthPx, targetHeightPx)
+                        view.requestLayout()
+                        view.forceLayout()
+                        view.invalidate()
+                    }
+                },
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(
-                        start = safePadding,
-                        top = safeVerticalPadding,
-                        end = safePadding,
-                        bottom = safeVerticalPadding
-                    )
+                    .align(Alignment.Center)
+                    .size(targetWidth, targetHeight)
             )
             AndroidView(
                 factory = { context ->

@@ -62,6 +62,11 @@ class BiliChannelInfoActivityTest {
     val ruleChain: RuleChain = RuleChain.outerRule(containerRule).around(composeRule)
 
     @Test
+    fun unreadUiIsHidden() {
+        composeRule.onNodeWithText("未读 0").assertDoesNotExist()
+    }
+
+    @Test
     fun returningFromSearch_doesNotReopenSearchWhenOpeningSettings() {
         composeRule.onNodeWithText("搜索", useUnmergedTree = true)
             .assertExists()

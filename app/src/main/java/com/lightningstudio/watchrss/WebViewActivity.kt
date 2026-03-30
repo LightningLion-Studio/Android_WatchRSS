@@ -39,7 +39,6 @@ import com.lightningstudio.watchrss.util.AppLogger
 import java.io.File
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
-import kotlin.math.sqrt
 
 enum class WebViewScaleMode {
     Standard,
@@ -105,7 +104,6 @@ class WebViewActivity : BaseWatchActivity() {
 
                 LaunchedEffect(scaleMode) {
                     currentScaleMode = scaleMode
-                    applyCurrentScaleMode()
                 }
 
                 LaunchedEffect(readingThemeDark) {
@@ -211,7 +209,6 @@ class WebViewActivity : BaseWatchActivity() {
 
             override fun onPageFinished(view: WebView?, url: String?) {
                 animateProgressTo(1f, hideWhenDone = true)
-                view?.post { applyCurrentScaleMode() }
             }
 
             override fun onReceivedError(
@@ -242,58 +239,6 @@ class WebViewActivity : BaseWatchActivity() {
                 }
             }
         }
-    }
-
-    private fun applyCurrentScaleMode() {
-        if (!webViewInitialized) return
-        val scaleFactor = calculateScaleFactor(currentScaleMode)
-        val script = buildScaleScript(scaleFactor)
-        webView.post {
-            runCatching {
-                webView.evaluateJavascript(script, null)
-            }.onFailure { throwable ->
-                AppLogger.e("WebViewActivity", "Failed to apply web scale mode: $currentScaleMode", throwable)
-            }
-        }
-    }
-
-    private fun calculateScaleFactor(scaleMode: WebViewScaleMode): Float {
-        if (!webViewInitialized) return 1f
-        val contentWidth = webView.width.toFloat().coerceAtLeast(1f)
-        val contentHeight = webView.height.toFloat().coerceAtLeast(1f)
-        val screenWidth = (
-            window.decorView.width.takeIf { it > 0 }
-                ?: webView.rootView.width.takeIf { it > 0 }
-                ?: resources.displayMetrics.widthPixels
-            ).toFloat().coerceAtLeast(contentWidth)
-        return when (scaleMode) {
-            WebViewScaleMode.Standard -> 1f
-            WebViewScaleMode.Expanded -> (screenWidth / contentWidth).coerceAtLeast(1f)
-            WebViewScaleMode.Shrunk -> {
-                val diagonal = sqrt(contentWidth * contentWidth + contentHeight * contentHeight)
-                if (diagonal > 0f) {
-                    (screenWidth / diagonal).coerceAtMost(1f)
-                } else {
-                    1f
-                }
-            }
-        }
-    }
-
-    private fun buildScaleScript(scaleFactor: Float): String {
-        val normalized = scaleFactor.coerceAtLeast(0.1f)
-        return """
-            (function() {
-              var zoom = ${normalized};
-              var root = document.documentElement;
-              if (!root) return;
-              if (Math.abs(zoom - 1) < 0.001) {
-                root.style.removeProperty('zoom');
-              } else {
-                root.style.setProperty('zoom', String(zoom));
-              }
-            })();
-        """.trimIndent()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

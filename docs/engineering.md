@@ -374,6 +374,25 @@ interface ChannelRepository {
   - 屏幕刷新率确认（用于 16ms 阈值）
     - `adb shell dumpsys SurfaceFlinger --latency`（首行约 16666666ns 表示 60Hz）
 
+### 14.4 抖音沉浸式播放器故障注入（Debug 构建）
+- 用途：在真机联调时，强制让“下一条将要播放”的抖音视频进入持续失败态，用于验证失败提示、自动重试、双击重试和恢复路径。
+- 生效范围：仅 `debug` 包注册该入口，`release` 包不暴露该能力。
+- 前提：
+  - 已安装 `debug` APK；
+  - 当前页面位于抖音沉浸式播放器；
+  - 当前页后面至少还有一条视频；若停在标题页，则“下一条”指第一条视频。
+- 触发命令：
+  - `adb shell am broadcast -n com.lightningstudio.watchrss/.debug.DouyinPlaybackDebugReceiver -a com.lightningstudio.watchrss.debug.action.FORCE_FAIL_NEXT_DOUYIN_VIDEO`
+- 预期行为：
+  - 当前页的下一条视频会被标记为故障注入目标；
+  - 当你滑到该视频时，播放器会把它的播放 URL 替换为无效调试地址；
+  - 自动重试后仍会继续失败，双击重试后也仍会继续失败，不会因为重新拉取播放地址而恢复。
+- 恢复方式：
+  - 当前实现不会自动清除这条故障注入；若要恢复，请重启应用进程或重新安装调试包。
+- 排查建议：
+  - 若广播无效，先确认当前页后面确实还有下一条视频；
+  - 可通过 `adb logcat -d -v time | rg 'DouyinPlaybackDebug|DouyinImmersive'` 查看是否收到广播与注入失败日志。
+
 ---
 
 ## 15. 里程碑（建议）

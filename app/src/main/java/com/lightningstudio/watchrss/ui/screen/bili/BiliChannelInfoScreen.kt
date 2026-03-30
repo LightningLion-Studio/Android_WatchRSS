@@ -140,14 +140,6 @@ fun BiliChannelInfoScreen(
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Center
             )
-            Spacer(modifier = Modifier.height(infoSpacing))
-            Text(
-                text = "未读 0",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center
-            )
 
             BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
                 val buttonWidth = watchActionButtonWidthFor(maxWidth)
