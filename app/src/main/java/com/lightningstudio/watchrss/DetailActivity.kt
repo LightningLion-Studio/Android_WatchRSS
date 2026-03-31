@@ -55,6 +55,7 @@ class DetailActivity : BaseWatchActivity() {
                     viewModel = viewModel,
                     llmSummaryState = llmSummaryState,
                     onOpenAiSummary = ::openAiSummary,
+                    onOpenReadAloud = ::openReadAloud,
                     onBack = { itemId, reachedBottom, isWatchLater ->
                         handleBackPress(itemId, reachedBottom, isWatchLater)
                     }
@@ -89,6 +90,21 @@ class DetailActivity : BaseWatchActivity() {
                     )
                 }
             )
+        }
+    }
+
+    private fun openReadAloud() {
+        val itemId = intent.getLongExtra(EXTRA_ITEM_ID, 0L)
+        if (itemId <= 0L) return
+
+        lifecycleScope.launch {
+            val isConfigured = container.readAloudController.hasConfig()
+            if (isConfigured) {
+                container.readAloudController.startFromItem(itemId)
+                startActivity(ReadAloudPlaybackActivity.createIntent(this@DetailActivity))
+            } else {
+                startActivity(ReadAloudApiSettingsActivity.createIntent(this@DetailActivity, itemId))
+            }
         }
     }
 

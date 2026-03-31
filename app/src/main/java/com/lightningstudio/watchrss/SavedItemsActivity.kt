@@ -7,15 +7,20 @@ import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
 import com.lightningstudio.watchrss.data.rss.SaveType
 import com.lightningstudio.watchrss.data.rss.SavedItem
 import com.lightningstudio.watchrss.phoneconnection.PhoneConnectionAbility
 import com.lightningstudio.watchrss.phoneconnection.PhoneConnectionFeature
+import com.lightningstudio.watchrss.ui.screen.common.ReadAloudBubbleDock
+import com.lightningstudio.watchrss.ui.screen.common.ReadAloudFloatingBubbleOverlay
 import com.lightningstudio.watchrss.ui.screen.rss.SavedItemsScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
@@ -52,46 +57,61 @@ class SavedItemsActivity : BaseWatchActivity() {
                 val phoneConnectionEnabled by settingsRepository.phoneConnectionEnabled.collectAsState(
                     initial = PhoneConnectionFeature.isDebugBuild
                 )
+                val readAloudState by (application as WatchRssApplication)
+                    .container
+                    .readAloudController
+                    .uiState
+                    .collectAsState()
                 val title = if (viewModel.saveType == SaveType.FAVORITE) "我的收藏" else "稍后再看"
                 val hint = "保存在本地，离线可读"
                 val emptyMessage = if (viewModel.saveType == SaveType.FAVORITE) "暂无收藏" else "暂无稍后再看"
 
-                SavedItemsScreen(
-                    title = title,
-                    hint = hint,
-                    emptyMessage = emptyMessage,
-                    items = items,
-                    undoVisible = lastRemoved != null,
-                    showSyncButton = PhoneConnectionFeature.isEnabled(phoneConnectionEnabled),
-                    onUndoClick = { handleUndo() },
-                    onItemClick = { savedItem ->
-                        if (!allowNavigation()) return@SavedItemsScreen
-                        val target = parseBiliTarget(savedItem.item.link)
-                        if (target != null) {
-                            val intent = BiliDetailActivity.createIntent(
-                                this,
-                                target.aid,
-                                target.bvid,
-                                target.cid,
-                                rssItemId = savedItem.item.id
-                            )
-                            startActivity(intent)
-                        } else {
-                            val intent = Intent(this, DetailActivity::class.java)
-                            intent.putExtra(DetailActivity.EXTRA_ITEM_ID, savedItem.item.id)
-                            intent.putExtra(
-                                DetailActivity.EXTRA_FROM_WATCH_LATER,
-                                viewModel.saveType == SaveType.WATCH_LATER
-                            )
-                            detailLauncher.launch(intent)
+                Box(modifier = Modifier.fillMaxSize()) {
+                    SavedItemsScreen(
+                        title = title,
+                        hint = hint,
+                        emptyMessage = emptyMessage,
+                        items = items,
+                        undoVisible = lastRemoved != null,
+                        showSyncButton = PhoneConnectionFeature.isEnabled(phoneConnectionEnabled),
+                        onUndoClick = { handleUndo() },
+                        onItemClick = { savedItem ->
+                            if (!allowNavigation()) return@SavedItemsScreen
+                            val target = parseBiliTarget(savedItem.item.link)
+                            if (target != null) {
+                                val intent = BiliDetailActivity.createIntent(
+                                    this@SavedItemsActivity,
+                                    target.aid,
+                                    target.bvid,
+                                    target.cid,
+                                    rssItemId = savedItem.item.id
+                                )
+                                startActivity(intent)
+                            } else {
+                                val intent = Intent(this@SavedItemsActivity, DetailActivity::class.java)
+                                intent.putExtra(DetailActivity.EXTRA_ITEM_ID, savedItem.item.id)
+                                intent.putExtra(
+                                    DetailActivity.EXTRA_FROM_WATCH_LATER,
+                                    viewModel.saveType == SaveType.WATCH_LATER
+                                )
+                                detailLauncher.launch(intent)
+                            }
+                        },
+                        onItemRemove = { savedItem ->
+                            viewModel.toggleSaved(savedItem.item.id)
+                            showUndo(savedItem)
+                        },
+                        onSyncToPhone = { startSyncToPhone() }
+                    )
+                    ReadAloudFloatingBubbleOverlay(
+                        state = readAloudState,
+                        defaultDock = ReadAloudBubbleDock.BOTTOM,
+                        onClick = {
+                            if (!allowNavigation()) return@ReadAloudFloatingBubbleOverlay
+                            startActivity(ReadAloudPlaybackActivity.createIntent(this@SavedItemsActivity))
                         }
-                    },
-                    onItemRemove = { savedItem ->
-                        viewModel.toggleSaved(savedItem.item.id)
-                        showUndo(savedItem)
-                    },
-                    onSyncToPhone = { startSyncToPhone() }
-                )
+                    )
+                }
             }
         }
     }

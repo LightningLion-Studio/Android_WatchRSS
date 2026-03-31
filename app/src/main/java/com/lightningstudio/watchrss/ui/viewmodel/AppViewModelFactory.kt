@@ -61,6 +61,13 @@ class AppViewModelFactory(private val container: AppContainer) : ViewModelProvid
                     container.llmApiKeyStore
                 )
             }
+            modelClass.isAssignableFrom(ReadAloudSettingsViewModel::class.java) -> {
+                ReadAloudSettingsViewModel(
+                    settingsRepository = container.settingsRepository,
+                    apiKeyStore = container.readAloudApiKeyStore,
+                    synthesisService = container.readAloudSynthesisService
+                )
+            }
             else -> throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
         } as T
     }
