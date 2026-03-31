@@ -2,7 +2,6 @@ package com.lightningstudio.watchrss
 
 import android.app.Application
 import android.content.pm.ApplicationInfo
-import com.lightningstudio.watchrss.data.cache.CacheTrimReason
 import com.lightningstudio.watchrss.data.AppContainer
 import com.lightningstudio.watchrss.data.DefaultAppContainer
 import com.lightningstudio.watchrss.debug.DebugLogBuffer
@@ -37,7 +36,6 @@ class WatchRssApplication : Application() {
             BiliDebugLog.setLogger { tag, message -> DebugLogBuffer.log(tag, message) }
         }
 
-        defaultContainer.managedCacheService.scheduleMaintenance(CacheTrimReason.APP_START)
     }
 
     fun setContainerForTesting(container: AppContainer?) {

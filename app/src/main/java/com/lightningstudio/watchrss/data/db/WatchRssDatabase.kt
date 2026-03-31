@@ -13,7 +13,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SavedEntryEntity::class,
         OfflineMediaEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 @SkipQueryVerification
@@ -116,6 +116,14 @@ abstract class WatchRssDatabase : RoomDatabase() {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL(
                     "ALTER TABLE rss_items ADD COLUMN originalContent TEXT"
+                )
+            }
+        }
+
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "CREATE INDEX IF NOT EXISTS index_rss_items_isRead_channelId ON rss_items(isRead, channelId)"
                 )
             }
         }

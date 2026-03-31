@@ -52,7 +52,8 @@ class DefaultAppContainer(context: Context) : AppContainer {
             WatchRssDatabase.MIGRATION_3_4,
             WatchRssDatabase.MIGRATION_4_5,
             WatchRssDatabase.MIGRATION_5_6,
-            WatchRssDatabase.MIGRATION_6_7
+            WatchRssDatabase.MIGRATION_6_7,
+            WatchRssDatabase.MIGRATION_7_8
         )
             .build()
     }

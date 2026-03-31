@@ -2,17 +2,19 @@ package com.lightningstudio.watchrss.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
-import com.lightningstudio.watchrss.data.douyin.DouyinRepositoryContract
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.rss.RssChannel
 import com.lightningstudio.watchrss.data.rss.RssRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class HomePlatformLoginState(
     val isBiliLoggedIn: Boolean = false,
@@ -21,10 +23,14 @@ data class HomePlatformLoginState(
 
 class HomeViewModel(
     private val repository: RssRepository,
-    private val biliRepository: BiliRepositoryContract,
-    private val douyinRepository: DouyinRepositoryContract
+    private val isBiliLoggedIn: suspend () -> Boolean,
+    private val isDouyinLoggedIn: suspend () -> Boolean
 ) : ViewModel() {
+    private val _hasLoadedChannels = MutableStateFlow(false)
+    val hasLoadedChannels: StateFlow<Boolean> = _hasLoadedChannels.asStateFlow()
+
     val channels = repository.observeChannels()
+        .onEach { _hasLoadedChannels.value = true }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val _isRefreshing = MutableStateFlow(false)
@@ -35,20 +41,24 @@ class HomeViewModel(
 
     private val _platformLoginState = MutableStateFlow(HomePlatformLoginState())
     val platformLoginState: StateFlow<HomePlatformLoginState> = _platformLoginState.asStateFlow()
+    private var platformLoginRefreshJob: Job? = null
 
     init {
         viewModelScope.launch {
             repository.ensureBuiltinChannels()
         }
-        refreshPlatformLoginState()
     }
 
     fun refreshPlatformLoginState() {
-        viewModelScope.launch {
-            _platformLoginState.value = HomePlatformLoginState(
-                isBiliLoggedIn = biliRepository.isLoggedIn(),
-                isDouyinLoggedIn = douyinRepository.isLoggedIn()
-            )
+        if (platformLoginRefreshJob?.isActive == true) return
+        platformLoginRefreshJob = viewModelScope.launch {
+            val nextState = withContext(Dispatchers.IO) {
+                HomePlatformLoginState(
+                    isBiliLoggedIn = isBiliLoggedIn(),
+                    isDouyinLoggedIn = isDouyinLoggedIn()
+                )
+            }
+            _platformLoginState.value = nextState
         }
     }
 

@@ -13,21 +13,25 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.lifecycleScope
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.rss.RssChannel
 import com.lightningstudio.watchrss.data.settings.CURRENT_OOBE_VERSION
+import com.lightningstudio.watchrss.data.cache.CacheTrimReason
 import com.lightningstudio.watchrss.debug.PerformanceMonitor
 import com.lightningstudio.watchrss.ui.screen.home.HomeComposeScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
 import com.lightningstudio.watchrss.ui.viewmodel.HomeViewModel
-import androidx.lifecycle.lifecycleScope
 import com.lightningstudio.watchrss.data.douyin.DouyinFeedCacheStore
 import com.lightningstudio.watchrss.data.douyin.DouyinSourceOrigin
 import com.lightningstudio.watchrss.data.douyin.DouyinStreamItem
 import com.lightningstudio.watchrss.sdk.douyin.DouyinVideo
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : BaseWatchActivity() {
     private val viewModel: HomeViewModel by viewModels {
@@ -48,6 +52,8 @@ class MainActivity : BaseWatchActivity() {
         }
     private var draggingSwipeKey by mutableStateOf<Long?>(null)
     private var keepSplashOnScreen = true
+    private var initialStartupCompleted = false
+    private var startupMaintenanceScheduled = false
 
     override fun onSwipeBackAttempt(dx: Float, dy: Float): Boolean {
         val hasOpen = openSwipeKey != null
@@ -66,21 +72,21 @@ class MainActivity : BaseWatchActivity() {
     override fun onResume() {
         super.onResume()
         closeOpenSwipe()
-        viewModel.refreshPlatformLoginState()
+        if (initialStartupCompleted) {
+            window.decorView.post {
+                viewModel.refreshPlatformLoginState()
+            }
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
         if (isLauncherEntry(intent)) {
-            lifecycleScope.launch {
-                AppLaunchSignal.markLauncherOpen()
-                prewarmDouyinFeed()
-                maybeResumeLastContent(intent)
-            }
+            AppLaunchSignal.markLauncherOpen()
+            scheduleLauncherEntryTasks(intent)
             return
         }
-        maybeResumeLastContent(intent)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -90,25 +96,24 @@ class MainActivity : BaseWatchActivity() {
         onBackPressedDispatcher.addCallback(this, closeOpenSwipeBackCallback)
         setupSystemBars()
         renderHomeContent()
+        keepSplashOnScreen = false
 
         lifecycleScope.launch {
-            val settingsRepository = (application as WatchRssApplication).container.settingsRepository
-            val shouldShowOobe = settingsRepository.oobeSeenVersion.first() < CURRENT_OOBE_VERSION
+            val shouldShowOobe = withContext(Dispatchers.IO) {
+                val settingsRepository = (application as WatchRssApplication).container.settingsRepository
+                settingsRepository.oobeSeenVersion.first() < CURRENT_OOBE_VERSION
+            }
             if (shouldShowOobe) {
                 startActivity(OobeActivity.createIntent(this@MainActivity))
-                keepSplashOnScreen = false
                 finish()
                 return@launch
             }
-            keepSplashOnScreen = false
+            initialStartupCompleted = true
+            schedulePlatformLoginStateRefresh()
+            scheduleStartupMaintenance()
             if (isLauncherEntry(intent)) {
                 AppLaunchSignal.markLauncherOpen()
-                launch {
-                    prewarmDouyinFeed()
-                    maybeResumeLastContent(intent)
-                }
-            } else {
-                maybeResumeLastContent(intent)
+                scheduleLauncherEntryTasks(intent)
             }
         }
     }
@@ -118,6 +123,7 @@ class MainActivity : BaseWatchActivity() {
             WatchRSSTheme {
                 val context = LocalContext.current
                 val channels by viewModel.channels.collectAsState()
+                val hasLoadedChannels by viewModel.hasLoadedChannels.collectAsState()
                 val isRefreshing by viewModel.isRefreshing.collectAsState()
                 val message by viewModel.message.collectAsState()
                 val platformLoginState by viewModel.platformLoginState.collectAsState()
@@ -131,6 +137,7 @@ class MainActivity : BaseWatchActivity() {
 
                 HomeComposeScreen(
                     channels = channels,
+                    hasLoadedChannels = hasLoadedChannels,
                     platformLoginState = platformLoginState,
                     isRefreshing = isRefreshing,
                     onRefreshAll = viewModel::refreshAll,
@@ -193,9 +200,11 @@ class MainActivity : BaseWatchActivity() {
         return Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
     }
 
-    private fun maybeResumeLastContent(sourceIntent: Intent?) {
+    private suspend fun maybeResumeLastContent(sourceIntent: Intent?) {
         if (!isLauncherEntry(sourceIntent)) return
-        val resumeIntent = AppResumeStateStore.load(this) ?: return
+        val resumeIntent = withContext(Dispatchers.IO) {
+            AppResumeStateStore.load(this@MainActivity)
+        } ?: return
         val component = resumeIntent.component ?: return
         if (component.className == MainActivity::class.java.name) return
         startActivity(
@@ -208,9 +217,9 @@ class MainActivity : BaseWatchActivity() {
         return intent.categories?.contains(Intent.CATEGORY_LAUNCHER) == true
     }
 
-    private suspend fun prewarmDouyinFeed() {
+    private suspend fun prewarmDouyinFeed() = withContext(Dispatchers.IO) {
         val container = (application as WatchRssApplication).container
-        if (!container.douyinRepository.isLoggedIn()) return
+        if (!container.douyinRepository.isLoggedIn()) return@withContext
         val result = container.douyinRepository.fetchFeedPage(
             cursor = null,
             count = DOUYIN_APP_OPEN_REFRESH_COUNT
@@ -219,6 +228,33 @@ class MainActivity : BaseWatchActivity() {
             .mapNotNull(::toDouyinStreamItem)
         if (items.isNotEmpty()) {
             DouyinFeedCacheStore(this@MainActivity).save(items)
+        }
+    }
+
+    private fun schedulePlatformLoginStateRefresh() {
+        window.decorView.post {
+            viewModel.refreshPlatformLoginState()
+        }
+    }
+
+    private fun scheduleStartupMaintenance() {
+        if (startupMaintenanceScheduled) return
+        startupMaintenanceScheduled = true
+        lifecycleScope.launch(Dispatchers.IO) {
+            delay(STARTUP_CACHE_MAINTENANCE_DELAY_MS)
+            (application as WatchRssApplication).container.managedCacheService
+                .scheduleMaintenance(CacheTrimReason.APP_START)
+        }
+    }
+
+    private fun scheduleLauncherEntryTasks(sourceIntent: Intent?) {
+        if (!initialStartupCompleted) return
+        lifecycleScope.launch {
+            maybeResumeLastContent(sourceIntent)
+        }
+        lifecycleScope.launch {
+            delay(STARTUP_DOUYIN_PREWARM_DELAY_MS)
+            prewarmDouyinFeed()
         }
     }
 
@@ -258,6 +294,8 @@ class MainActivity : BaseWatchActivity() {
     }
 
     companion object {
+        private const val STARTUP_DOUYIN_PREWARM_DELAY_MS = 2_000L
+        private const val STARTUP_CACHE_MAINTENANCE_DELAY_MS = 5_000L
         private const val DOUYIN_APP_OPEN_REFRESH_COUNT = 16
     }
 }

@@ -1,0 +1,27 @@
+# Cold start and first-scroll hot path.
+Lcom/lightningstudio/watchrss/WatchRssApplication;
+Lcom/lightningstudio/watchrss/BaseWatchActivity;
+Lcom/lightningstudio/watchrss/MainActivity;
+Lcom/lightningstudio/watchrss/AppResumeStateStore;
+Lcom/lightningstudio/watchrss/util/AppLogger;
+
+# App graph and startup data layer.
+Lcom/lightningstudio/watchrss/data/DefaultAppContainer;
+Lcom/lightningstudio/watchrss/data/cache/ManagedCacheService;
+Lcom/lightningstudio/watchrss/data/settings/SettingsRepository;
+Lcom/lightningstudio/watchrss/data/db/WatchRssDatabase;
+Lcom/lightningstudio/watchrss/data/rss/DefaultRssRepository;
+Lcom/lightningstudio/watchrss/data/rss/RssOfflineStore;
+
+# Home screen composition and gesture path.
+Lcom/lightningstudio/watchrss/ui/viewmodel/AppViewModelFactory;
+Lcom/lightningstudio/watchrss/ui/viewmodel/HomeViewModel;
+Lcom/lightningstudio/watchrss/ui/screen/home/HomeComposeScreenKt;
+Lcom/lightningstudio/watchrss/ui/components/PullRefreshBoxKt;
+Lcom/lightningstudio/watchrss/ui/input/DigitalCrownInputKt;
+Lcom/lightningstudio/watchrss/ui/theme/ThemeKt;
+
+# Critical activity and touch methods.
+HSPLcom/lightningstudio/watchrss/MainActivity;->onCreate(Landroid/os/Bundle;)V
+HSPLcom/lightningstudio/watchrss/MainActivity;->renderHomeContent()V
+HSPLcom/lightningstudio/watchrss/BaseWatchActivity;->dispatchTouchEvent(Landroid/view/MotionEvent;)Z

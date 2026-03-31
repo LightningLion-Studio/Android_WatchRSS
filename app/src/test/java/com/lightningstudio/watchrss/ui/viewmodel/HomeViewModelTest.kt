@@ -25,8 +25,14 @@ class HomeViewModelTest {
         val repo = TestRssRepository(
             initialChannels = listOf(sampleRssChannel(id = 1L), sampleRssChannel(id = 2L))
         )
+        val biliRepository = TestBiliRepository()
+        val douyinRepository = TestDouyinRepository()
 
-        val viewModel = HomeViewModel(repo, TestBiliRepository(), TestDouyinRepository())
+        val viewModel = HomeViewModel(
+            repository = repo,
+            isBiliLoggedIn = { biliRepository.isLoggedIn() },
+            isDouyinLoggedIn = { douyinRepository.isLoggedIn() }
+        )
         val collection = collectFlow(viewModel.channels)
         advanceUntilIdle()
 
@@ -46,7 +52,13 @@ class HomeViewModelTest {
             )
         )
         repo.refreshResults[22L] = Result.failure(IllegalStateException("第二个频道刷新失败"))
-        val viewModel = HomeViewModel(repo, TestBiliRepository(), TestDouyinRepository())
+        val biliRepository = TestBiliRepository()
+        val douyinRepository = TestDouyinRepository()
+        val viewModel = HomeViewModel(
+            repository = repo,
+            isBiliLoggedIn = { biliRepository.isLoggedIn() },
+            isDouyinLoggedIn = { douyinRepository.isLoggedIn() }
+        )
         val collection = collectFlow(viewModel.channels)
         advanceUntilIdle()
 
@@ -64,7 +76,13 @@ class HomeViewModelTest {
         val first = sampleRssChannel(id = 1L, title = "第一个")
         val second = sampleRssChannel(id = 2L, title = "第二个")
         val repo = TestRssRepository(initialChannels = listOf(first, second))
-        val viewModel = HomeViewModel(repo, TestBiliRepository(), TestDouyinRepository())
+        val biliRepository = TestBiliRepository()
+        val douyinRepository = TestDouyinRepository()
+        val viewModel = HomeViewModel(
+            repository = repo,
+            isBiliLoggedIn = { biliRepository.isLoggedIn() },
+            isDouyinLoggedIn = { douyinRepository.isLoggedIn() }
+        )
         val collection = collectFlow(viewModel.channels)
         advanceUntilIdle()
 

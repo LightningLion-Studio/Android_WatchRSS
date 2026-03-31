@@ -6,6 +6,7 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.Executors
 
 /**
  * 应用日志工具类
@@ -19,6 +20,11 @@ object AppLogger {
 
     private var logFile: File? = null
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault())
+    private val fileIoExecutor = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "AppLogger-IO").apply {
+            isDaemon = true
+        }
+    }
 
     /**
      * 初始化日志系统
@@ -26,9 +32,6 @@ object AppLogger {
      */
     fun init(context: Context) {
         logFile = File(context.filesDir, LOG_FILE_NAME)
-        if (!logFile!!.exists()) {
-            logFile!!.createNewFile()
-        }
         log("AppLogger", "日志系统初始化完成")
     }
 
@@ -61,7 +64,9 @@ object AppLogger {
     }
 
     private fun write(level: Int, tag: String, message: String, throwable: Throwable? = null) {
-        val timestamp = dateFormat.format(Date())
+        val timestamp = synchronized(dateFormat) {
+            dateFormat.format(Date())
+        }
         val levelChar = when (level) {
             Log.VERBOSE -> "V"
             Log.DEBUG -> "D"
@@ -94,18 +99,24 @@ object AppLogger {
      * 如果文件超过5MB，删除最早的行
      */
     private fun writeToFile(message: String) {
-        try {
-            val file = logFile ?: return
+        val targetFile = logFile ?: return
+        fileIoExecutor.execute {
+            try {
+                if (!targetFile.exists()) {
+                    targetFile.parentFile?.mkdirs()
+                    targetFile.createNewFile()
+                }
 
-            // 检查文件大小
-            if (file.length() > MAX_FILE_SIZE) {
-                trimLogFile(file)
+                // 检查文件大小
+                if (targetFile.length() > MAX_FILE_SIZE) {
+                    trimLogFile(targetFile)
+                }
+
+                // 追加日志
+                targetFile.appendText("$message\n")
+            } catch (e: Exception) {
+                Log.e(TAG, "写入日志失败", e)
             }
-
-            // 追加日志
-            file.appendText("$message\n")
-        } catch (e: Exception) {
-            Log.e(TAG, "写入日志失败", e)
         }
     }
 

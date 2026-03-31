@@ -18,7 +18,8 @@ import androidx.room.PrimaryKey
     indices = [
         Index(value = ["channelId"]),
         Index(value = ["channelId", "dedupKey"], unique = true),
-        Index(value = ["channelId", "fetchedAt"])
+        Index(value = ["channelId", "fetchedAt"]),
+        Index(value = ["isRead", "channelId"])
     ]
 )
 data class RssItemEntity(

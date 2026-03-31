@@ -99,6 +99,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.appcompat)
+    implementation(libs.androidx.profileinstaller)
     implementation(project(":sdk:bili"))
     implementation(project(":sdk:douyin"))
     implementation(platform(libs.androidx.compose.bom))
