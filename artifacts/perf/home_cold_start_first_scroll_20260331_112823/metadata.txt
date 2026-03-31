@@ -1,0 +1,14 @@
+scenario=home_cold_start_first_scroll
+serial=emulator-5554
+package=com.lightningstudio.watchrss
+activity=com.lightningstudio.watchrss/.MainActivity
+timestamp=20260331_112823
+display_width=466
+display_height=466
+swipe_x=233
+swipe_start_y=349
+swipe_end_y=116
+swipe_duration_ms=260
+pre_scroll_settle_sec=1.5
+post_scroll_settle_sec=1.5
+clear_app_data=false

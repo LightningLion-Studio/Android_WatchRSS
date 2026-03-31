@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.lightningstudio.watchrss.BuildConfig
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.RssPlayerActivity
 import com.lightningstudio.watchrss.data.douyin.buildDouyinPlaybackWebUrl
@@ -489,6 +490,7 @@ internal fun DetailContent(
                 llmSummaryState.text.isNotBlank() ||
                 llmSummaryState.status is SummaryStatus.Error)
         val showAiButton = llmFeatureEnabled && !llmAutoSummarize
+        val showReadAloudAction = BuildConfig.DEBUG && item != null
 
         LazyColumn(
             modifier = Modifier
@@ -524,7 +526,7 @@ internal fun DetailContent(
                     )
                 }
             }
-            if (item != null) {
+            if (showReadAloudAction) {
                 item(key = "readAloudAction") {
                     Spacer(modifier = Modifier.height(blockSpacing))
                     DetailActionButton(

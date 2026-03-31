@@ -43,12 +43,6 @@ class HomeViewModel(
     val platformLoginState: StateFlow<HomePlatformLoginState> = _platformLoginState.asStateFlow()
     private var platformLoginRefreshJob: Job? = null
 
-    init {
-        viewModelScope.launch {
-            repository.ensureBuiltinChannels()
-        }
-    }
-
     fun refreshPlatformLoginState() {
         if (platformLoginRefreshJob?.isActive == true) return
         platformLoginRefreshJob = viewModelScope.launch {

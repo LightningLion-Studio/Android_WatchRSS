@@ -1,0 +1,3 @@
+PROVIDER ContentProviderRecord{e8d1502 u0 com.lightningstudio.watchrss/.debug.DebugLogProvider} pid=7825
+    Client:
+      DebugLogProvider disabled.

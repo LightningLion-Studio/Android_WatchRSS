@@ -231,7 +231,6 @@ class DouyinEntryActivity : BaseWatchActivity() {
         currentlySaved: Boolean,
         successMessage: String
     ) {
-        rssRepository.ensureBuiltinChannels()
         val external = buildDouyinExternalSavedItem(item)
         if (external == null) {
             com.lightningstudio.watchrss.ui.util.showAppToast(

@@ -44,8 +44,6 @@ class FakeRssRepository(
 
     override fun observeOfflineMedia(itemId: Long): Flow<List<OfflineMedia>> = flowOf(emptyList())
 
-    override suspend fun ensureBuiltinChannels() = Unit
-
     override suspend fun previewChannel(url: String): Result<AddRssPreview> {
         return Result.failure(UnsupportedOperationException("previewChannel is not configured in FakeRssRepository"))
     }

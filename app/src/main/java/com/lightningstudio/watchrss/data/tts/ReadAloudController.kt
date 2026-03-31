@@ -65,7 +65,9 @@ class ReadAloudController(
     private val synthesisService: ReadAloudSynthesisService
 ) {
     private val appContext = context.applicationContext
-    private val player = ExoPlayer.Builder(appContext).build()
+    // Home subscribes to uiState on startup; keep the player lazy so that the
+    // launcher path does not eagerly allocate audio/network resources.
+    private var player: ExoPlayer? = null
     private val _uiState = MutableStateFlow(ReadAloudUiState())
     val uiState: StateFlow<ReadAloudUiState> = _uiState
 
@@ -73,31 +75,32 @@ class ReadAloudController(
     private var currentQueueIndex: Int = -1
     private var playbackJob: Job? = null
     private var prefetchJob: Job? = null
+    private val playerListener = object : Player.Listener {
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            _uiState.update { it.copy(isPlaying = isPlaying) }
+        }
+
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            val currentPlayer = player ?: return
+            if (playbackState == Player.STATE_ENDED &&
+                currentPlayer.currentMediaItemIndex >= currentPlayer.mediaItemCount - 1
+            ) {
+                playNext()
+            }
+        }
+    }
 
     init {
-        player.repeatMode = Player.REPEAT_MODE_OFF
-        player.addListener(object : Player.Listener {
-            override fun onIsPlayingChanged(isPlaying: Boolean) {
-                _uiState.update { it.copy(isPlaying = isPlaying) }
-            }
-
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                if (playbackState == Player.STATE_ENDED &&
-                    player.currentMediaItemIndex >= player.mediaItemCount - 1
-                ) {
-                    playNext()
-                }
-            }
-        })
         appScope.launch {
             while (true) {
                 val state = _uiState.value
-                if (state.visible) {
+                val currentPlayer = player
+                if (state.visible && currentPlayer != null) {
                     _uiState.update {
                         it.copy(
-                            progressMs = player.currentPosition.coerceAtLeast(0L),
-                            durationMs = player.duration.takeIf { value -> value > 0L } ?: 0L,
-                            isPlaying = player.isPlaying
+                            progressMs = currentPlayer.currentPosition.coerceAtLeast(0L),
+                            durationMs = currentPlayer.duration.takeIf { value -> value > 0L } ?: 0L,
+                            isPlaying = currentPlayer.isPlaying
                         )
                     }
                 }
@@ -131,10 +134,11 @@ class ReadAloudController(
             ReadAloudPhase.RESOLVING_CONTENT,
             ReadAloudPhase.SYNTHESIZING -> Unit
             ReadAloudPhase.READY -> {
-                if (player.isPlaying) {
-                    player.pause()
+                val currentPlayer = player ?: return
+                if (currentPlayer.isPlaying) {
+                    currentPlayer.pause()
                 } else {
-                    player.play()
+                    currentPlayer.play()
                 }
             }
         }
@@ -160,8 +164,9 @@ class ReadAloudController(
     fun stop() {
         playbackJob?.cancel()
         prefetchJob?.cancel()
-        player.stop()
-        player.clearMediaItems()
+        player?.stop()
+        player?.clearMediaItems()
+        releasePlayer()
         currentQueueIndex = -1
         queue = emptyList()
         _uiState.value = ReadAloudUiState()
@@ -169,7 +174,6 @@ class ReadAloudController(
 
     fun release() {
         stop()
-        player.release()
     }
 
     private fun playQueueIndex(index: Int) {
@@ -199,13 +203,14 @@ class ReadAloudController(
                     config = config
                 )
 
-                player.stop()
-                player.clearMediaItems()
-                player.setMediaItems(files.map { file ->
+                val currentPlayer = ensurePlayer()
+                currentPlayer.stop()
+                currentPlayer.clearMediaItems()
+                currentPlayer.setMediaItems(files.map { file ->
                     MediaItem.fromUri(Uri.fromFile(file))
                 })
-                player.prepare()
-                player.play()
+                currentPlayer.prepare()
+                currentPlayer.play()
 
                 prefetchJob?.cancel()
                 prefetchJob = appScope.launch {
@@ -228,8 +233,8 @@ class ReadAloudController(
                         isPlaying = false
                     )
                 }
-                player.stop()
-                player.clearMediaItems()
+                player?.stop()
+                player?.clearMediaItems()
             }
         }
     }
@@ -410,6 +415,7 @@ class ReadAloudController(
         errorMessage: String?,
         config: ReadAloudConfig
     ) {
+        val currentPlayer = player
         _uiState.update {
             it.copy(
                 visible = true,
@@ -419,10 +425,14 @@ class ReadAloudController(
                 currentChannelTitle = entry.channelTitle,
                 queueIndex = currentQueueIndex + 1,
                 queueSize = queue.size,
-                isPlaying = player.isPlaying,
-                progressMs = if (phase == ReadAloudPhase.READY) player.currentPosition else 0L,
+                isPlaying = currentPlayer?.isPlaying == true,
+                progressMs = if (phase == ReadAloudPhase.READY) {
+                    currentPlayer?.currentPosition ?: 0L
+                } else {
+                    0L
+                },
                 durationMs = if (phase == ReadAloudPhase.READY) {
-                    player.duration.takeIf { value -> value > 0L } ?: 0L
+                    currentPlayer?.duration?.takeIf { value -> value > 0L } ?: 0L
                 } else {
                     0L
                 },
@@ -430,6 +440,23 @@ class ReadAloudController(
                 errorMessage = errorMessage
             )
         }
+    }
+
+    private fun ensurePlayer(): ExoPlayer {
+        val existing = player
+        if (existing != null) return existing
+        return ExoPlayer.Builder(appContext).build().also { nextPlayer ->
+            nextPlayer.repeatMode = Player.REPEAT_MODE_OFF
+            nextPlayer.addListener(playerListener)
+            player = nextPlayer
+        }
+    }
+
+    private fun releasePlayer() {
+        val currentPlayer = player ?: return
+        currentPlayer.removeListener(playerListener)
+        currentPlayer.release()
+        player = null
     }
 
     private data class QueueEntry(

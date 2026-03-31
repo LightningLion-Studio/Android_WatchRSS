@@ -27,7 +27,6 @@ class TestRssRepository(
     private val offlineMediaFlow = MutableStateFlow<Map<Long, List<OfflineMedia>>>(emptyMap())
     private val cacheUsageBytesFlow = MutableStateFlow(0L)
 
-    var ensureBuiltinChannelsCount = 0
     var previewChannelResult: Result<AddRssPreview> =
         Result.failure(UnsupportedOperationException("previewChannel not configured"))
     var confirmAddChannelResult: Result<RssChannel> =
@@ -141,10 +140,6 @@ class TestRssRepository(
 
     override fun observeOfflineMedia(itemId: Long): Flow<List<OfflineMedia>> {
         return offlineMediaFlow.map { media -> media[itemId].orEmpty() }
-    }
-
-    override suspend fun ensureBuiltinChannels() {
-        ensureBuiltinChannelsCount += 1
     }
 
     override suspend fun previewChannel(url: String): Result<AddRssPreview> = previewChannelResult

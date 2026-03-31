@@ -11,7 +11,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.lifecycleScope
 import com.lightningstudio.watchrss.data.bili.buildBiliExternalSavedItem
 import com.lightningstudio.watchrss.data.bili.buildBiliShareLink
 import com.lightningstudio.watchrss.data.bili.formatBiliError
@@ -45,10 +44,6 @@ class BiliVideoActionsActivity : BaseWatchActivity() {
         if (aid == null && bvid.isNullOrBlank()) {
             finish()
             return
-        }
-
-        lifecycleScope.launch {
-            rssRepository.ensureBuiltinChannels()
         }
 
         setContent {
@@ -204,7 +199,6 @@ class BiliVideoActionsActivity : BaseWatchActivity() {
         cid: Long?,
         successMessage: String
     ) {
-        rssRepository.ensureBuiltinChannels()
         rssRepository.syncExternalSavedItem(externalSavedItem, saveType, saved = true)
         repository.cachePreviewClip(aid = aid, bvid = bvid, cid = cid)
         showAppToast(this, successMessage, Toast.LENGTH_SHORT)

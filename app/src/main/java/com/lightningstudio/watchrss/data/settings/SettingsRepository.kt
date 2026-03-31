@@ -12,7 +12,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 private val CACHE_LIMIT_BYTES = longPreferencesKey("cache_limit_bytes")
-private val BUILTIN_CHANNELS_INITIALIZED = booleanPreferencesKey("builtin_channels_initialized")
 private val OOBE_SEEN_VERSION = intPreferencesKey("oobe_seen_version")
 private val READING_THEME_DARK = booleanPreferencesKey("reading_theme_dark")
 private val READING_FONT_SIZE_SP = intPreferencesKey("reading_font_size_sp")
@@ -50,9 +49,6 @@ const val TEMP_ORIGINAL_MODE_HINT_THRESHOLD: Int = 3
 class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     val cacheLimitBytes: Flow<Long> = dataStore.data.map { preferences ->
         clampCacheLimitBytes(preferences[CACHE_LIMIT_BYTES] ?: (DEFAULT_CACHE_LIMIT_MB * MB_BYTES))
-    }
-    val builtinChannelsInitialized: Flow<Boolean> = dataStore.data.map { preferences ->
-        preferences[BUILTIN_CHANNELS_INITIALIZED] ?: false
     }
     val oobeSeenVersion: Flow<Int> = dataStore.data.map { preferences ->
         preferences[OOBE_SEEN_VERSION] ?: 0
@@ -96,12 +92,6 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     suspend fun setCacheLimitBytes(bytes: Long) {
         dataStore.edit { preferences ->
             preferences[CACHE_LIMIT_BYTES] = clampCacheLimitBytes(bytes)
-        }
-    }
-
-    suspend fun setBuiltinChannelsInitialized(value: Boolean) {
-        dataStore.edit { preferences ->
-            preferences[BUILTIN_CHANNELS_INITIALIZED] = value
         }
     }
 

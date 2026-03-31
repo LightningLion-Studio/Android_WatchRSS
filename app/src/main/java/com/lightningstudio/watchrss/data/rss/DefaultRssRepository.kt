@@ -15,14 +15,12 @@ import com.lightningstudio.watchrss.data.db.SavedEntryEntity
 import com.lightningstudio.watchrss.data.db.SavedRssItem
 import com.lightningstudio.watchrss.debug.DebugLogBuffer
 import com.lightningstudio.watchrss.debug.PerfTrace
-import com.lightningstudio.watchrss.data.settings.SettingsRepository
 import com.prof18.rssparser.model.RssItem as ParsedItem
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -34,7 +32,6 @@ class DefaultRssRepository(
     private val itemDao: RssItemDao,
     private val savedEntryDao: SavedEntryDao,
     private val offlineMediaDao: OfflineMediaDao,
-    private val settingsRepository: SettingsRepository,
     private val cacheService: ManagedCacheService,
     private val appScope: CoroutineScope,
     private val fetchService: RssFetchService,
@@ -129,27 +126,6 @@ class DefaultRssRepository(
         offlineMediaDao.observeByItemId(itemId).map { list ->
             list.map { it.toModel() }
         }
-
-    override suspend fun ensureBuiltinChannels() = withContext(Dispatchers.IO) {
-        if (settingsRepository.builtinChannelsInitialized.first()) return@withContext
-        val now = System.currentTimeMillis()
-        BuiltinChannelType.values().forEachIndexed { index, type ->
-            val timestamp = now - index
-            val entity = RssChannelEntity(
-                url = type.url,
-                title = type.title,
-                description = type.description,
-                imageUrl = null,
-                lastFetchedAt = null,
-                createdAt = timestamp,
-                sortOrder = timestamp,
-                isPinned = false,
-                useOriginalContent = type.useOriginalContentByDefault
-            )
-            channelDao.insertChannel(entity)
-        }
-        settingsRepository.setBuiltinChannelsInitialized(true)
-    }
 
     override suspend fun previewChannel(url: String): Result<AddRssPreview> = withContext(Dispatchers.IO) {
         val normalizedUrl = normalizeUrl(url)

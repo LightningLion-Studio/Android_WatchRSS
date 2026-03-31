@@ -5,7 +5,6 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
@@ -37,10 +36,6 @@ class DouyinChannelInfoActivity : BaseWatchActivity() {
                     val channel = channels.firstOrNull { it.url == BuiltinChannelType.DOUYIN.url }
                     val isLoggedIn by produceState(initialValue = false) {
                         value = repository.isLoggedIn()
-                    }
-
-                    LaunchedEffect(Unit) {
-                        rssRepository.ensureBuiltinChannels()
                     }
 
                     DouyinChannelInfoScreen(

@@ -1,0 +1,3 @@
+PROVIDER ContentProviderRecord{6e3374d u0 com.lightningstudio.watchrss/.debug.DebugLogProvider} pid=2736
+    Client:
+      DebugLogBuffer size=0 max=400

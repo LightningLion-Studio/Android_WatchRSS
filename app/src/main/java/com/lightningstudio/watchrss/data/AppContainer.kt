@@ -8,6 +8,7 @@ import com.lightningstudio.watchrss.data.bili.BiliPlaybackCacheManager
 import com.lightningstudio.watchrss.data.cache.ManagedCacheService
 import com.lightningstudio.watchrss.data.bili.BiliRepository
 import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
+import com.lightningstudio.watchrss.data.db.BuiltinChannelSeed
 import com.lightningstudio.watchrss.data.douyin.DouyinRepository
 import com.lightningstudio.watchrss.data.douyin.DouyinRepositoryContract
 import com.lightningstudio.watchrss.data.db.WatchRssDatabase
@@ -61,6 +62,7 @@ class DefaultAppContainer(context: Context) : AppContainer {
             WatchRssDatabase.MIGRATION_6_7,
             WatchRssDatabase.MIGRATION_7_8
         )
+            .addCallback(BuiltinChannelSeed.callback)
             .build()
     }
 
@@ -130,7 +132,6 @@ class DefaultAppContainer(context: Context) : AppContainer {
             itemDao = database.rssItemDao(),
             savedEntryDao = database.savedEntryDao(),
             offlineMediaDao = database.offlineMediaDao(),
-            settingsRepository = settingsRepository,
             cacheService = managedCacheService,
             appScope = appScope,
             fetchService = fetchService,

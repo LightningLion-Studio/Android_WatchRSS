@@ -1,0 +1,8 @@
+Stopping: com.lightningstudio.watchrss
+Starting: Intent { cmp=com.lightningstudio.watchrss/.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: com.lightningstudio.watchrss/.MainActivity
+TotalTime: 732
+WaitTime: 736
+Complete

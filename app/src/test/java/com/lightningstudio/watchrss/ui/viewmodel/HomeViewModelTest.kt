@@ -21,7 +21,7 @@ class HomeViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     @Test
-    fun init_ensuresBuiltinChannels_and_exposesChannels() = runTest {
+    fun init_exposesChannels_and_marksLoadedAfterFirstEmission() = runTest {
         val repo = TestRssRepository(
             initialChannels = listOf(sampleRssChannel(id = 1L), sampleRssChannel(id = 2L))
         )
@@ -36,8 +36,25 @@ class HomeViewModelTest {
         val collection = collectFlow(viewModel.channels)
         advanceUntilIdle()
 
-        assertEquals(1, repo.ensureBuiltinChannelsCount)
         assertEquals(listOf(1L, 2L), viewModel.channels.value.map { it.id })
+        assertEquals(true, viewModel.hasLoadedChannels.value)
+        collection.cancel()
+    }
+
+    @Test
+    fun hasLoadedChannels_allowsLegitimateEmptyState_afterFirstEmission() = runTest {
+        val repo = TestRssRepository()
+        val viewModel = HomeViewModel(
+            repository = repo,
+            isBiliLoggedIn = { false },
+            isDouyinLoggedIn = { false }
+        )
+        val collection = collectFlow(viewModel.channels)
+
+        advanceUntilIdle()
+
+        assertEquals(true, viewModel.hasLoadedChannels.value)
+        assertEquals(emptyList<Long>(), viewModel.channels.value.map { it.id })
         collection.cancel()
     }
 

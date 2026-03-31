@@ -29,9 +29,6 @@ class DouyinSettingsViewModel(
     val uiState: StateFlow<DouyinSettingsUiState> = _uiState
 
     init {
-        viewModelScope.launch {
-            rssRepository.ensureBuiltinChannels()
-        }
         observeDouyinChannel()
     }
 

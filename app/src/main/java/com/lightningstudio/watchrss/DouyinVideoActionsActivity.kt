@@ -11,7 +11,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.lifecycleScope
 import com.lightningstudio.watchrss.data.douyin.buildDouyinExternalSavedItem
 import com.lightningstudio.watchrss.data.douyin.buildDouyinShareLink
 import com.lightningstudio.watchrss.data.douyin.containsDouyinSavedItem
@@ -45,10 +44,6 @@ class DouyinVideoActionsActivity : BaseWatchActivity() {
         if (awemeId.isBlank() && playUrl.isBlank()) {
             finish()
             return
-        }
-
-        lifecycleScope.launch {
-            rssRepository.ensureBuiltinChannels()
         }
 
         setContent {
@@ -165,7 +160,6 @@ class DouyinVideoActionsActivity : BaseWatchActivity() {
         currentlySaved: Boolean,
         successMessage: String
     ) {
-        rssRepository.ensureBuiltinChannels()
         val result = rssRepository.syncExternalSavedItem(item, saveType, saved = !currentlySaved)
         if (result.isSuccess) {
             showAppToast(this, successMessage, Toast.LENGTH_SHORT)

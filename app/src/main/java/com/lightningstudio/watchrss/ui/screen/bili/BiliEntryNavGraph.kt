@@ -53,10 +53,6 @@ fun BiliEntryNavGraph(repository: BiliRepositoryContract, rssRepository: RssRepo
         }
     }.collectAsState(initial = true)
 
-    LaunchedEffect(Unit) {
-        rssRepository.ensureBuiltinChannels()
-    }
-
     LaunchedEffect(currentBackStackEntry?.destination?.route) {
         (context as? BaseWatchActivity)?.resetNavigationThrottle()
     }

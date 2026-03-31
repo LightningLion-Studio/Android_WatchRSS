@@ -40,6 +40,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,6 +48,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.composed
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
@@ -114,6 +116,9 @@ fun HomeComposeScreen(
         val listState = rememberLazyListState()
         InstallDigitalCrownLazyListHandler(listState)
         val canRefresh = rememberPullRefreshEnabled(listState)
+        val isScrolling by remember(listState) {
+            derivedStateOf { listState.isScrollInProgress }
+        }
         PullRefreshBox(
             isRefreshing = isRefreshing,
             onRefresh = onRefreshAll,
@@ -166,7 +171,10 @@ fun HomeComposeScreen(
                                 )
                             }
                             HomeEntry.AddRss -> {
-                                HomeAddEntry(onAddRssClick = onAddRssClick)
+                                HomeAddEntry(
+                                    onAddRssClick = onAddRssClick,
+                                    interactionsEnabled = !isScrolling
+                                )
                             }
                             HomeEntry.Beian -> {
                                 HomeBeianEntry(onBeianClick = onBeianClick)
@@ -184,6 +192,7 @@ fun HomeComposeScreen(
                                     onChannelClick = { onChannelClick(entry.channel) },
                                     onChannelLongClick = { onChannelLongClick(entry.channel) },
                                     onSwipeBack = onSwipeBack,
+                                    swipeInteractionsEnabled = !isScrolling,
                                     onMoveTopClick = { onMoveTopClick(entry.channel) },
                                     onMarkReadClick = { onMarkReadClick(entry.channel) }
                                 )
@@ -267,11 +276,14 @@ private fun HomeProfileEntry(onProfileClick: () -> Unit) {
 }
 
 @Composable
-private fun HomeAddEntry(onAddRssClick: () -> Unit) {
+private fun HomeAddEntry(
+    onAddRssClick: () -> Unit,
+    interactionsEnabled: Boolean
+) {
     val buttonSize = watchDimensionResource(R.dimen.hey_button_height)
     val padding = watchDimensionResource(R.dimen.hey_distance_4dp)
     val radius = watchDimensionResource(R.dimen.hey_button_default_radius)
-    val pressState = rememberPressScaleState()
+    val pressState = rememberPressScaleState(enabled = interactionsEnabled)
     val pressScale = pressState.scale
     val scaleModifier = if (pressScale != 1f) {
         Modifier.graphicsLayer(
@@ -324,24 +336,16 @@ private fun HomeChannelEntry(
     onChannelClick: () -> Unit,
     onChannelLongClick: () -> Unit,
     onSwipeBack: () -> Unit,
+    swipeInteractionsEnabled: Boolean,
     onMoveTopClick: () -> Unit,
     onMarkReadClick: () -> Unit
 ) {
     val actionPadding = watchDimensionResource(R.dimen.hey_distance_4dp)
     val actionWidth = watchDimensionResource(R.dimen.watch_swipe_action_button_width)
-    val fallbackActionsWidthPx = with(LocalDensity.current) {
+    val actionsWidthPx = with(LocalDensity.current) {
         (actionWidth * 2 + actionPadding * 2).toPx()
     }
     val revealGapPx = with(LocalDensity.current) { (actionPadding * 2).toPx() }
-    var actionsWidthPx by remember { mutableStateOf(fallbackActionsWidthPx) }
-    var cardHeightPx by remember { mutableStateOf(0) }
-    val density = LocalDensity.current
-    val cardHeightModifier = if (cardHeightPx > 0) {
-        val height = with(density) { cardHeightPx.toDp() }
-        Modifier.height(height)
-    } else {
-        Modifier
-    }
     val builtinType = BuiltinChannelType.fromUrl(channel.url)
     val interactionSource = remember { MutableInteractionSource() }
     val summary = remember(
@@ -362,11 +366,6 @@ private fun HomeChannelEntry(
                 .fillMaxWidth()
                 .then(offsetModifier)
                 .testTag(HomeTestTags.channelRow(channel.id))
-                .onSizeChanged { size ->
-                    if (cardHeightPx != size.height) {
-                        cardHeightPx = size.height
-                    }
-                }
         ) {
             HomeDefaultItem(
                 title = channel.title,
@@ -399,6 +398,7 @@ private fun HomeChannelEntry(
         onDragStart = onDragStart,
         onDragEnd = onDragEnd,
         onSwipeBack = onSwipeBack,
+        enabled = swipeInteractionsEnabled,
         actionsWidthPx = actionsWidthPx,
         revealGapPx = revealGapPx
     ) { offsetModifier ->
@@ -409,15 +409,9 @@ private fun HomeChannelEntry(
             Row(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
-                    .then(cardHeightModifier)
-                    .padding(start = 0.dp, end = actionPadding)
-                    .onSizeChanged { size ->
-                        val nextWidth = size.width.toFloat()
-                        if (actionsWidthPx != nextWidth) {
-                            actionsWidthPx = nextWidth
-                        }
-                    },
-                horizontalArrangement = Arrangement.spacedBy(actionPadding),
+                    .fillMaxHeight()
+                    .padding(end = actionPadding),
+                horizontalArrangement = Arrangement.spacedBy(actionPadding, Alignment.End),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 HomeSwipeActionButton(
@@ -522,6 +516,7 @@ private fun HomeSwipeRow(
     onDragStart: (Long) -> Unit,
     onDragEnd: () -> Unit,
     onSwipeBack: () -> Unit,
+    enabled: Boolean,
     actionsWidthPx: Float,
     revealGapPx: Float,
     content: @Composable (Modifier) -> Unit
@@ -533,7 +528,16 @@ private fun HomeSwipeRow(
     val backSwipeThreshold = with(LocalDensity.current) { 48.dp.toPx() }
     val openSwipeIdState = rememberUpdatedState(openSwipeId)
 
-    LaunchedEffect(openSwipeId, actionsWidthPx, revealGapPx, draggingSwipeId) {
+    LaunchedEffect(openSwipeId, actionsWidthPx, revealGapPx, draggingSwipeId, enabled) {
+        if (!enabled) {
+            if (offsetX.value != 0f) {
+                offsetX.snapTo(0f)
+            }
+            if (openSwipeId == itemId) {
+                onCloseSwipe()
+            }
+            return@LaunchedEffect
+        }
         if (draggingSwipeId != itemId && openSwipeId != itemId && offsetX.value != 0f) {
             offsetX.animateTo(0f, animationSpec = tween(durationMillis = 180))
         }
@@ -542,7 +546,7 @@ private fun HomeSwipeRow(
         }
     }
 
-    val dragModifier = if (revealWidth <= 0f) {
+    val dragModifier = if (!enabled || revealWidth <= 0f) {
         Modifier
     } else {
         Modifier.pointerInput(itemId, actionsWidthPx, revealGapPx, backSwipeThreshold) {
@@ -793,22 +797,25 @@ private fun Modifier.clickableWithoutRipple(
     enabled: Boolean = true,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
-    interactionSource: MutableInteractionSource = MutableInteractionSource()
+    interactionSource: MutableInteractionSource? = null
 ): Modifier {
-    return if (onLongClick != null) {
-        combinedClickable(
-            interactionSource = interactionSource,
-            indication = null,
-            enabled = enabled,
-            onClick = onClick,
-            onLongClick = onLongClick
-        )
-    } else {
-        clickable(
-            interactionSource = interactionSource,
-            indication = null,
-            enabled = enabled,
-            onClick = onClick
-        )
+    return composed {
+        val resolvedInteractionSource = interactionSource ?: remember { MutableInteractionSource() }
+        if (onLongClick != null) {
+            combinedClickable(
+                interactionSource = resolvedInteractionSource,
+                indication = null,
+                enabled = enabled,
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
+        } else {
+            clickable(
+                interactionSource = resolvedInteractionSource,
+                indication = null,
+                enabled = enabled,
+                onClick = onClick
+            )
+        }
     }
 }

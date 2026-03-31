@@ -1,0 +1,218 @@
+--------- beginning of main
+03-31 11:28:20.695 W/DetectPable( 2281): type=1400 audit(0.0:42878): avc: denied { getattr } for path="/proc/keys" dev="proc" ino=4026531983 scontext=u:r:shell:s0 tcontext=u:object_r:proc_keys:s0 tclass=file permissive=0
+03-31 11:28:20.695 W/DetectPable( 2281): type=1400 audit(0.0:42879): avc: denied { getattr } for path="/proc/kmsg" dev="proc" ino=4026531939 scontext=u:r:shell:s0 tcontext=u:object_r:proc_kmsg:s0 tclass=file permissive=0
+03-31 11:28:20.695 W/DetectPable( 2281): type=1400 audit(0.0:42880): avc: denied { getattr } for path="/proc/misc" dev="proc" ino=4026531909 scontext=u:r:shell:s0 tcontext=u:object_r:proc_misc:s0 tclass=file permissive=0
+03-31 11:28:20.695 W/DetectPable( 2281): type=1400 audit(0.0:42881): avc: denied { getattr } for path="/proc/iomem" dev="proc" ino=4026531966 scontext=u:r:shell:s0 tcontext=u:object_r:proc_iomem:s0 tclass=file permissive=0
+03-31 11:28:20.695 W/DetectPable( 2281): type=1400 audit(0.0:42882): avc: denied { getattr } for path="/proc/locks" dev="proc" ino=4026531927 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+--------- beginning of kernel
+03-31 11:28:20.695 W/audit   (    0): audit_lost=7796 audit_rate_limit=5 audit_backlog_limit=64
+03-31 11:28:20.695 E/audit   (    0): rate limit exceeded
+03-31 11:28:21.707 W/DetectPable( 2281): type=1400 audit(0.0:42905): avc: denied { getattr } for path="/proc/keys" dev="proc" ino=4026531983 scontext=u:r:shell:s0 tcontext=u:object_r:proc_keys:s0 tclass=file permissive=0
+03-31 11:28:21.707 W/DetectPable( 2281): type=1400 audit(0.0:42906): avc: denied { getattr } for path="/proc/kmsg" dev="proc" ino=4026531939 scontext=u:r:shell:s0 tcontext=u:object_r:proc_kmsg:s0 tclass=file permissive=0
+03-31 11:28:21.707 W/DetectPable( 2281): type=1400 audit(0.0:42907): avc: denied { getattr } for path="/proc/misc" dev="proc" ino=4026531909 scontext=u:r:shell:s0 tcontext=u:object_r:proc_misc:s0 tclass=file permissive=0
+03-31 11:28:21.707 W/DetectPable( 2281): type=1400 audit(0.0:42908): avc: denied { getattr } for path="/proc/iomem" dev="proc" ino=4026531966 scontext=u:r:shell:s0 tcontext=u:object_r:proc_iomem:s0 tclass=file permissive=0
+03-31 11:28:21.707 W/DetectPable( 2281): type=1400 audit(0.0:42909): avc: denied { getattr } for path="/proc/locks" dev="proc" ino=4026531927 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+03-31 11:28:21.706 W/audit   (    0): audit_lost=7818 audit_rate_limit=5 audit_backlog_limit=64
+03-31 11:28:21.706 E/audit   (    0): rate limit exceeded
+03-31 11:28:22.719 W/DetectPable( 2281): type=1400 audit(0.0:42932): avc: denied { getattr } for path="/proc/keys" dev="proc" ino=4026531983 scontext=u:r:shell:s0 tcontext=u:object_r:proc_keys:s0 tclass=file permissive=0
+03-31 11:28:22.719 W/DetectPable( 2281): type=1400 audit(0.0:42933): avc: denied { getattr } for path="/proc/kmsg" dev="proc" ino=4026531939 scontext=u:r:shell:s0 tcontext=u:object_r:proc_kmsg:s0 tclass=file permissive=0
+03-31 11:28:22.719 W/DetectPable( 2281): type=1400 audit(0.0:42934): avc: denied { getattr } for path="/proc/misc" dev="proc" ino=4026531909 scontext=u:r:shell:s0 tcontext=u:object_r:proc_misc:s0 tclass=file permissive=0
+03-31 11:28:22.719 W/DetectPable( 2281): type=1400 audit(0.0:42935): avc: denied { getattr } for path="/proc/iomem" dev="proc" ino=4026531966 scontext=u:r:shell:s0 tcontext=u:object_r:proc_iomem:s0 tclass=file permissive=0
+03-31 11:28:22.719 W/DetectPable( 2281): type=1400 audit(0.0:42936): avc: denied { getattr } for path="/proc/locks" dev="proc" ino=4026531927 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+03-31 11:28:22.721 W/audit   (    0): audit_lost=7840 audit_rate_limit=5 audit_backlog_limit=64
+03-31 11:28:22.721 E/audit   (    0): rate limit exceeded
+03-31 11:28:23.236 I/cmd     ( 2675): oneway function results will be dropped but finished with status OK and parcel size 4
+03-31 11:28:23.381 D/AndroidRuntime( 2689): >>>>>> START com.android.internal.os.RuntimeInit uid 2000 <<<<<<
+03-31 11:28:23.382 E/libc    ( 2689): Access denied finding property "persist.device_config.runtime_native_boot.profilebootclasspath"
+03-31 11:28:23.382 E/libc    ( 2689): Access denied finding property "persist.device_config.runtime_native_boot.enable_apex_image"
+03-31 11:28:23.382 I/AndroidRuntime( 2689): Using default boot image
+03-31 11:28:23.382 E/libc    ( 2689): Access denied finding property "persist.device_config.runtime_native_boot.disable_lock_profiling"
+03-31 11:28:23.382 I/AndroidRuntime( 2689): Leaving lock profiling enabled
+03-31 11:28:23.382 E/libc    ( 2689): Access denied finding property "persist.device_config.runtime_native_boot.enable_generational_cc"
+03-31 11:28:23.383 I/app_process( 2689): Core platform API reporting enabled, enforcing=false
+03-31 11:28:23.421 D/app_process( 2689): Time zone APEX ICU file found: /apex/com.android.tzdata/etc/icu/icu_tzdata.dat
+03-31 11:28:23.421 D/app_process( 2689): I18n APEX ICU file found: /apex/com.android.i18n/etc/icu/icudt66l.dat
+03-31 11:28:23.427 I/app_process( 2689): The ClassLoaderContext is a special shared library.
+03-31 11:28:23.432 W/app_process( 2689): JNI RegisterNativeMethods: attempt to register 0 native methods for android.media.AudioAttributes
+03-31 11:28:23.435 D/AndroidRuntime( 2689): Calling main entry com.android.commands.input.Input
+03-31 11:28:23.437 D/AndroidRuntime( 2689): Shutting down VM
+03-31 11:28:23.735 W/DetectPable( 2281): type=1400 audit(0.0:42963): avc: denied { getattr } for path="/proc/keys" dev="proc" ino=4026531983 scontext=u:r:shell:s0 tcontext=u:object_r:proc_keys:s0 tclass=file permissive=0
+03-31 11:28:23.735 W/DetectPable( 2281): type=1400 audit(0.0:42964): avc: denied { getattr } for path="/proc/kmsg" dev="proc" ino=4026531939 scontext=u:r:shell:s0 tcontext=u:object_r:proc_kmsg:s0 tclass=file permissive=0
+03-31 11:28:23.735 W/DetectPable( 2281): type=1400 audit(0.0:42965): avc: denied { getattr } for path="/proc/misc" dev="proc" ino=4026531909 scontext=u:r:shell:s0 tcontext=u:object_r:proc_misc:s0 tclass=file permissive=0
+03-31 11:28:23.735 W/DetectPable( 2281): type=1400 audit(0.0:42966): avc: denied { getattr } for path="/proc/iomem" dev="proc" ino=4026531966 scontext=u:r:shell:s0 tcontext=u:object_r:proc_iomem:s0 tclass=file permissive=0
+03-31 11:28:23.735 W/DetectPable( 2281): type=1400 audit(0.0:42967): avc: denied { getattr } for path="/proc/locks" dev="proc" ino=4026531927 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+03-31 11:28:23.735 W/audit   (    0): audit_lost=7866 audit_rate_limit=5 audit_backlog_limit=64
+03-31 11:28:23.735 E/audit   (    0): rate limit exceeded
+03-31 11:28:23.896 I/cmd     ( 2707): oneway function results will be dropped but finished with status OK and parcel size 4
+03-31 11:28:23.932 D/AndroidRuntime( 2710): >>>>>> START com.android.internal.os.RuntimeInit uid 2000 <<<<<<
+03-31 11:28:23.932 E/libc    ( 2710): Access denied finding property "persist.device_config.runtime_native_boot.profilebootclasspath"
+03-31 11:28:23.932 E/libc    ( 2710): Access denied finding property "persist.device_config.runtime_native_boot.enable_apex_image"
+03-31 11:28:23.932 I/AndroidRuntime( 2710): Using default boot image
+03-31 11:28:23.932 E/libc    ( 2710): Access denied finding property "persist.device_config.runtime_native_boot.disable_lock_profiling"
+03-31 11:28:23.932 I/AndroidRuntime( 2710): Leaving lock profiling enabled
+03-31 11:28:23.932 E/libc    ( 2710): Access denied finding property "persist.device_config.runtime_native_boot.enable_generational_cc"
+03-31 11:28:23.933 I/app_process( 2710): Core platform API reporting enabled, enforcing=false
+03-31 11:28:23.950 D/app_process( 2710): Time zone APEX ICU file found: /apex/com.android.tzdata/etc/icu/icu_tzdata.dat
+03-31 11:28:23.950 D/app_process( 2710): I18n APEX ICU file found: /apex/com.android.i18n/etc/icu/icudt66l.dat
+03-31 11:28:23.952 I/app_process( 2710): The ClassLoaderContext is a special shared library.
+03-31 11:28:23.955 W/app_process( 2710): JNI RegisterNativeMethods: attempt to register 0 native methods for android.media.AudioAttributes
+03-31 11:28:23.956 D/AndroidRuntime( 2710): Calling main entry com.android.commands.input.Input
+03-31 11:28:23.966 D/AndroidRuntime( 2710): Shutting down VM
+03-31 11:28:23.967 I/system_server(  524): oneway function results will be dropped but finished with status OK and parcel size 4
+03-31 11:28:23.968 I/system_server(  524): oneway function results will be dropped but finished with status OK and parcel size 4
+03-31 11:28:23.968 D/AudioFlinger(  412): mixer(0xb400007e3d216040) throttle end: throttle time(42)
+--------- beginning of system
+03-31 11:28:24.438 I/ActivityManager(  524): Force stopping com.lightningstudio.watchrss appid=10167 user=0: from pid 2728
+03-31 11:28:24.439 I/ActivityManager(  524): Killing 2580:com.lightningstudio.watchrss/u0a167 (adj 0): stop com.lightningstudio.watchrss due to from pid 2728
+03-31 11:28:24.439 W/ActivityTaskManager(  524): Force removing ActivityRecord{5bf99d5 u0 com.lightningstudio.watchrss/.MainActivity t2725 f}}: app died, no saved state
+03-31 11:28:24.447 I/binder  (    0): undelivered transaction 16396490, process died.
+03-31 11:28:24.451 I/Zygote  (  296): Process 2580 exited due to signal 9 (Killed)
+03-31 11:28:24.458 D/CarrierSvcBindHelper(  890): No carrier app for: 0
+03-31 11:28:24.458 W/ActivityManager(  524): Unable to start service Intent { act=android.service.appprediction.AppPredictionService cmp=com.google.android.as/com.google.android.apps.miphone.aiai.app.AiAiPredictionService } U=0: not found
+03-31 11:28:24.458 W/RemoteAppPredictionService(  524): could not bind to Intent { act=android.service.appprediction.AppPredictionService cmp=com.google.android.as/com.google.android.apps.miphone.aiai.app.AiAiPredictionService } using flags 67108865
+03-31 11:28:24.458 W/ActivityManager(  524): setHasOverlayUi called on unknown pid: 2580
+03-31 11:28:24.483 I/libprocessgroup(  524): Successfully killed process cgroup uid 10167 pid 2580 in 44ms
+03-31 11:28:24.493 E/sb.v.u.LiteSuggestSourc(24785): On-device lite suggest model loading error.
+03-31 11:28:24.501 W/ThreadPoolDumper(24785): Queue length for executor EventBus is now 11. Perhaps some tasks are too long, or the pool is too small.
+03-31 11:28:24.503 W/LocationOracle(24785): No location history returned by ContextManager
+03-31 11:28:24.508 W/GCoreFlp( 1375): No location to return for getLastLocation()
+03-31 11:28:24.516 I/BgTaskExecutorImpl(24785): Starting EXCLUSIVE background task TNG_MINUS_ONE_SYNC.
+03-31 11:28:24.517 I/TngMinusOneSync(24785): Syncing TNG:-1
+03-31 11:28:24.707 I/ActivityTaskManager(  524): START u0 {flg=0x10000000 cmp=com.lightningstudio.watchrss/.MainActivity} from uid 2000
+03-31 11:28:24.707 D/EventSequenceValidator(  524): inc AccIntentStartedEvents to 2105
+03-31 11:28:24.708 I/perfetto(  370): ing_service_impl.cc:758 Configured tracing session 1072, #sources:1, duration:5000 ms, #buffers:1, total buffer size:4096 KB, total sessions:1, uid:1071 session name: ""
+03-31 11:28:24.709 I/perfetto(  367): probes_producer.cc:230  Ftrace setup (target_buf=1072)
+03-31 11:28:24.711 D/CompatibilityChangeReporter(  524): Compat change id reported: 135634846; UID 10167; state: DISABLED
+03-31 11:28:24.711 D/CompatibilityChangeReporter(  524): Compat change id reported: 135754954; UID 10167; state: ENABLED
+03-31 11:28:24.711 D/CompatibilityChangeReporter(  524): Compat change id reported: 143937733; UID 10167; state: ENABLED
+03-31 11:28:24.735 I/perfetto(  367): ftrace_procfs.cc:176    enabled ftrace
+03-31 11:28:24.734 W/perfetto(    0): enabled ftrace
+03-31 11:28:24.744 D/Zygote  (  296): Forked child process 2736
+03-31 11:28:24.745 I/ActivityManager(  524): Start proc 2736:com.lightningstudio.watchrss/u0a167 for pre-top-activity {com.lightningstudio.watchrss/com.lightningstudio.watchrss.MainActivity}
+03-31 11:28:24.747 I/studio.watchrs( 2736): Late-enabling -Xcheck:jni
+03-31 11:28:24.743 W/DetectPable( 2281): type=1400 audit(0.0:42994): avc: denied { getattr } for path="/proc/keys" dev="proc" ino=4026531983 scontext=u:r:shell:s0 tcontext=u:object_r:proc_keys:s0 tclass=file permissive=0
+03-31 11:28:24.743 W/DetectPable( 2281): type=1400 audit(0.0:42995): avc: denied { getattr } for path="/proc/kmsg" dev="proc" ino=4026531939 scontext=u:r:shell:s0 tcontext=u:object_r:proc_kmsg:s0 tclass=file permissive=0
+03-31 11:28:24.743 W/DetectPable( 2281): type=1400 audit(0.0:42996): avc: denied { getattr } for path="/proc/misc" dev="proc" ino=4026531909 scontext=u:r:shell:s0 tcontext=u:object_r:proc_misc:s0 tclass=file permissive=0
+03-31 11:28:24.743 W/DetectPable( 2281): type=1400 audit(0.0:42997): avc: denied { getattr } for path="/proc/iomem" dev="proc" ino=4026531966 scontext=u:r:shell:s0 tcontext=u:object_r:proc_iomem:s0 tclass=file permissive=0
+03-31 11:28:24.743 W/DetectPable( 2281): type=1400 audit(0.0:42998): avc: denied { getattr } for path="/proc/locks" dev="proc" ino=4026531927 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+03-31 11:28:24.748 W/audit   (    0): audit_lost=7892 audit_rate_limit=5 audit_backlog_limit=64
+03-31 11:28:24.748 E/audit   (    0): rate limit exceeded
+03-31 11:28:24.752 D/studio.transport( 2281): Running '/system/bin/cmd activity profile start --sampling 1000000 zygote64 /data/local/tmp/profileable_reporter.tmp 2>/dev/null'
+03-31 11:28:24.755 I/studio.watchrs( 2736): Unquickening 12 vdex files!
+03-31 11:28:24.757 I/adbd    (  363): jdwp connection from 2736
+03-31 11:28:24.757 I/cmd     ( 2743): oneway function results will be dropped but finished with status OK and parcel size 4
+03-31 11:28:24.829 E/JobScheduler.Background(  524): App com.google.android.gms became active but still in NEVER bucket
+03-31 11:28:24.830 I/DropBoxManagerService(  524): add tag=system_server_wtf isTagEnabled=true flags=0x2
+03-31 11:28:25.116 D/NetworkSecurityConfig( 2736): Using Network Security Config from resource network_security_config debugBuild: true
+03-31 11:28:25.116 D/NetworkSecurityConfig( 2736): Using Network Security Config from resource network_security_config debugBuild: true
+03-31 11:28:25.123 D/AppLogger( 2736): 日志系统初始化完成
+03-31 11:28:25.123 D/Application( 2736): 应用启动 - 2026-03-31 11:28:25
+03-31 11:28:25.126 D/libEGL  ( 2736): loaded /vendor/lib64/egl/libEGL_emulation.so
+03-31 11:28:25.126 D/libEGL  ( 2736): loaded /vendor/lib64/egl/libGLESv1_CM_emulation.so
+03-31 11:28:25.127 D/libEGL  ( 2736): loaded /vendor/lib64/egl/libGLESv2_emulation.so
+03-31 11:28:25.151 D/Activity( 2736): 启动: MainActivity
+03-31 11:28:25.168 D/Activity( 2736): 活跃: MainActivity
+03-31 11:28:25.270 I/ExoPlayerImpl( 2736): Init d0ee876 [AndroidXMedia3/1.5.1] [emulator_arm64, sdk_gphone_arm64, Google, 30]
+03-31 11:28:25.284 W/studio.watchrs( 2736): Accessing hidden method Landroid/media/AudioTrack;->getLatency()I (greylist, reflection, allowed)
+03-31 11:28:25.341 I/system_server(  524): oneway function results will be dropped but finished with status OK and parcel size 4
+03-31 11:28:25.341 I/system_server(  524): oneway function results will be dropped but finished with status OK and parcel size 4
+03-31 11:28:25.487 D/HostConnection( 2736): HostConnection::get() New Host Connection established 0xb4000076ab65a210, tid 2764
+03-31 11:28:25.489 D/HostConnection( 2736): HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma ANDROID_EMU_hwc_color_transform GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_1 
+03-31 11:28:25.489 I/hwservicemanager(  184): getTransport: Cannot find entry android.hardware.configstore@1.0::ISurfaceFlingerConfigs/default in either framework or device manifest.
+03-31 11:28:25.489 W/OpenGLRenderer( 2736): Failed to choose config with EGL_SWAP_BEHAVIOR_PRESERVED, retrying without...
+03-31 11:28:25.489 D/EGL_emulation( 2736): eglCreateContext: 0xb40000769b67c910: maj 3 min 1 rcv 4
+03-31 11:28:25.490 D/EGL_emulation( 2736): eglMakeCurrent: 0xb40000769b67c910: ver 3 1 (tinfo 0xb40000763b6aea30) (first time)
+03-31 11:28:25.493 I/hwservicemanager(  184): getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device manifest.
+03-31 11:28:25.493 I/Gralloc4( 2736): mapper 4.x is not supported
+03-31 11:28:25.493 D/HostConnection( 2736): createUnique: call
+03-31 11:28:25.493 D/HostConnection( 2736): HostConnection::get() New Host Connection established 0xb4000076ab65da50, tid 2764
+03-31 11:28:25.499 D/HostConnection( 2736): HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma ANDROID_EMU_hwc_color_transform GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_1 
+03-31 11:28:25.518 D/ArtManagerInternalImpl(  524): /data/misc/iorapd/com.lightningstudio.watchrss/1/com.lightningstudio.watchrss.MainActivity/compiled_traces/compiled_trace.pb doesn't exist
+03-31 11:28:25.519 I/TetheringManager( 2736): registerTetheringEventCallback:com.lightningstudio.watchrss
+03-31 11:28:25.519 I/ActivityTaskManager(  524): Displayed com.lightningstudio.watchrss/.MainActivity: +811ms
+03-31 11:28:25.519 D/EventSequenceValidator(  524): dec AccIntentStartedEvents to 2104
+03-31 11:28:25.520 I/cmd     ( 2728): oneway function results will be dropped but finished with status OK and parcel size 4
+03-31 11:28:25.544 W/studio.watchrs( 2736): Accessing hidden field Landroid/view/Choreographer;->mLastFrameTimeNanos:J (greylist, reflection, allowed)
+03-31 11:28:25.554 I/PBSessionCacheImpl(24785): Deleted sessionId[109007357320059194] from persistence.
+03-31 11:28:25.556 W/SearchServiceCore(24785): Abort, client detached.
+03-31 11:28:25.755 W/DetectPable( 2281): type=1400 audit(0.0:43021): avc: denied { getattr } for path="/proc/keys" dev="proc" ino=4026531983 scontext=u:r:shell:s0 tcontext=u:object_r:proc_keys:s0 tclass=file permissive=0
+03-31 11:28:25.755 W/DetectPable( 2281): type=1400 audit(0.0:43022): avc: denied { getattr } for path="/proc/kmsg" dev="proc" ino=4026531939 scontext=u:r:shell:s0 tcontext=u:object_r:proc_kmsg:s0 tclass=file permissive=0
+03-31 11:28:25.755 W/DetectPable( 2281): type=1400 audit(0.0:43023): avc: denied { getattr } for path="/proc/misc" dev="proc" ino=4026531909 scontext=u:r:shell:s0 tcontext=u:object_r:proc_misc:s0 tclass=file permissive=0
+03-31 11:28:25.755 W/DetectPable( 2281): type=1400 audit(0.0:43024): avc: denied { getattr } for path="/proc/iomem" dev="proc" ino=4026531966 scontext=u:r:shell:s0 tcontext=u:object_r:proc_iomem:s0 tclass=file permissive=0
+03-31 11:28:25.755 W/DetectPable( 2281): type=1400 audit(0.0:43025): avc: denied { getattr } for path="/proc/locks" dev="proc" ino=4026531927 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+03-31 11:28:25.760 W/audit   (    0): audit_lost=7914 audit_rate_limit=5 audit_backlog_limit=64
+03-31 11:28:25.760 E/audit   (    0): rate limit exceeded
+03-31 11:28:25.763 D/studio.transport( 2281): Running '/system/bin/cmd activity profile start --sampling 1000000 com.lightningstudio.watchrss /data/local/tmp/profileable_reporter.tmp 2>/dev/null'
+03-31 11:28:25.768 I/cmd     ( 2795): oneway function results will be dropped but finished with status OK and parcel size 4
+03-31 11:28:25.770 D/studio.transport( 2281): Running '/system/bin/cmd activity profile stop com.lightningstudio.watchrss'
+03-31 11:28:25.773 I/cmd     ( 2798): oneway function results will be dropped but finished with status OK and parcel size 4
+03-31 11:28:25.903 I/system_server(  524): oneway function results will be dropped but finished with status OK and parcel size 4
+03-31 11:28:26.775 I/studio.watchrs( 2736): Waiting for a blocking GC Instrumentation
+03-31 11:28:26.771 W/DetectPable( 2281): type=1400 audit(0.0:43048): avc: denied { getattr } for path="/proc/keys" dev="proc" ino=4026531983 scontext=u:r:shell:s0 tcontext=u:object_r:proc_keys:s0 tclass=file permissive=0
+03-31 11:28:26.771 W/DetectPable( 2281): type=1400 audit(0.0:43049): avc: denied { getattr } for path="/proc/kmsg" dev="proc" ino=4026531939 scontext=u:r:shell:s0 tcontext=u:object_r:proc_kmsg:s0 tclass=file permissive=0
+03-31 11:28:26.771 W/DetectPable( 2281): type=1400 audit(0.0:43050): avc: denied { getattr } for path="/proc/misc" dev="proc" ino=4026531909 scontext=u:r:shell:s0 tcontext=u:object_r:proc_misc:s0 tclass=file permissive=0
+03-31 11:28:26.771 W/DetectPable( 2281): type=1400 audit(0.0:43051): avc: denied { getattr } for path="/proc/iomem" dev="proc" ino=4026531966 scontext=u:r:shell:s0 tcontext=u:object_r:proc_iomem:s0 tclass=file permissive=0
+03-31 11:28:26.771 W/DetectPable( 2281): type=1400 audit(0.0:43052): avc: denied { getattr } for path="/proc/locks" dev="proc" ino=4026531927 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+03-31 11:28:26.774 W/audit   (    0): audit_lost=7936 audit_rate_limit=5 audit_backlog_limit=64
+03-31 11:28:26.774 E/audit   (    0): rate limit exceeded
+03-31 11:28:26.782 I/studio.watchrs( 2736): WaitForGcToComplete blocked Instrumentation on Instrumentation for 6.203ms
+03-31 11:28:26.838 W/BroadcastQueue(  524): Background execution not allowed: receiving Intent { act=android.intent.action.DROPBOX_ENTRY_ADDED flg=0x10 (has extras) } to com.google.android.gms/.stats.service.DropBoxEntryAddedReceiver
+03-31 11:28:26.839 W/BroadcastQueue(  524): Background execution not allowed: receiving Intent { act=android.intent.action.DROPBOX_ENTRY_ADDED flg=0x10 (has extras) } to com.google.android.gms/.chimera.GmsIntentOperationService$PersistentTrustedReceiver
+03-31 11:28:27.025 I/system_server(  524): oneway function results will be dropped but finished with status OK and parcel size 4
+03-31 11:28:27.163 I/hwservicemanager(  184): getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device manifest.
+03-31 11:28:27.163 I/Gralloc4( 2827): mapper 4.x is not supported
+03-31 11:28:27.175 D/HostConnection( 2827): createUnique: call
+03-31 11:28:27.175 D/HostConnection( 2827): HostConnection::get() New Host Connection established 0xb40000770dcc1850, tid 2827
+03-31 11:28:27.177 D/HostConnection( 2827): HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma ANDROID_EMU_hwc_color_transform GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_1 
+03-31 11:28:27.215 D/AndroidRuntime( 2829): >>>>>> START com.android.internal.os.RuntimeInit uid 2000 <<<<<<
+03-31 11:28:27.216 E/libc    ( 2829): Access denied finding property "persist.device_config.runtime_native_boot.profilebootclasspath"
+03-31 11:28:27.216 E/libc    ( 2829): Access denied finding property "persist.device_config.runtime_native_boot.enable_apex_image"
+03-31 11:28:27.216 I/AndroidRuntime( 2829): Using default boot image
+03-31 11:28:27.216 E/libc    ( 2829): Access denied finding property "persist.device_config.runtime_native_boot.disable_lock_profiling"
+03-31 11:28:27.216 I/AndroidRuntime( 2829): Leaving lock profiling enabled
+03-31 11:28:27.216 E/libc    ( 2829): Access denied finding property "persist.device_config.runtime_native_boot.enable_generational_cc"
+03-31 11:28:27.216 I/app_process( 2829): Core platform API reporting enabled, enforcing=false
+03-31 11:28:27.234 D/WifiNl80211Manager(  524): Scan result ready event
+03-31 11:28:27.234 D/WifiNative(  524): Scan result ready event
+03-31 11:28:27.236 D/app_process( 2829): Time zone APEX ICU file found: /apex/com.android.tzdata/etc/icu/icu_tzdata.dat
+03-31 11:28:27.236 D/app_process( 2829): I18n APEX ICU file found: /apex/com.android.i18n/etc/icu/icudt66l.dat
+03-31 11:28:27.238 I/app_process( 2829): The ClassLoaderContext is a special shared library.
+03-31 11:28:27.241 W/app_process( 2829): JNI RegisterNativeMethods: attempt to register 0 native methods for android.media.AudioAttributes
+03-31 11:28:27.252 I/Checkin ( 2573): [EventLogChimeraService] Opted in for usage reporting: false
+03-31 11:28:27.253 I/Checkin ( 2573): [EventLogChimeraService] Aggregate from 1774969135587 (log), 1774969135587 (data)
+03-31 11:28:27.252 D/logd    (    0): logdr: UID=10118 GID=10118 PID=2573 n tail=0 logMask=4 pid=0 start=0ns timeout=0ns
+03-31 11:28:27.256 D/AndroidRuntime( 2829): Calling main entry com.android.commands.input.Input
+03-31 11:28:27.263 D/TaplEvents(28674): TIS / TouchInteractionService.onInputEvent: MotionEvent { action=ACTION_DOWN, actionButton=0, id[0]=0, x[0]=233.0, y[0]=349.0, toolType[0]=TOOL_TYPE_UNKNOWN, buttonState=0, classification=NONE, metaState=0, flags=0x0, edgeFlags=0x0, pointerCount=1, historySize=0, eventTime=589175381, downTime=589175381, deviceId=-1, source=0x1002, displayId=0 }
+03-31 11:28:27.286 D/WifiNl80211Manager(  524): Scan result ready event
+03-31 11:28:27.286 D/WifiNative(  524): Scan result ready event
+03-31 11:28:27.288 D/WificondScannerImpl(  524): Filtering out 1 scan results.
+03-31 11:28:27.290 I/DropBoxManagerService(  524): add tag=event_data isTagEnabled=true flags=0x2
+03-31 11:28:27.291 W/BroadcastQueue(  524): Background execution not allowed: receiving Intent { act=android.intent.action.DROPBOX_ENTRY_ADDED flg=0x10 (has extras) } to com.google.android.gms/.stats.service.DropBoxEntryAddedReceiver
+03-31 11:28:27.291 W/BroadcastQueue(  524): Background execution not allowed: receiving Intent { act=android.intent.action.DROPBOX_ENTRY_ADDED flg=0x10 (has extras) } to com.google.android.gms/.chimera.GmsIntentOperationService$PersistentTrustedReceiver
+03-31 11:28:27.294 E/libprocessgroup(  524): AddTidToCgroup failed to write '2849'; fd=67: Invalid argument
+03-31 11:28:27.294 E/libprocessgroup(  524): Failed to add task into cgroup
+03-31 11:28:27.294 W/libprocessgroup(  524): ExecuteForTask failed for aggregate profile: Invalid argument
+03-31 11:28:27.531 D/TaplEvents(28674): TIS / TouchInteractionService.onInputEvent: MotionEvent { action=ACTION_UP, actionButton=0, id[0]=0, x[0]=233.0, y[0]=116.0, toolType[0]=TOOL_TYPE_UNKNOWN, buttonState=0, classification=NONE, metaState=0, flags=0x0, edgeFlags=0x0, pointerCount=1, historySize=0, eventTime=589175656, downTime=589175381, deviceId=-1, source=0x1002, displayId=0 }
+03-31 11:28:27.534 D/AndroidRuntime( 2829): Shutting down VM
+03-31 11:28:27.779 W/DetectPable( 2281): type=1400 audit(0.0:43079): avc: denied { getattr } for path="/proc/keys" dev="proc" ino=4026531983 scontext=u:r:shell:s0 tcontext=u:object_r:proc_keys:s0 tclass=file permissive=0
+03-31 11:28:27.779 W/DetectPable( 2281): type=1400 audit(0.0:43080): avc: denied { getattr } for path="/proc/kmsg" dev="proc" ino=4026531939 scontext=u:r:shell:s0 tcontext=u:object_r:proc_kmsg:s0 tclass=file permissive=0
+03-31 11:28:27.779 W/DetectPable( 2281): type=1400 audit(0.0:43081): avc: denied { getattr } for path="/proc/misc" dev="proc" ino=4026531909 scontext=u:r:shell:s0 tcontext=u:object_r:proc_misc:s0 tclass=file permissive=0
+03-31 11:28:27.779 W/DetectPable( 2281): type=1400 audit(0.0:43082): avc: denied { getattr } for path="/proc/iomem" dev="proc" ino=4026531966 scontext=u:r:shell:s0 tcontext=u:object_r:proc_iomem:s0 tclass=file permissive=0
+03-31 11:28:27.779 W/DetectPable( 2281): type=1400 audit(0.0:43083): avc: denied { getattr } for path="/proc/locks" dev="proc" ino=4026531927 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+03-31 11:28:27.781 W/audit   (    0): audit_lost=7962 audit_rate_limit=5 audit_backlog_limit=64
+03-31 11:28:27.781 E/audit   (    0): rate limit exceeded
+03-31 11:28:28.350 I/system_server(  524): oneway function results will be dropped but finished with status OK and parcel size 4
+03-31 11:28:28.787 W/DetectPable( 2281): type=1400 audit(0.0:43106): avc: denied { getattr } for path="/proc/keys" dev="proc" ino=4026531983 scontext=u:r:shell:s0 tcontext=u:object_r:proc_keys:s0 tclass=file permissive=0
+03-31 11:28:28.787 W/DetectPable( 2281): type=1400 audit(0.0:43107): avc: denied { getattr } for path="/proc/kmsg" dev="proc" ino=4026531939 scontext=u:r:shell:s0 tcontext=u:object_r:proc_kmsg:s0 tclass=file permissive=0
+03-31 11:28:28.787 W/DetectPable( 2281): type=1400 audit(0.0:43108): avc: denied { getattr } for path="/proc/misc" dev="proc" ino=4026531909 scontext=u:r:shell:s0 tcontext=u:object_r:proc_misc:s0 tclass=file permissive=0
+03-31 11:28:28.787 W/DetectPable( 2281): type=1400 audit(0.0:43109): avc: denied { getattr } for path="/proc/iomem" dev="proc" ino=4026531966 scontext=u:r:shell:s0 tcontext=u:object_r:proc_iomem:s0 tclass=file permissive=0
+03-31 11:28:28.787 W/DetectPable( 2281): type=1400 audit(0.0:43110): avc: denied { getattr } for path="/proc/locks" dev="proc" ino=4026531927 scontext=u:r:shell:s0 tcontext=u:object_r:proc:s0 tclass=file permissive=0
+03-31 11:28:28.787 W/audit   (    0): audit_lost=7984 audit_rate_limit=5 audit_backlog_limit=64
+03-31 11:28:28.787 E/audit   (    0): rate limit exceeded
+03-31 11:28:29.512 I/PeriodicStatsRunner( 1373): PeriodicStatsRunner.call():180 call()
+03-31 11:28:29.512 I/PeriodicStatsRunner( 1373): PeriodicStatsRunner.call():184 No submit PeriodicStats since input started.
+03-31 11:28:29.516 I/hwservicemanager(  184): getTransport: Cannot find entry android.hardware.graphics.mapper@4.0::IMapper/default in either framework or device manifest.
+03-31 11:28:29.516 I/Gralloc4( 2853): mapper 4.x is not supported
+03-31 11:28:29.518 D/HostConnection( 2853): createUnique: call
+03-31 11:28:29.518 D/HostConnection( 2853): HostConnection::get() New Host Connection established 0xb40000757ce96450, tid 2853
+03-31 11:28:29.520 D/HostConnection( 2853): HostComposition ext ANDROID_EMU_CHECKSUM_HELPER_v1 ANDROID_EMU_native_sync_v2 ANDROID_EMU_dma_v1 ANDROID_EMU_direct_mem ANDROID_EMU_host_composition_v1 ANDROID_EMU_host_composition_v2 ANDROID_EMU_vulkan ANDROID_EMU_deferred_vulkan_commands ANDROID_EMU_vulkan_null_optional_strings ANDROID_EMU_vulkan_create_resources_with_requirements ANDROID_EMU_YUV_Cache ANDROID_EMU_vulkan_ignored_handles ANDROID_EMU_has_shared_slots_host_memory_allocator ANDROID_EMU_vulkan_free_memory_sync ANDROID_EMU_vulkan_shader_float16_int8 ANDROID_EMU_vulkan_async_queue_submit ANDROID_EMU_sync_buffer_data ANDROID_EMU_vulkan_async_qsri ANDROID_EMU_read_color_buffer_dma ANDROID_EMU_hwc_color_transform GL_OES_EGL_image_external_essl3 GL_OES_vertex_array_object ANDROID_EMU_host_side_tracing ANDROID_EMU_gles_max_version_3_1 

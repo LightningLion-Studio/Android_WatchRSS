@@ -1,0 +1,95 @@
+Applications Graphics Acceleration Info:
+Uptime: 48028 Realtime: 48028
+
+** Graphics info for pid 5665 [com.lightningstudio.watchrss] **
+
+Stats since: 38516944726ns
+Total frames rendered: 7
+Janky frames: 6 (85.71%)
+50th percentile: 150ms
+90th percentile: 1600ms
+95th percentile: 1600ms
+99th percentile: 1600ms
+Number Missed Vsync: 3
+Number High input latency: 1
+Number Slow UI thread: 5
+Number Slow bitmap uploads: 0
+Number Slow issue draw commands: 4
+Number Frame deadline missed: 5
+HISTOGRAM: 5ms=1 6ms=0 7ms=0 8ms=0 9ms=0 10ms=0 11ms=0 12ms=0 13ms=0 14ms=0 15ms=0 16ms=0 17ms=0 18ms=0 19ms=0 20ms=0 21ms=0 22ms=0 23ms=0 24ms=0 25ms=0 26ms=0 27ms=0 28ms=1 29ms=0 30ms=0 31ms=0 32ms=0 34ms=0 36ms=0 38ms=0 40ms=0 42ms=0 44ms=0 46ms=0 48ms=0 53ms=0 57ms=0 61ms=0 65ms=0 69ms=0 73ms=0 77ms=0 81ms=0 85ms=0 89ms=0 93ms=0 97ms=0 101ms=0 105ms=0 109ms=0 113ms=1 117ms=0 121ms=0 125ms=0 129ms=0 133ms=0 150ms=2 200ms=1 250ms=0 300ms=0 350ms=0 400ms=0 450ms=0 500ms=0 550ms=0 600ms=0 650ms=0 700ms=0 750ms=0 800ms=0 850ms=0 900ms=0 950ms=0 1000ms=0 1050ms=0 1100ms=0 1150ms=0 1200ms=0 1250ms=0 1300ms=0 1350ms=0 1400ms=0 1450ms=0 1500ms=0 1550ms=0 1600ms=1 1650ms=0 1700ms=0 1750ms=0 1800ms=0 1850ms=0 1900ms=0 1950ms=0 2000ms=0 2050ms=0 2100ms=0 2150ms=0 2200ms=0 2250ms=0 2300ms=0 2350ms=0 2400ms=0 2450ms=0 2500ms=0 2550ms=0 2600ms=0 2650ms=0 2700ms=0 2750ms=0 2800ms=0 2850ms=0 2900ms=0 2950ms=0 3000ms=0 3050ms=0 3100ms=0 3150ms=0 3200ms=0 3250ms=0 3300ms=0 3350ms=0 3400ms=0 3450ms=0 3500ms=0 3550ms=0 3600ms=0 3650ms=0 3700ms=0 3750ms=0 3800ms=0 3850ms=0 3900ms=0 3950ms=0 4000ms=0 4050ms=0 4100ms=0 4150ms=0 4200ms=0 4250ms=0 4300ms=0 4350ms=0 4400ms=0 4450ms=0 4500ms=0 4550ms=0 4600ms=0 4650ms=0 4700ms=0 4750ms=0 4800ms=0 4850ms=0 4900ms=0 4950ms=0
+50th gpu percentile: 4950ms
+90th gpu percentile: 4950ms
+95th gpu percentile: 4950ms
+99th gpu percentile: 4950ms
+GPU HISTOGRAM: 1ms=0 2ms=1 3ms=1 4ms=0 5ms=0 6ms=0 7ms=0 8ms=0 9ms=0 10ms=0 11ms=0 12ms=0 13ms=0 14ms=0 15ms=0 16ms=0 17ms=0 18ms=0 19ms=0 20ms=0 21ms=0 22ms=0 23ms=0 24ms=0 25ms=0 4950ms=2
+Font Cache (CPU):
+  Size: 36.07 kB 
+  Glyph Count: 13 
+CPU Caches:
+GPU Caches:
+  SW Path Mask:
+    Texture: 212.07 KB (1 entry)
+  Other:
+    Other: 11.12 KB (1 entry)
+    Buffer Object: 2.05 KB (2 entries)
+  Image:
+    Texture: 4.00 KB (4 entries)
+  Scratch:
+    RenderTarget: 192.00 KB (2 entries)
+    Buffer Object: 112.00 KB (3 entries)
+    Texture: 256.00 KB (1 entry)
+Other Caches:
+                         Current / Maximum
+  Layers Total           0.00 KB (numLayers = 0)
+Total GPU memory usage:
+  808176 bytes, 789.23 KB (278.12 KB is purgeable)
+
+
+Pipeline=Skia (OpenGL)
+Profile data in ms:
+
+	com.lightningstudio.watchrss/com.lightningstudio.watchrss.MainActivity/android.view.ViewRootImpl@2f48dd7 (visibility=0)
+Window: com.lightningstudio.watchrss/com.lightningstudio.watchrss.MainActivity
+Stats since: 38901333017ns
+Total frames rendered: 7
+Janky frames: 6 (85.71%)
+50th percentile: 150ms
+90th percentile: 1600ms
+95th percentile: 1600ms
+99th percentile: 1600ms
+Number Missed Vsync: 3
+Number High input latency: 1
+Number Slow UI thread: 5
+Number Slow bitmap uploads: 0
+Number Slow issue draw commands: 4
+Number Frame deadline missed: 5
+HISTOGRAM: 5ms=1 6ms=0 7ms=0 8ms=0 9ms=0 10ms=0 11ms=0 12ms=0 13ms=0 14ms=0 15ms=0 16ms=0 17ms=0 18ms=0 19ms=0 20ms=0 21ms=0 22ms=0 23ms=0 24ms=0 25ms=0 26ms=0 27ms=0 28ms=1 29ms=0 30ms=0 31ms=0 32ms=0 34ms=0 36ms=0 38ms=0 40ms=0 42ms=0 44ms=0 46ms=0 48ms=0 53ms=0 57ms=0 61ms=0 65ms=0 69ms=0 73ms=0 77ms=0 81ms=0 85ms=0 89ms=0 93ms=0 97ms=0 101ms=0 105ms=0 109ms=0 113ms=1 117ms=0 121ms=0 125ms=0 129ms=0 133ms=0 150ms=2 200ms=1 250ms=0 300ms=0 350ms=0 400ms=0 450ms=0 500ms=0 550ms=0 600ms=0 650ms=0 700ms=0 750ms=0 800ms=0 850ms=0 900ms=0 950ms=0 1000ms=0 1050ms=0 1100ms=0 1150ms=0 1200ms=0 1250ms=0 1300ms=0 1350ms=0 1400ms=0 1450ms=0 1500ms=0 1550ms=0 1600ms=1 1650ms=0 1700ms=0 1750ms=0 1800ms=0 1850ms=0 1900ms=0 1950ms=0 2000ms=0 2050ms=0 2100ms=0 2150ms=0 2200ms=0 2250ms=0 2300ms=0 2350ms=0 2400ms=0 2450ms=0 2500ms=0 2550ms=0 2600ms=0 2650ms=0 2700ms=0 2750ms=0 2800ms=0 2850ms=0 2900ms=0 2950ms=0 3000ms=0 3050ms=0 3100ms=0 3150ms=0 3200ms=0 3250ms=0 3300ms=0 3350ms=0 3400ms=0 3450ms=0 3500ms=0 3550ms=0 3600ms=0 3650ms=0 3700ms=0 3750ms=0 3800ms=0 3850ms=0 3900ms=0 3950ms=0 4000ms=0 4050ms=0 4100ms=0 4150ms=0 4200ms=0 4250ms=0 4300ms=0 4350ms=0 4400ms=0 4450ms=0 4500ms=0 4550ms=0 4600ms=0 4650ms=0 4700ms=0 4750ms=0 4800ms=0 4850ms=0 4900ms=0 4950ms=0
+50th gpu percentile: 4950ms
+90th gpu percentile: 4950ms
+95th gpu percentile: 4950ms
+99th gpu percentile: 4950ms
+GPU HISTOGRAM: 1ms=0 2ms=1 3ms=1 4ms=0 5ms=0 6ms=0 7ms=0 8ms=0 9ms=0 10ms=0 11ms=0 12ms=0 13ms=0 14ms=0 15ms=0 16ms=0 17ms=0 18ms=0 19ms=0 20ms=0 21ms=0 22ms=0 23ms=0 24ms=0 25ms=0 4950ms=2
+
+
+---PROFILEDATA---
+Flags,IntendedVsync,Vsync,OldestInputEvent,NewestInputEvent,HandleInputStart,AnimationStart,PerformTraversalsStart,DrawStart,SyncQueued,SyncStart,IssueDrawCommandsStart,SwapBuffers,FrameCompleted,DequeueBufferDuration,QueueBufferDuration,GpuCompleted,
+1,38421466084,38921466064,9223372036854775807,0,38930027976,38930029142,38930493476,39982902851,40007207101,40007636351,40007651560,40027458185,40069177185,766708,1694000,40066293268,
+1,41288129390,41354796054,9223372036854775807,0,41361639227,41361640602,41363654602,41436421310,41437286185,41437602977,41439312602,41451391894,41457210394,766042,3192500,41453172310,
+0,42254783232,42254783232,9223372036854775807,0,42269234311,42269235394,42301535311,42383449144,42396550269,42397987144,42398227519,42407627269,42451116936,3756625,1668000,42443171811,
+0,45138119122,45188119120,45179000000,45179000000,45201486395,45249645104,45322797645,45324370229,45332476437,45336405229,45337465770,45350791395,45356269937,1282083,1368042,45353249979,
+0,45254766990,45338100320,9223372036854775807,0,45349411145,45349416020,45366988145,45367058062,45367494437,45367674645,45367699312,45367960395,45369420854,144291,137042,25769803784,
+0,45388095503,45388095503,9223372036854775807,0,45388503312,45388504270,45388504854,45388559229,45388820145,45388891979,45388931854,45389269687,45390724520,46375,91417,7888105825026532969,
+0,45704762412,45704762412,9223372036854775807,0,45719224187,45719225146,45719225604,45721261979,45722565312,45723781604,45725752729,45729775396,45734575479,1127541,1807459,1662459528742279712,
+---PROFILEDATA---
+
+
+View hierarchy:
+
+  com.lightningstudio.watchrss/com.lightningstudio.watchrss.MainActivity/android.view.ViewRootImpl@2f48dd7
+  8 views, 14.52 kB of render nodes
+
+
+Total ViewRootImpl   : 1
+Total attached Views : 8
+Total RenderNode     : 14.52 kB (used) / 54.23 kB (capacity)
+

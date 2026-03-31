@@ -101,7 +101,6 @@ class MainActivity : BaseWatchActivity() {
         onBackPressedDispatcher.addCallback(this, closeOpenSwipeBackCallback)
         setupSystemBars()
         renderHomeContent()
-        keepSplashOnScreen = false
 
         lifecycleScope.launch {
             val shouldShowOobe = withContext(Dispatchers.IO) {
@@ -109,6 +108,7 @@ class MainActivity : BaseWatchActivity() {
                 settingsRepository.oobeSeenVersion.first() < CURRENT_OOBE_VERSION
             }
             if (shouldShowOobe) {
+                keepSplashOnScreen = false
                 startActivity(OobeActivity.createIntent(this@MainActivity))
                 finish()
                 return@launch
@@ -137,6 +137,12 @@ class MainActivity : BaseWatchActivity() {
                     .readAloudController
                     .uiState
                     .collectAsState()
+
+                LaunchedEffect(hasLoadedChannels) {
+                    if (hasLoadedChannels) {
+                        keepSplashOnScreen = false
+                    }
+                }
 
                 LaunchedEffect(message) {
                     if (message != null) {

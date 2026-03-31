@@ -28,9 +28,6 @@ class BiliSettingsViewModel(
     val uiState: StateFlow<BiliSettingsUiState> = _uiState
 
     init {
-        viewModelScope.launch {
-            rssRepository.ensureBuiltinChannels()
-        }
         observeBiliChannel()
     }
 
