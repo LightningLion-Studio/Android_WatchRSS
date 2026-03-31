@@ -23,6 +23,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.pager.PagerDefaults
+import androidx.compose.foundation.pager.PagerSnapDistance
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -160,6 +162,11 @@ fun DouyinImmersiveScreen(
         initialPage = initialPage,
         pageCount = { pageCount.coerceAtLeast(1) }
     )
+    val pagerFlingBehavior = PagerDefaults.flingBehavior(
+        state = pagerState,
+        pagerSnapDistance = PagerSnapDistance.atMost(1),
+        snapPositionalThreshold = DOUYIN_PAGER_SNAP_POSITIONAL_THRESHOLD
+    )
     var pendingAutoSkipPage by remember { mutableIntStateOf(-1) }
     var autoSkipMessage by remember { mutableStateOf<String?>(null) }
     var controlsVisible by rememberSaveable { mutableStateOf(true) }
@@ -260,6 +267,7 @@ fun DouyinImmersiveScreen(
         VerticalPager(
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
+            flingBehavior = pagerFlingBehavior,
             userScrollEnabled = pageCount > 1
         ) { page ->
             if (page == 0) {
@@ -364,12 +372,15 @@ private fun DouyinTitlePage(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(Color.Black),
-                state = listState,
-                contentPadding = PaddingValues(safePadding)
+                state = listState
             ) {
                 item {
                     Box(
-                        modifier = Modifier.fillParentMaxSize()
+                        modifier = Modifier
+                            .fillParentMaxSize()
+                            // Keep the visual safe area without adding scroll range that
+                            // would otherwise absorb upward fling before the pager sees it.
+                            .padding(safePadding)
                     ) {
                         Column(
                             modifier = Modifier
@@ -1100,5 +1111,6 @@ private const val TITLE_ORIGINAL_SECOND_LINE_RATIO = 0.82f
 private const val DOUYIN_MAX_AUTO_RETRY_COUNT = 1
 private const val DOUYIN_AUTO_SKIP_MESSAGE = "当前视频无法播放\n已为您自动跳过"
 private const val DOUYIN_AUTO_SKIP_MESSAGE_DURATION_MS = 2_000L
+private const val DOUYIN_PAGER_SNAP_POSITIONAL_THRESHOLD = 0.18f
 private const val DOUYIN_INJECTED_FAILURE_URI_PREFIX = "watchrss-debug://douyin/force-fail/"
 private const val TAG = "DouyinImmersive"
