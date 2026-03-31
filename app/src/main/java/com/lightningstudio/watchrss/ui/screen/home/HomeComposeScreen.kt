@@ -342,6 +342,13 @@ private fun HomeChannelEntry(
 ) {
     val actionPadding = watchDimensionResource(R.dimen.hey_distance_4dp)
     val actionWidth = watchDimensionResource(R.dimen.watch_swipe_action_button_width)
+    var cardHeightPx by remember { mutableStateOf(0) }
+    val density = LocalDensity.current
+    val cardHeightModifier = if (cardHeightPx > 0) {
+        Modifier.height(with(density) { cardHeightPx.toDp() })
+    } else {
+        Modifier
+    }
     val actionsWidthPx = with(LocalDensity.current) {
         (actionWidth * 2 + actionPadding * 2).toPx()
     }
@@ -365,6 +372,11 @@ private fun HomeChannelEntry(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(offsetModifier)
+                .onSizeChanged { size ->
+                    if (cardHeightPx != size.height) {
+                        cardHeightPx = size.height
+                    }
+                }
                 .testTag(HomeTestTags.channelRow(channel.id))
         ) {
             HomeDefaultItem(
@@ -401,44 +413,46 @@ private fun HomeChannelEntry(
         enabled = swipeInteractionsEnabled,
         actionsWidthPx = actionsWidthPx,
         revealGapPx = revealGapPx
-    ) { offsetModifier ->
+    ) { offsetModifier, actionsVisible ->
         Box(
             modifier = Modifier
                 .fillMaxWidth()
         ) {
-            Row(
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .fillMaxHeight()
-                    .padding(end = actionPadding),
-                horizontalArrangement = Arrangement.spacedBy(actionPadding, Alignment.End),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                HomeSwipeActionButton(
-                    text = "移到顶",
-                    width = actionWidth,
-                    testTag = HomeTestTags.moveTopAction(channel.id),
-                    onClick = {
-                        onCloseSwipe()
-                        onMoveTopClick()
-                    },
-                    icon = Icons.Outlined.VerticalAlignTop
-                )
-                val isBuiltin = BuiltinChannelType.fromUrl(channel.url) != null
-                val canMarkRead = channel.unreadCount > 0 && !isBuiltin
-                HomeSwipeActionButton(
-                    text = "标记已读",
-                    width = actionWidth,
-                    alpha = if (canMarkRead) 1f else 0.5f,
-                    testTag = HomeTestTags.markReadAction(channel.id),
-                    onClick = {
-                        onCloseSwipe()
-                        if (canMarkRead) {
-                            onMarkReadClick()
-                        }
-                    },
-                    icon = Icons.Outlined.DoneAll
-                )
+            if (actionsVisible) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .then(cardHeightModifier)
+                        .padding(end = actionPadding),
+                    horizontalArrangement = Arrangement.spacedBy(actionPadding, Alignment.End),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    HomeSwipeActionButton(
+                        text = "移到顶",
+                        width = actionWidth,
+                        testTag = HomeTestTags.moveTopAction(channel.id),
+                        onClick = {
+                            onCloseSwipe()
+                            onMoveTopClick()
+                        },
+                        icon = Icons.Outlined.VerticalAlignTop
+                    )
+                    val isBuiltin = BuiltinChannelType.fromUrl(channel.url) != null
+                    val canMarkRead = channel.unreadCount > 0 && !isBuiltin
+                    HomeSwipeActionButton(
+                        text = "标记已读",
+                        width = actionWidth,
+                        alpha = if (canMarkRead) 1f else 0.5f,
+                        testTag = HomeTestTags.markReadAction(channel.id),
+                        onClick = {
+                            onCloseSwipe()
+                            if (canMarkRead) {
+                                onMarkReadClick()
+                            }
+                        },
+                        icon = Icons.Outlined.DoneAll
+                    )
+                }
             }
             cardContent(offsetModifier)
         }
@@ -519,7 +533,7 @@ private fun HomeSwipeRow(
     enabled: Boolean,
     actionsWidthPx: Float,
     revealGapPx: Float,
-    content: @Composable (Modifier) -> Unit
+    content: @Composable (Modifier, Boolean) -> Unit
 ) {
     val scope = rememberCoroutineScope()
     val offsetX = remember { Animatable(0f) }
@@ -626,8 +640,11 @@ private fun HomeSwipeRow(
     val offsetModifier = Modifier
         .offset { IntOffset(offsetX.value.roundToInt(), 0) }
         .then(dragModifier)
+    val actionsVisible = offsetX.value < -0.5f ||
+        openSwipeId == itemId ||
+        draggingSwipeId == itemId
 
-    content(offsetModifier)
+    content(offsetModifier, actionsVisible)
 }
 
 @Composable
