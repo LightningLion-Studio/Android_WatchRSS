@@ -53,6 +53,9 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.lightningstudio.watchrss.R
+import com.lightningstudio.watchrss.RssPlayerActivity
+import com.lightningstudio.watchrss.data.douyin.buildDouyinPlaybackWebUrl
+import com.lightningstudio.watchrss.data.douyin.parseDouyinAwemeId
 import com.lightningstudio.watchrss.data.rss.OfflineMedia
 import com.lightningstudio.watchrss.data.rss.RssItem
 import com.lightningstudio.watchrss.data.settings.RssInlineImagePrefetchMode
@@ -625,7 +628,12 @@ internal fun DetailContent(
                         }
                         is ContentBlock.Video -> {
                             val resolvedUrl = resolveMediaUrl(block.url, offlineMedia, baseLink)
-                            val webUrl = resolveRemoteUrl(block.url, baseLink)
+                            val defaultWebUrl = resolveRemoteUrl(block.url, baseLink)
+                            val douyinAwemeId = item?.link?.let(::parseDouyinAwemeId)
+                            val douyinWebUrl = buildDouyinPlaybackWebUrl(
+                                awemeId = douyinAwemeId,
+                                fallbackUrl = item?.link
+                            )
                             DetailVideoBlock(
                                 poster = block.poster?.let { resolveMediaUrl(it, offlineMedia, baseLink) },
                                 videoUrl = resolvedUrl,
@@ -634,7 +642,21 @@ internal fun DetailContent(
                                 borderColor = mediaCardBorderColor,
                                 topPadding = topPadding,
                                 isScrolling = isScrolling,
-                                onClick = { openRssVideo(context, resolvedUrl, webUrl) }
+                                onClick = {
+                                    val targetWebUrl = douyinWebUrl ?: defaultWebUrl
+                                    if (douyinAwemeId != null || !douyinWebUrl.isNullOrBlank()) {
+                                        context.startActivity(
+                                            RssPlayerActivity.createIntent(
+                                                context = context,
+                                                playUrl = resolvedUrl,
+                                                webUrl = targetWebUrl,
+                                                awemeId = douyinAwemeId
+                                            )
+                                        )
+                                    } else {
+                                        openRssVideo(context, resolvedUrl, targetWebUrl)
+                                    }
+                                }
                             )
                         }
                     }

@@ -12,6 +12,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
+import com.lightningstudio.watchrss.data.douyin.buildDouyinPlaybackWebUrl
 import com.lightningstudio.watchrss.data.rss.RssItem
 import com.lightningstudio.watchrss.data.settings.DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE
 import com.lightningstudio.watchrss.ui.screen.rss.DetailContent
@@ -53,8 +54,9 @@ class DouyinDetailActivity : BaseWatchActivity() {
                             playUrl = playUrl
                         )
                     }
-                    val contentBlocks = remember(author, summary, playUrl, coverUrl) {
+                    val contentBlocks = remember(awemeId, author, summary, playUrl, coverUrl) {
                         buildDouyinDetailBlocks(
+                            awemeId = awemeId,
                             author = author,
                             summary = summary,
                             playUrl = playUrl,
@@ -187,6 +189,7 @@ private fun buildDouyinRssItem(
 }
 
 private fun buildDouyinDetailBlocks(
+    awemeId: String,
     author: String,
     summary: String,
     playUrl: String,
@@ -203,9 +206,16 @@ private fun buildDouyinDetailBlocks(
         blocks += ContentBlock.Text("这是一条来自抖音的信息流内容。", ContentTextStyle.BODY)
     }
 
-    if (playUrl.isNotBlank()) {
+    val videoTapUrl = playUrl.ifBlank {
+        buildDouyinPlaybackWebUrl(
+            awemeId = awemeId,
+            fallbackUrl = null
+        ).orEmpty()
+    }
+
+    if (videoTapUrl.isNotBlank()) {
         blocks += ContentBlock.Video(
-            url = playUrl,
+            url = videoTapUrl,
             poster = coverUrl.ifBlank { null }
         )
         blocks += ContentBlock.Text("点击视频卡片即可播放。", ContentTextStyle.QUOTE)

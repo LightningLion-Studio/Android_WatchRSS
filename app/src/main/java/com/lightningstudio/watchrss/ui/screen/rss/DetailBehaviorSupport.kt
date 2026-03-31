@@ -20,6 +20,7 @@ import com.lightningstudio.watchrss.ImagePreviewActivity
 import com.lightningstudio.watchrss.RssPlayerActivity
 import com.lightningstudio.watchrss.ShareQrActivity
 import com.lightningstudio.watchrss.WebViewActivity
+import com.lightningstudio.watchrss.data.douyin.parseDouyinAwemeId
 import com.lightningstudio.watchrss.ui.util.showAppToast
 import java.io.File
 import kotlin.math.abs
@@ -189,5 +190,14 @@ internal fun openImagePreview(context: Context, url: String, alt: String?) {
 internal fun openRssVideo(context: Context, playUrl: String, webUrl: String?) {
     val trimmed = playUrl.trim()
     if (trimmed.isEmpty()) return
-    context.startActivity(RssPlayerActivity.createIntent(context, trimmed, webUrl))
+    val trimmedWebUrl = webUrl?.trim()?.takeIf { it.isNotEmpty() }
+    val awemeId = parseDouyinAwemeId(trimmedWebUrl) ?: parseDouyinAwemeId(trimmed)
+    context.startActivity(
+        RssPlayerActivity.createIntent(
+            context = context,
+            playUrl = trimmed,
+            webUrl = trimmedWebUrl,
+            awemeId = awemeId
+        )
+    )
 }

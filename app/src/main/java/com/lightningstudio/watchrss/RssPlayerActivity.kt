@@ -11,12 +11,15 @@ import androidx.compose.runtime.getValue
 import androidx.core.content.FileProvider
 import com.lightningstudio.watchrss.ui.screen.bili.BiliPlayerScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
+import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
 import com.lightningstudio.watchrss.ui.viewmodel.RssPlayerViewModel
 import java.io.File
 
 class RssPlayerActivity : BaseWatchActivity() {
-    private val settingsRepository by lazy { (application as WatchRssApplication).container.settingsRepository }
-    private val viewModel: RssPlayerViewModel by viewModels()
+    private val container by lazy { (application as WatchRssApplication).container }
+    private val viewModel: RssPlayerViewModel by viewModels {
+        AppViewModelFactory(container)
+    }
     private var panOffsetX = 0f
     private var panRangeX = 0f
 
@@ -30,6 +33,7 @@ class RssPlayerActivity : BaseWatchActivity() {
                 BiliPlayerScreen(
                     uiState = uiState,
                     onRetry = viewModel::loadPlayUrl,
+                    onPlaybackError = viewModel::recoverFromPlaybackError,
                     onOpenWeb = {
                         val link = viewModel.webUrl() ?: return@BiliPlayerScreen
                         if (link.startsWith("http", ignoreCase = true)) {
@@ -54,13 +58,15 @@ class RssPlayerActivity : BaseWatchActivity() {
     }
 
     override fun buildResumeIntent(): Intent? {
-        val playUrl = intent.getStringExtra(RssPlayerViewModel.KEY_PLAY_URL)?.trim().orEmpty()
+        val playUrl = viewModel.currentPlayUrl()?.trim().orEmpty()
         if (playUrl.isBlank()) return null
-        val webUrl = intent.getStringExtra(RssPlayerViewModel.KEY_WEB_URL)
+        val webUrl = viewModel.webUrl()
+        val awemeId = viewModel.awemeId()
         return createIntent(
             context = this,
             playUrl = playUrl,
-            webUrl = webUrl
+            webUrl = webUrl,
+            awemeId = awemeId
         )
     }
 
@@ -68,11 +74,13 @@ class RssPlayerActivity : BaseWatchActivity() {
         fun createIntent(
             context: Context,
             playUrl: String,
-            webUrl: String? = null
+            webUrl: String? = null,
+            awemeId: String? = null
         ): Intent {
             return Intent(context, RssPlayerActivity::class.java).apply {
                 putExtra(RssPlayerViewModel.KEY_PLAY_URL, playUrl)
                 putExtra(RssPlayerViewModel.KEY_WEB_URL, webUrl.orEmpty())
+                putExtra(RssPlayerViewModel.KEY_AWEME_ID, awemeId.orEmpty())
             }
         }
     }

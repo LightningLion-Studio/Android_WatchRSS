@@ -48,6 +48,9 @@ class AppViewModelFactory(private val container: AppContainer) : ViewModelProvid
             modelClass.isAssignableFrom(RssSearchViewModel::class.java) -> {
                 RssSearchViewModel(savedStateHandle, container.rssRepository)
             }
+            modelClass.isAssignableFrom(RssPlayerViewModel::class.java) -> {
+                RssPlayerViewModel(savedStateHandle, container.douyinRepository)
+            }
             modelClass.isAssignableFrom(LlmConnectivityViewModel::class.java) -> {
                 LlmConnectivityViewModel(container.settingsRepository, container.llmApiKeyStore)
             }
