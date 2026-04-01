@@ -48,6 +48,11 @@ class DefaultRssRepository(
     private val previewJobs: MutableSet<Long> = ConcurrentHashMap.newKeySet()
     private val previewAttemptKeys = ConcurrentHashMap<Long, String>()
 
+    override fun observeHomeChannels(): Flow<List<RssChannel>> =
+        channelDao.observeChannels().map { channels ->
+            channels.map { channel -> channel.toModel(unreadCount = 0) }
+        }
+
     override fun observeChannels(): Flow<List<RssChannel>> =
         combine(
             channelDao.observeChannels(),

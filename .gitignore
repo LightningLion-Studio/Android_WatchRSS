@@ -24,3 +24,5 @@ keystore.properties
 .gradle_user/*
 java_pid13968.hprof
 .gradle-tmp/*
+/.gradle-user
+/.qoder/repowiki/zh/content

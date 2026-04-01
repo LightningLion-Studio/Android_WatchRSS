@@ -67,6 +67,7 @@ private fun LlmSummaryContent(
 ) {
     val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
     val entrySpacing = WatchDimens.hey_distance_8dp
+    val titleTopSpacing = WatchDimens.hey_distance_6dp
     val valueSpacing = WatchDimens.hey_distance_4dp
     val valueIndent = WatchDimens.hey_distance_10dp
     val scrollState = rememberScrollState()
@@ -81,6 +82,8 @@ private fun LlmSummaryContent(
                 .verticalScroll(scrollState)
                 .padding(safePadding)
         ) {
+            Spacer(modifier = Modifier.height(titleTopSpacing))
+
             // 标题行
             Row(
                 modifier = Modifier.fillMaxWidth(),

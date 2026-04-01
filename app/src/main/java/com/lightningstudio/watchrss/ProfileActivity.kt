@@ -7,8 +7,29 @@ import androidx.activity.compose.setContent
 import com.lightningstudio.watchrss.phoneconnection.PhoneConnectionFeature
 import com.lightningstudio.watchrss.ui.screen.ProfileScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
+import com.lightningstudio.watchrss.util.AppLogger
 
 class ProfileActivity : BaseWatchActivity() {
+    override fun onResume() {
+        super.onResume()
+        AppLogger.d(DEBUG_TAG, "ProfileActivity.onResume")
+    }
+
+    override fun onPause() {
+        AppLogger.d(DEBUG_TAG, "ProfileActivity.onPause")
+        super.onPause()
+    }
+
+    override fun onStop() {
+        AppLogger.d(DEBUG_TAG, "ProfileActivity.onStop")
+        super.onStop()
+    }
+
+    override fun finish() {
+        AppLogger.d(DEBUG_TAG, "ProfileActivity.finish")
+        super.finish()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setupSystemBars()
@@ -57,5 +78,14 @@ class ProfileActivity : BaseWatchActivity() {
                 )
             }
         }
+    }
+
+    override fun onDestroy() {
+        AppLogger.d(DEBUG_TAG, "ProfileActivity.onDestroy")
+        super.onDestroy()
+    }
+
+    companion object {
+        private const val DEBUG_TAG = "ProfileActivityDebug"
     }
 }

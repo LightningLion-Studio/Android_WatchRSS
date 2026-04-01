@@ -3,6 +3,7 @@ package com.lightningstudio.watchrss.data.rss
 import kotlinx.coroutines.flow.Flow
 
 interface RssRepository {
+    fun observeHomeChannels(): Flow<List<RssChannel>>
     fun observeChannels(): Flow<List<RssChannel>>
     fun observeChannel(channelId: Long): Flow<RssChannel?>
     fun observeItemsPaged(channelId: Long, limit: Int): Flow<List<RssItem>>

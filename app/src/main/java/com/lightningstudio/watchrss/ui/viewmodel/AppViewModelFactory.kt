@@ -13,9 +13,7 @@ class AppViewModelFactory(private val container: AppContainer) : ViewModelProvid
         return when {
             modelClass.isAssignableFrom(HomeViewModel::class.java) -> {
                 HomeViewModel(
-                    repository = container.rssRepository,
-                    isBiliLoggedIn = { container.biliRepository.isLoggedIn() },
-                    isDouyinLoggedIn = { container.douyinRepository.isLoggedIn() }
+                    repository = container.rssRepository
                 )
             }
             modelClass.isAssignableFrom(AddRssViewModel::class.java) -> {
