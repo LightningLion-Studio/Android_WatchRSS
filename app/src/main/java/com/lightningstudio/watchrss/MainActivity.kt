@@ -60,6 +60,12 @@ class MainActivity : BaseWatchActivity() {
     private var initialStartupCompleted = false
     private var startupMaintenanceScheduled = false
     private var navigatingHomeEntryKey by mutableStateOf<String?>(null)
+    private var initialHomeLoginRefreshScheduled = false
+    private val refreshPlatformLoginStateRunnable = Runnable {
+        if (!isDestroyed) {
+            viewModel.refreshPlatformLoginState()
+        }
+    }
 
     override fun onSwipeBackAttempt(dx: Float, dy: Float): Boolean {
         val hasOpen = openSwipeKey != null
@@ -81,9 +87,7 @@ class MainActivity : BaseWatchActivity() {
         super.onResume()
         closeOpenSwipe()
         if (initialStartupCompleted) {
-            window.decorView.post {
-                viewModel.refreshPlatformLoginState()
-            }
+            schedulePlatformLoginStateRefresh()
         }
     }
 
@@ -124,7 +128,6 @@ class MainActivity : BaseWatchActivity() {
                 return@launch
             }
             initialStartupCompleted = true
-            schedulePlatformLoginStateRefresh()
             scheduleStartupMaintenance()
             if (isLauncherEntry(intent)) {
                 AppLaunchSignal.markLauncherOpen()
@@ -151,6 +154,7 @@ class MainActivity : BaseWatchActivity() {
                 LaunchedEffect(hasLoadedChannels) {
                     if (hasLoadedChannels) {
                         keepSplashOnScreen = false
+                        scheduleInitialHomeLoginStateRefresh()
                     }
                 }
 
@@ -273,9 +277,20 @@ class MainActivity : BaseWatchActivity() {
     }
 
     private fun schedulePlatformLoginStateRefresh() {
-        window.decorView.post {
-            viewModel.refreshPlatformLoginState()
-        }
+        val decorView = window.decorView
+        decorView.removeCallbacks(refreshPlatformLoginStateRunnable)
+        decorView.post(refreshPlatformLoginStateRunnable)
+    }
+
+    private fun scheduleInitialHomeLoginStateRefresh() {
+        if (initialHomeLoginRefreshScheduled) return
+        initialHomeLoginRefreshScheduled = true
+        val decorView = window.decorView
+        decorView.removeCallbacks(refreshPlatformLoginStateRunnable)
+        decorView.postDelayed(
+            refreshPlatformLoginStateRunnable,
+            INITIAL_HOME_LOGIN_STATE_REFRESH_DELAY_MS
+        )
     }
 
     private fun scheduleStartupMaintenance() {
@@ -358,6 +373,7 @@ class MainActivity : BaseWatchActivity() {
         private const val HOME_ENTRY_PROFILE = "profile"
         private const val HOME_ENTRY_RECOMMEND = "recommend"
         private const val HOME_ENTRY_ADD_RSS = "add_rss"
+        private const val INITIAL_HOME_LOGIN_STATE_REFRESH_DELAY_MS = 1_200L
         private const val STARTUP_DOUYIN_PREWARM_DELAY_MS = 2_000L
         private const val STARTUP_CACHE_MAINTENANCE_DELAY_MS = 5_000L
         private const val DOUYIN_APP_OPEN_REFRESH_COUNT = 16

@@ -5,7 +5,6 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -392,8 +391,7 @@ private fun HomeChannelEntry(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(offsetModifier)
-                .clip(cardShape)
-                .clickableWithRipple(
+                .clickableWithoutRipple(
                     onClick = onChannelClick,
                     onLongClick = onChannelLongClick,
                     interactionSource = interactionSource
@@ -893,35 +891,6 @@ private fun rememberPressScaleState(enabled: Boolean = true): PressScaleState {
 private fun textSize(id: Int): TextUnit {
     val density = LocalDensity.current
     return with(density) { watchDimensionResource(id).toSp() }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-private fun Modifier.clickableWithRipple(
-    enabled: Boolean = true,
-    onClick: () -> Unit,
-    onLongClick: (() -> Unit)? = null,
-    interactionSource: MutableInteractionSource? = null
-): Modifier {
-    return composed {
-        val resolvedInteractionSource = interactionSource ?: remember { MutableInteractionSource() }
-        val indication = LocalIndication.current
-        if (onLongClick != null) {
-            combinedClickable(
-                interactionSource = resolvedInteractionSource,
-                indication = indication,
-                enabled = enabled,
-                onClick = onClick,
-                onLongClick = onLongClick
-            )
-        } else {
-            clickable(
-                interactionSource = resolvedInteractionSource,
-                indication = indication,
-                enabled = enabled,
-                onClick = onClick
-            )
-        }
-    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
