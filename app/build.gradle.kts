@@ -70,6 +70,13 @@ android {
                 signingConfig = signingConfigs.getByName("release")
             }
         }
+        create("profileableRelease") {
+            initWith(getByName("release"))
+            matchingFallbacks += listOf("release")
+            if (hasKeystoreProperties) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
