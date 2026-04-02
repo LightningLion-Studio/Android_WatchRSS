@@ -42,6 +42,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import com.lightningstudio.watchrss.ui.theme.watchColorResource
@@ -88,7 +89,7 @@ fun SavedItemsScreen(
             .fillMaxSize()
             .background(androidx.compose.ui.graphics.Color.Black)
             .semantics {
-                contentDescription = "$title页面"
+                contentDescription = "${title}页面"
                 stateDescription = if (items.isEmpty()) "无保存项目" else "共 ${items.size} 个保存项目"
             }
     ) {

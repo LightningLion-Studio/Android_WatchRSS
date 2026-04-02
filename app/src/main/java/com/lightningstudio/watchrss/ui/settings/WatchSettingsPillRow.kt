@@ -32,6 +32,7 @@ fun WatchSettingsPillRow(
     label: String,
     leadingIcon: androidx.compose.ui.graphics.vector.ImageVector? = null,
     testTag: String? = null,
+    modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
     endPaddingMultiplier: Float = 1f,
     content: @Composable RowScope.() -> Unit = {}
@@ -46,7 +47,7 @@ fun WatchSettingsPillRow(
     val iconSpacing = WatchDimens.hey_distance_8dp
 
     Row(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .height(pillHeight)
             .clip(RoundedCornerShape(pillRadius))

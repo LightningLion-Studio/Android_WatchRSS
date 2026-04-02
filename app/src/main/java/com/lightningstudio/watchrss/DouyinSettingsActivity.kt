@@ -16,6 +16,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -25,6 +26,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.screen.DeleteConfirmDialog
 import com.lightningstudio.watchrss.ui.screen.bili.BiliSettingsScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
@@ -43,6 +45,14 @@ class DouyinSettingsActivity : BaseWatchActivity() {
                 }
                 throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
             }
+        }
+    }
+    private var isNavigating by mutableStateOf(false)
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            isNavigating = false
         }
     }
 
@@ -111,6 +121,15 @@ class DouyinSettingsActivity : BaseWatchActivity() {
                                 onCancel = { showDeleteConfirm = false }
                             )
                         }
+
+                        if (isNavigating) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                WatchCircularProgressIndicator()
+                            }
+                        }
                     }
                 }
             }
@@ -124,6 +143,7 @@ class DouyinSettingsActivity : BaseWatchActivity() {
     }
 
     private fun navigateHome() {
+        isNavigating = true
         com.lightningstudio.watchrss.ui.util.showAppToast(
             applicationContext,
             "已退出登录",

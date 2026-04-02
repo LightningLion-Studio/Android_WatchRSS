@@ -5,10 +5,17 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.screen.rss.ChannelDetailScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.util.isSystemShareSettingSupported
@@ -22,6 +29,14 @@ class ChannelDetailActivity : BaseWatchActivity() {
     private val settingsRepository by lazy { (application as WatchRssApplication).container.settingsRepository }
     private val viewModel: ChannelDetailViewModel by viewModels {
         AppViewModelFactory((application as WatchRssApplication).container)
+    }
+    private var isNavigating by mutableStateOf(false)
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            isNavigating = false
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -38,30 +53,44 @@ class ChannelDetailActivity : BaseWatchActivity() {
                 val useSystemShare = remember(context, shareUseSystem) {
                     shareUseSystem && isSystemShareSettingSupported(context)
                 }
-                ChannelDetailScreen(
-                    channel = channel,
-                    onOpenSettings = {
-                        if (channelId <= 0L) return@ChannelDetailScreen
-                        val intent = Intent(this, ChannelSettingsActivity::class.java)
-                        intent.putExtra(ChannelSettingsActivity.EXTRA_CHANNEL_ID, channelId)
-                        startActivity(intent)
-                    },
-                    onSearch = {
-                        if (channelId <= 0L) return@ChannelDetailScreen
-                        val intent = RssSearchActivity.createIntent(this, channelId)
-                        startActivity(intent)
-                    },
-                    onMarkRead = viewModel::markRead,
-                    onShare = {
-                        val title = channel?.title
-                        val link = channel?.url
-                        if (useSystemShare) {
-                            shareCurrent(context, title, link)
-                        } else {
-                            showShareQr(context, title, link)
+
+                Box(modifier = Modifier.fillMaxSize()) {
+                    ChannelDetailScreen(
+                        channel = channel,
+                        onOpenSettings = {
+                            if (channelId <= 0L) return@ChannelDetailScreen
+                            isNavigating = true
+                            val intent = Intent(this@ChannelDetailActivity, ChannelSettingsActivity::class.java)
+                            intent.putExtra(ChannelSettingsActivity.EXTRA_CHANNEL_ID, channelId)
+                            startActivity(intent)
+                        },
+                        onSearch = {
+                            if (channelId <= 0L) return@ChannelDetailScreen
+                            isNavigating = true
+                            val intent = RssSearchActivity.createIntent(this@ChannelDetailActivity, channelId)
+                            startActivity(intent)
+                        },
+                        onMarkRead = viewModel::markRead,
+                        onShare = {
+                            val title = channel?.title
+                            val link = channel?.url
+                            if (useSystemShare) {
+                                shareCurrent(context, title, link)
+                            } else {
+                                showShareQr(context, title, link)
+                            }
+                        }
+                    )
+
+                    if (isNavigating) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            WatchCircularProgressIndicator()
                         }
                     }
-                )
+                }
             }
         }
     }

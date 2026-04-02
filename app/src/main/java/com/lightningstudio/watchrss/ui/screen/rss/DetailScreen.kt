@@ -11,6 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -24,6 +25,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -92,6 +94,7 @@ import kotlin.math.roundToInt
 fun DetailScreen(
     viewModel: DetailViewModel,
     llmSummaryState: LlmSummaryUiState = LlmSummaryUiState(),
+    isStartingActivity: Boolean = false,
     onOpenAiSummary: () -> Unit = {},
     onOpenReadAloud: () -> Unit = {},
     onBack: (Long, Boolean, Boolean) -> Unit
@@ -133,6 +136,7 @@ fun DetailScreen(
             llmFeatureEnabled = llmFeatureEnabled,
             llmAutoSummarize = llmAutoSummarize,
             llmSummaryState = llmSummaryState,
+            isStartingActivity = isStartingActivity,
             onToggleFavorite = viewModel::toggleFavorite,
             onToggleOriginalContent = viewModel::toggleOriginalContent,
             onRetryOfflineMedia = viewModel::retryOfflineMedia,
@@ -163,6 +167,7 @@ internal fun DetailContent(
     llmFeatureEnabled: Boolean = false,
     llmAutoSummarize: Boolean = false,
     llmSummaryState: LlmSummaryUiState = LlmSummaryUiState(),
+    isStartingActivity: Boolean = false,
     onToggleFavorite: () -> Unit,
     onToggleOriginalContent: () -> Unit,
     onRetryOfflineMedia: () -> Unit,
@@ -336,6 +341,20 @@ internal fun DetailContent(
                 contentDescription = "文章详情页面"
             }
     ) {
+        // Activity starting overlay - shows when button triggers startActivity
+        if (isStartingActivity) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    color = activeColor,
+                    strokeWidth = 3.dp,
+                    modifier = Modifier.size(36.dp)
+                )
+            }
+        }
+
         val isScrolling by remember(listState) {
             derivedStateOf { listState.isScrollInProgress }
         }
@@ -786,6 +805,7 @@ internal fun DetailContent(
             }
         }
 
+        // Warning dialog
         if (showOriginalModeWarning && link.isNotEmpty()) {
             WarningConfirmDialog(
                 title = "内测功能",

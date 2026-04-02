@@ -5,24 +5,56 @@ import androidx.lifecycle.viewModelScope
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.rss.RssChannel
 import com.lightningstudio.watchrss.data.rss.RssRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+data class HomePlatformLoginState(
+    val isBiliLoggedIn: Boolean = false,
+    val isDouyinLoggedIn: Boolean = false
+)
 
 class HomeViewModel(
-    private val repository: RssRepository
+    private val repository: RssRepository,
+    private val isBiliLoggedIn: suspend () -> Boolean,
+    private val isDouyinLoggedIn: suspend () -> Boolean
 ) : ViewModel() {
-    val channels: StateFlow<List<RssChannel>?> = repository.observeHomeChannels()
-        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    private val _hasLoadedChannels = MutableStateFlow(false)
+    val hasLoadedChannels: StateFlow<Boolean> = _hasLoadedChannels.asStateFlow()
+
+    val channels = repository.observeChannels()
+        .onEach { _hasLoadedChannels.value = true }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
+
+    private val _platformLoginState = MutableStateFlow(HomePlatformLoginState())
+    val platformLoginState: StateFlow<HomePlatformLoginState> = _platformLoginState.asStateFlow()
+    private var platformLoginRefreshJob: Job? = null
+
+    fun refreshPlatformLoginState() {
+        if (platformLoginRefreshJob?.isActive == true) return
+        platformLoginRefreshJob = viewModelScope.launch {
+            val nextState = withContext(Dispatchers.IO) {
+                HomePlatformLoginState(
+                    isBiliLoggedIn = isBiliLoggedIn(),
+                    isDouyinLoggedIn = isDouyinLoggedIn()
+                )
+            }
+            _platformLoginState.value = nextState
+        }
+    }
 
     fun refresh(channel: RssChannel) {
         viewModelScope.launch {
@@ -39,7 +71,7 @@ class HomeViewModel(
         viewModelScope.launch {
             if (_isRefreshing.value) return@launch
             _isRefreshing.value = true
-            val snapshot = channels.value.orEmpty().filter { channel ->
+            val snapshot = channels.value.filter { channel ->
                 BuiltinChannelType.fromUrl(channel.url) == null
             }
             var errorMessage: String? = null

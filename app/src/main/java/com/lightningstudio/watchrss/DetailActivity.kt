@@ -17,8 +17,10 @@ import com.lightningstudio.watchrss.ui.util.showAppToast
 import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
 import com.lightningstudio.watchrss.ui.viewmodel.DetailViewModel
 import com.lightningstudio.watchrss.ui.viewmodel.LlmSummaryViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.asStateFlow
 
 class DetailActivity : BaseWatchActivity() {
     private val container by lazy { (application as WatchRssApplication).container }
@@ -28,6 +30,9 @@ class DetailActivity : BaseWatchActivity() {
     private val llmSummaryViewModel: LlmSummaryViewModel by viewModels {
         AppViewModelFactory(container)
     }
+
+    private val _isStartingActivity = MutableStateFlow(false)
+    private val isStartingActivity = _isStartingActivity.asStateFlow()
 
     private var fromWatchLater: Boolean = false
 
@@ -54,6 +59,7 @@ class DetailActivity : BaseWatchActivity() {
                 DetailScreen(
                     viewModel = viewModel,
                     llmSummaryState = llmSummaryState,
+                    isStartingActivity = isStartingActivity.collectAsState().value,
                     onOpenAiSummary = ::openAiSummary,
                     onOpenReadAloud = ::openReadAloud,
                     onBack = { itemId, reachedBottom, isWatchLater ->
@@ -72,6 +78,13 @@ class DetailActivity : BaseWatchActivity() {
         finish()
     }
 
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            _isStartingActivity.value = false
+        }
+    }
+
     private fun openAiSummary() {
         val itemId = intent.getLongExtra(EXTRA_ITEM_ID, 0L)
         if (itemId <= 0L) return
@@ -79,6 +92,7 @@ class DetailActivity : BaseWatchActivity() {
         lifecycleScope.launch {
             val isConfigured = container.llmApiKeyStore.hasApiKey() &&
                 container.settingsRepository.llmProvider.first().isNotBlank()
+            _isStartingActivity.value = true
             startActivity(
                 if (isConfigured) {
                     LlmSummaryActivity.createIntent(this@DetailActivity, itemId)
@@ -101,8 +115,10 @@ class DetailActivity : BaseWatchActivity() {
             val isConfigured = container.readAloudController.hasConfig()
             if (isConfigured) {
                 container.readAloudController.startFromItem(itemId)
+                _isStartingActivity.value = true
                 startActivity(ReadAloudPlaybackActivity.createIntent(this@DetailActivity))
             } else {
+                _isStartingActivity.value = true
                 startActivity(ReadAloudApiSettingsActivity.createIntent(this@DetailActivity, itemId))
             }
         }

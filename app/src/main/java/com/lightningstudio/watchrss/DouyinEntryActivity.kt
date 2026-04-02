@@ -3,6 +3,8 @@ package com.lightningstudio.watchrss
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -10,6 +12,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.lifecycle.lifecycleScope
@@ -21,6 +26,7 @@ import com.lightningstudio.watchrss.data.douyin.DouyinPreloadManager
 import com.lightningstudio.watchrss.data.douyin.DouyinWatchHistoryStore
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.rss.SaveType
+import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.screen.douyin.DouyinImmersiveScreen
 import com.lightningstudio.watchrss.ui.screen.douyin.DouyinLoginScreen
 import com.lightningstudio.watchrss.ui.screen.douyin.DouyinRssFeedScreen
@@ -44,6 +50,14 @@ class DouyinEntryActivity : BaseWatchActivity() {
     }
     private var disableSwipeBack = false
     private var handledLauncherOpenToken = AppLaunchSignal.currentToken()
+    private var isNavigating by mutableStateOf(false)
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            isNavigating = false
+        }
+    }
 
     override fun onResume() {
         super.onResume()
@@ -121,6 +135,7 @@ class DouyinEntryActivity : BaseWatchActivity() {
                                 onPageSettled = viewModel::onPageSettled,
                                 onEnterFlow = viewModel::enterVideoFlow,
                                 onItemLongPress = { item ->
+                                    isNavigating = true
                                     startActivity(
                                         DouyinVideoActionsActivity.createIntent(
                                             context = this@DouyinEntryActivity,
@@ -136,6 +151,7 @@ class DouyinEntryActivity : BaseWatchActivity() {
                                 onRequestPlaybackRefresh = viewModel::refreshPlaybackSource,
                                 onMessageShown = viewModel::clearMessage,
                                 onHeaderClick = {
+                                    isNavigating = true
                                     startActivity(DouyinChannelInfoActivity.createIntent(this@DouyinEntryActivity))
                                 }
                             )
@@ -146,6 +162,7 @@ class DouyinEntryActivity : BaseWatchActivity() {
                                 onLoadMore = viewModel::loadMoreForList,
                                 onItemClick = { item, _ ->
                                     if (allowNavigation()) {
+                                        isNavigating = true
                                         watchHistoryStore.markWatched(item)
                                         startActivity(
                                             DouyinDetailActivity.createIntent(
@@ -196,12 +213,23 @@ class DouyinEntryActivity : BaseWatchActivity() {
                                     }
                                 },
                                 onLoginClick = {
+                                    isNavigating = true
                                     DouyinLoginActivity.open(this@DouyinEntryActivity)
                                 },
                                 onHeaderClick = {
+                                    isNavigating = true
                                     startActivity(DouyinChannelInfoActivity.createIntent(this@DouyinEntryActivity))
                                 }
                             )
+                        }
+                    }
+
+                    if (isNavigating) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            WatchCircularProgressIndicator()
                         }
                     }
                 }
@@ -212,6 +240,7 @@ class DouyinEntryActivity : BaseWatchActivity() {
     override fun isSwipeBackEnabled(): Boolean = !disableSwipeBack
 
     private fun openDouyinItemActions(item: DouyinStreamItem) {
+        isNavigating = true
         startActivity(
             DouyinVideoActionsActivity.createIntent(
                 context = this,

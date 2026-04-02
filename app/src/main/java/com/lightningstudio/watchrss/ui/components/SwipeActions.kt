@@ -32,6 +32,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import com.lightningstudio.watchrss.ui.theme.watchColorResource
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.res.painterResource
@@ -48,7 +50,8 @@ fun SwipeActionButton(
     text: String,
     width: Dp,
     onClick: () -> Unit,
-    icon: androidx.compose.ui.graphics.vector.ImageVector? = null
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    semanticLabel: String = text
 ) {
     val radius = watchDimensionResource(R.dimen.hey_card_normal_bg_radius)
     val textSize = textSize(R.dimen.feed_card_action_text_size)
@@ -64,6 +67,7 @@ fun SwipeActionButton(
             .fillMaxHeight()
             .clip(RoundedCornerShape(radius))
             .background(MaterialTheme.colorScheme.surfaceVariant)
+            .semantics { contentDescription = semanticLabel }
             .clickableWithoutRipple(onClick),
         contentAlignment = Alignment.Center
     ) {

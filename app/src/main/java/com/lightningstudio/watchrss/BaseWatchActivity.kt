@@ -48,13 +48,10 @@ open class BaseWatchActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (shouldAttachPerformanceMonitor()) {
-            PerformanceMonitor.attach(this)
-        }
+        PerformanceMonitor.attach(this)
 
-        if (shouldLogActivityLifecycle()) {
-            AppLogger.log("Activity", "启动: ${this.javaClass.simpleName}")
-        }
+        // 记录Activity启动
+        AppLogger.log("Activity", "启动: ${this.javaClass.simpleName}")
     }
 
     override fun onResume() {
@@ -63,17 +60,14 @@ open class BaseWatchActivity : ComponentActivity() {
         window.decorView.removeCallbacks(resetRunnable)
         swipeCommitted = false
         resetNavigationThrottle()
-        if (shouldResetRootViewStateOnResume()) {
-            resetViewState(window.decorView)
-        }
+        resetViewState(window.decorView)
 
-        if (shouldLogActivityLifecycle()) {
-            AppLogger.log("Activity", "活跃: ${this.javaClass.simpleName}")
-        }
+        // 记录Activity活跃
+        AppLogger.log("Activity", "活跃: ${this.javaClass.simpleName}")
     }
 
     override fun setContentView(layoutResID: Int) {
-        if (!shouldUseDebugWatchMask()) {
+        if (!BuildConfig.DEBUG) {
             super.setContentView(layoutResID)
             return
         }
@@ -87,7 +81,7 @@ open class BaseWatchActivity : ComponentActivity() {
             super.setContentView(view)
             return
         }
-        if (!shouldUseDebugWatchMask()) {
+        if (!BuildConfig.DEBUG) {
             super.setContentView(view)
             return
         }
@@ -107,7 +101,7 @@ open class BaseWatchActivity : ComponentActivity() {
             super.setContentView(view, params)
             return
         }
-        if (!shouldUseDebugWatchMask()) {
+        if (!BuildConfig.DEBUG) {
             super.setContentView(view, params)
             return
         }
@@ -137,7 +131,7 @@ open class BaseWatchActivity : ComponentActivity() {
         if (swipeHandled) {
             if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
                 root.removeCallbacks(resetRunnable)
-                if (!swipeCommitted && shouldScheduleRootViewResetAfterTouchEnd()) {
+                if (!swipeCommitted) {
                     root.postDelayed(resetRunnable, RESET_DELAY_MS)
                 }
             }
@@ -149,9 +143,7 @@ open class BaseWatchActivity : ComponentActivity() {
             if (shouldResetViewStateImmediatelyOnTouchEnd()) {
                 resetViewState(root)
             }
-            if (shouldScheduleRootViewResetAfterTouchEnd()) {
-                root.postDelayed(resetRunnable, RESET_DELAY_MS)
-            }
+            root.postDelayed(resetRunnable, RESET_DELAY_MS)
         }
         return handled
     }
@@ -220,16 +212,6 @@ open class BaseWatchActivity : ComponentActivity() {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
     }
-
-    protected open fun shouldUseDebugWatchMask(): Boolean = BuildConfig.DEBUG
-
-    protected open fun shouldAttachPerformanceMonitor(): Boolean = true
-
-    protected open fun shouldLogActivityLifecycle(): Boolean = true
-
-    protected open fun shouldResetRootViewStateOnResume(): Boolean = true
-
-    protected open fun shouldScheduleRootViewResetAfterTouchEnd(): Boolean = true
 
     private fun resetViewState(view: View) {
         val skipScale = view.getTag(R.id.tag_skip_scale_reset) == true

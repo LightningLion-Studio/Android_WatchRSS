@@ -21,7 +21,6 @@ import com.lightningstudio.watchrss.ui.screen.rss.FeedScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
 import com.lightningstudio.watchrss.ui.viewmodel.FeedViewModel
-import com.lightningstudio.watchrss.util.AppLogger
 
 class FeedActivity : BaseWatchActivity() {
     private val viewModel: FeedViewModel by viewModels {
@@ -41,23 +40,7 @@ class FeedActivity : BaseWatchActivity() {
 
     override fun onResume() {
         super.onResume()
-        AppLogger.d(DEBUG_TAG, "FeedActivity.onResume")
         closeOpenSwipe()
-    }
-
-    override fun onPause() {
-        AppLogger.d(DEBUG_TAG, "FeedActivity.onPause")
-        super.onPause()
-    }
-
-    override fun onStop() {
-        AppLogger.d(DEBUG_TAG, "FeedActivity.onStop")
-        super.onStop()
-    }
-
-    override fun finish() {
-        AppLogger.d(DEBUG_TAG, "FeedActivity.finish")
-        super.finish()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -167,6 +150,5 @@ class FeedActivity : BaseWatchActivity() {
 
     companion object {
         const val EXTRA_CHANNEL_ID = "channelId"
-        private const val DEBUG_TAG = "FeedActivityDebug"
     }
 }

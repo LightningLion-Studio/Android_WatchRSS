@@ -4,15 +4,17 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
+import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.screen.DeleteConfirmDialog
 import com.lightningstudio.watchrss.ui.screen.rss.ChannelSettingsScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
@@ -22,6 +24,14 @@ import com.lightningstudio.watchrss.ui.viewmodel.ChannelDetailViewModel
 class ChannelSettingsActivity : BaseWatchActivity() {
     private val viewModel: ChannelDetailViewModel by viewModels {
         AppViewModelFactory((application as WatchRssApplication).container)
+    }
+    private var isNavigating by mutableStateOf(false)
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            isNavigating = false
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -66,6 +76,15 @@ class ChannelSettingsActivity : BaseWatchActivity() {
                             onCancel = { showDeleteConfirm = false }
                         )
                     }
+
+                    if (isNavigating) {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            WatchCircularProgressIndicator()
+                        }
+                    }
                 }
             }
         }
@@ -76,6 +95,7 @@ class ChannelSettingsActivity : BaseWatchActivity() {
     }
 
     private fun navigateHome() {
+        isNavigating = true
         val intent = Intent(this, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         startActivity(intent)

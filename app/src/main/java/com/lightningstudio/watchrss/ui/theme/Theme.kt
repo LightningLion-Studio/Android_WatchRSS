@@ -90,7 +90,6 @@ fun WatchRSSTheme(
     darkTheme: Boolean = true,
     // Dynamic color is available on Android 12+
     dynamicColor: Boolean = false,
-    enableRubberBandOverscroll: Boolean = true,
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) WatchDarkColorScheme else WatchLightColorScheme
@@ -104,17 +103,7 @@ fun WatchRSSTheme(
                 LocalContentColor provides colorScheme.onSurface
             ) {
                 ProvideTextStyle(Typography.bodyMedium) {
-                    if (enableRubberBandOverscroll) {
-                        RubberBandOverscrollContainer(content = content)
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color.Black)
-                        ) {
-                            content()
-                        }
-                    }
+                    RubberBandOverscrollContainer(content = content)
                 }
             }
         }
