@@ -68,7 +68,7 @@ class MainActivity : BaseWatchActivity() {
         return hasOpen
     }
 
-    override fun isSwipeBackEnabled(): Boolean = !usesSystemBackGesture()
+    override fun isSwipeBackEnabled(): Boolean = false
 
     override fun shouldAnimateSwipeBackGesture(): Boolean = false
 
