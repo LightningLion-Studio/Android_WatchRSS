@@ -71,11 +71,13 @@ class MainActivity : BaseWatchActivity() {
         return hasOpen
     }
 
-    override fun isSwipeBackEnabled(): Boolean = !usesSystemBackGesture()
+    override fun isSwipeBackEnabled(): Boolean = false
 
     override fun shouldAnimateSwipeBackGesture(): Boolean = false
 
     override fun shouldResetViewStateImmediatelyOnTouchEnd(): Boolean = false
+
+    override fun shouldScheduleDelayedViewStateResetOnTouchEnd(): Boolean = false
 
     override fun onResume() {
         super.onResume()
@@ -166,6 +168,7 @@ class MainActivity : BaseWatchActivity() {
                         channels = channels,
                         hasLoadedChannels = hasLoadedChannels,
                         platformLoginState = platformLoginState,
+                        enableChannelSwipeActions = false,
                         isRefreshing = isRefreshing,
                         onRefreshAll = viewModel::refreshAll,
                         openSwipeId = openSwipeKey,
