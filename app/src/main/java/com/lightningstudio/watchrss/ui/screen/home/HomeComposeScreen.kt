@@ -253,8 +253,7 @@ private fun HomeProfileEntry(onProfileClick: () -> Unit) {
             modifier = Modifier
                 .size(avatarSize)
                 .border(strokeWidth, accentColor, CircleShape)
-                .clip(CircleShape)
-                .background(cardColor)
+                .background(cardColor, CircleShape)
                 .semantics { contentDescription = "个人中心" },
             contentAlignment = Alignment.Center
         ) {
@@ -463,6 +462,7 @@ private fun HomeSwipeActionButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector? = null
 ) {
     val radius = watchDimensionResource(R.dimen.hey_card_normal_bg_radius)
+    val shape = RoundedCornerShape(radius)
     val textSize = textSize(R.dimen.feed_card_action_text_size)
     val textPadding = watchDimensionResource(R.dimen.hey_distance_8dp)
     val iconSize = watchDimensionResource(R.dimen.hey_distance_16dp)
@@ -474,8 +474,7 @@ private fun HomeSwipeActionButton(
         modifier = Modifier
             .width(width)
             .fillMaxHeight()
-            .clip(RoundedCornerShape(radius))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .background(MaterialTheme.colorScheme.surfaceVariant, shape)
             .then(testTag?.let(Modifier::testTag) ?: Modifier)
             .clickableWithoutRipple(onClick = onClick)
             .alpha(alpha),
@@ -674,8 +673,7 @@ private fun HomeDefaultItem(
             .fillMaxWidth()
             .then(clickModifier)
             .then(testTag?.let(Modifier::testTag) ?: Modifier)
-            .clip(shape)
-            .background(backgroundColor)
+            .background(backgroundColor, shape)
             .padding(
                 start = paddingStart,
                 end = paddingEnd,
@@ -706,9 +704,8 @@ private fun HomeDefaultItem(
                     .padding(start = arrowMargin)
                     .offset(x = minorMarginRight)
                     .size(indicatorSize)
-                    .clip(CircleShape)
                     .then(indicatorTestTag?.let(Modifier::testTag) ?: Modifier)
-                    .background(MaterialTheme.colorScheme.primary)
+                    .background(MaterialTheme.colorScheme.primary, CircleShape)
             )
         }
     }
