@@ -42,11 +42,9 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.composed
 import androidx.compose.ui.Modifier
@@ -55,7 +53,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import com.lightningstudio.watchrss.ui.theme.watchColorResource
@@ -88,6 +85,7 @@ fun HomeComposeScreen(
     channels: List<RssChannel>,
     hasLoadedChannels: Boolean,
     platformLoginState: HomePlatformLoginState = HomePlatformLoginState(),
+    enableChannelSwipeActions: Boolean = false,
     isRefreshing: Boolean,
     onRefreshAll: () -> Unit,
     openSwipeId: Long?,
@@ -192,7 +190,7 @@ fun HomeComposeScreen(
                                     onChannelClick = { onChannelClick(entry.channel) },
                                     onChannelLongClick = { onChannelLongClick(entry.channel) },
                                     onSwipeBack = onSwipeBack,
-                                    swipeInteractionsEnabled = !isScrolling,
+                                    swipeInteractionsEnabled = enableChannelSwipeActions && !isScrolling,
                                     onMoveTopClick = { onMoveTopClick(entry.channel) },
                                     onMarkReadClick = { onMarkReadClick(entry.channel) }
                                 )
@@ -342,13 +340,6 @@ private fun HomeChannelEntry(
 ) {
     val actionPadding = watchDimensionResource(R.dimen.hey_distance_4dp)
     val actionWidth = watchDimensionResource(R.dimen.watch_swipe_action_button_width)
-    var cardHeightPx by remember { mutableStateOf(0) }
-    val density = LocalDensity.current
-    val cardHeightModifier = if (cardHeightPx > 0) {
-        Modifier.height(with(density) { cardHeightPx.toDp() })
-    } else {
-        Modifier
-    }
     val actionsWidthPx = with(LocalDensity.current) {
         (actionWidth * 2 + actionPadding * 2).toPx()
     }
@@ -372,11 +363,6 @@ private fun HomeChannelEntry(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(offsetModifier)
-                .onSizeChanged { size ->
-                    if (cardHeightPx != size.height) {
-                        cardHeightPx = size.height
-                    }
-                }
                 .testTag(HomeTestTags.channelRow(channel.id))
         ) {
             HomeDefaultItem(
@@ -401,6 +387,11 @@ private fun HomeChannelEntry(
         }
     }
 
+    if (!swipeInteractionsEnabled) {
+        cardContent(Modifier)
+        return
+    }
+
     HomeSwipeRow(
         itemId = channel.id,
         openSwipeId = openSwipeId,
@@ -419,39 +410,42 @@ private fun HomeChannelEntry(
                 .fillMaxWidth()
         ) {
             if (actionsVisible) {
-                Row(
+                Box(
                     modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .then(cardHeightModifier)
+                        .matchParentSize()
                         .padding(end = actionPadding),
-                    horizontalArrangement = Arrangement.spacedBy(actionPadding, Alignment.End),
-                    verticalAlignment = Alignment.CenterVertically
+                    contentAlignment = Alignment.CenterEnd
                 ) {
-                    HomeSwipeActionButton(
-                        text = "移到顶",
-                        width = actionWidth,
-                        testTag = HomeTestTags.moveTopAction(channel.id),
-                        onClick = {
-                            onCloseSwipe()
-                            onMoveTopClick()
-                        },
-                        icon = Icons.Outlined.VerticalAlignTop
-                    )
-                    val isBuiltin = BuiltinChannelType.fromUrl(channel.url) != null
-                    val canMarkRead = channel.unreadCount > 0 && !isBuiltin
-                    HomeSwipeActionButton(
-                        text = "标记已读",
-                        width = actionWidth,
-                        alpha = if (canMarkRead) 1f else 0.5f,
-                        testTag = HomeTestTags.markReadAction(channel.id),
-                        onClick = {
-                            onCloseSwipe()
-                            if (canMarkRead) {
-                                onMarkReadClick()
-                            }
-                        },
-                        icon = Icons.Outlined.DoneAll
-                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(actionPadding, Alignment.End),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        HomeSwipeActionButton(
+                            text = "移到顶",
+                            width = actionWidth,
+                            testTag = HomeTestTags.moveTopAction(channel.id),
+                            onClick = {
+                                onCloseSwipe()
+                                onMoveTopClick()
+                            },
+                            icon = Icons.Outlined.VerticalAlignTop
+                        )
+                        val isBuiltin = BuiltinChannelType.fromUrl(channel.url) != null
+                        val canMarkRead = channel.unreadCount > 0 && !isBuiltin
+                        HomeSwipeActionButton(
+                            text = "标记已读",
+                            width = actionWidth,
+                            alpha = if (canMarkRead) 1f else 0.5f,
+                            testTag = HomeTestTags.markReadAction(channel.id),
+                            onClick = {
+                                onCloseSwipe()
+                                if (canMarkRead) {
+                                    onMarkReadClick()
+                                }
+                            },
+                            icon = Icons.Outlined.DoneAll
+                        )
+                    }
                 }
             }
             cardContent(offsetModifier)

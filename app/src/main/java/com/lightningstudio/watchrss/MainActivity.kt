@@ -74,6 +74,8 @@ class MainActivity : BaseWatchActivity() {
 
     override fun shouldResetViewStateImmediatelyOnTouchEnd(): Boolean = false
 
+    override fun shouldScheduleDelayedViewStateResetOnTouchEnd(): Boolean = false
+
     override fun onResume() {
         super.onResume()
         closeOpenSwipe()
@@ -156,6 +158,7 @@ class MainActivity : BaseWatchActivity() {
                         channels = channels,
                         hasLoadedChannels = hasLoadedChannels,
                         platformLoginState = platformLoginState,
+                        enableChannelSwipeActions = false,
                         isRefreshing = isRefreshing,
                         onRefreshAll = viewModel::refreshAll,
                         openSwipeId = openSwipeKey,

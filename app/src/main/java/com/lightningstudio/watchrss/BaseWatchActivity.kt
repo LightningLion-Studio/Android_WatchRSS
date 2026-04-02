@@ -131,7 +131,7 @@ open class BaseWatchActivity : ComponentActivity() {
         if (swipeHandled) {
             if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
                 root.removeCallbacks(resetRunnable)
-                if (!swipeCommitted) {
+                if (!swipeCommitted && shouldScheduleDelayedViewStateResetOnTouchEnd()) {
                     root.postDelayed(resetRunnable, RESET_DELAY_MS)
                 }
             }
@@ -143,7 +143,9 @@ open class BaseWatchActivity : ComponentActivity() {
             if (shouldResetViewStateImmediatelyOnTouchEnd()) {
                 resetViewState(root)
             }
-            root.postDelayed(resetRunnable, RESET_DELAY_MS)
+            if (shouldScheduleDelayedViewStateResetOnTouchEnd()) {
+                root.postDelayed(resetRunnable, RESET_DELAY_MS)
+            }
         }
         return handled
     }
@@ -326,6 +328,8 @@ open class BaseWatchActivity : ComponentActivity() {
     protected open fun shouldAnimateSwipeBackGesture(): Boolean = true
 
     protected open fun shouldResetViewStateImmediatelyOnTouchEnd(): Boolean = true
+
+    protected open fun shouldScheduleDelayedViewStateResetOnTouchEnd(): Boolean = true
 
     protected open fun buildResumeIntent(): Intent? = null
 
