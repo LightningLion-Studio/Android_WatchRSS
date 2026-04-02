@@ -28,12 +28,18 @@ import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.withLink
 import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
 import com.lightningstudio.watchrss.R
@@ -51,7 +57,10 @@ internal fun DetailTextBlock(
     textColor: Color,
     fontSizeSp: TextUnit,
     topPadding: Dp,
-    isScrolling: Boolean
+    isScrolling: Boolean,
+    inlineActionText: String? = null,
+    inlineActionColor: Color = Color(0xFF87CEEB),
+    onInlineActionClick: (() -> Unit)? = null
 ) {
     if (isDetailTracingEnabled()) {
         Trace.beginSection("DetailTextBlock:${style.name}")
@@ -59,8 +68,16 @@ internal fun DetailTextBlock(
     val lineHeight = fontSizeSp * 1.2f
     val fontFamily = if (style == ContentTextStyle.CODE) FontFamily.Monospace else null
     val color = if (style == ContentTextStyle.QUOTE) textColor.copy(alpha = 0.8f) else textColor
+    val annotatedText = remember(text, inlineActionText, inlineActionColor, onInlineActionClick) {
+        buildDetailTextAnnotatedString(
+            text = text,
+            inlineActionText = inlineActionText,
+            inlineActionColor = inlineActionColor,
+            onInlineActionClick = onInlineActionClick
+        )
+    }
     Text(
-        text = text,
+        text = annotatedText,
         color = color,
         fontSize = fontSizeSp,
         lineHeight = lineHeight,
@@ -75,6 +92,46 @@ internal fun DetailTextBlock(
     )
     if (isDetailTracingEnabled()) {
         Trace.endSection()
+    }
+}
+
+private fun buildDetailTextAnnotatedString(
+    text: String,
+    inlineActionText: String?,
+    inlineActionColor: Color,
+    onInlineActionClick: (() -> Unit)?
+) = buildAnnotatedString {
+    if (inlineActionText.isNullOrEmpty() || onInlineActionClick == null) {
+        append(text)
+        return@buildAnnotatedString
+    }
+
+    val linkStyle = TextLinkStyles(
+        style = SpanStyle(
+            color = inlineActionColor,
+            textDecoration = TextDecoration.Underline
+        )
+    )
+    var searchStart = 0
+    while (searchStart < text.length) {
+        val matchIndex = text.indexOf(inlineActionText, startIndex = searchStart)
+        if (matchIndex < 0) {
+            append(text.substring(searchStart))
+            break
+        }
+        if (matchIndex > searchStart) {
+            append(text.substring(searchStart, matchIndex))
+        }
+        withLink(
+            LinkAnnotation.Clickable(
+                tag = inlineActionText,
+                styles = linkStyle,
+                linkInteractionListener = { onInlineActionClick() }
+            )
+        ) {
+            append(inlineActionText)
+        }
+        searchStart = matchIndex + inlineActionText.length
     }
 }
 

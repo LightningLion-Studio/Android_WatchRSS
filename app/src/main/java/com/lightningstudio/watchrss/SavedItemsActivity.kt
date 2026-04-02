@@ -54,6 +54,7 @@ class SavedItemsActivity : BaseWatchActivity() {
         setContent {
             WatchRSSTheme {
                 val items by viewModel.items.collectAsState()
+                val hasLoadedItems by viewModel.hasLoadedItems.collectAsState()
                 val phoneConnectionEnabled by settingsRepository.phoneConnectionEnabled.collectAsState(
                     initial = PhoneConnectionFeature.isDebugBuild
                 )
@@ -63,7 +64,7 @@ class SavedItemsActivity : BaseWatchActivity() {
                     .uiState
                     .collectAsState()
                 val title = if (viewModel.saveType == SaveType.FAVORITE) "我的收藏" else "稍后再看"
-                val hint = "保存在本地，离线可读"
+                val hint = "保存在本地，离线可读，长按可拖动排序"
                 val emptyMessage = if (viewModel.saveType == SaveType.FAVORITE) "暂无收藏" else "暂无稍后再看"
 
                 Box(modifier = Modifier.fillMaxSize()) {
@@ -71,6 +72,7 @@ class SavedItemsActivity : BaseWatchActivity() {
                         title = title,
                         hint = hint,
                         emptyMessage = emptyMessage,
+                        hasLoadedItems = hasLoadedItems,
                         items = items,
                         undoVisible = lastRemoved != null,
                         showSyncButton = PhoneConnectionFeature.isEnabled(phoneConnectionEnabled),
@@ -100,6 +102,9 @@ class SavedItemsActivity : BaseWatchActivity() {
                         onItemRemove = { savedItem ->
                             viewModel.toggleSaved(savedItem.item.id)
                             showUndo(savedItem)
+                        },
+                        onItemsReordered = { orderedItemIds ->
+                            viewModel.reorderSavedItems(orderedItemIds)
                         },
                         onSyncToPhone = { startSyncToPhone() }
                     )

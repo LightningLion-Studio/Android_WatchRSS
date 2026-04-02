@@ -26,7 +26,8 @@ class ProfileScreenTest {
                 onPhoneConnectionClick = {},
                 onSettingsClick = {},
                 onAboutClick = {},
-                onContactDeveloperClick = {}
+                onContactDeveloperClick = {},
+                onBeianClick = {}
             )
         }
 
@@ -36,6 +37,7 @@ class ProfileScreenTest {
         composeRule.onNodeWithTag(ProfileTestTags.SETTINGS_ENTRY).assertExists()
         composeRule.onNodeWithTag(ProfileTestTags.ABOUT_ENTRY).performScrollTo().assertExists()
         composeRule.onNodeWithTag(ProfileTestTags.CONTACT_DEVELOPER_ENTRY).performScrollTo().assertExists()
+        composeRule.onNodeWithTag(ProfileTestTags.BEIAN_ENTRY).performScrollTo().assertExists()
     }
 
     @Test
@@ -46,6 +48,7 @@ class ProfileScreenTest {
         var settingsClicks = 0
         var aboutClicks = 0
         var contactClicks = 0
+        var beianClicks = 0
 
         composeRule.setWatchContent {
             ProfileScreen(
@@ -54,7 +57,8 @@ class ProfileScreenTest {
                 onPhoneConnectionClick = { phoneConnectionClicks++ },
                 onSettingsClick = { settingsClicks++ },
                 onAboutClick = { aboutClicks++ },
-                onContactDeveloperClick = { contactClicks++ }
+                onContactDeveloperClick = { contactClicks++ },
+                onBeianClick = { beianClicks++ }
             )
         }
 
@@ -64,6 +68,7 @@ class ProfileScreenTest {
         composeRule.onNodeWithTag(ProfileTestTags.SETTINGS_ENTRY).performClick()
         composeRule.onNodeWithTag(ProfileTestTags.ABOUT_ENTRY).performScrollTo().performClick()
         composeRule.onNodeWithTag(ProfileTestTags.CONTACT_DEVELOPER_ENTRY).performScrollTo().performClick()
+        composeRule.onNodeWithTag(ProfileTestTags.BEIAN_ENTRY).performScrollTo().performClick()
 
         composeRule.runOnIdle {
             assertEquals(1, favoritesClicks)
@@ -72,6 +77,7 @@ class ProfileScreenTest {
             assertEquals(1, settingsClicks)
             assertEquals(1, aboutClicks)
             assertEquals(1, contactClicks)
+            assertEquals(1, beianClicks)
         }
     }
 
@@ -85,7 +91,8 @@ class ProfileScreenTest {
                 onPhoneConnectionClick = {},
                 onSettingsClick = {},
                 onAboutClick = {},
-                onContactDeveloperClick = {}
+                onContactDeveloperClick = {},
+                onBeianClick = {}
             )
         }
 

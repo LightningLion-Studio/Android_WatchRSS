@@ -1,38 +1,37 @@
 package com.lightningstudio.watchrss
 
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
-import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import com.lightningstudio.watchrss.data.cache.CacheTrimReason
+import com.lightningstudio.watchrss.data.douyin.DouyinFeedCacheStore
+import com.lightningstudio.watchrss.data.douyin.DouyinSourceOrigin
+import com.lightningstudio.watchrss.data.douyin.DouyinStreamItem
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.rss.RssChannel
 import com.lightningstudio.watchrss.data.settings.CURRENT_OOBE_VERSION
 import com.lightningstudio.watchrss.debug.PerformanceMonitor
-import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
+import com.lightningstudio.watchrss.sdk.douyin.DouyinVideo
 import com.lightningstudio.watchrss.ui.screen.common.ReadAloudBubbleDock
 import com.lightningstudio.watchrss.ui.screen.common.ReadAloudFloatingBubbleOverlay
 import com.lightningstudio.watchrss.ui.screen.home.HomeComposeScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
 import com.lightningstudio.watchrss.ui.viewmodel.HomeViewModel
-import com.lightningstudio.watchrss.data.douyin.DouyinFeedCacheStore
-import com.lightningstudio.watchrss.data.douyin.DouyinSourceOrigin
-import com.lightningstudio.watchrss.data.douyin.DouyinStreamItem
-import com.lightningstudio.watchrss.sdk.douyin.DouyinVideo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
@@ -60,7 +59,7 @@ class MainActivity : BaseWatchActivity() {
     private var keepSplashOnScreen = true
     private var initialStartupCompleted = false
     private var startupMaintenanceScheduled = false
-    private var isNavigating by mutableStateOf(false)
+    private var navigatingHomeEntryKey by mutableStateOf<String?>(null)
 
     override fun onSwipeBackAttempt(dx: Float, dy: Float): Boolean {
         val hasOpen = openSwipeKey != null
@@ -91,7 +90,7 @@ class MainActivity : BaseWatchActivity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) {
-            isNavigating = false
+            navigatingHomeEntryKey = null
         }
     }
 
@@ -124,7 +123,6 @@ class MainActivity : BaseWatchActivity() {
                 finish()
                 return@launch
             }
-            keepSplashOnScreen = false
             initialStartupCompleted = true
             schedulePlatformLoginStateRefresh()
             scheduleStartupMaintenance()
@@ -150,6 +148,12 @@ class MainActivity : BaseWatchActivity() {
                     .uiState
                     .collectAsState()
 
+                LaunchedEffect(hasLoadedChannels) {
+                    if (hasLoadedChannels) {
+                        keepSplashOnScreen = false
+                    }
+                }
+
                 LaunchedEffect(message) {
                     if (message != null) {
                         com.lightningstudio.watchrss.ui.util.showAppToast(context, message, android.widget.Toast.LENGTH_SHORT)
@@ -164,6 +168,7 @@ class MainActivity : BaseWatchActivity() {
                         platformLoginState = platformLoginState,
                         enableChannelSwipeActions = false,
                         isRefreshing = isRefreshing,
+                        loadingEntryKey = navigatingHomeEntryKey,
                         onRefreshAll = viewModel::refreshAll,
                         openSwipeId = openSwipeKey,
                         onOpenSwipe = { openSwipeKey = it },
@@ -172,17 +177,20 @@ class MainActivity : BaseWatchActivity() {
                         onDragStart = { draggingSwipeKey = it },
                         onDragEnd = { draggingSwipeKey = null },
                         onProfileClick = {
-                            if (!allowNavigation()) return@HomeComposeScreen
-                            startNavigatingActivity(Intent(this@MainActivity, ProfileActivity::class.java))
+                            startNavigatingActivity(
+                                intent = Intent(this@MainActivity, ProfileActivity::class.java),
+                                loadingEntryKey = HOME_ENTRY_PROFILE
+                            )
                         },
                         onRecommendClick = {
                             if (closeOpenSwipe()) return@HomeComposeScreen
-                            if (!allowNavigation()) return@HomeComposeScreen
-                            startNavigatingActivity(Intent(this@MainActivity, RssRecommendActivity::class.java))
+                            startNavigatingActivity(
+                                intent = Intent(this@MainActivity, RssRecommendActivity::class.java),
+                                loadingEntryKey = HOME_ENTRY_RECOMMEND
+                            )
                         },
                         onChannelClick = { channel ->
                             if (closeOpenSwipe()) return@HomeComposeScreen
-                            if (!allowNavigation()) return@HomeComposeScreen
                             openChannel(channel)
                         },
                         onChannelLongClick = { channel ->
@@ -192,8 +200,10 @@ class MainActivity : BaseWatchActivity() {
                             onBackPressedDispatcher.onBackPressed()
                         },
                         onAddRssClick = {
-                            if (!allowNavigation()) return@HomeComposeScreen
-                            startNavigatingActivity(Intent(this@MainActivity, AddRssActivity::class.java))
+                            startNavigatingActivity(
+                                intent = Intent(this@MainActivity, AddRssActivity::class.java),
+                                loadingEntryKey = HOME_ENTRY_ADD_RSS
+                            )
                         },
                         onMoveTopClick = { channel ->
                             closeOpenSwipe()
@@ -204,7 +214,6 @@ class MainActivity : BaseWatchActivity() {
                             viewModel.markChannelRead(channel)
                         },
                         onBeianClick = {
-                            if (!allowNavigation()) return@HomeComposeScreen
                             startNavigatingActivity(BeianActivity.createIntent(this@MainActivity))
                         }
                     )
@@ -212,18 +221,9 @@ class MainActivity : BaseWatchActivity() {
                         state = readAloudState,
                         defaultDock = ReadAloudBubbleDock.RIGHT,
                         onClick = {
-                            if (!allowNavigation()) return@ReadAloudFloatingBubbleOverlay
                             startNavigatingActivity(ReadAloudPlaybackActivity.createIntent(this@MainActivity))
                         }
                     )
-                    if (isNavigating) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            WatchCircularProgressIndicator()
-                        }
-                    }
                 }
             }
         }
@@ -235,6 +235,10 @@ class MainActivity : BaseWatchActivity() {
             openSwipeKey = null
         }
         return hasOpen
+    }
+
+    private fun usesSystemBackGesture(): Boolean {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
     }
 
     private suspend fun maybeResumeLastContent(sourceIntent: Intent?) {
@@ -269,8 +273,7 @@ class MainActivity : BaseWatchActivity() {
     }
 
     private fun schedulePlatformLoginStateRefresh() {
-        lifecycleScope.launch {
-            delay(STARTUP_PLATFORM_LOGIN_REFRESH_DELAY_MS)
+        window.decorView.post {
             viewModel.refreshPlatformLoginState()
         }
     }
@@ -300,25 +303,40 @@ class MainActivity : BaseWatchActivity() {
         val intent = Intent(this, ChannelActionsActivity::class.java)
         intent.putExtra(ChannelActionsActivity.EXTRA_CHANNEL_ID, channel.id)
         intent.putExtra(ChannelActionsActivity.EXTRA_QUICK, quick)
-        startNavigatingActivity(intent)
+        startNavigatingActivity(
+            intent = intent,
+            loadingEntryKey = homeChannelNavigationKey(channel.id)
+        )
     }
 
     private fun openChannel(channel: RssChannel) {
+        val loadingEntryKey = homeChannelNavigationKey(channel.id)
         when (BuiltinChannelType.fromUrl(channel.url)) {
-            BuiltinChannelType.BILI -> startNavigatingActivity(Intent(this, BiliEntryActivity::class.java))
-            BuiltinChannelType.DOUYIN -> startNavigatingActivity(Intent(this, DouyinEntryActivity::class.java))
+            BuiltinChannelType.BILI -> startNavigatingActivity(
+                intent = Intent(this, BiliEntryActivity::class.java),
+                loadingEntryKey = loadingEntryKey
+            )
+            BuiltinChannelType.DOUYIN -> startNavigatingActivity(
+                intent = Intent(this, DouyinEntryActivity::class.java),
+                loadingEntryKey = loadingEntryKey
+            )
             null -> {
                 val intent = Intent(this, FeedActivity::class.java)
                 intent.putExtra(FeedActivity.EXTRA_CHANNEL_ID, channel.id)
-                startNavigatingActivity(intent)
+                startNavigatingActivity(
+                    intent = intent,
+                    loadingEntryKey = loadingEntryKey
+                )
             }
         }
     }
 
-    private fun startNavigatingActivity(intent: Intent) {
-        isNavigating = true
+    private fun startNavigatingActivity(intent: Intent, loadingEntryKey: String? = null) {
+        navigatingHomeEntryKey = loadingEntryKey
         startActivity(intent)
     }
+
+    private fun homeChannelNavigationKey(channelId: Long): String = "channel_$channelId"
 
     private fun toDouyinStreamItem(video: DouyinVideo): DouyinStreamItem? {
         val awemeId = video.awemeId?.trim().orEmpty()
@@ -337,9 +355,11 @@ class MainActivity : BaseWatchActivity() {
     }
 
     companion object {
+        private const val HOME_ENTRY_PROFILE = "profile"
+        private const val HOME_ENTRY_RECOMMEND = "recommend"
+        private const val HOME_ENTRY_ADD_RSS = "add_rss"
         private const val STARTUP_DOUYIN_PREWARM_DELAY_MS = 2_000L
-        private const val STARTUP_PLATFORM_LOGIN_REFRESH_DELAY_MS = 1_500L
-        private const val STARTUP_CACHE_MAINTENANCE_DELAY_MS = 10_000L
+        private const val STARTUP_CACHE_MAINTENANCE_DELAY_MS = 5_000L
         private const val DOUYIN_APP_OPEN_REFRESH_COUNT = 16
     }
 }

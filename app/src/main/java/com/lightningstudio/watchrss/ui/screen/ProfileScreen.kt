@@ -3,6 +3,7 @@ package com.lightningstudio.watchrss.ui.screen
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -47,7 +48,8 @@ fun ProfileScreen(
     onPhoneConnectionClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onAboutClick: () -> Unit,
-    onContactDeveloperClick: () -> Unit
+    onContactDeveloperClick: () -> Unit,
+    onBeianClick: () -> Unit
 ) {
     val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
     val sectionSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_content_horizontal_distance
@@ -180,6 +182,20 @@ fun ProfileScreen(
             )
 
             Spacer(modifier = Modifier.height(pillHeight))
+
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "浙ICP备2024111886号-5A",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .testTag(ProfileTestTags.BEIAN_ENTRY)
+                        .clickable(onClick = onBeianClick)
+                )
+            }
         }
     }
 }

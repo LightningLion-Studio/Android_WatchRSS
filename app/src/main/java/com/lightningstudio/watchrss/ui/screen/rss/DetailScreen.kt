@@ -2,18 +2,26 @@ package com.lightningstudio.watchrss.ui.screen.rss
 
 import android.view.View
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.updateTransition
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -23,6 +31,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.CircularProgressIndicator
@@ -43,8 +52,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
@@ -53,6 +66,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -66,6 +80,7 @@ import com.lightningstudio.watchrss.data.douyin.parseDouyinAwemeId
 import com.lightningstudio.watchrss.data.rss.OfflineMedia
 import com.lightningstudio.watchrss.data.rss.RssItem
 import com.lightningstudio.watchrss.data.settings.RssInlineImagePrefetchMode
+import com.lightningstudio.watchrss.ui.components.BlurFadeVisibility
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.screen.WarningConfirmDialog
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
@@ -532,11 +547,25 @@ internal fun DetailContent(
                 Spacer(modifier = Modifier.height(watchDimensionResource(R.dimen.hey_distance_4dp)))
             }
             item(key = "title") {
-                DetailTitle(
-                    title = item?.title ?: "加载中...",
-                    titlePadding = titlePadding,
-                    textColor = textColor
-                )
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    if (item != null) {
+                        DetailTitle(
+                            title = item.title,
+                            titlePadding = titlePadding,
+                            textColor = textColor
+                        )
+                    }
+                    BlurFadeVisibility(
+                        visible = item == null,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        DetailTitleSkeleton(
+                            titlePadding = titlePadding,
+                            backgroundColor = backgroundColor,
+                            textColor = textColor
+                        )
+                    }
+                }
             }
             if (link.isNotEmpty()) {
                 item(key = "linkAction") {
@@ -606,20 +635,21 @@ internal fun DetailContent(
                     )
                 }
             }
-            if (item == null) {
-                item(key = "loading") {}
-            } else if (contentBlocks.isEmpty() && !showOriginalLoadingNotice) {
-                item(key = "emptyContent") {
-                    DetailTextBlock(
-                        text = "暂无正文",
-                        style = ContentTextStyle.BODY,
+            item(key = "loadingSkeleton") {
+                BlurFadeVisibility(
+                    visible = item == null || contentBlocks.isEmpty(),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    DetailContentSkeleton(
+                        backgroundColor = backgroundColor,
                         textColor = textColor,
-                        fontSizeSp = bodyFontSize,
-                        topPadding = 0.dp,
-                        isScrolling = isScrolling
+                        containerColor = actionContainerColor,
+                        borderColor = actionBorderColor,
+                        blockSpacing = blockSpacing
                     )
                 }
-            } else {
+            }
+            if (item != null && contentBlocks.isNotEmpty()) {
                 itemsIndexed(
                     items = contentBlocks,
                     key = { index, block ->
@@ -653,7 +683,10 @@ internal fun DetailContent(
                                 textColor = textColor,
                                 fontSizeSp = blockFontSize,
                                 topPadding = topPadding,
-                                isScrolling = isScrolling
+                                isScrolling = isScrolling,
+                                // “少数派”返回的 RSS 就是这样的，只有摘要，在摘要结尾说“查看全文”。
+                                inlineActionText = "查看全文",
+                                onInlineActionClick = onToggleOriginalContent
                             )
                         }
                         is ContentBlock.Image -> {
@@ -818,4 +851,267 @@ internal fun DetailContent(
             )
         }
     }
+}
+
+@Composable
+private fun DetailTitleSkeleton(
+    titlePadding: Dp,
+    backgroundColor: Color,
+    textColor: Color
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = titlePadding),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        DetailSkeletonBar(
+            widthFraction = 0.78f,
+            height = 12.dp,
+            backgroundColor = backgroundColor,
+            tintColor = textColor
+        )
+        Spacer(modifier = Modifier.height(7.dp))
+        DetailSkeletonBar(
+            widthFraction = 0.52f,
+            height = 12.dp,
+            backgroundColor = backgroundColor,
+            tintColor = textColor
+        )
+    }
+}
+
+@Composable
+private fun DetailContentSkeleton(
+    backgroundColor: Color,
+    textColor: Color,
+    containerColor: Color,
+    borderColor: Color,
+    blockSpacing: Dp
+) {
+    val isDarkPalette = backgroundColor.red + backgroundColor.green + backgroundColor.blue < 1.2f
+    val cardShape = RoundedCornerShape(WatchDimens.hey_card_normal_bg_radius)
+    val lineTint = if (isDarkPalette) {
+        textColor.copy(alpha = 0.22f)
+    } else {
+        textColor.copy(alpha = 0.08f)
+    }
+    val cardTint = if (isDarkPalette) {
+        containerColor.copy(alpha = 0.96f)
+    } else {
+        Color.White.copy(alpha = 0.94f)
+    }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        DetailSkeletonBar(
+            widthFraction = 0.34f,
+            height = 8.dp,
+            backgroundColor = backgroundColor,
+            tintColor = lineTint
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+        DetailSkeletonParagraph(
+            backgroundColor = backgroundColor,
+            tintColor = lineTint,
+            lineHeights = listOf(11.dp, 10.dp, 10.dp),
+            widthFractions = listOf(0.96f, 0.92f, 0.68f),
+            lineSpacing = 8.dp
+        )
+        Spacer(modifier = Modifier.height(blockSpacing))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1.08f)
+                .clip(cardShape)
+                .detailSkeletonPlaceholder(
+                    backgroundColor = backgroundColor,
+                    tintColor = cardTint,
+                    cornerRadius = WatchDimens.hey_card_normal_bg_radius
+                )
+                .then(
+                    if (borderColor.alpha > 0f) {
+                        Modifier.border(BorderStroke(1.dp, borderColor.copy(alpha = 0.55f)), cardShape)
+                    } else {
+                        Modifier
+                    }
+                )
+        )
+        Spacer(modifier = Modifier.height(blockSpacing))
+        DetailSkeletonChipRow(
+            backgroundColor = backgroundColor,
+            tintColor = lineTint
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        DetailSkeletonParagraph(
+            backgroundColor = backgroundColor,
+            tintColor = lineTint,
+            lineHeights = listOf(10.dp, 10.dp, 10.dp, 10.dp, 10.dp),
+            widthFractions = listOf(0.94f, 0.88f, 0.9f, 0.82f, 0.56f),
+            lineSpacing = 8.dp
+        )
+        Spacer(modifier = Modifier.height(14.dp))
+        DetailSkeletonParagraph(
+            backgroundColor = backgroundColor,
+            tintColor = lineTint,
+            lineHeights = listOf(10.dp, 10.dp, 10.dp),
+            widthFractions = listOf(0.92f, 0.8f, 0.48f),
+            lineSpacing = 8.dp
+        )
+    }
+}
+
+@Composable
+private fun DetailSkeletonChipRow(
+    backgroundColor: Color,
+    tintColor: Color
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        DetailSkeletonFixedBar(
+            width = 48.dp,
+            height = 18.dp,
+            backgroundColor = backgroundColor,
+            tintColor = tintColor,
+            cornerRadius = 9.dp
+        )
+        DetailSkeletonFixedBar(
+            width = 58.dp,
+            height = 18.dp,
+            backgroundColor = backgroundColor,
+            tintColor = tintColor,
+            cornerRadius = 9.dp
+        )
+        DetailSkeletonFixedBar(
+            width = 42.dp,
+            height = 18.dp,
+            backgroundColor = backgroundColor,
+            tintColor = tintColor,
+            cornerRadius = 9.dp
+        )
+    }
+}
+
+@Composable
+private fun DetailSkeletonParagraph(
+    backgroundColor: Color,
+    tintColor: Color,
+    lineHeights: List<Dp>,
+    widthFractions: List<Float>,
+    lineSpacing: Dp
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        widthFractions.forEachIndexed { index, widthFraction ->
+            DetailSkeletonBar(
+                widthFraction = widthFraction,
+                height = lineHeights.getOrElse(index) { lineHeights.lastOrNull() ?: 10.dp },
+                backgroundColor = backgroundColor,
+                tintColor = tintColor
+            )
+            if (index != widthFractions.lastIndex) {
+                Spacer(modifier = Modifier.height(lineSpacing))
+            }
+        }
+    }
+}
+
+@Composable
+private fun DetailSkeletonBar(
+    widthFraction: Float,
+    height: Dp,
+    backgroundColor: Color,
+    tintColor: Color,
+    cornerRadius: Dp = 6.dp
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth(widthFraction)
+            .height(height)
+            .clip(RoundedCornerShape(cornerRadius))
+            .detailSkeletonPlaceholder(
+                backgroundColor = backgroundColor,
+                tintColor = tintColor,
+                cornerRadius = cornerRadius
+            )
+    )
+}
+
+@Composable
+private fun DetailSkeletonFixedBar(
+    width: Dp,
+    height: Dp,
+    backgroundColor: Color,
+    tintColor: Color,
+    cornerRadius: Dp
+) {
+    Box(
+        modifier = Modifier
+            .width(width)
+            .height(height)
+            .clip(RoundedCornerShape(cornerRadius))
+            .detailSkeletonPlaceholder(
+                backgroundColor = backgroundColor,
+                tintColor = tintColor,
+                cornerRadius = cornerRadius
+            )
+    )
+}
+
+@Composable
+private fun Modifier.detailSkeletonPlaceholder(
+    backgroundColor: Color,
+    tintColor: Color,
+    cornerRadius: Dp
+): Modifier {
+    val transition = rememberInfiniteTransition(label = "DetailSkeleton")
+    val shimmerProgress by transition.animateFloat(
+        initialValue = -1.15f,
+        targetValue = 1.25f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1750, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "DetailSkeletonShimmer"
+    )
+    val pulseAlpha by transition.animateFloat(
+        initialValue = 0.88f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 980, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "DetailSkeletonPulse"
+    )
+    val highlightColor = if (backgroundColor.red + backgroundColor.green + backgroundColor.blue < 1.2f) {
+        Color.White.copy(alpha = 0.16f)
+    } else {
+        Color.White.copy(alpha = 0.62f)
+    }
+
+    return this
+        .graphicsLayer { alpha = pulseAlpha }
+        .background(tintColor)
+        .drawWithCache {
+            val radiusPx = cornerRadius.toPx()
+            val widthPx = size.width.coerceAtLeast(1f)
+            val heightPx = size.height.coerceAtLeast(1f)
+            val startX = widthPx * shimmerProgress
+            val brush = Brush.linearGradient(
+                colors = listOf(
+                    Color.Transparent,
+                    highlightColor,
+                    Color.Transparent
+                ),
+                start = Offset(startX - widthPx * 0.85f, 0f),
+                end = Offset(startX + widthPx * 0.25f, heightPx)
+            )
+            onDrawWithContent {
+                drawContent()
+                drawRoundRect(
+                    brush = brush,
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(radiusPx, radiusPx)
+                )
+            }
+        }
 }

@@ -52,7 +52,7 @@ fun RssRecommendScreen(
 
     InstallDigitalCrownLazyListHandler(listState)
 
-    WatchSurface(pureBlack = true) {
+    WatchSurface {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -95,7 +95,7 @@ fun RssRecommendGroupScreen(
 
     InstallDigitalCrownLazyListHandler(listState)
 
-    WatchSurface(pureBlack = true) {
+    WatchSurface {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()

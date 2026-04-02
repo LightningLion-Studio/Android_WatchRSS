@@ -25,5 +25,6 @@ data class SavedEntryEntity(
     val id: Long = 0L,
     val itemId: Long,
     val saveType: String,
-    val createdAt: Long
+    val createdAt: Long,
+    val sortOrder: Long
 )

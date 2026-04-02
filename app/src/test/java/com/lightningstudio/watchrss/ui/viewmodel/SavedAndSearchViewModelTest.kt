@@ -46,6 +46,32 @@ class SavedAndSearchViewModelTest {
     }
 
     @Test
+    fun savedItemsViewModel_reordersSavedItems_forCurrentSaveType() = runTest {
+        val repo = TestRssRepository()
+        repo.setSavedItems(
+            SaveType.FAVORITE,
+            listOf(
+                sampleSavedItem(itemId = 1L),
+                sampleSavedItem(itemId = 2L),
+                sampleSavedItem(itemId = 3L)
+            )
+        )
+        val viewModel = SavedItemsViewModel(
+            SavedStateHandle(mapOf("saveType" to SaveType.FAVORITE.name)),
+            repo
+        )
+        val collection = collectFlow(viewModel.items)
+        advanceUntilIdle()
+
+        viewModel.reorderSavedItems(listOf(2L, 1L, 3L))
+        advanceUntilIdle()
+
+        assertEquals(listOf(SaveType.FAVORITE to listOf(2L, 1L, 3L)), repo.reorderedSavedItems)
+        assertEquals(listOf(2L, 1L, 3L), viewModel.items.value.map { it.item.id })
+        collection.cancel()
+    }
+
+    @Test
     fun rssSearchViewModel_debouncesKeyword_and_filtersResults() = runTest {
         val repo = TestRssRepository(initialChannels = listOf(sampleRssChannel(id = 15L)))
         repo.setChannelItems(

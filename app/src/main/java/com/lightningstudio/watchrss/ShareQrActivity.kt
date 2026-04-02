@@ -14,6 +14,7 @@ class ShareQrActivity : BaseWatchActivity() {
         setupSystemBars()
 
         val link = intent.getStringExtra(EXTRA_LINK).orEmpty().trim()
+        val title = intent.getStringExtra(EXTRA_TITLE)?.trim().orEmpty().ifBlank { null }
         val topHint = intent.getStringExtra(EXTRA_TOP_HINT)?.trim().orEmpty().ifBlank { null }
         val qrWidthRatio = intent
             .getFloatExtra(EXTRA_QR_WIDTH_RATIO, DEFAULT_SHARE_QR_WIDTH_RATIO)
@@ -28,6 +29,7 @@ class ShareQrActivity : BaseWatchActivity() {
         setContent {
             WatchRSSTheme {
                 ShareQrScreen(
+                    title = title,
                     link = link,
                     qrWidthRatio = qrWidthRatio,
                     topHint = topHint,

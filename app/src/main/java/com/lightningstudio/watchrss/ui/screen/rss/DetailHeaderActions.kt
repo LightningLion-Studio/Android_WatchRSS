@@ -3,7 +3,10 @@ package com.lightningstudio.watchrss.ui.screen.rss
 import android.graphics.Paint
 import android.text.TextPaint
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -21,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
@@ -40,11 +44,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
@@ -284,33 +291,185 @@ internal fun FavoriteButtonWithStars(
     enabled: Boolean = true,
     onClick: () -> Unit
 ) {
-    var triggerAnimation by remember { mutableStateOf(0) }
+    var starBurstKey by remember { mutableStateOf(0) }
+    var buttonPulseKey by remember { mutableStateOf(0) }
+    var pulseColor by remember { mutableStateOf(activeColor) }
+
+    val buttonScale = remember { Animatable(1f) }
+    val buttonAlpha = remember { Animatable(1f) }
+    val buttonBlur = remember { Animatable(0f) }
+    val buttonBrightness = remember { Animatable(0f) }
+    val auraScale = remember { Animatable(0.82f) }
+    val auraAlpha = remember { Animatable(0f) }
+    val auraBlur = remember { Animatable(0f) }
+    val auraBrightness = remember { Animatable(0f) }
+
+    LaunchedEffect(buttonPulseKey) {
+        if (buttonPulseKey == 0) return@LaunchedEffect
+
+        buttonScale.snapTo(0.96f)
+        buttonAlpha.snapTo(0.94f)
+        buttonBlur.snapTo(0f)
+        buttonBrightness.snapTo(0.08f)
+        auraScale.snapTo(0.82f)
+        auraAlpha.snapTo(0f)
+        auraBlur.snapTo(0f)
+        auraBrightness.snapTo(0.1f)
+
+        launch {
+            buttonScale.animateTo(
+                targetValue = 1f,
+                animationSpec = keyframes {
+                    durationMillis = 1260
+                    1.09f at 180 using FastOutSlowInEasing
+                    1.03f at 520 using LinearOutSlowInEasing
+                    0.995f at 920 using LinearOutSlowInEasing
+                    1f at 1260
+                }
+            )
+        }
+        launch {
+            buttonAlpha.animateTo(
+                targetValue = 1f,
+                animationSpec = keyframes {
+                    durationMillis = 1260
+                    1f at 160 using FastOutSlowInEasing
+                    0.98f at 420 using LinearOutSlowInEasing
+                    1f at 1260
+                }
+            )
+        }
+        launch {
+            buttonBlur.animateTo(
+                targetValue = 0f,
+                animationSpec = keyframes {
+                    durationMillis = 1260
+                    2.4f at 180 using FastOutSlowInEasing
+                    0.7f at 540 using LinearOutSlowInEasing
+                    0f at 1260
+                }
+            )
+        }
+        launch {
+            buttonBrightness.animateTo(
+                targetValue = 0f,
+                animationSpec = keyframes {
+                    durationMillis = 1260
+                    0.48f at 170 using FastOutSlowInEasing
+                    0.22f at 520 using LinearOutSlowInEasing
+                    0f at 1260
+                }
+            )
+        }
+        launch {
+            auraScale.animateTo(
+                targetValue = 1.48f,
+                animationSpec = tween(
+                    durationMillis = 1380,
+                    easing = LinearOutSlowInEasing
+                )
+            )
+        }
+        launch {
+            auraAlpha.animateTo(
+                targetValue = 0f,
+                animationSpec = keyframes {
+                    durationMillis = 1380
+                    0.34f at 150 using FastOutSlowInEasing
+                    0.18f at 520 using LinearOutSlowInEasing
+                    0f at 1380
+                }
+            )
+        }
+        launch {
+            auraBlur.animateTo(
+                targetValue = 10f,
+                animationSpec = tween(
+                    durationMillis = 1380,
+                    easing = LinearOutSlowInEasing
+                )
+            )
+        }
+        launch {
+            auraBrightness.animateTo(
+                targetValue = 0f,
+                animationSpec = keyframes {
+                    durationMillis = 1380
+                    0.42f at 180 using FastOutSlowInEasing
+                    0.12f at 560 using LinearOutSlowInEasing
+                    0f at 1380
+                }
+            )
+        }
+    }
 
     Box(
         modifier = Modifier.size(iconSize),
         contentAlignment = Alignment.Center
     ) {
-        if (triggerAnimation > 0) {
-            StarParticles(
-                key = triggerAnimation,
-                color = activeColor
+        if (buttonPulseKey > 0) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .graphicsLayer {
+                        scaleX = auraScale.value
+                        scaleY = auraScale.value
+                        alpha = auraAlpha.value
+                    }
+                    .then(if (auraBlur.value > 0.1f) Modifier.blur(auraBlur.value.dp) else Modifier)
+                    .clip(CircleShape)
+                    .background(pulseColor.copy(alpha = 0.24f))
+                    .favoriteBrightnessOverlay(
+                        amount = auraBrightness.value,
+                        tintColor = pulseColor
+                    )
             )
         }
 
-        CircleIconButton(
-            icon = Icons.Filled.Star,
-            contentDescription = "收藏",
-            tint = if (isFavorite) activeColor else normalIconColor,
-            containerColor = containerColor,
-            borderColor = borderColor,
-            size = iconSize,
-            padding = iconPadding,
-            enabled = enabled,
-            onClick = {
-                onClick()
-                triggerAnimation++
+        if (starBurstKey > 0) {
+            Box(
+                modifier = Modifier.requiredSize(iconSize + 84.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                StarParticles(
+                    key = starBurstKey,
+                    color = activeColor
+                )
             }
-        )
+        }
+
+        Box(
+            modifier = Modifier
+                .graphicsLayer {
+                    scaleX = buttonScale.value
+                    scaleY = buttonScale.value
+                    alpha = buttonAlpha.value
+                }
+                .then(if (buttonBlur.value > 0.1f) Modifier.blur(buttonBlur.value.dp) else Modifier)
+                .favoriteBrightnessOverlay(
+                    amount = buttonBrightness.value,
+                    tintColor = pulseColor
+                )
+        ) {
+            CircleIconButton(
+                icon = Icons.Filled.Star,
+                contentDescription = "收藏",
+                tint = if (isFavorite) activeColor else normalIconColor,
+                containerColor = containerColor,
+                borderColor = borderColor,
+                size = iconSize,
+                padding = iconPadding,
+                enabled = enabled,
+                onClick = {
+                    pulseColor = if (isFavorite) normalIconColor else activeColor
+                    buttonPulseKey++
+                    if (!isFavorite) {
+                        starBurstKey++
+                    }
+                    onClick()
+                }
+            )
+        }
     }
 }
 
@@ -319,89 +478,205 @@ private fun StarParticles(
     key: Int,
     color: Color
 ) {
-    val particleCount = 8
-    val angles = remember { List(particleCount) { it * 360f / particleCount } }
+    val particles = remember {
+        listOf(
+            StarParticleSpec(angle = -92f, distance = 34f, size = 8.dp, delayMillis = 0, rotationTarget = 220f),
+            StarParticleSpec(angle = -56f, distance = 42f, size = 10.dp, delayMillis = 36, rotationTarget = -260f),
+            StarParticleSpec(angle = -18f, distance = 36f, size = 8.dp, delayMillis = 72, rotationTarget = 180f),
+            StarParticleSpec(angle = 18f, distance = 46f, size = 11.dp, delayMillis = 118, rotationTarget = -300f),
+            StarParticleSpec(angle = 54f, distance = 38f, size = 9.dp, delayMillis = 164, rotationTarget = 240f),
+            StarParticleSpec(angle = 98f, distance = 30f, size = 7.dp, delayMillis = 92, rotationTarget = -180f),
+            StarParticleSpec(angle = 134f, distance = 40f, size = 9.dp, delayMillis = 146, rotationTarget = 260f),
+            StarParticleSpec(angle = 170f, distance = 32f, size = 8.dp, delayMillis = 56, rotationTarget = -220f),
+            StarParticleSpec(angle = 214f, distance = 36f, size = 8.dp, delayMillis = 126, rotationTarget = 200f),
+            StarParticleSpec(angle = 252f, distance = 30f, size = 7.dp, delayMillis = 182, rotationTarget = -210f)
+        )
+    }
 
-    angles.forEach { angle ->
+    particles.forEach { particle ->
         StarParticle(
             key = key,
-            angle = angle,
+            spec = particle,
             color = color
         )
     }
 }
 
+private data class StarParticleSpec(
+    val angle: Float,
+    val distance: Float,
+    val size: Dp,
+    val delayMillis: Int,
+    val rotationTarget: Float
+)
+
 @Composable
 private fun StarParticle(
     key: Int,
-    angle: Float,
+    spec: StarParticleSpec,
     color: Color
 ) {
     val progress = remember { Animatable(0f) }
-    val scale = remember { Animatable(0f) }
+    val starScale = remember { Animatable(0.4f) }
+    val glowScale = remember { Animatable(0.75f) }
     val rotation = remember { Animatable(0f) }
-    val alpha = remember { Animatable(1f) }
+    val alphaAnim = remember { Animatable(1f) }
+    val blur = remember { Animatable(5f) }
+    val brightness = remember { Animatable(0.35f) }
 
     LaunchedEffect(key) {
         progress.snapTo(0f)
-        scale.snapTo(0f)
+        starScale.snapTo(0.4f)
+        glowScale.snapTo(0.75f)
         rotation.snapTo(0f)
-        alpha.snapTo(1f)
+        alphaAnim.snapTo(0f)
+        blur.snapTo(5f)
+        brightness.snapTo(0.35f)
 
         launch {
             progress.animateTo(
                 targetValue = 1f,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessLow
+                animationSpec = tween(
+                    durationMillis = 1680,
+                    delayMillis = spec.delayMillis,
+                    easing = LinearOutSlowInEasing
                 )
             )
         }
         launch {
-            scale.animateTo(
+            starScale.animateTo(
                 targetValue = 1f,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMediumLow
+                animationSpec = keyframes {
+                    durationMillis = 1680
+                    delayMillis = spec.delayMillis
+                    1.28f at 240 using FastOutSlowInEasing
+                    1.04f at 620 using LinearOutSlowInEasing
+                    0.86f at 1240 using LinearOutSlowInEasing
+                    0.72f at 1680
+                }
+            )
+        }
+        launch {
+            glowScale.animateTo(
+                targetValue = 1.52f,
+                animationSpec = tween(
+                    durationMillis = 1680,
+                    delayMillis = spec.delayMillis,
+                    easing = LinearOutSlowInEasing
                 )
             )
         }
         launch {
             rotation.animateTo(
-                targetValue = 720f,
-                animationSpec = tween(durationMillis = 1200)
+                targetValue = spec.rotationTarget,
+                animationSpec = tween(
+                    durationMillis = 1680,
+                    delayMillis = spec.delayMillis,
+                    easing = LinearOutSlowInEasing
+                )
             )
         }
         launch {
-            alpha.animateTo(
+            alphaAnim.animateTo(
                 targetValue = 0f,
-                animationSpec = tween(durationMillis = 1200, delayMillis = 200)
+                animationSpec = keyframes {
+                    durationMillis = 1680
+                    delayMillis = spec.delayMillis
+                    0.96f at 200 using FastOutSlowInEasing
+                    0.72f at 820 using LinearOutSlowInEasing
+                    0.14f at 1380 using LinearOutSlowInEasing
+                    0f at 1680
+                }
+            )
+        }
+        launch {
+            blur.animateTo(
+                targetValue = 0f,
+                animationSpec = keyframes {
+                    durationMillis = 1680
+                    delayMillis = spec.delayMillis
+                    3.4f at 240 using FastOutSlowInEasing
+                    1.2f at 860 using LinearOutSlowInEasing
+                    0f at 1680
+                }
+            )
+        }
+        launch {
+            brightness.animateTo(
+                targetValue = 0f,
+                animationSpec = keyframes {
+                    durationMillis = 1680
+                    delayMillis = spec.delayMillis
+                    0.56f at 220 using FastOutSlowInEasing
+                    0.22f at 840 using LinearOutSlowInEasing
+                    0f at 1680
+                }
             )
         }
     }
 
-    val distance = 60f * progress.value
-    val radians = Math.toRadians(angle.toDouble())
+    val easedProgress = FastOutSlowInEasing.transform(progress.value.coerceIn(0f, 1f))
+    val distance = spec.distance * easedProgress
+    val radians = Math.toRadians(spec.angle.toDouble())
     val offsetX = (distance * kotlin.math.cos(radians)).toFloat()
     val offsetY = (distance * kotlin.math.sin(radians)).toFloat()
 
     Box(
         modifier = Modifier
-            .fillMaxSize()
-            .alpha(alpha.value),
+            .fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = "★",
-            color = color,
-            fontSize = with(LocalDensity.current) { (16.dp * scale.value).toSp() },
+            color = color.copy(alpha = 0.72f),
+            fontSize = with(LocalDensity.current) { spec.size.toSp() },
             modifier = Modifier
                 .offset(
                     x = with(LocalDensity.current) { offsetX.toDp() },
                     y = with(LocalDensity.current) { offsetY.toDp() }
                 )
-                .scale(scale.value)
+                .graphicsLayer {
+                    scaleX = glowScale.value
+                    scaleY = glowScale.value
+                    alpha = alphaAnim.value * 0.78f
+                }
+                .then(if (blur.value > 0.1f) Modifier.blur(blur.value.dp) else Modifier)
+                .favoriteBrightnessOverlay(
+                    amount = brightness.value,
+                    tintColor = color
+                )
+        )
+        Text(
+            text = "★",
+            color = color,
+            fontSize = with(LocalDensity.current) { spec.size.toSp() },
+            modifier = Modifier
+                .offset(
+                    x = with(LocalDensity.current) { offsetX.toDp() },
+                    y = with(LocalDensity.current) { offsetY.toDp() }
+                )
+                .graphicsLayer {
+                    scaleX = starScale.value
+                    scaleY = starScale.value
+                    alpha = alphaAnim.value
+                }
                 .rotate(rotation.value)
+        )
+    }
+}
+
+private fun Modifier.favoriteBrightnessOverlay(
+    amount: Float,
+    tintColor: Color
+): Modifier {
+    if (amount <= 0f) return this
+    return drawWithContent {
+        drawContent()
+        drawRect(
+            color = tintColor.copy(alpha = amount.coerceIn(0f, 1f) * 0.28f)
+        )
+        drawRect(
+            color = Color.White.copy(alpha = amount.coerceIn(0f, 1f) * 0.14f)
         )
     }
 }

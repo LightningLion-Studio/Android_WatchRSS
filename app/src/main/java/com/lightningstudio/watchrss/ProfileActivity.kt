@@ -53,6 +53,10 @@ class ProfileActivity : BaseWatchActivity() {
                     onContactDeveloperClick = {
                         if (!allowNavigation()) return@ProfileScreen
                         startActivity(Intent(this, ContactDeveloperActivity::class.java))
+                    },
+                    onBeianClick = {
+                        if (!allowNavigation()) return@ProfileScreen
+                        startActivity(BeianActivity.createIntent(this))
                     }
                 )
             }

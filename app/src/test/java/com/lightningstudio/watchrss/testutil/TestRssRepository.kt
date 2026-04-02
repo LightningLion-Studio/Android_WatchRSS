@@ -42,6 +42,7 @@ class TestRssRepository(
     val markedReadItemIds = mutableListOf<Long>()
     val toggledFavoriteIds = mutableListOf<Long>()
     val toggledWatchLaterIds = mutableListOf<Long>()
+    val reorderedSavedItems = mutableListOf<Pair<SaveType, List<Long>>>()
     val syncedExternalSavedItems = mutableListOf<Triple<ExternalSavedItem, SaveType, Boolean>>()
     val retriedOfflineMediaIds = mutableListOf<Long>()
     var retryOfflineMediaBehavior: suspend (Long) -> Unit = {}
@@ -190,6 +191,22 @@ class TestRssRepository(
         val updated = current.copy(isWatchLater = !current.isWatchLater)
         setSavedState(itemId, updated)
         return Result.success(updated)
+    }
+
+    override suspend fun reorderSavedItems(saveType: SaveType, orderedItemIds: List<Long>) {
+        reorderedSavedItems += saveType to orderedItemIds
+        val current = savedItemsFlow.value.toMutableMap()
+        val items = current[saveType].orEmpty()
+        if (items.isEmpty()) return
+        val orderedMap = items.associateBy { it.item.id }
+        val reordered = buildList {
+            orderedItemIds.forEach { itemId ->
+                orderedMap[itemId]?.let(::add)
+            }
+            items.filterTo(this) { it.item.id !in orderedItemIds.toSet() }
+        }
+        current[saveType] = reordered
+        savedItemsFlow.value = current
     }
 
     override suspend fun syncExternalSavedItem(

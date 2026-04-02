@@ -469,6 +469,13 @@ class DefaultRssRepository(
     override suspend fun toggleWatchLater(itemId: Long): Result<SavedState> =
         toggleSaved(itemId, SaveType.WATCH_LATER)
 
+    override suspend fun reorderSavedItems(saveType: SaveType, orderedItemIds: List<Long>) {
+        withContext(Dispatchers.IO) {
+            if (orderedItemIds.isEmpty()) return@withContext
+            savedEntryDao.reorderSavedItems(saveType.name, orderedItemIds.distinct())
+        }
+    }
+
     override suspend fun syncExternalSavedItem(
         item: ExternalSavedItem,
         saveType: SaveType,
@@ -748,7 +755,8 @@ class DefaultRssRepository(
                     SavedEntryEntity(
                         itemId = itemId,
                         saveType = saveType.name,
-                        createdAt = System.currentTimeMillis()
+                        createdAt = System.currentTimeMillis(),
+                        sortOrder = System.currentTimeMillis()
                     )
                 )
                 runCatching { offlineStore.downloadMediaForItem(item) }

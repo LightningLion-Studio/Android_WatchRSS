@@ -1,6 +1,11 @@
 package com.lightningstudio.watchrss.ui.screen.rss
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -49,11 +54,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
@@ -72,6 +79,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -85,9 +93,11 @@ import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.rss.RssChannel
 import com.lightningstudio.watchrss.data.rss.RssItem
 import com.lightningstudio.watchrss.data.rss.RssUrlResolver
+import com.lightningstudio.watchrss.ui.components.BlurFadeVisibility
 import com.lightningstudio.watchrss.ui.components.PullRefreshBox
 import com.lightningstudio.watchrss.ui.components.SwipeActionButton
 import com.lightningstudio.watchrss.ui.components.SwipeActionRow
+import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.components.rememberPullRefreshEnabled
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.util.formatWatchTitleForWidthLimits
@@ -281,89 +291,95 @@ fun FeedScreen(
                 }
         }
 
-        PullRefreshBox(
-            isRefreshing = isRefreshing,
-            onRefresh = onRefresh,
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black)
-                .semantics {
-                    contentDescription = "RSS内容列表"
-                    stateDescription = if (isRefreshing) "刷新中" else if (items.isEmpty()) "无内容" else "共 ${items.size} 条"
-                },
-            indicatorPadding = safePadding,
-            canRefresh = canRefresh
-        ) {
-            LazyColumn(
+        WatchSurface {
+            PullRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = onRefresh,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = safePadding),
-                state = listState,
-                contentPadding = PaddingValues(
-                    top = 12.dp,
-                    bottom = imageItemSpacing
-                )
+                    .semantics {
+                        contentDescription = "RSS内容列表"
+                        stateDescription = if (isRefreshing) "刷新中" else if (items.isEmpty()) "无内容" else "共 ${items.size} 条"
+                    },
+                indicatorPadding = safePadding,
+                canRefresh = canRefresh
             ) {
-                item(key = "header") {
-                    Box(modifier = Modifier.padding(bottom = imageItemSpacing)) {
-                        FeedHeader(
-                            title = channel?.title ?: "RSS",
-                            isRefreshing = isRefreshing,
-                            enabled = !isScrolling,
-                            onClick = onHeaderClick
-                        )
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = safePadding),
+                    state = listState,
+                    contentPadding = PaddingValues(
+                        top = 12.dp,
+                        bottom = imageItemSpacing
+                    )
+                ) {
+                    item(key = "header") {
+                        Box(modifier = Modifier.padding(bottom = imageItemSpacing)) {
+                            FeedHeader(
+                                title = channel?.title ?: "RSS",
+                                isRefreshing = isRefreshing,
+                                enabled = !isScrolling,
+                                onClick = onHeaderClick
+                            )
+                        }
                     }
-                }
-                if (items.isEmpty()) {
                     item(key = "empty") {
-                        FeedEmpty(
-                            onBack = onBack
-                        )
+                        BlurFadeVisibility(
+                            visible = items.isEmpty(),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            FeedEmptySkeleton(
+                                imageItemSpacing = imageItemSpacing,
+                                textItemSpacing = textItemSpacing
+                            )
+                        }
                     }
-                } else {
-                    items(
-                        items,
-                        key = { it.id },
-                        contentType = {
-                            if (!it.imageUrl.isNullOrBlank() || !it.previewImageUrl.isNullOrBlank()) {
-                                "image"
+                    if (items.isNotEmpty()) {
+                        items(
+                            items,
+                            key = { it.id },
+                            contentType = {
+                                if (!it.imageUrl.isNullOrBlank() || !it.previewImageUrl.isNullOrBlank()) {
+                                    "image"
+                                } else {
+                                    "text"
+                                }
+                            }
+                        ) { item ->
+                            val thumbUrl = resolveThumbUrl(item)
+                            val itemSpacing = if (thumbUrl.isNullOrBlank()) {
+                                textItemSpacing
                             } else {
-                                "text"
+                                imageItemSpacing
+                            }
+                            Box(modifier = Modifier.padding(bottom = itemSpacing)) {
+                                FeedItemEntry(
+                                    item = item,
+                                    thumbUrl = thumbUrl,
+                                    maxImageWidthPx = maxImageWidthPx,
+                                    isScrolling = isScrolling,
+                                    useOriginalContent = channel?.useOriginalContent == true,
+                                    openSwipeId = openSwipeId,
+                                    onOpenSwipe = onOpenSwipe,
+                                    onCloseSwipe = onCloseSwipe,
+                                    draggingSwipeId = draggingSwipeId,
+                                    onDragStart = onDragStart,
+                                    onDragEnd = onDragEnd,
+                                    onClick = { onItemClick(item) },
+                                    onLongClick = { onItemLongClick(item) },
+                                    onFavoriteClick = { onFavoriteClick(item) },
+                                    onWatchLaterClick = { onWatchLaterClick(item) }
+                                )
                             }
                         }
-                    ) { item ->
-                        val thumbUrl = resolveThumbUrl(item)
-                        val itemSpacing = if (thumbUrl.isNullOrBlank()) {
-                            textItemSpacing
-                        } else {
-                            imageItemSpacing
-                        }
-                        Box(modifier = Modifier.padding(bottom = itemSpacing)) {
-                            FeedItemEntry(
-                                item = item,
-                                thumbUrl = thumbUrl,
-                                maxImageWidthPx = maxImageWidthPx,
-                                isScrolling = isScrolling,
-                                useOriginalContent = channel?.useOriginalContent == true,
-                                openSwipeId = openSwipeId,
-                                onOpenSwipe = onOpenSwipe,
-                                onCloseSwipe = onCloseSwipe,
-                                draggingSwipeId = draggingSwipeId,
-                                onDragStart = onDragStart,
-                                onDragEnd = onDragEnd,
-                                onClick = { onItemClick(item) },
-                                onLongClick = { onItemLongClick(item) },
-                                onFavoriteClick = { onFavoriteClick(item) },
-                                onWatchLaterClick = { onWatchLaterClick(item) }
-                            )
-                        }
-                    }
-                    item(key = "actions") {
-                        Box(modifier = Modifier.padding(top = imageItemSpacing)) {
-                            FeedActions(
-                                canLoadMore = hasMore,
-                                onLoadMore = onLoadMore
-                            )
+                        item(key = "actions") {
+                            Box(modifier = Modifier.padding(top = imageItemSpacing)) {
+                                FeedActions(
+                                    canLoadMore = hasMore,
+                                    onLoadMore = onLoadMore
+                                )
+                            }
                         }
                     }
                 }
@@ -474,29 +490,193 @@ private fun channelTitleWithStyledHint(
 }
 
 @Composable
-private fun FeedEmpty(
-    onBack: () -> Unit
+private fun FeedEmptySkeleton(
+    imageItemSpacing: Dp,
+    textItemSpacing: Dp
 ) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        FeedImageSkeletonCard()
+        Spacer(modifier = Modifier.height(imageItemSpacing))
+        FeedImageSkeletonCard(
+            titleWidths = listOf(0.68f, 0.46f),
+            summaryWidths = listOf(0.76f, 0.58f)
+        )
+        Spacer(modifier = Modifier.height(textItemSpacing))
+        FeedTextSkeletonCard()
+    }
+}
+
+@Composable
+private fun FeedImageSkeletonCard(
+    titleWidths: List<Float> = listOf(0.74f, 0.38f),
+    summaryWidths: List<Float> = listOf(0.82f, 0.64f)
+) {
+    val shape = RoundedCornerShape(watchDimensionResource(R.dimen.hey_card_normal_bg_radius))
+    val imageHeight = watchDimensionResource(R.dimen.feed_card_image_height)
+    val padding = watchDimensionResource(R.dimen.hey_distance_8dp)
+    val cardColor = MaterialTheme.colorScheme.surface
+    val lineColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+    val summaryColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.10f)
+    val overlay = Brush.verticalGradient(
+        colors = listOf(
+            Color.Transparent,
+            MaterialTheme.colorScheme.background.copy(alpha = 0.72f)
+        )
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(cardColor)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(imageHeight)
+                .feedSkeletonPlaceholder(
+                    baseColor = lineColor.copy(alpha = 0.9f),
+                    highlightColor = Color.White.copy(alpha = 0.18f),
+                    cornerRadius = watchDimensionResource(R.dimen.hey_card_normal_bg_radius)
+                )
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(imageHeight)
+                .background(overlay)
+        )
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(padding)
+        ) {
+            FeedSkeletonParagraph(
+                widths = titleWidths,
+                lineHeight = 10.dp,
+                spacing = 6.dp,
+                color = lineColor
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            FeedSkeletonParagraph(
+                widths = summaryWidths,
+                lineHeight = 8.dp,
+                spacing = 5.dp,
+                color = summaryColor
+            )
+        }
+    }
+}
+
+@Composable
+private fun FeedTextSkeletonCard() {
+    val shape = RoundedCornerShape(watchDimensionResource(R.dimen.hey_card_normal_bg_radius))
     val padding = watchDimensionResource(R.dimen.hey_content_horizontal_distance)
-    val buttonSpacing = watchDimensionResource(R.dimen.hey_distance_6dp)
-    val hintSize = textSize(R.dimen.hey_caption)
+    val cardColor = MaterialTheme.colorScheme.surface
+    val titleColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.11f)
+    val summaryColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.10f)
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(padding),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .clip(shape)
+            .background(cardColor)
+            .padding(padding)
     ) {
-        Text(
-            text = "暂无内容",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = hintSize,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
+        FeedSkeletonParagraph(
+            widths = listOf(0.84f, 0.56f),
+            lineHeight = 10.dp,
+            spacing = 6.dp,
+            color = titleColor
         )
-        Spacer(modifier = Modifier.height(buttonSpacing))
-        FeedPillButton(text = "返回", onClick = onBack)
+        Spacer(modifier = Modifier.height(10.dp))
+        FeedSkeletonParagraph(
+            widths = listOf(0.96f, 0.88f, 0.62f),
+            lineHeight = 8.dp,
+            spacing = 5.dp,
+            color = summaryColor
+        )
     }
+}
+
+@Composable
+private fun FeedSkeletonParagraph(
+    widths: List<Float>,
+    lineHeight: Dp,
+    spacing: Dp,
+    color: Color
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        widths.forEachIndexed { index, width ->
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(width)
+                    .height(lineHeight)
+                    .clip(RoundedCornerShape(6.dp))
+                    .feedSkeletonPlaceholder(
+                        baseColor = color,
+                        highlightColor = Color.White.copy(alpha = 0.22f),
+                        cornerRadius = 6.dp
+                    )
+            )
+            if (index != widths.lastIndex) {
+                Spacer(modifier = Modifier.height(spacing))
+            }
+        }
+    }
+}
+
+@Composable
+private fun Modifier.feedSkeletonPlaceholder(
+    baseColor: Color,
+    highlightColor: Color,
+    cornerRadius: Dp
+): Modifier {
+    val transition = rememberInfiniteTransition(label = "FeedSkeleton")
+    val shimmerProgress by transition.animateFloat(
+        initialValue = -1.1f,
+        targetValue = 1.3f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1700, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "FeedSkeletonShimmer"
+    )
+    val pulseAlpha by transition.animateFloat(
+        initialValue = 0.9f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 920, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "FeedSkeletonPulse"
+    )
+
+    return this
+        .graphicsLayer { alpha = pulseAlpha }
+        .background(baseColor)
+        .drawWithCache {
+            val radiusPx = cornerRadius.toPx()
+            val widthPx = size.width.coerceAtLeast(1f)
+            val heightPx = size.height.coerceAtLeast(1f)
+            val startX = widthPx * shimmerProgress
+            val brush = Brush.linearGradient(
+                colors = listOf(
+                    Color.Transparent,
+                    highlightColor,
+                    Color.Transparent
+                ),
+                start = Offset(startX - widthPx * 0.8f, 0f),
+                end = Offset(startX + widthPx * 0.25f, heightPx)
+            )
+            onDrawWithContent {
+                drawContent()
+                drawRoundRect(
+                    brush = brush,
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(radiusPx, radiusPx)
+                )
+            }
+        }
 }
 
 @Composable

@@ -76,6 +76,8 @@ class FakeRssRepository(
         return Result.success(SavedState(isFavorite = false, isWatchLater = true))
     }
 
+    override suspend fun reorderSavedItems(saveType: SaveType, orderedItemIds: List<Long>) = Unit
+
     override suspend fun syncExternalSavedItem(
         item: ExternalSavedItem,
         saveType: SaveType,

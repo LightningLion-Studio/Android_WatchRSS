@@ -60,7 +60,8 @@ class DefaultAppContainer(context: Context) : AppContainer {
             WatchRssDatabase.MIGRATION_4_5,
             WatchRssDatabase.MIGRATION_5_6,
             WatchRssDatabase.MIGRATION_6_7,
-            WatchRssDatabase.MIGRATION_7_8
+            WatchRssDatabase.MIGRATION_7_8,
+            WatchRssDatabase.MIGRATION_8_9
         )
             .addCallback(BuiltinChannelSeed.callback)
             .build()

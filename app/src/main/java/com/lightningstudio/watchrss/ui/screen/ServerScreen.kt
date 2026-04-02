@@ -34,6 +34,13 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
@@ -91,6 +98,7 @@ fun ServerScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(backgroundColor)
+            .semantics { contentDescription = "$title 页面" }
     ) {
         Column(
             modifier = Modifier
@@ -104,7 +112,12 @@ fun ServerScreen(
                 style = MaterialTheme.typography.headlineSmall,
                 color = textColor,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics {
+                        heading()
+                        contentDescription = "标题：$title"
+                    }
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -116,7 +129,11 @@ fun ServerScreen(
                         text = "正在启动服务器...",
                         style = MaterialTheme.typography.bodyMedium,
                         color = textColor.copy(alpha = 0.7f),
-                        textAlign = TextAlign.Center
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.semantics {
+                            liveRegion = LiveRegionMode.Polite
+                            contentDescription = "状态：正在启动服务器"
+                        }
                     )
                 }
                 networkError -> {
@@ -125,14 +142,20 @@ fun ServerScreen(
                         text = "请连接WiFi网络",
                         style = MaterialTheme.typography.bodyMedium,
                         color = lerp(Color(0xFFCF6679), Color(0xFFB00020), backgroundProgress),
-                        textAlign = TextAlign.Center
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.semantics {
+                            contentDescription = "错误：请连接WiFi网络"
+                        }
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
                         text = hint,
                         style = MaterialTheme.typography.bodySmall,
                         color = textColor.copy(alpha = 0.7f),
-                        textAlign = TextAlign.Center
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.semantics {
+                            contentDescription = "操作说明：$hint"
+                        }
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     WatchButton(
@@ -158,10 +181,14 @@ fun ServerScreen(
                     qrBitmap?.let { bitmap ->
                         Image(
                             bitmap = bitmap.asImageBitmap(),
-                            contentDescription = "QR Code",
+                            contentDescription = "服务器连接二维码，使用手机版腕上RSS扫描此二维码",
                             modifier = Modifier
                                 .size(120.dp)
                                 .border(width = 6.dp, color = Color.Black)
+                                .semantics {
+                                    role = Role.Image
+                                    contentDescription = "服务器连接二维码，使用手机版腕上RSS扫描此二维码"
+                                }
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                     }
@@ -171,7 +198,11 @@ fun ServerScreen(
                             text = "已同步至手机端",
                             style = MaterialTheme.typography.bodyMedium,
                             color = lerp(Color(0xFF64B5F6), Color(0xFF1976D2), backgroundProgress),
-                            textAlign = TextAlign.Center
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.semantics {
+                                liveRegion = LiveRegionMode.Polite
+                                contentDescription = "状态：已同步至手机端"
+                            }
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         WatchButton(
@@ -196,14 +227,21 @@ fun ServerScreen(
                             text = "请使用手机版扫码",
                             style = MaterialTheme.typography.bodySmall,
                             color = textColor.copy(alpha = 0.7f),
-                            textAlign = TextAlign.Center
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.semantics {
+                                contentDescription = "提示：请使用手机版腕上RSS扫码"
+                            }
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
                             text = hint,
                             style = MaterialTheme.typography.bodySmall,
                             color = textColor.copy(alpha = 0.7f),
-                            textAlign = TextAlign.Center
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.semantics {
+                                liveRegion = LiveRegionMode.Polite
+                                contentDescription = "操作说明：$hint"
+                            }
                         )
                     }
                 }

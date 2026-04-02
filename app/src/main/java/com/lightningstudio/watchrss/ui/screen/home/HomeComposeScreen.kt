@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -38,38 +39,47 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.composed
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import com.lightningstudio.watchrss.ui.theme.watchColorResource
-import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lightningstudio.watchrss.R
+import com.lightningstudio.watchrss.ui.components.PullRefreshBox
+import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
+import com.lightningstudio.watchrss.ui.components.rememberPullRefreshEnabled
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.rss.RssChannel
+import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.testing.HomeTestTags
+import com.lightningstudio.watchrss.ui.theme.watchColorResource
+import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import com.lightningstudio.watchrss.ui.util.formatTime
 import com.lightningstudio.watchrss.ui.viewmodel.HomePlatformLoginState
 import kotlinx.coroutines.launch
@@ -78,10 +88,11 @@ import kotlin.math.roundToInt
 @Composable
 fun HomeComposeScreen(
     channels: List<RssChannel>,
-    hasLoadedChannels: Boolean = true,
+    hasLoadedChannels: Boolean,
     platformLoginState: HomePlatformLoginState = HomePlatformLoginState(),
     enableChannelSwipeActions: Boolean = false,
     isRefreshing: Boolean,
+    loadingEntryKey: String? = null,
     onRefreshAll: () -> Unit,
     openSwipeId: Long?,
     onOpenSwipe: (Long) -> Unit,
@@ -99,88 +110,105 @@ fun HomeComposeScreen(
     onMarkReadClick: (RssChannel) -> Unit,
     onBeianClick: () -> Unit
 ) {
-    val entries = remember(channels, hasLoadedChannels) {
-        buildHomeEntries(channels, hasLoadedChannels)
-    }
-    val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
-    val itemSpacing = watchDimensionResource(R.dimen.hey_distance_6dp)
-    val listState = rememberLazyListState()
-    val isScrolling by remember(listState) {
-        derivedStateOf { listState.isScrollInProgress }
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .testTag(HomeTestTags.ROOT)
-    ) {
-        LazyColumn(
+    val baseDensity = LocalDensity.current
+    CompositionLocalProvider(LocalDensity provides Density(2f, baseDensity.fontScale)) {
+        val entries = remember(channels, hasLoadedChannels) {
+            buildHomeEntries(channels, hasLoadedChannels)
+        }
+        val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
+        val itemSpacing = watchDimensionResource(R.dimen.hey_distance_6dp)
+        val listState = rememberLazyListState()
+        InstallDigitalCrownLazyListHandler(listState)
+        val canRefresh = rememberPullRefreshEnabled(listState)
+        val isScrolling by remember(listState) {
+            derivedStateOf { listState.isScrollInProgress }
+        }
+        PullRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = onRefreshAll,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = safePadding)
-                .testTag(HomeTestTags.CHANNEL_LIST),
-            state = listState,
-            contentPadding = PaddingValues(
-                top = safePadding,
-                bottom = safePadding + itemSpacing
-            ),
-            verticalArrangement = Arrangement.spacedBy(itemSpacing)
+                .background(Color.Black)
+                .testTag(HomeTestTags.ROOT),
+            indicatorPadding = safePadding,
+            canRefresh = canRefresh
         ) {
-            items(
-                entries,
-                key = { it.key },
-                contentType = { it::class }
-            ) { entry ->
-                when (entry) {
-                    HomeEntry.Profile -> {
-                        HomeProfileEntry(onProfileClick = onProfileClick)
-                    }
-                    HomeEntry.Empty -> {
-                        HomeDefaultItem(
-                            title = "还没有 RSS 频道",
-                            summary = "点击下方添加你的第一个订阅源",
-                            backgroundColor = MaterialTheme.colorScheme.surface,
-                            showIndicator = false,
-                            testTag = HomeTestTags.EMPTY_ENTRY
-                        )
-                    }
-                    HomeEntry.Recommend -> {
-                        HomeDefaultItem(
-                            title = "RSS推荐",
-                            summary = "一键加入官方支持频道",
-                            backgroundColor = MaterialTheme.colorScheme.surface,
-                            showIndicator = false,
-                            testTag = HomeTestTags.RECOMMEND_ENTRY,
-                            onClick = onRecommendClick
-                        )
-                    }
-                    HomeEntry.AddRss -> {
-                        HomeAddEntry(
-                            onAddRssClick = onAddRssClick,
-                            interactionsEnabled = !isScrolling
-                        )
-                    }
-                    HomeEntry.Beian -> {
-                        HomeBeianEntry(onBeianClick = onBeianClick)
-                    }
-                    is HomeEntry.Channel -> {
-                        HomeChannelEntry(
-                            channel = entry.channel,
-                            platformLoginState = platformLoginState,
-                            openSwipeId = openSwipeId,
-                            onOpenSwipe = onOpenSwipe,
-                            onCloseSwipe = onCloseSwipe,
-                            draggingSwipeId = draggingSwipeId,
-                            onDragStart = onDragStart,
-                            onDragEnd = onDragEnd,
-                            onChannelClick = { onChannelClick(entry.channel) },
-                            onChannelLongClick = { onChannelLongClick(entry.channel) },
-                            onSwipeBack = onSwipeBack,
-                            swipeInteractionsEnabled = enableChannelSwipeActions && !isScrolling,
-                            onMoveTopClick = { onMoveTopClick(entry.channel) },
-                            onMarkReadClick = { onMarkReadClick(entry.channel) }
-                        )
+            Box(modifier = Modifier.fillMaxSize()) {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = safePadding)
+                        .testTag(HomeTestTags.CHANNEL_LIST),
+                    state = listState,
+                    contentPadding = PaddingValues(
+                        top = safePadding,
+                        bottom = safePadding + itemSpacing
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(itemSpacing)
+                ) {
+                    items(
+                        entries,
+                        key = { it.key },
+                        contentType = { it::class }
+                    ) { entry ->
+                        when (entry) {
+                            HomeEntry.Profile -> {
+                                HomeProfileEntry(
+                                    onProfileClick = onProfileClick,
+                                    isLoading = loadingEntryKey == entry.key
+                                )
+                            }
+                            HomeEntry.Empty -> {
+                                HomeDefaultItem(
+                                    title = "还没有 RSS 频道",
+                                    summary = "点击下方添加你的第一个订阅源",
+                                    backgroundColor = MaterialTheme.colorScheme.surface,
+                                    isLoading = loadingEntryKey == entry.key,
+                                    showIndicator = false,
+                                    testTag = HomeTestTags.EMPTY_ENTRY
+                                )
+                            }
+                            HomeEntry.Recommend -> {
+                                HomeDefaultItem(
+                                    title = "RSS推荐",
+                                    summary = "一键加入官方支持频道",
+                                    backgroundColor = MaterialTheme.colorScheme.surface,
+                                    isLoading = loadingEntryKey == entry.key,
+                                    showIndicator = false,
+                                    testTag = HomeTestTags.RECOMMEND_ENTRY,
+                                    onClick = onRecommendClick
+                                )
+                            }
+                            HomeEntry.AddRss -> {
+                                HomeAddEntry(
+                                    onAddRssClick = onAddRssClick,
+                                    interactionsEnabled = !isScrolling,
+                                    isLoading = loadingEntryKey == entry.key
+                                )
+                            }
+                            HomeEntry.Beian -> {
+                                HomeBeianEntry(onBeianClick = onBeianClick)
+                            }
+                            is HomeEntry.Channel -> {
+                                HomeChannelEntry(
+                                    channel = entry.channel,
+                                    platformLoginState = platformLoginState,
+                                    openSwipeId = openSwipeId,
+                                    onOpenSwipe = onOpenSwipe,
+                                    onCloseSwipe = onCloseSwipe,
+                                    draggingSwipeId = draggingSwipeId,
+                                    onDragStart = onDragStart,
+                                    onDragEnd = onDragEnd,
+                                    onChannelClick = { onChannelClick(entry.channel) },
+                                    onChannelLongClick = { onChannelLongClick(entry.channel) },
+                                    onSwipeBack = onSwipeBack,
+                                    swipeInteractionsEnabled = enableChannelSwipeActions && !isScrolling,
+                                    onMoveTopClick = { onMoveTopClick(entry.channel) },
+                                    onMarkReadClick = { onMarkReadClick(entry.channel) },
+                                    isLoading = loadingEntryKey == entry.key
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -217,7 +245,10 @@ private fun buildHomeEntries(
 }
 
 @Composable
-private fun HomeProfileEntry(onProfileClick: () -> Unit) {
+private fun HomeProfileEntry(
+    onProfileClick: () -> Unit,
+    isLoading: Boolean
+) {
     val avatarSize = watchDimensionResource(R.dimen.hey_listitem_big_lefticon_height_width)
     val padding = watchDimensionResource(R.dimen.hey_distance_4dp)
     val hintSize = textSize(R.dimen.hey_caption)
@@ -225,6 +256,7 @@ private fun HomeProfileEntry(onProfileClick: () -> Unit) {
     val strokeWidth = watchDimensionResource(R.dimen.hey_dotStrokeWidth)
     val accentColor = MaterialTheme.colorScheme.primary
     val cardColor = MaterialTheme.colorScheme.surface
+    val shape = CircleShape
 
     Column(
         modifier = Modifier
@@ -237,8 +269,9 @@ private fun HomeProfileEntry(onProfileClick: () -> Unit) {
         Box(
             modifier = Modifier
                 .size(avatarSize)
-                .border(strokeWidth, accentColor, CircleShape)
-                .background(cardColor, CircleShape)
+                .clip(shape)
+                .border(strokeWidth, accentColor, shape)
+                .background(cardColor, shape)
                 .semantics { contentDescription = "个人中心" },
             contentAlignment = Alignment.Center
         ) {
@@ -246,6 +279,10 @@ private fun HomeProfileEntry(onProfileClick: () -> Unit) {
                 text = "我",
                 color = MaterialTheme.colorScheme.onSurface,
                 fontSize = avatarTextSize
+            )
+            CardLoadingOverlay(
+                visible = isLoading,
+                shape = shape
             )
         }
         Spacer(modifier = Modifier.height(padding))
@@ -260,11 +297,13 @@ private fun HomeProfileEntry(onProfileClick: () -> Unit) {
 @Composable
 private fun HomeAddEntry(
     onAddRssClick: () -> Unit,
-    interactionsEnabled: Boolean
+    interactionsEnabled: Boolean,
+    isLoading: Boolean
 ) {
     val buttonSize = watchDimensionResource(R.dimen.hey_button_height)
     val padding = watchDimensionResource(R.dimen.hey_distance_4dp)
     val radius = watchDimensionResource(R.dimen.hey_button_default_radius)
+    val shape = RoundedCornerShape(radius)
     val pressState = rememberPressScaleState(enabled = interactionsEnabled)
     val pressScale = pressState.scale
     val scaleModifier = if (pressScale != 1f) {
@@ -286,7 +325,7 @@ private fun HomeAddEntry(
             modifier = Modifier
                 .size(buttonSize)
                 .then(scaleModifier)
-                .clip(RoundedCornerShape(radius))
+                .clip(shape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 .testTag(HomeTestTags.ADD_ENTRY)
                 .clickableWithoutRipple(
@@ -300,6 +339,10 @@ private fun HomeAddEntry(
                 text = "+",
                 color = MaterialTheme.colorScheme.onSurface,
                 fontSize = textSize(R.dimen.hey_s_title)
+            )
+            CardLoadingOverlay(
+                visible = isLoading,
+                shape = shape
             )
         }
     }
@@ -320,10 +363,12 @@ private fun HomeChannelEntry(
     onSwipeBack: () -> Unit,
     swipeInteractionsEnabled: Boolean,
     onMoveTopClick: () -> Unit,
-    onMarkReadClick: () -> Unit
+    onMarkReadClick: () -> Unit,
+    isLoading: Boolean
 ) {
     val actionPadding = watchDimensionResource(R.dimen.hey_distance_4dp)
     val actionWidth = watchDimensionResource(R.dimen.watch_swipe_action_button_width)
+    val cardShape = RoundedCornerShape(watchDimensionResource(R.dimen.hey_card_normal_bg_radius))
     val actionsWidthPx = with(LocalDensity.current) {
         (actionWidth * 2 + actionPadding * 2).toPx()
     }
@@ -347,6 +392,12 @@ private fun HomeChannelEntry(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(offsetModifier)
+                .clip(cardShape)
+                .clickableWithRipple(
+                    onClick = onChannelClick,
+                    onLongClick = onChannelLongClick,
+                    interactionSource = interactionSource
+                )
                 .testTag(HomeTestTags.channelRow(channel.id))
         ) {
             HomeDefaultItem(
@@ -358,15 +409,10 @@ private fun HomeChannelEntry(
                     MaterialTheme.colorScheme.surface
                 },
                 titleFontSize = 16.sp,
+                isLoading = isLoading,
                 showIndicator = shouldShowUnreadUi(builtinType) && channel.unreadCount > 0,
                 indicatorTestTag = HomeTestTags.channelIndicator(channel.id),
-                testTag = HomeTestTags.channelCard(channel.id),
-                modifier = Modifier
-                    .clickableWithoutRipple(
-                        onClick = onChannelClick,
-                        onLongClick = onChannelLongClick,
-                        interactionSource = interactionSource
-                    )
+                testTag = HomeTestTags.channelCard(channel.id)
             )
         }
     }
@@ -631,6 +677,7 @@ private fun HomeDefaultItem(
     summary: String,
     backgroundColor: Color,
     titleFontSize: TextUnit? = null,
+    isLoading: Boolean = false,
     showIndicator: Boolean,
     indicatorTestTag: String? = null,
     testTag: String? = null,
@@ -653,46 +700,109 @@ private fun HomeDefaultItem(
         Modifier
     }
 
-    Row(
+    Box(
         modifier = modifier
             .fillMaxWidth()
+            .clip(shape)
             .then(clickModifier)
             .then(testTag?.let(Modifier::testTag) ?: Modifier)
             .background(backgroundColor, shape)
-            .padding(
-                start = paddingStart,
-                end = paddingEnd,
-                top = verticalPadding,
-                bottom = verticalPadding
-            ),
-        verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontSize = titleSize,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = summary,
-                color = summaryColor,
-                fontSize = summarySize,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    start = paddingStart,
+                    end = paddingEnd,
+                    top = verticalPadding,
+                    bottom = verticalPadding
+                ),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = titleSize,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = summary,
+                    color = summaryColor,
+                    fontSize = summarySize,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            if (showIndicator) {
+                Box(
+                    modifier = Modifier
+                        .padding(start = arrowMargin)
+                        .offset(x = minorMarginRight)
+                        .size(indicatorSize)
+                        .then(indicatorTestTag?.let(Modifier::testTag) ?: Modifier)
+                        .background(MaterialTheme.colorScheme.primary, CircleShape)
+                )
+            }
         }
-        if (showIndicator) {
-            Box(
-                modifier = Modifier
-                    .padding(start = arrowMargin)
-                    .offset(x = minorMarginRight)
-                    .size(indicatorSize)
-                    .then(indicatorTestTag?.let(Modifier::testTag) ?: Modifier)
-                    .background(MaterialTheme.colorScheme.primary, CircleShape)
-            )
+        CardLoadingOverlay(
+            visible = isLoading,
+            shape = shape
+        )
+    }
+}
+
+@Composable
+private fun CardLoadingOverlay(
+    visible: Boolean,
+    shape: Shape
+) {
+    val overlayAlpha = remember { Animatable(if (visible) 1f else 0f) }
+    val overlayBlur = remember { Animatable(0f) }
+    var keepOverlayMounted by remember { mutableStateOf(visible) }
+
+    LaunchedEffect(visible) {
+        if (visible) {
+            keepOverlayMounted = true
+            overlayBlur.snapTo(0f)
+            overlayAlpha.snapTo(1f)
+        } else if (keepOverlayMounted) {
+            val fadeOut = launch {
+                overlayAlpha.animateTo(
+                    targetValue = 0f,
+                    animationSpec = tween(durationMillis = 240)
+                )
+            }
+            val blurOut = launch {
+                overlayBlur.animateTo(
+                    targetValue = 10f,
+                    animationSpec = tween(durationMillis = 240)
+                )
+            }
+            fadeOut.join()
+            blurOut.join()
+            keepOverlayMounted = false
+            overlayBlur.snapTo(0f)
         }
+    }
+
+    if (!keepOverlayMounted) {
+        return
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .clip(shape)
+            .blur(overlayBlur.value.dp)
+            .graphicsLayer { alpha = overlayAlpha.value }
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.78f)),
+        contentAlignment = Alignment.Center
+    ) {
+        WatchCircularProgressIndicator(
+            modifier = Modifier.size(18.dp)
+        )
     }
 }
 
@@ -783,6 +893,35 @@ private fun rememberPressScaleState(enabled: Boolean = true): PressScaleState {
 private fun textSize(id: Int): TextUnit {
     val density = LocalDensity.current
     return with(density) { watchDimensionResource(id).toSp() }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+private fun Modifier.clickableWithRipple(
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
+    interactionSource: MutableInteractionSource? = null
+): Modifier {
+    return composed {
+        val resolvedInteractionSource = interactionSource ?: remember { MutableInteractionSource() }
+        val indication = LocalIndication.current
+        if (onLongClick != null) {
+            combinedClickable(
+                interactionSource = resolvedInteractionSource,
+                indication = indication,
+                enabled = enabled,
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
+        } else {
+            clickable(
+                interactionSource = resolvedInteractionSource,
+                indication = indication,
+                enabled = enabled,
+                onClick = onClick
+            )
+        }
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)

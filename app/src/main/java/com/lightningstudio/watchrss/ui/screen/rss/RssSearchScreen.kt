@@ -46,7 +46,7 @@ fun RssSearchScreen(
 
     InstallDigitalCrownLazyListHandler(listState)
 
-    WatchSurface(pureBlack = true) {
+    WatchSurface {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize(),

@@ -1,18 +1,13 @@
 package com.lightningstudio.watchrss.ui.screen
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -21,11 +16,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
+import com.lightningstudio.watchrss.ui.components.QrCodePanel
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownScrollHandler
 import com.lightningstudio.watchrss.ui.util.QrCodeGenerator
@@ -39,7 +35,6 @@ fun JoinGroupScreen(
 ) {
     val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
     val topPadding = watchDimensionResource(R.dimen.hey_distance_4dp)
-    val sectionSpacing = 12.dp
     val scrollState = rememberScrollState()
 
     var qrCodeBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
@@ -62,39 +57,21 @@ fun JoinGroupScreen(
                     top = topPadding,
                     end = safePadding,
                     bottom = safePadding
-                ),
+                )
+                .semantics { contentDescription = "加群页面。扫描二维码加入QQ群，群号：$groupNumber。" },
             verticalArrangement = Arrangement.Top,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                text = "加群",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center
+            QrCodePanel(
+                qrBitmap = qrCodeBitmap,
+                qrSizeDp = 150.dp,
+                qrContentDescription = "QQ群二维码，扫描后可在手机上加入群聊",
+                title = "加入 QQ 群",
+                subtitle = "群号 $groupNumber",
+                titleContentDescription = "标题：加入 QQ 群",
+                subtitleContentDescription = "QQ群号：$groupNumber",
             )
-
-            Spacer(modifier = Modifier.height(sectionSpacing))
-
-            qrCodeBitmap?.let { bitmap ->
-                Image(
-                    bitmap = bitmap.asImageBitmap(),
-                    contentDescription = "QQ群二维码",
-                    modifier = Modifier.size(150.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(sectionSpacing))
-
-            Text(
-                text = "QQ群号 $groupNumber",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(modifier = Modifier.height(sectionSpacing))
+            Spacer(modifier = Modifier.height(12.dp))
         }
     }
 }

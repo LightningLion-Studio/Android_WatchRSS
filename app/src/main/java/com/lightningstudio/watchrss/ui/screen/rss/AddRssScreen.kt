@@ -1,6 +1,5 @@
 package com.lightningstudio.watchrss.ui.screen.rss
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -29,7 +28,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -40,6 +38,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lightningstudio.watchrss.data.rss.RssChannel
+import com.lightningstudio.watchrss.ui.components.QrCodePanel
 import com.lightningstudio.watchrss.ui.components.WatchButton
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.R
@@ -80,7 +79,7 @@ fun AddRssScreen(
         }
     }
 
-    WatchSurface(pureBlack = true) {
+    WatchSurface {
         val scrollState = rememberScrollState()
         InstallDigitalCrownScrollHandler(scrollState)
         val actionShape = RoundedCornerShape(WatchDimens.hey_button_default_radius)
@@ -443,44 +442,19 @@ fun AddRssScreen(
                                 QrCodeGenerator.createWatchRssQrCode(serverAddress, qrBitmapSizePx)
                             }
 
-                            Column(
+                            QrCodePanel(
+                                qrBitmap = qrBitmap,
+                                qrSizeDp = qrSize,
+                                qrContentDescription = "RSS服务器二维码，使用手机版腕上RSS扫描后可在手机端输入RSS地址",
+                                title = "手机扫码添加 RSS",
+                                subtitle = "使用手机版腕上 RSS 扫码后，可在手机上直接输入 RSS 地址",
+                                titleContentDescription = "标题：手机扫码添加 RSS",
+                                subtitleContentDescription = "操作提示：使用手机版腕上 RSS 扫码后，可在手机上直接输入 RSS 地址",
+                                qrTestTag = AddRssTestTags.QR_IMAGE,
                                 modifier = Modifier
                                     .testTag(AddRssTestTags.QR_PANEL)
                                     .semantics { contentDescription = "二维码扫描面板" },
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text(
-                                    text = "用手机扫码",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .semantics { heading() }
-                                )
-
-                                Spacer(modifier = Modifier.height(12.dp))
-
-                                qrBitmap?.let { bitmap ->
-                                    Image(
-                                        bitmap = bitmap.asImageBitmap(),
-                                        contentDescription = "二维码",
-                                        modifier = Modifier
-                                            .size(qrSize)
-                                            .testTag(AddRssTestTags.QR_IMAGE)
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.height(12.dp))
-
-                                Text(
-                                    text = "使用手机版腕上RSS扫描二维码\n即可在手机上输入RSS地址",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    textAlign = TextAlign.Center,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
+                            )
 
                             Spacer(modifier = Modifier.height(16.dp))
 

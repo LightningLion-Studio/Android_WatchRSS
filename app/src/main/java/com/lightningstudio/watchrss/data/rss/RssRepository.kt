@@ -26,6 +26,7 @@ interface RssRepository {
     suspend fun markItemRead(itemId: Long)
     suspend fun toggleFavorite(itemId: Long): Result<SavedState>
     suspend fun toggleWatchLater(itemId: Long): Result<SavedState>
+    suspend fun reorderSavedItems(saveType: SaveType, orderedItemIds: List<Long>)
     suspend fun syncExternalSavedItem(
         item: ExternalSavedItem,
         saveType: SaveType,

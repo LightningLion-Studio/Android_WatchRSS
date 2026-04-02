@@ -52,6 +52,7 @@ object ProfileTestTags {
     const val SETTINGS_ENTRY = "profile/settings_entry"
     const val ABOUT_ENTRY = "profile/about_entry"
     const val CONTACT_DEVELOPER_ENTRY = "profile/contact_developer_entry"
+    const val BEIAN_ENTRY = "profile/beian_entry"
 }
 
 object PhoneConnectionTestTags {
