@@ -37,3 +37,10 @@
 cp gradle.properties.example gradle.properties
 ```
 - 如需配置本机路径（如 `org.gradle.java.home`、临时目录等），请仅修改本地 `gradle.properties`。
+
+## 📦 Profileable Release 打包
+- 执行 `scripts/build_profileable_release.sh` 可构建 `profileableRelease`，并将 APK、`mapping.txt`、`output-metadata.json` 收集到 `app/build/outputs/dist/profileableRelease/`。
+- 如需自定义输出目录，可执行：
+```bash
+scripts/build_profileable_release.sh --dist-dir /tmp/watchrss-profileable
+```

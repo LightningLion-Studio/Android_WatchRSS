@@ -1,7 +1,6 @@
 package com.lightningstudio.watchrss
 
 import android.content.Intent
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
@@ -125,6 +124,7 @@ class MainActivity : BaseWatchActivity() {
                 finish()
                 return@launch
             }
+            keepSplashOnScreen = false
             initialStartupCompleted = true
             schedulePlatformLoginStateRefresh()
             scheduleStartupMaintenance()
@@ -149,12 +149,6 @@ class MainActivity : BaseWatchActivity() {
                     .readAloudController
                     .uiState
                     .collectAsState()
-
-                LaunchedEffect(hasLoadedChannels) {
-                    if (hasLoadedChannels) {
-                        keepSplashOnScreen = false
-                    }
-                }
 
                 LaunchedEffect(message) {
                     if (message != null) {
@@ -243,10 +237,6 @@ class MainActivity : BaseWatchActivity() {
         return hasOpen
     }
 
-    private fun usesSystemBackGesture(): Boolean {
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
-    }
-
     private suspend fun maybeResumeLastContent(sourceIntent: Intent?) {
         if (!isLauncherEntry(sourceIntent)) return
         val resumeIntent = withContext(Dispatchers.IO) {
@@ -279,7 +269,8 @@ class MainActivity : BaseWatchActivity() {
     }
 
     private fun schedulePlatformLoginStateRefresh() {
-        window.decorView.post {
+        lifecycleScope.launch {
+            delay(STARTUP_PLATFORM_LOGIN_REFRESH_DELAY_MS)
             viewModel.refreshPlatformLoginState()
         }
     }
@@ -347,7 +338,8 @@ class MainActivity : BaseWatchActivity() {
 
     companion object {
         private const val STARTUP_DOUYIN_PREWARM_DELAY_MS = 2_000L
-        private const val STARTUP_CACHE_MAINTENANCE_DELAY_MS = 5_000L
+        private const val STARTUP_PLATFORM_LOGIN_REFRESH_DELAY_MS = 1_500L
+        private const val STARTUP_CACHE_MAINTENANCE_DELAY_MS = 10_000L
         private const val DOUYIN_APP_OPEN_REFRESH_COUNT = 16
     }
 }

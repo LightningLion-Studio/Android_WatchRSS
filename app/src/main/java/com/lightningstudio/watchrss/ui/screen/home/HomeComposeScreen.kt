@@ -38,7 +38,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -63,17 +62,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lightningstudio.watchrss.R
-import com.lightningstudio.watchrss.ui.components.PullRefreshBox
-import com.lightningstudio.watchrss.ui.components.rememberPullRefreshEnabled
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.rss.RssChannel
-import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.testing.HomeTestTags
 import com.lightningstudio.watchrss.ui.util.formatTime
 import com.lightningstudio.watchrss.ui.viewmodel.HomePlatformLoginState
@@ -83,7 +78,7 @@ import kotlin.math.roundToInt
 @Composable
 fun HomeComposeScreen(
     channels: List<RssChannel>,
-    hasLoadedChannels: Boolean,
+    hasLoadedChannels: Boolean = true,
     platformLoginState: HomePlatformLoginState = HomePlatformLoginState(),
     enableChannelSwipeActions: Boolean = false,
     isRefreshing: Boolean,
@@ -104,98 +99,88 @@ fun HomeComposeScreen(
     onMarkReadClick: (RssChannel) -> Unit,
     onBeianClick: () -> Unit
 ) {
-    val baseDensity = LocalDensity.current
-    CompositionLocalProvider(LocalDensity provides Density(2f, baseDensity.fontScale)) {
-        val entries = remember(channels, hasLoadedChannels) {
-            buildHomeEntries(channels, hasLoadedChannels)
-        }
-        val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
-        val itemSpacing = watchDimensionResource(R.dimen.hey_distance_6dp)
-        val listState = rememberLazyListState()
-        InstallDigitalCrownLazyListHandler(listState)
-        val canRefresh = rememberPullRefreshEnabled(listState)
-        val isScrolling by remember(listState) {
-            derivedStateOf { listState.isScrollInProgress }
-        }
-        PullRefreshBox(
-            isRefreshing = isRefreshing,
-            onRefresh = onRefreshAll,
+    val entries = remember(channels, hasLoadedChannels) {
+        buildHomeEntries(channels, hasLoadedChannels)
+    }
+    val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
+    val itemSpacing = watchDimensionResource(R.dimen.hey_distance_6dp)
+    val listState = rememberLazyListState()
+    val isScrolling by remember(listState) {
+        derivedStateOf { listState.isScrollInProgress }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .testTag(HomeTestTags.ROOT)
+    ) {
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black)
-                .testTag(HomeTestTags.ROOT),
-            indicatorPadding = safePadding,
-            canRefresh = canRefresh
+                .padding(horizontal = safePadding)
+                .testTag(HomeTestTags.CHANNEL_LIST),
+            state = listState,
+            contentPadding = PaddingValues(
+                top = safePadding,
+                bottom = safePadding + itemSpacing
+            ),
+            verticalArrangement = Arrangement.spacedBy(itemSpacing)
         ) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = safePadding)
-                        .testTag(HomeTestTags.CHANNEL_LIST),
-                    state = listState,
-                    contentPadding = PaddingValues(
-                        top = safePadding,
-                        bottom = safePadding + itemSpacing
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(itemSpacing)
-                ) {
-                    items(
-                        entries,
-                        key = { it.key },
-                        contentType = { it::class }
-                    ) { entry ->
-                        when (entry) {
-                            HomeEntry.Profile -> {
-                                HomeProfileEntry(onProfileClick = onProfileClick)
-                            }
-                            HomeEntry.Empty -> {
-                                HomeDefaultItem(
-                                    title = "还没有 RSS 频道",
-                                    summary = "点击下方添加你的第一个订阅源",
-                                    backgroundColor = MaterialTheme.colorScheme.surface,
-                                    showIndicator = false,
-                                    testTag = HomeTestTags.EMPTY_ENTRY
-                                )
-                            }
-                            HomeEntry.Recommend -> {
-                                HomeDefaultItem(
-                                    title = "RSS推荐",
-                                    summary = "一键加入官方支持频道",
-                                    backgroundColor = MaterialTheme.colorScheme.surface,
-                                    showIndicator = false,
-                                    testTag = HomeTestTags.RECOMMEND_ENTRY,
-                                    onClick = onRecommendClick
-                                )
-                            }
-                            HomeEntry.AddRss -> {
-                                HomeAddEntry(
-                                    onAddRssClick = onAddRssClick,
-                                    interactionsEnabled = !isScrolling
-                                )
-                            }
-                            HomeEntry.Beian -> {
-                                HomeBeianEntry(onBeianClick = onBeianClick)
-                            }
-                            is HomeEntry.Channel -> {
-                                HomeChannelEntry(
-                                    channel = entry.channel,
-                                    platformLoginState = platformLoginState,
-                                    openSwipeId = openSwipeId,
-                                    onOpenSwipe = onOpenSwipe,
-                                    onCloseSwipe = onCloseSwipe,
-                                    draggingSwipeId = draggingSwipeId,
-                                    onDragStart = onDragStart,
-                                    onDragEnd = onDragEnd,
-                                    onChannelClick = { onChannelClick(entry.channel) },
-                                    onChannelLongClick = { onChannelLongClick(entry.channel) },
-                                    onSwipeBack = onSwipeBack,
-                                    swipeInteractionsEnabled = enableChannelSwipeActions && !isScrolling,
-                                    onMoveTopClick = { onMoveTopClick(entry.channel) },
-                                    onMarkReadClick = { onMarkReadClick(entry.channel) }
-                                )
-                            }
-                        }
+            items(
+                entries,
+                key = { it.key },
+                contentType = { it::class }
+            ) { entry ->
+                when (entry) {
+                    HomeEntry.Profile -> {
+                        HomeProfileEntry(onProfileClick = onProfileClick)
+                    }
+                    HomeEntry.Empty -> {
+                        HomeDefaultItem(
+                            title = "还没有 RSS 频道",
+                            summary = "点击下方添加你的第一个订阅源",
+                            backgroundColor = MaterialTheme.colorScheme.surface,
+                            showIndicator = false,
+                            testTag = HomeTestTags.EMPTY_ENTRY
+                        )
+                    }
+                    HomeEntry.Recommend -> {
+                        HomeDefaultItem(
+                            title = "RSS推荐",
+                            summary = "一键加入官方支持频道",
+                            backgroundColor = MaterialTheme.colorScheme.surface,
+                            showIndicator = false,
+                            testTag = HomeTestTags.RECOMMEND_ENTRY,
+                            onClick = onRecommendClick
+                        )
+                    }
+                    HomeEntry.AddRss -> {
+                        HomeAddEntry(
+                            onAddRssClick = onAddRssClick,
+                            interactionsEnabled = !isScrolling
+                        )
+                    }
+                    HomeEntry.Beian -> {
+                        HomeBeianEntry(onBeianClick = onBeianClick)
+                    }
+                    is HomeEntry.Channel -> {
+                        HomeChannelEntry(
+                            channel = entry.channel,
+                            platformLoginState = platformLoginState,
+                            openSwipeId = openSwipeId,
+                            onOpenSwipe = onOpenSwipe,
+                            onCloseSwipe = onCloseSwipe,
+                            draggingSwipeId = draggingSwipeId,
+                            onDragStart = onDragStart,
+                            onDragEnd = onDragEnd,
+                            onChannelClick = { onChannelClick(entry.channel) },
+                            onChannelLongClick = { onChannelLongClick(entry.channel) },
+                            onSwipeBack = onSwipeBack,
+                            swipeInteractionsEnabled = enableChannelSwipeActions && !isScrolling,
+                            onMoveTopClick = { onMoveTopClick(entry.channel) },
+                            onMarkReadClick = { onMarkReadClick(entry.channel) }
+                        )
                     }
                 }
             }
