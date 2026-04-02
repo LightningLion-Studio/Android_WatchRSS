@@ -39,6 +39,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import com.lightningstudio.watchrss.ui.theme.watchColorResource
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.res.painterResource
@@ -82,6 +87,10 @@ fun SavedItemsScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(androidx.compose.ui.graphics.Color.Black)
+            .semantics {
+                contentDescription = "$title页面"
+                stateDescription = if (items.isEmpty()) "无保存项目" else "共 ${items.size} 个保存项目"
+            }
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -148,19 +157,22 @@ private fun SavedHeader(title: String, hint: String) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(padding),
+            .padding(padding)
+            .semantics { heading() },
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
             text = title,
             color = MaterialTheme.colorScheme.onSurface,
             fontSize = titleSize,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.semantics { contentDescription = "页面标题：$title" }
         )
         Text(
             text = hint,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = hintSize
+            fontSize = hintSize,
+            modifier = Modifier.semantics { contentDescription = "页面说明：$hint" }
         )
     }
 }
@@ -173,7 +185,11 @@ private fun SyncButton(onClick: () -> Unit) {
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = padding, vertical = padding),
+            .padding(horizontal = padding, vertical = padding)
+            .semantics {
+                contentDescription = "同步到手机按钮"
+                role = Role.Button
+            },
         contentAlignment = Alignment.Center
     ) {
         val buttonWidth = watchActionButtonWidthFor(maxWidth)
@@ -240,7 +256,10 @@ private fun SavedItemRow(
                 end = paddingEnd,
                 top = verticalPadding,
                 bottom = verticalPadding
-            ),
+            )
+            .semantics {
+                contentDescription = "文章：$title，$summary"
+            },
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
@@ -277,7 +296,11 @@ private fun UndoFloatingButton(
             .size(size)
             .clip(RoundedCornerShape(radius))
             .background(background)
-            .clickableWithoutRipple(onClick),
+            .clickableWithoutRipple(onClick)
+            .semantics {
+                contentDescription = "撤回按钮"
+                role = Role.Button
+            },
         contentAlignment = Alignment.Center
     ) {
         Icon(

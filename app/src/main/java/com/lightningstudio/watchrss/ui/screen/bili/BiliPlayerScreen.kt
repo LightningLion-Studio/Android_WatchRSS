@@ -63,6 +63,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -633,6 +637,16 @@ fun BiliPlayerScreen(
                 transformOrigin = TransformOrigin.Center
             )
             .background(Color.Black)
+            .semantics {
+                contentDescription = "视频播放器"
+                stateDescription = when {
+                    isBuffering -> "缓冲中"
+                    playbackError != null -> "播放错误"
+                    isPlaying -> "播放中"
+                    playbackCompleted -> "已播放完成"
+                    else -> "已暂停"
+                }
+            }
     ) {
         val showPlayerSurface = activeSource != null || hasConfiguredSource || uiState.isLoading
         if (showPlayerSurface) {
@@ -870,7 +884,10 @@ fun BiliPlayerScreen(
                         Text(
                             text = formatTime(positionMs),
                             color = MaterialTheme.colorScheme.onSurface,
-                            fontSize = timeSize
+                            fontSize = timeSize,
+                            modifier = Modifier.semantics {
+                                contentDescription = "当前时间 ${formatTime(positionMs)}"
+                            }
                         )
                         LinearProgressIndicator(
                             progress = {
@@ -882,11 +899,18 @@ fun BiliPlayerScreen(
                                 .weight(1f)
                                 .height(4.dp)
                                 .clip(androidx.compose.foundation.shape.RoundedCornerShape(100))
+                                .semantics {
+                                    contentDescription = "播放进度"
+                                    stateDescription = "${(if (durationMs > 0) positionMs * 100 / durationMs else 0)}%"
+                                }
                         )
                         Text(
                             text = formatTime(durationMs),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontSize = timeSize
+                            fontSize = timeSize,
+                            modifier = Modifier.semantics {
+                                contentDescription = "总时长 ${formatTime(durationMs)}"
+                            }
                         )
                     }
 
@@ -959,7 +983,12 @@ private fun PlayerIconButton(
         modifier = Modifier
             .size(size)
             .alpha(if (enabled) 1f else 0.5f)
-            .clickable(enabled = enabled, onClick = onClick),
+            .clickable(enabled = enabled, onClick = onClick)
+            .semantics {
+                this.contentDescription = contentDescription
+                this.stateDescription = if (enabled) "可用" else "禁用"
+                role = Role.Button
+            },
         contentAlignment = Alignment.Center
     ) {
         Icon(

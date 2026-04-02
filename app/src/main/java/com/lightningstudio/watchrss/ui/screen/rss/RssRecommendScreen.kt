@@ -25,6 +25,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -48,7 +53,12 @@ fun RssRecommendScreen(
 
     WatchSurface(pureBlack = true) {
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .semantics {
+                    contentDescription = "RSS推荐页面"
+                    stateDescription = "共 ${groups.size} 个推荐分组"
+                },
             state = listState,
             contentPadding = PaddingValues(
                 start = safePadding,
@@ -62,7 +72,11 @@ fun RssRecommendScreen(
                 RecommendHeader(title = "RSS推荐", hint = "点击媒体查看频道")
             }
             items(groups) { group ->
-                RecommendGroupCard(group = group, onClick = { onGroupClick(group) })
+                RecommendGroupCard(
+                    group = group,
+                    onClick = { onGroupClick(group) },
+                    semanticDescription = "推荐分组：${group.name}"
+                )
             }
         }
     }
@@ -82,7 +96,12 @@ fun RssRecommendGroupScreen(
 
     WatchSurface(pureBlack = true) {
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .semantics {
+                    contentDescription = "RSS推荐分组页面：${group.name}"
+                    stateDescription = "共 ${group.channels.size} 个频道"
+                },
             state = listState,
             contentPadding = PaddingValues(
                 start = safePadding,
@@ -113,24 +132,31 @@ private fun RecommendHeader(title: String, hint: String) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(padding),
+            .padding(padding)
+            .semantics { heading() },
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
             text = title,
             style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.semantics { contentDescription = "页面标题：$title" }
         )
         Text(
             text = hint,
             style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.semantics { contentDescription = "页面说明：$hint" }
         )
     }
 }
 
 @Composable
-private fun RecommendGroupCard(group: RssRecommendGroup, onClick: () -> Unit) {
+private fun RecommendGroupCard(
+    group: RssRecommendGroup,
+    onClick: () -> Unit,
+    semanticDescription: String = "推荐分组"
+) {
     val cardColor = MaterialTheme.colorScheme.surface
     val cardRadius = watchDimensionResource(R.dimen.hey_card_normal_bg_radius)
     val horizontalPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_12dp
@@ -149,6 +175,10 @@ private fun RecommendGroupCard(group: RssRecommendGroup, onClick: () -> Unit) {
                 top = verticalPadding,
                 bottom = verticalPadding
             )
+            .semantics {
+                contentDescription = semanticDescription
+                role = Role.Button
+            }
     ) {
         Text(
             text = group.name,
@@ -193,11 +223,14 @@ private fun RecommendChannelCard(
                 end = endPadding,
                 top = verticalPadding,
                 bottom = verticalPadding
-            ),
+            )
+            .semantics { contentDescription = "推荐频道：${channel.title}" },
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(
-            modifier = Modifier.weight(1f)
+            modifier = Modifier
+                .weight(1f)
+                .semantics { contentDescription = "频道信息：${channel.title}，${channel.url}" }
         ) {
             Text(
                 text = channel.title,
@@ -221,7 +254,11 @@ private fun RecommendChannelCard(
                 .size(iconSize)
                 .clip(CircleShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                .clickable(onClick = onAddClick),
+                .clickable(onClick = onAddClick)
+                .semantics {
+                    contentDescription = "添加频道：${channel.title}"
+                    role = Role.Button
+                },
             contentAlignment = Alignment.Center
         ) {
             Text(

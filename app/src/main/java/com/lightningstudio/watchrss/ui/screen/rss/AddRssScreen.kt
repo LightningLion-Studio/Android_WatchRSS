@@ -31,6 +31,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -113,7 +116,8 @@ fun AddRssScreen(
                         top = verticalPadding,
                         bottom = verticalPadding
                     )
-                    .verticalScroll(scrollState),
+                    .verticalScroll(scrollState)
+                    .semantics { contentDescription = "添加RSS订阅页面" },
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
@@ -122,7 +126,9 @@ fun AddRssScreen(
                     style = titleStyle,
                     color = MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { heading() }
                 )
 
                 Spacer(modifier = Modifier.height(9.dp))
@@ -133,7 +139,8 @@ fun AddRssScreen(
                             onValueChange = onUrlChange,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .testTag(AddRssTestTags.URL_INPUT),
+                                .testTag(AddRssTestTags.URL_INPUT)
+                                .semantics { contentDescription = "RSS订阅地址输入框，当前内容：${state.url}" },
                             textStyle = MaterialTheme.typography.bodyLarge.copy(
                                 color = MaterialTheme.colorScheme.onSurface
                             ),
@@ -176,7 +183,9 @@ fun AddRssScreen(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .semantics { contentDescription = "支持的订阅格式说明" }
                         )
 
                         Spacer(modifier = Modifier.height(4.dp))
@@ -199,6 +208,7 @@ fun AddRssScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .testTag(AddRssTestTags.ERROR_TEXT)
+                                    .semantics { contentDescription = "错误信息：$message" }
                             )
                             val showActions = message != "请输入 RSS 地址" && message != "URL 不合法"
                             if (showActions) {
@@ -208,7 +218,9 @@ fun AddRssScreen(
                                         onClick = onSubmit,
                                         colors = ButtonDefaults.buttonColors(containerColor = actionColor),
                                         shape = actionShape,
-                                        modifier = Modifier.testTag(AddRssTestTags.RETRY_BUTTON)
+                                        modifier = Modifier
+                                            .testTag(AddRssTestTags.RETRY_BUTTON)
+                                            .semantics { contentDescription = "重试按钮" }
                                     ) {
                                         Text(text = "重试", color = actionTextColor)
                                     }
@@ -216,7 +228,9 @@ fun AddRssScreen(
                                         onClick = onClearError,
                                         colors = ButtonDefaults.buttonColors(containerColor = actionColor),
                                         shape = actionShape,
-                                        modifier = Modifier.testTag(AddRssTestTags.CANCEL_ERROR_BUTTON)
+                                        modifier = Modifier
+                                            .testTag(AddRssTestTags.CANCEL_ERROR_BUTTON)
+                                            .semantics { contentDescription = "取消按钮" }
                                     ) {
                                         Text(text = "取消", color = actionTextColor)
                                     }
@@ -236,7 +250,10 @@ fun AddRssScreen(
                                     shape = CircleShape,
                                     modifier = Modifier
                                         .size(44.dp)
-                                        .testTag(AddRssTestTags.SUBMIT_BUTTON),
+                                        .testTag(AddRssTestTags.SUBMIT_BUTTON)
+                                        .semantics {
+                                            contentDescription = if (state.isSubmitting) "添加中" else "添加订阅按钮"
+                                        },
                                     contentPadding = PaddingValues(0.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = actionColor)
                                 ) {
@@ -255,6 +272,7 @@ fun AddRssScreen(
                                         .width(actionWidth)
                                         .height(actionHeight)
                                         .testTag(AddRssTestTags.REMOTE_INPUT_BUTTON)
+                                        .semantics { contentDescription = "从手机输入按钮" }
                                 ) {
                                     Text(
                                         text = "从手机输入",
@@ -270,7 +288,9 @@ fun AddRssScreen(
                     AddRssStep.PREVIEW -> {
                         val preview = state.preview
                         Column(
-                            modifier = Modifier.testTag(AddRssTestTags.PREVIEW_PANEL),
+                            modifier = Modifier
+                                .testTag(AddRssTestTags.PREVIEW_PANEL)
+                                .semantics { contentDescription = "频道预览：${preview?.title ?: "未知"}" },
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
@@ -278,7 +298,9 @@ fun AddRssScreen(
                                 style = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp),
                                 color = MaterialTheme.colorScheme.onSurface,
                                 textAlign = TextAlign.Center,
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .semantics { heading() }
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
@@ -318,6 +340,7 @@ fun AddRssScreen(
                                     .width(actionWidth)
                                     .height(actionHeight)
                                     .testTag(AddRssTestTags.CONFIRM_BUTTON)
+                                    .semantics { contentDescription = if (state.isSubmitting) "添加中" else "确认添加订阅按钮" }
                             ) {
                                 Text(
                                     text = if (state.isSubmitting) "添加中" else "确认添加",
@@ -334,6 +357,7 @@ fun AddRssScreen(
                                     .width(actionWidth)
                                     .height(actionHeight)
                                     .testTag(AddRssTestTags.BACK_TO_INPUT_BUTTON)
+                                    .semantics { contentDescription = "修改地址按钮" }
                             ) {
                                 Text(
                                     text = "修改地址",
@@ -348,7 +372,9 @@ fun AddRssScreen(
                     AddRssStep.EXISTING -> {
                         val existing = state.existingChannel
                         Column(
-                            modifier = Modifier.testTag(AddRssTestTags.EXISTING_PANEL),
+                            modifier = Modifier
+                                .testTag(AddRssTestTags.EXISTING_PANEL)
+                                .semantics { contentDescription = "已存在的订阅频道" },
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
@@ -356,7 +382,9 @@ fun AddRssScreen(
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onSurface,
                                 textAlign = TextAlign.Center,
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .semantics { heading() }
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
@@ -394,6 +422,7 @@ fun AddRssScreen(
                                 .width(actionWidth)
                                 .height(actionHeight)
                                 .testTag(AddRssTestTags.OPEN_EXISTING_BUTTON)
+                                .semantics { contentDescription = "跳转到已有频道按钮" }
                         ) {
                             Text(
                                 text = "跳转频道",
@@ -415,7 +444,9 @@ fun AddRssScreen(
                             }
 
                             Column(
-                                modifier = Modifier.testTag(AddRssTestTags.QR_PANEL),
+                                modifier = Modifier
+                                    .testTag(AddRssTestTags.QR_PANEL)
+                                    .semantics { contentDescription = "二维码扫描面板" },
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Text(
@@ -423,7 +454,9 @@ fun AddRssScreen(
                                     style = MaterialTheme.typography.titleMedium,
                                     color = MaterialTheme.colorScheme.onSurface,
                                     textAlign = TextAlign.Center,
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .semantics { heading() }
                                 )
 
                                 Spacer(modifier = Modifier.height(12.dp))
@@ -459,6 +492,7 @@ fun AddRssScreen(
                                     .width(actionWidth)
                                     .height(actionHeight)
                                     .testTag(AddRssTestTags.BACK_TO_INPUT_BUTTON)
+                                    .semantics { contentDescription = "返回按钮" }
                             ) {
                                 Text(
                                     text = "返回",

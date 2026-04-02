@@ -58,6 +58,12 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.testTag
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
@@ -280,7 +286,11 @@ fun FeedScreen(
             onRefresh = onRefresh,
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black),
+                .background(Color.Black)
+                .semantics {
+                    contentDescription = "RSS内容列表"
+                    stateDescription = if (isRefreshing) "刷新中" else if (items.isEmpty()) "无内容" else "共 ${items.size} 条"
+                },
             indicatorPadding = safePadding,
             canRefresh = canRefresh
         ) {
@@ -421,7 +431,9 @@ internal fun FeedHeader(
                 fontSize = titleSize,
                 lineHeight = titleLineHeight,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics { heading() }
             )
         }
         Text(
@@ -429,7 +441,9 @@ internal fun FeedHeader(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = hintSize,
             textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .semantics { contentDescription = if (isRefreshing) "正在刷新内容" else "下拉可刷新" }
         )
     }
 }
@@ -674,7 +688,8 @@ internal fun FeedItemEntry(
                             onCloseSwipe()
                             onFavoriteClick()
                         },
-                        icon = Icons.Filled.Star
+                        icon = Icons.Filled.Star,
+                        semanticLabel = "收藏按钮"
                     )
                     SwipeActionButton(
                         text = "稍后再看",
@@ -683,7 +698,8 @@ internal fun FeedItemEntry(
                             onCloseSwipe()
                             onWatchLaterClick()
                         },
-                        icon = Icons.Outlined.WatchLater
+                        icon = Icons.Outlined.WatchLater,
+                        semanticLabel = "稍后再看按钮"
                     )
                 }
                 cardContent(offsetModifier)
@@ -738,6 +754,9 @@ private fun FeedCardTitle(
         overflow = TextOverflow.Ellipsis,
         inlineContent = inlineContent,
         modifier = modifier
+            .semantics {
+                contentDescription = if (isRead) title else "未读：$title"
+            }
     )
 }
 
@@ -779,6 +798,9 @@ private fun FeedTextCard(
                 interactionSource = pressState.interactionSource
             )
             .padding(padding)
+            .semantics {
+                contentDescription = "文章：${item.title}${if (item.isRead) "" else "，未读"}"
+            }
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             FeedCardTitle(
@@ -843,6 +865,9 @@ private fun FeedImageCard(
                 onLongClick = onLongClick,
                 interactionSource = pressState.interactionSource
             )
+            .semantics {
+                contentDescription = "文章：${item.title}${if (item.isRead) "" else "，未读"}"
+            }
     ) {
         RssThumbnail(
             url = thumbUrl,

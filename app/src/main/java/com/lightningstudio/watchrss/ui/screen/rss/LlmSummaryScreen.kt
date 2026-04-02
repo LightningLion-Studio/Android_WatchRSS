@@ -29,6 +29,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -81,17 +86,29 @@ private fun LlmSummaryContent(
                 .fillMaxSize()
                 .verticalScroll(scrollState)
                 .padding(safePadding)
+                .semantics {
+                    contentDescription = "AI总结页面"
+                    stateDescription = when (state.status) {
+                        SummaryStatus.Idle -> "空闲状态"
+                        SummaryStatus.WaitingForContent -> "等待内容"
+                        SummaryStatus.Generating -> "正在生成"
+                        SummaryStatus.Done -> "已完成"
+                        is SummaryStatus.Error -> "发生错误"
+                    }
+                }
         ) {
             Spacer(modifier = Modifier.height(titleTopSpacing))
 
             // 标题行
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics { heading() },
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
                     imageVector = Icons.Outlined.AutoAwesome,
-                    contentDescription = null,
+                    contentDescription = "AI图标",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(16.dp)
                 )
@@ -99,7 +116,8 @@ private fun LlmSummaryContent(
                 Text(
                     text = "AI 总结",
                     style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.semantics { contentDescription = "AI总结标题" }
                 )
                 if (isGenerating) {
                     Spacer(modifier = Modifier.width(8.dp))
@@ -119,7 +137,9 @@ private fun LlmSummaryContent(
                         text = "准备中...",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = valueIndent)
+                        modifier = Modifier
+                            .padding(start = valueIndent)
+                            .semantics { contentDescription = "当前状态：准备中" }
                     )
                 }
                 is SummaryStatus.WaitingForContent -> {
@@ -127,23 +147,27 @@ private fun LlmSummaryContent(
                         text = "原文还在加载，准备好后会自动开始总结。",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = valueIndent)
+                        modifier = Modifier
+                            .padding(start = valueIndent)
+                            .semantics { contentDescription = "等待原文加载完成" }
                     )
                 }
                 is SummaryStatus.Generating -> {
                     if (state.text.isNotBlank()) {
-                        SummaryTextCard(text = state.text)
+                        SummaryTextCard(text = state.text, isGenerating = true)
                     } else {
                         Text(
                             text = "正在生成总结...",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(start = valueIndent)
+                            modifier = Modifier
+                                .padding(start = valueIndent)
+                                .semantics { contentDescription = "正在生成总结中" }
                         )
                     }
                 }
                 is SummaryStatus.Done -> {
-                    SummaryTextCard(text = state.text)
+                    SummaryTextCard(text = state.text, isGenerating = false)
                     if (showTokenUsage && state.totalTokens != null) {
                         Spacer(modifier = Modifier.height(entrySpacing))
                         TokenUsageCard(
@@ -159,13 +183,15 @@ private fun LlmSummaryContent(
                     WatchSettingsPillRow(
                         label = "重试",
                         leadingIcon = Icons.Outlined.Refresh,
-                        onClick = onRetry
+                        onClick = onRetry,
+                        modifier = Modifier.semantics { contentDescription = "重试生成总结按钮" }
                     )
                     Spacer(modifier = Modifier.height(valueSpacing))
                     WatchSettingsPillRow(
                         label = "检测一下",
                         leadingIcon = Icons.Outlined.SettingsEthernet,
-                        onClick = onOpenConnectivityCheck
+                        onClick = onOpenConnectivityCheck,
+                        modifier = Modifier.semantics { contentDescription = "检测连接状态按钮" }
                     )
                 }
             }
@@ -176,13 +202,16 @@ private fun LlmSummaryContent(
 }
 
 @Composable
-private fun SummaryTextCard(text: String) {
+private fun SummaryTextCard(text: String, isGenerating: Boolean = false) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .padding(horizontal = 12.dp, vertical = 10.dp)
+            .semantics {
+                contentDescription = "AI总结内容：${text.take(100)}${if (text.length > 100) "..." else ""}"
+            }
     ) {
         Text(
             text = text,
@@ -204,6 +233,9 @@ private fun TokenUsageCard(
             .clip(RoundedCornerShape(10.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
             .padding(horizontal = 12.dp, vertical = 8.dp)
+            .semantics {
+                contentDescription = "Token用量：输入${promptTokens ?: 0}，输出${completionTokens ?: 0}，合计${totalTokens ?: 0}"
+            }
     ) {
         Column {
             Text(
@@ -233,7 +265,10 @@ private fun ErrorCard(message: String) {
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(Color(0xFFFF6B6B).copy(alpha = 0.12f))
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+            .semantics {
+                contentDescription = "错误信息：$message"
+            },
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {

@@ -17,6 +17,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -50,6 +55,10 @@ fun ReadAloudPlaybackScreen(
                 .fillMaxSize()
                 .verticalScroll(scrollState)
                 .padding(safePadding)
+                .semantics {
+                    contentDescription = "朗读播控页面"
+                    stateDescription = buildPlaybackStatusText(state)
+                }
         ) {
             SettingsHeader(title = "朗读播控")
 
@@ -62,7 +71,9 @@ fun ReadAloudPlaybackScreen(
                 textAlign = TextAlign.Center,
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics { heading() }
             )
             if (state.currentChannelTitle.isNotBlank()) {
                 Spacer(modifier = Modifier.height(WatchDimens.hey_distance_4dp))
@@ -71,7 +82,9 @@ fun ReadAloudPlaybackScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { contentDescription = "来源：${state.currentChannelTitle}" }
                 )
             }
 
@@ -82,7 +95,9 @@ fun ReadAloudPlaybackScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 style = MaterialTheme.typography.bodySmall,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics { contentDescription = "播放状态：${buildPlaybackStatusText(state)}" }
             )
 
             if (!state.errorMessage.isNullOrBlank()) {
@@ -92,20 +107,25 @@ fun ReadAloudPlaybackScreen(
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { contentDescription = "错误：${state.errorMessage}" }
                 )
             }
 
             Spacer(modifier = Modifier.height(WatchDimens.hey_distance_10dp))
 
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics { contentDescription = "播放控制按钮" },
                 horizontalArrangement = Arrangement.Center
             ) {
                 WatchButton(
                     onClick = onPrevious,
                     shape = CircleShape,
-                    colors = ButtonDefaults.buttonColors(containerColor = actionColor)
+                    colors = ButtonDefaults.buttonColors(containerColor = actionColor),
+                    modifier = Modifier.semantics { contentDescription = "播放上一首"; role = Role.Button }
                 ) {
                     Text(text = "上一", color = MaterialTheme.colorScheme.onSurface)
                 }
@@ -113,7 +133,11 @@ fun ReadAloudPlaybackScreen(
                 WatchButton(
                     onClick = onTogglePlayPause,
                     shape = CircleShape,
-                    colors = ButtonDefaults.buttonColors(containerColor = actionColor)
+                    colors = ButtonDefaults.buttonColors(containerColor = actionColor),
+                    modifier = Modifier.semantics {
+                        contentDescription = if (state.isPlaying) "暂停朗读" else "开始朗读"
+                        role = Role.Button
+                    }
                 ) {
                     Text(
                         text = if (state.isPlaying) "暂停" else "播放",
@@ -124,7 +148,8 @@ fun ReadAloudPlaybackScreen(
                 WatchButton(
                     onClick = onNext,
                     shape = CircleShape,
-                    colors = ButtonDefaults.buttonColors(containerColor = actionColor)
+                    colors = ButtonDefaults.buttonColors(containerColor = actionColor),
+                    modifier = Modifier.semantics { contentDescription = "播放下一首"; role = Role.Button }
                 ) {
                     Text(text = "下一", color = MaterialTheme.colorScheme.onSurface)
                 }
@@ -139,7 +164,8 @@ fun ReadAloudPlaybackScreen(
                 WatchButton(
                     onClick = onStop,
                     shape = CircleShape,
-                    colors = ButtonDefaults.buttonColors(containerColor = actionColor)
+                    colors = ButtonDefaults.buttonColors(containerColor = actionColor),
+                    modifier = Modifier.semantics { contentDescription = "停止朗读"; role = Role.Button }
                 ) {
                     Text(text = "停止", color = MaterialTheme.colorScheme.onSurface)
                 }
@@ -148,7 +174,8 @@ fun ReadAloudPlaybackScreen(
                     WatchButton(
                         onClick = onOpenCurrentArticle,
                         shape = CircleShape,
-                        colors = ButtonDefaults.buttonColors(containerColor = actionColor)
+                        colors = ButtonDefaults.buttonColors(containerColor = actionColor),
+                        modifier = Modifier.semantics { contentDescription = "查看当前文章"; role = Role.Button }
                     ) {
                         Text(text = "文章", color = MaterialTheme.colorScheme.onSurface)
                     }

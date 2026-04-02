@@ -24,6 +24,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.testTag
 import com.lightningstudio.watchrss.ui.theme.watchColorResource
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.style.TextAlign
@@ -75,7 +81,8 @@ fun ChannelDetailScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(scrollState)
-                .padding(safePadding),
+                .padding(safePadding)
+                .semantics { contentDescription = "频道详情页面" },
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
@@ -97,7 +104,9 @@ fun ChannelDetailScreen(
                     color = MaterialTheme.colorScheme.onSurface,
                     fontSize = titleSize,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { heading() }
                 )
             }
 
@@ -131,7 +140,10 @@ fun ChannelDetailScreen(
                     text = "未读 ${channel.unreadCount}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { contentDescription = "未读数量 ${channel.unreadCount} 条" }
+                        .testTag("unread_count"),
                     textAlign = TextAlign.Center
                 )
             }
@@ -149,7 +161,8 @@ fun ChannelDetailScreen(
                         enabled = channel != null,
                         width = buttonWidth,
                         height = buttonHeight,
-                        onClick = onOpenSettings
+                        onClick = onOpenSettings,
+                        semanticLabel = "频道设置按钮"
                     )
 
                     Spacer(modifier = Modifier.height(buttonSpacing))
@@ -159,7 +172,8 @@ fun ChannelDetailScreen(
                         enabled = channel != null,
                         width = buttonWidth,
                         height = buttonHeight,
-                        onClick = onSearch
+                        onClick = onSearch,
+                        semanticLabel = "频道内搜索按钮"
                     )
 
                     Spacer(modifier = Modifier.height(buttonSpacing))
@@ -169,7 +183,8 @@ fun ChannelDetailScreen(
                         enabled = channel != null,
                         width = buttonWidth,
                         height = buttonHeight,
-                        onClick = onShare
+                        onClick = onShare,
+                        semanticLabel = "分享频道按钮"
                     )
 
                     Spacer(modifier = Modifier.height(buttonSpacing))
@@ -179,7 +194,8 @@ fun ChannelDetailScreen(
                         enabled = channel?.unreadCount?.let { it > 0 } ?: false,
                         width = buttonWidth,
                         height = buttonHeight,
-                        onClick = onMarkRead
+                        onClick = onMarkRead,
+                        semanticLabel = "标记全部已读按钮"
                     )
                 }
             }
@@ -193,7 +209,8 @@ private fun ActionButton(
     enabled: Boolean,
     width: androidx.compose.ui.unit.Dp,
     height: androidx.compose.ui.unit.Dp,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    semanticLabel: String = label
 ) {
     val pillColor = watchColorResource(R.color.watch_pill_background)
     val pillRadius = WatchDimens.hey_button_default_radius
@@ -207,7 +224,12 @@ private fun ActionButton(
             .clip(RoundedCornerShape(pillRadius))
             .background(pillColor)
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = horizontalPadding),
+            .padding(horizontal = horizontalPadding)
+            .semantics {
+                contentDescription = semanticLabel
+                stateDescription = if (enabled) "可用" else "禁用"
+                role = Role.Button
+            },
         contentAlignment = Alignment.Center
     ) {
         Text(

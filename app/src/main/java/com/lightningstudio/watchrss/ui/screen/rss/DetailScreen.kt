@@ -47,6 +47,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -328,6 +332,9 @@ internal fun DetailContent(
         modifier = Modifier
             .fillMaxSize()
             .background(backgroundColor)
+            .semantics {
+                contentDescription = "文章详情页面"
+            }
     ) {
         val isScrolling by remember(listState) {
             derivedStateOf { listState.isScrollInProgress }
