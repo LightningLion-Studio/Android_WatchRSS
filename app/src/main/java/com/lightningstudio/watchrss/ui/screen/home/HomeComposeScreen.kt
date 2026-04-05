@@ -57,7 +57,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -82,16 +84,18 @@ import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import com.lightningstudio.watchrss.ui.util.formatTime
 import com.lightningstudio.watchrss.ui.viewmodel.HomePlatformLoginState
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.roundToInt
 
 @Composable
 fun HomeComposeScreen(
     channels: List<RssChannel>,
-    hasLoadedChannels: Boolean,
+    hasLoadedChannels: Boolean = true,
     platformLoginState: HomePlatformLoginState = HomePlatformLoginState(),
     enableChannelSwipeActions: Boolean = false,
     isRefreshing: Boolean,
     loadingEntryKey: String? = null,
+    onMinimalContentReady: () -> Unit = {},
     onRefreshAll: () -> Unit,
     openSwipeId: Long?,
     onOpenSwipe: (Long) -> Unit,
@@ -119,6 +123,9 @@ fun HomeComposeScreen(
         val listState = rememberLazyListState()
         InstallDigitalCrownLazyListHandler(listState)
         val canRefresh = rememberPullRefreshEnabled(listState)
+        val view = LocalView.current
+        val firstLayoutReported = remember { AtomicBoolean(false) }
+        val onMinimalContentReadyState = rememberUpdatedState(onMinimalContentReady)
         val isScrolling by remember(listState) {
             derivedStateOf { listState.isScrollInProgress }
         }
@@ -137,6 +144,13 @@ fun HomeComposeScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(horizontal = safePadding)
+                        .onGloballyPositioned {
+                            if (firstLayoutReported.compareAndSet(false, true)) {
+                                view.post {
+                                    onMinimalContentReadyState.value()
+                                }
+                            }
+                        }
                         .testTag(HomeTestTags.CHANNEL_LIST),
                     state = listState,
                     contentPadding = PaddingValues(

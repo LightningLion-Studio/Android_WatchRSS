@@ -1,7 +1,9 @@
 package com.lightningstudio.watchrss.ui.screen.home
 
 import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -57,6 +59,53 @@ class HomeComposeScreenTest {
         composeRule.onNodeWithTag(HomeTestTags.CHANNEL_LIST)
             .performScrollToNode(hasTestTag(HomeTestTags.BEIAN_ENTRY))
         composeRule.onNodeWithTag(HomeTestTags.BEIAN_ENTRY).assertExists()
+    }
+
+    @Test
+    fun loadingHome_reportsMinimalContentReadyBeforeChannelDataArrives() {
+        var minimalContentReadyCount = 0
+
+        composeRule.setWatchContent {
+            HomeComposeScreen(
+                channels = emptyList(),
+                hasLoadedChannels = false,
+                isRefreshing = false,
+                loadingEntryKey = null,
+                onMinimalContentReady = { minimalContentReadyCount++ },
+                onRefreshAll = {},
+                openSwipeId = null,
+                onOpenSwipe = {},
+                onCloseSwipe = {},
+                draggingSwipeId = null,
+                onDragStart = {},
+                onDragEnd = {},
+                onProfileClick = {},
+                onRecommendClick = {},
+                onChannelClick = {},
+                onChannelLongClick = {},
+                onSwipeBack = {},
+                onAddRssClick = {},
+                onMoveTopClick = {},
+                onMarkReadClick = {},
+                onBeianClick = {}
+            )
+        }
+
+        composeRule.onNodeWithTag(HomeTestTags.PROFILE_ENTRY).assertExists()
+        composeRule.onAllNodesWithTag(HomeTestTags.EMPTY_ENTRY).assertCountEquals(0)
+        composeRule.onNodeWithTag(HomeTestTags.CHANNEL_LIST)
+            .performScrollToNode(hasTestTag(HomeTestTags.RECOMMEND_ENTRY))
+        composeRule.onNodeWithTag(HomeTestTags.RECOMMEND_ENTRY).assertExists()
+        composeRule.onNodeWithTag(HomeTestTags.CHANNEL_LIST)
+            .performScrollToNode(hasTestTag(HomeTestTags.ADD_ENTRY))
+        composeRule.onNodeWithTag(HomeTestTags.ADD_ENTRY).assertExists()
+        composeRule.onNodeWithTag(HomeTestTags.CHANNEL_LIST)
+            .performScrollToNode(hasTestTag(HomeTestTags.BEIAN_ENTRY))
+        composeRule.onNodeWithTag(HomeTestTags.BEIAN_ENTRY).assertExists()
+
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            minimalContentReadyCount == 1
+        }
     }
 
     @Test

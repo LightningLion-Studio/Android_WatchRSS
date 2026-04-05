@@ -25,6 +25,7 @@ import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.rss.RssChannel
 import com.lightningstudio.watchrss.data.settings.CURRENT_OOBE_VERSION
 import com.lightningstudio.watchrss.debug.PerformanceMonitor
+import com.lightningstudio.watchrss.debug.StartupDurationTracker
 import com.lightningstudio.watchrss.sdk.douyin.DouyinVideo
 import com.lightningstudio.watchrss.ui.screen.common.ReadAloudBubbleDock
 import com.lightningstudio.watchrss.ui.screen.common.ReadAloudFloatingBubbleOverlay
@@ -57,6 +58,8 @@ class MainActivity : BaseWatchActivity() {
         }
     private var draggingSwipeKey by mutableStateOf<Long?>(null)
     private var keepSplashOnScreen = true
+    private var startupReadyToShowHome = false
+    private var homeMinimumContentReady = false
     private var initialStartupCompleted = false
     private var startupMaintenanceScheduled = false
     private var navigatingHomeEntryKey by mutableStateOf<String?>(null)
@@ -111,6 +114,10 @@ class MainActivity : BaseWatchActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen().setKeepOnScreenCondition { keepSplashOnScreen }
         super.onCreate(savedInstanceState)
+        StartupDurationTracker.markMainActivityCreated(
+            isLauncherEntry = isLauncherEntry(intent),
+            savedInstanceState = savedInstanceState
+        )
         PerformanceMonitor.setScenario(this, "home_cold_start")
         onBackPressedDispatcher.addCallback(this, closeOpenSwipeBackCallback)
         setupSystemBars()
@@ -123,9 +130,15 @@ class MainActivity : BaseWatchActivity() {
             }
             if (shouldShowOobe) {
                 keepSplashOnScreen = false
+                StartupDurationTracker.markStartupReady(destination = "oobe")
                 startActivity(OobeActivity.createIntent(this@MainActivity))
                 finish()
                 return@launch
+            }
+            startupReadyToShowHome = true
+            updateSplashVisibility()
+            if (homeMinimumContentReady) {
+                StartupDurationTracker.markStartupReady(destination = "home")
             }
             initialStartupCompleted = true
             scheduleStartupMaintenance()
@@ -153,7 +166,6 @@ class MainActivity : BaseWatchActivity() {
 
                 LaunchedEffect(hasLoadedChannels) {
                     if (hasLoadedChannels) {
-                        keepSplashOnScreen = false
                         scheduleInitialHomeLoginStateRefresh()
                     }
                 }
@@ -173,6 +185,13 @@ class MainActivity : BaseWatchActivity() {
                         enableChannelSwipeActions = false,
                         isRefreshing = isRefreshing,
                         loadingEntryKey = navigatingHomeEntryKey,
+                        onMinimalContentReady = {
+                            homeMinimumContentReady = true
+                            updateSplashVisibility()
+                            if (startupReadyToShowHome) {
+                                StartupDurationTracker.markStartupReady(destination = "home")
+                            }
+                        },
                         onRefreshAll = viewModel::refreshAll,
                         openSwipeId = openSwipeKey,
                         onOpenSwipe = { openSwipeKey = it },
@@ -231,6 +250,10 @@ class MainActivity : BaseWatchActivity() {
                 }
             }
         }
+    }
+
+    private fun updateSplashVisibility() {
+        keepSplashOnScreen = !(startupReadyToShowHome && homeMinimumContentReady)
     }
 
     private fun closeOpenSwipe(): Boolean {
