@@ -64,7 +64,10 @@ class DouyinFeedViewModel(
                         message = null
                     )
                 }
-                restoreEntryPlayback(headers)
+                val hasBootstrapItems = restoreEntryPlayback(headers)
+                if (!hasBootstrapItems) {
+                    loadInitial()
+                }
             } else {
                 _uiState.update { it.copy(isLoggedIn = false) }
             }
@@ -104,7 +107,10 @@ class DouyinFeedViewModel(
                     message = null
                 )
             }
-            restoreEntryPlayback(headers)
+            val hasBootstrapItems = restoreEntryPlayback(headers)
+            if (!hasBootstrapItems) {
+                loadInitial()
+            }
         }
     }
 
@@ -248,8 +254,9 @@ class DouyinFeedViewModel(
         return bootstrapState.savedAtMs
     }
 
-    private suspend fun restoreEntryPlayback(headers: Map<String, String>) {
+    private suspend fun restoreEntryPlayback(headers: Map<String, String>): Boolean {
         val bootstrapState = readBootstrapState()
+        val hasBootstrapItems = bootstrapState.items.isNotEmpty()
         val latestAwemeId = watchHistoryStore.readHistory()
             .firstOrNull()
             ?.awemeId
@@ -269,7 +276,7 @@ class DouyinFeedViewModel(
                 )
             }
             schedulePreload(bootstrapState.items, headers)
-            return
+            return hasBootstrapItems
         }
 
         val cachedTargetPage = resolveNextPageAfter(
@@ -290,7 +297,7 @@ class DouyinFeedViewModel(
                 )
             }
             schedulePreload(bootstrapState.items, headers)
-            return
+            return hasBootstrapItems
         }
 
         val fallbackPage = if (bootstrapState.items.isNotEmpty()) 1 else 0
@@ -307,6 +314,7 @@ class DouyinFeedViewModel(
             )
         }
         schedulePreload(bootstrapState.items, headers)
+        return hasBootstrapItems
     }
 
     private suspend fun readBootstrapState(): DouyinBootstrapState {
@@ -575,7 +583,7 @@ class DouyinFeedViewModel(
 
     companion object {
         private const val PAGE_SIZE = 16
-        private const val LOAD_MORE_THRESHOLD = 3
+        private const val LOAD_MORE_THRESHOLD = 5
         private const val TARGET_PRELOAD_UNWATCHED = 2
         private const val BOOTSTRAP_ITEMS = PAGE_SIZE
     }

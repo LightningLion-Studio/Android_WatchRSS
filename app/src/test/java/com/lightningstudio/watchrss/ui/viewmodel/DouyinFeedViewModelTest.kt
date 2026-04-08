@@ -178,6 +178,40 @@ class DouyinFeedViewModelTest {
     }
 
     @Test
+    fun init_withoutCachedItems_triggersInitialRefresh() = runTest {
+        val repo = TestDouyinRepository(initialLoggedIn = true).apply {
+            feedPageResults = ArrayDeque(
+                listOf(
+                    DouyinResult(
+                        code = DouyinErrorCodes.OK,
+                        data = DouyinFeedPage(
+                            items = listOf(
+                                sampleDouyinVideo(awemeId = "fresh-a"),
+                                sampleDouyinVideo(awemeId = "fresh-b")
+                            ),
+                            nextCursor = "next-cursor",
+                            hasMore = true
+                        )
+                    )
+                )
+            )
+        }
+        val feedCacheStore = TestDouyinFeedCacheStore()
+        val viewModel = DouyinFeedViewModel(
+            repository = repo,
+            preloadManager = TestDouyinPreloadManager(),
+            watchHistoryStore = TestDouyinWatchHistoryStore(),
+            feedCacheStore = feedCacheStore
+        )
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.showTitlePage)
+        assertEquals(0, viewModel.uiState.value.currentPage)
+        assertEquals(listOf("fresh-a", "fresh-b"), viewModel.uiState.value.items.map { it.awemeId })
+        assertTrue(feedCacheStore.savedSnapshots.isNotEmpty())
+    }
+
+    @Test
     fun loadInitial_manualRefresh_preservesCurrentPageInsteadOfReapplyingEntryResume() = runTest {
         val first = sampleDouyinStreamItem(awemeId = "aweme-a")
         val second = sampleDouyinStreamItem(awemeId = "aweme-b")
@@ -199,9 +233,16 @@ class DouyinFeedViewModelTest {
         )
         advanceUntilIdle()
 
-        viewModel.onPageSettled(3)
         repo.feedPageResults = ArrayDeque(
             listOf(
+                DouyinResult(
+                    code = DouyinErrorCodes.OK,
+                    data = DouyinFeedPage(
+                        items = emptyList(),
+                        nextCursor = null,
+                        hasMore = false
+                    )
+                ),
                 DouyinResult(
                     code = DouyinErrorCodes.OK,
                     data = DouyinFeedPage(
@@ -217,6 +258,8 @@ class DouyinFeedViewModelTest {
                 )
             )
         )
+        viewModel.onPageSettled(3)
+        advanceUntilIdle()
 
         viewModel.loadInitial()
         advanceUntilIdle()

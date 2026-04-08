@@ -4,6 +4,12 @@ import android.content.Context
 import android.net.Uri
 import com.lightningstudio.watchrss.data.cache.CacheTrimReason
 import com.lightningstudio.watchrss.data.cache.ManagedCacheService
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.job
+import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
@@ -28,12 +34,49 @@ class DouyinPreloadManager(
 ) : DouyinPreloadManagerContract {
     private val appContext = context.applicationContext
     private val cacheDir = File(appContext.cacheDir, CACHE_DIR_NAME).apply { mkdirs() }
+    private val cacheDispatcher = Dispatchers.IO.limitedParallelism(1)
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(8, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
         .build()
 
     override suspend fun localPathFor(awemeId: String): String? {
+        return withContext(cacheDispatcher) {
+            localPathForInternal(awemeId)
+        }
+    }
+
+    override suspend fun resolveLocalPaths(awemeIds: List<String>): Map<String, String> {
+        return withContext(cacheDispatcher) {
+            resolveLocalPathsInternal(awemeIds)
+        }
+    }
+
+    override suspend fun ensureUnwatchedCache(
+        items: List<DouyinStreamItem>,
+        watchedIds: Set<String>,
+        headers: Map<String, String>,
+        targetUnwatchedCount: Int
+    ) {
+        withContext(cacheDispatcher) {
+            ensureUnwatchedCacheInternal(
+                items = items,
+                watchedIds = watchedIds,
+                headers = headers,
+                targetUnwatchedCount = targetUnwatchedCount
+            )
+        }
+    }
+
+    fun toLocalUri(path: String): Uri = Uri.fromFile(File(path))
+
+    override suspend fun invalidate(awemeId: String): Boolean {
+        return withContext(cacheDispatcher) {
+            invalidateInternal(awemeId)
+        }
+    }
+
+    private fun localPathForInternal(awemeId: String): String? {
         val file = mediaFileFor(awemeId) ?: return null
         if (!file.exists()) return null
         if (file.length() < MIN_VALID_FILE_BYTES) {
@@ -45,11 +88,11 @@ class DouyinPreloadManager(
         return file.absolutePath
     }
 
-    override suspend fun resolveLocalPaths(awemeIds: List<String>): Map<String, String> {
+    private fun resolveLocalPathsInternal(awemeIds: List<String>): Map<String, String> {
         if (awemeIds.isEmpty()) return emptyMap()
         val result = linkedMapOf<String, String>()
         awemeIds.distinct().forEach { awemeId ->
-            val local = localPathFor(awemeId)
+            val local = localPathForInternal(awemeId)
             if (!local.isNullOrBlank()) {
                 result[awemeId] = local
             }
@@ -57,7 +100,7 @@ class DouyinPreloadManager(
         return result
     }
 
-    override suspend fun ensureUnwatchedCache(
+    private suspend fun ensureUnwatchedCacheInternal(
         items: List<DouyinStreamItem>,
         watchedIds: Set<String>,
         headers: Map<String, String>,
@@ -75,7 +118,8 @@ class DouyinPreloadManager(
         }
         if (validItems.isEmpty()) return
 
-        val cachedNow = resolveLocalPaths(validItems.keys.toList())
+        currentCoroutineContext().ensureActive()
+        val cachedNow = resolveLocalPathsInternal(validItems.keys.toList())
         var cachedUnwatchedCount = cachedNow.keys.count { awemeId -> !watchedIds.contains(awemeId) }
         if (cachedUnwatchedCount >= targetUnwatchedCount) {
             trimCache(maxEntries = MAX_CACHE_ENTRIES)
@@ -87,6 +131,7 @@ class DouyinPreloadManager(
                 cachedNow[item.awemeId].isNullOrBlank()
         }
         for (item in candidates) {
+            currentCoroutineContext().ensureActive()
             if (cachedUnwatchedCount >= targetUnwatchedCount) break
             if (downloadToCache(item, headers)) {
                 cachedUnwatchedCount += 1
@@ -95,9 +140,7 @@ class DouyinPreloadManager(
         trimCache(maxEntries = MAX_CACHE_ENTRIES)
     }
 
-    fun toLocalUri(path: String): Uri = Uri.fromFile(File(path))
-
-    override suspend fun invalidate(awemeId: String): Boolean {
+    private fun invalidateInternal(awemeId: String): Boolean {
         val target = mediaFileFor(awemeId) ?: return false
         val deleted = target.exists() && target.delete()
         if (deleted) {
@@ -106,7 +149,7 @@ class DouyinPreloadManager(
         return deleted
     }
 
-    private fun downloadToCache(item: DouyinStreamItem, headers: Map<String, String>): Boolean {
+    private suspend fun downloadToCache(item: DouyinStreamItem, headers: Map<String, String>): Boolean {
         val target = mediaFileFor(item.awemeId) ?: return false
         if (target.exists() && target.length() >= MIN_VALID_FILE_BYTES) {
             target.setLastModified(System.currentTimeMillis())
@@ -114,7 +157,7 @@ class DouyinPreloadManager(
         }
 
         val temp = File(cacheDir, "${target.name}.tmp")
-        return runCatching {
+        return try {
             val requestBuilder = Request.Builder()
                 .url(item.playUrl)
                 .get()
@@ -123,17 +166,30 @@ class DouyinPreloadManager(
                     requestBuilder.header(key, value)
                 }
             }
-            httpClient.newCall(requestBuilder.build()).execute().use { response ->
-                if (!response.isSuccessful) {
-                    throw IOException("unexpected code ${response.code}")
-                }
-                val body = response.body ?: throw IOException("empty body")
-                temp.outputStream().use { output ->
-                    body.byteStream().use { input ->
-                        input.copyTo(output)
-                    }
+            val call = httpClient.newCall(requestBuilder.build())
+            val job = currentCoroutineContext().job
+            val cancelHandle = job.invokeOnCompletion { throwable ->
+                if (throwable != null) {
+                    call.cancel()
                 }
             }
+            try {
+                call.execute().use { response ->
+                    currentCoroutineContext().ensureActive()
+                    if (!response.isSuccessful) {
+                        throw IOException("unexpected code ${response.code}")
+                    }
+                    val body = response.body ?: throw IOException("empty body")
+                    temp.outputStream().use { output ->
+                        body.byteStream().use { input ->
+                            input.copyTo(output)
+                        }
+                    }
+                }
+            } finally {
+                cancelHandle.dispose()
+            }
+            currentCoroutineContext().ensureActive()
             if (temp.length() < MIN_VALID_FILE_BYTES) {
                 throw IOException("file too small")
             }
@@ -147,7 +203,10 @@ class DouyinPreloadManager(
             touchFile(target)
             cacheService?.scheduleMaintenance(CacheTrimReason.CACHE_WRITE)
             true
-        }.getOrElse {
+        } catch (cancelled: CancellationException) {
+            temp.delete()
+            throw cancelled
+        } catch (_: Throwable) {
             temp.delete()
             false
         }

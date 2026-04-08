@@ -88,6 +88,8 @@ class TestRssRepository(
         cacheUsageBytesFlow.value = bytes
     }
 
+    override fun observeHomeChannels(): Flow<List<RssChannel>> = channelsFlow
+
     override fun observeChannels(): Flow<List<RssChannel>> = channelsFlow
 
     override fun observeChannel(channelId: Long): Flow<RssChannel?> {

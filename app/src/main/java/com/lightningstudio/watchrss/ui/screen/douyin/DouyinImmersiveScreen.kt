@@ -3,8 +3,11 @@ package com.lightningstudio.watchrss.ui.screen.douyin
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.graphics.Matrix
 import android.graphics.Paint
+import android.graphics.SurfaceTexture
 import android.text.TextPaint
+import android.view.TextureView
 import android.view.WindowManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -49,22 +52,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.layout.onSizeChanged
-import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -72,8 +71,6 @@ import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.ui.AspectRatioFrameLayout
-import androidx.media3.ui.PlayerView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -91,10 +88,14 @@ import com.lightningstudio.watchrss.ui.components.rememberPullRefreshEnabled
 import com.lightningstudio.watchrss.ui.components.rememberPlayerVolumeState
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownPagerHandler
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownVolumeHandler
+import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import com.lightningstudio.watchrss.ui.util.hasValidatedInternetConnection
 import com.lightningstudio.watchrss.ui.viewmodel.DouyinFeedUiState
 import com.lightningstudio.watchrss.util.AppLogger
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import okhttp3.OkHttpClient
 import kotlin.math.min
 import kotlin.math.sqrt
@@ -117,6 +118,41 @@ private data class DouyinPlayerScaleToggleAction(
     val icon: ImageVector,
     val contentDescription: String
 )
+
+private enum class DouyinPlayerSlotKey {
+    Primary,
+    Secondary;
+
+    fun other(): DouyinPlayerSlotKey {
+        return when (this) {
+            Primary -> Secondary
+            Secondary -> Primary
+        }
+    }
+}
+
+private data class DouyinPlayerScale(
+    val scaleX: Float,
+    val scaleY: Float
+)
+
+private class DouyinPlayerSlotState(
+    val key: DouyinPlayerSlotKey,
+    val player: ExoPlayer
+) {
+    var textureView by mutableStateOf<TextureView?>(null)
+    var viewSize by mutableStateOf(IntSize.Zero)
+    var boundAwemeId by mutableStateOf<String?>(null)
+    var mediaUri by mutableStateOf<String?>(null)
+    var remoteResolvedAtMs by mutableStateOf(0L)
+    var preparedSourceKey by mutableStateOf<String?>(null)
+    var hasRenderedFirstFrame by mutableStateOf(false)
+    var isBuffering by mutableStateOf(false)
+    var isPlaying by mutableStateOf(false)
+    var hasError by mutableStateOf(false)
+    var videoSize by mutableStateOf(IntSize.Zero)
+    var videoRotation by mutableIntStateOf(0)
+}
 
 @Composable
 fun DouyinImmersiveScreen(
@@ -172,6 +208,214 @@ fun DouyinImmersiveScreen(
     var controlsVisible by rememberSaveable { mutableStateOf(true) }
     var scaleMode by rememberSaveable { mutableStateOf(DouyinPlayerScaleMode.Standard) }
     val volumeState = rememberPlayerVolumeState()
+    var foregroundSlotKey by rememberSaveable { mutableStateOf(DouyinPlayerSlotKey.Primary) }
+    val context = LocalContext.current
+    val view = LocalView.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val poisonedAwemeIds by DouyinPlaybackDebugController.poisonedAwemeIds.collectAsState()
+    val activeItemIndex = resolveDouyinItemIndexForPagerPage(
+        pagerPage = pagerState.currentPage,
+        entryStartIndex = entryStartIndex
+    )
+    val activeItem = if (uiState.showTitlePage) {
+        null
+    } else {
+        uiState.items.getOrNull(activeItemIndex ?: -1)
+    }
+    val activePage = pagerState.currentPage.takeIf { activeItem != null } ?: -1
+    val hasNextActiveItem = (activeItemIndex ?: -1) < uiState.items.lastIndex
+    var injectedFailureNonce by remember(activeItem?.awemeId) { mutableStateOf(0L) }
+    val activeIsPoisoned = activeItem?.awemeId?.let(poisonedAwemeIds::contains) == true
+    val activeLocalUri = if (activeIsPoisoned) {
+        null
+    } else {
+        activeItem?.awemeId
+            ?.let(uiState.localPlayPaths::get)
+            ?.takeIf { it.isNotBlank() }
+            ?.let { "file://$it" }
+    }
+    val activeRemoteUri = when {
+        activeItem == null -> null
+        activeIsPoisoned -> buildDouyinInjectedFailureUri(
+            awemeId = activeItem.awemeId,
+            sequence = injectedFailureNonce
+        )
+        else -> activeItem.playUrl.takeIf { it.isNotBlank() }
+    }
+    val standbyItemIndex = resolveDouyinStandbyItemIndex(
+        activeItemIndex = activeItemIndex,
+        itemCount = uiState.items.size
+    )
+    val standbyItem = uiState.items.getOrNull(standbyItemIndex ?: -1)
+    val standbyLocalUri = standbyItem?.awemeId
+        ?.let(uiState.localPlayPaths::get)
+        ?.takeIf { it.isNotBlank() }
+        ?.let { "file://$it" }
+    val standbyRemoteUri = standbyItem?.playUrl?.takeIf { it.isNotBlank() }
+    val standbyMediaUri = standbyLocalUri ?: standbyRemoteUri
+    val standbyRemoteResolvedAtMs = standbyItem?.playUrlResolvedAtMs ?: 0L
+    var activeMediaUri by remember(activeItem?.awemeId) { mutableStateOf(activeLocalUri ?: activeRemoteUri) }
+    var activeRemoteResolvedAtMs by remember(activeItem?.awemeId) {
+        mutableStateOf(activeItem?.playUrlResolvedAtMs ?: 0L)
+    }
+    var activePrepareAttemptNonce by remember(activeItem?.awemeId) { mutableIntStateOf(0) }
+    var activeRetryCount by remember(activeItem?.awemeId) { mutableIntStateOf(0) }
+    var activePausedByGesture by remember(activeItem?.awemeId) { mutableStateOf(false) }
+    val headersSignature = remember(uiState.playHeaders) {
+        uiState.playHeaders.entries.sortedBy { it.key }.joinToString(";")
+    }
+    val primarySlot = remember(context, headersSignature) {
+        DouyinPlayerSlotState(
+            key = DouyinPlayerSlotKey.Primary,
+            player = buildDouyinExoPlayer(
+                context = context,
+                headers = uiState.playHeaders,
+                lightweight = false
+            )
+        )
+    }
+    val secondarySlot = remember(context, headersSignature) {
+        DouyinPlayerSlotState(
+            key = DouyinPlayerSlotKey.Secondary,
+            player = buildDouyinExoPlayer(
+                context = context,
+                headers = uiState.playHeaders,
+                lightweight = true
+            )
+        )
+    }
+    fun slotFor(key: DouyinPlayerSlotKey): DouyinPlayerSlotState {
+        return when (key) {
+            DouyinPlayerSlotKey.Primary -> primarySlot
+            DouyinPlayerSlotKey.Secondary -> secondarySlot
+        }
+    }
+    val foregroundSlot = slotFor(foregroundSlotKey)
+    val standbySlot = slotFor(foregroundSlotKey.other())
+    val activeSlotMatchesCurrentItem = activeItem?.awemeId != null &&
+        foregroundSlot.boundAwemeId == activeItem.awemeId
+    val activeIsBuffering = activeSlotMatchesCurrentItem && foregroundSlot.isBuffering
+    val activeIsPlaying = activeSlotMatchesCurrentItem && foregroundSlot.isPlaying
+    val activeHasError = activeSlotMatchesCurrentItem && foregroundSlot.hasError
+    val shouldKeepScreenOn = activeItem != null &&
+        !activeHasError &&
+        (activeIsPlaying || activeIsBuffering)
+    fun stopSlotPlayback(slot: DouyinPlayerSlotState) {
+        slot.player.playWhenReady = false
+        slot.player.pause()
+        slot.isPlaying = false
+        slot.isBuffering = false
+    }
+
+    fun clearSlotBinding(slot: DouyinPlayerSlotState) {
+        slot.player.playWhenReady = false
+        runCatching {
+            slot.player.stop()
+            slot.player.clearMediaItems()
+        }
+        slot.boundAwemeId = null
+        slot.mediaUri = null
+        slot.remoteResolvedAtMs = 0L
+        slot.preparedSourceKey = null
+        slot.hasRenderedFirstFrame = false
+        slot.isBuffering = false
+        slot.isPlaying = false
+        slot.hasError = false
+        slot.videoSize = IntSize.Zero
+        slot.videoRotation = 0
+    }
+
+    fun bindSlotTarget(
+        slot: DouyinPlayerSlotState,
+        awemeId: String,
+        mediaUri: String,
+        remoteResolvedAtMs: Long,
+        prepareKey: String,
+        shouldPlay: Boolean
+    ) {
+        val targetUri = mediaUri.trim()
+        if (slot.boundAwemeId == awemeId && slot.preparedSourceKey == prepareKey) {
+            slot.player.playWhenReady = shouldPlay
+            if (shouldPlay) {
+                slot.player.play()
+            } else {
+                stopSlotPlayback(slot)
+            }
+            return
+        }
+        slot.boundAwemeId = awemeId
+        slot.mediaUri = targetUri
+        slot.remoteResolvedAtMs = remoteResolvedAtMs
+        slot.preparedSourceKey = prepareKey
+        slot.hasRenderedFirstFrame = false
+        slot.isBuffering = true
+        slot.isPlaying = false
+        slot.hasError = false
+        slot.videoSize = IntSize.Zero
+        slot.videoRotation = 0
+        slot.player.playWhenReady = shouldPlay
+        slot.player.setMediaItem(MediaItem.fromUri(targetUri))
+        slot.player.prepare()
+        if (shouldPlay) {
+            slot.player.play()
+        }
+    }
+
+    fun stopForegroundPlayback() {
+        stopSlotPlayback(slotFor(foregroundSlotKey))
+    }
+
+    fun scheduleAutoSkipCurrentPage() {
+        if (activePage == pagerState.currentPage && activePage > 0) {
+            pendingAutoSkipPage = activePage
+        }
+    }
+
+    fun requestActivePlaybackRefresh(resetRetryCount: Boolean = false) {
+        val item = activeItem ?: return
+        if (activeIsPoisoned) {
+            if (resetRetryCount) {
+                activeRetryCount = 0
+            }
+            val nextFailureSequence = injectedFailureNonce + 1L
+            injectedFailureNonce = nextFailureSequence
+            foregroundSlot.hasError = false
+            foregroundSlot.hasRenderedFirstFrame = false
+            activePausedByGesture = false
+            activeMediaUri = buildDouyinInjectedFailureUri(
+                awemeId = item.awemeId,
+                sequence = nextFailureSequence
+            )
+            AppLogger.d(
+                TAG,
+                "retry poisoned video with injected uri awemeId=${item.awemeId} sequence=$nextFailureSequence"
+            )
+            return
+        }
+        val sourceKind = currentDouyinPlaybackSourceKind(activeMediaUri)
+        val targetUri = activeMediaUri?.trim()?.takeIf { it.isNotBlank() }
+            ?: activeLocalUri
+            ?: activeRemoteUri
+        if (targetUri.isNullOrBlank()) {
+            foregroundSlot.hasError = false
+            activePausedByGesture = false
+            clearSlotBinding(foregroundSlot)
+            scheduleAutoSkipCurrentPage()
+            return
+        }
+        if (resetRetryCount) {
+            activeRetryCount = 0
+        }
+        foregroundSlot.hasError = false
+        foregroundSlot.hasRenderedFirstFrame = false
+        activePausedByGesture = false
+        activePrepareAttemptNonce += 1
+        if (sourceKind == DouyinPlaybackSourceKind.LOCAL && !activeRemoteUri.isNullOrBlank()) {
+            activeMediaUri = activeRemoteUri
+            activeRemoteResolvedAtMs = item.playUrlResolvedAtMs
+        }
+        onRequestPlaybackRefresh(item.awemeId, sourceKind)
+    }
 
     InstallDigitalCrownPagerHandler(
         pagerState = pagerState,
@@ -185,12 +429,19 @@ fun DouyinImmersiveScreen(
         onVolumeAdjust = volumeState::adjustByDelta
     )
 
-    LaunchedEffect(pagerState.currentPage, entryStartIndex) {
-        val settledPage = resolveDouyinSettledPage(
-            pagerPage = pagerState.currentPage,
-            entryStartIndex = entryStartIndex
-        )
-        onPageSettled(settledPage)
+    LaunchedEffect(pagerState, entryStartIndex) {
+        snapshotFlow {
+            resolveDouyinSettledPageOrNull(
+                isScrollInProgress = pagerState.isScrollInProgress,
+                pagerPage = pagerState.currentPage,
+                entryStartIndex = entryStartIndex
+            )
+        }
+            .filterNotNull()
+            .distinctUntilChanged()
+            .collect { settledPage ->
+                onPageSettled(settledPage)
+            }
     }
 
     LaunchedEffect(pagerState.currentPage, uiState.items, uiState.showTitlePage, entryStartIndex) {
@@ -259,6 +510,316 @@ fun DouyinImmersiveScreen(
         autoSkipMessage = null
     }
 
+    LaunchedEffect(activeItem?.awemeId, activeLocalUri, activeRemoteUri, activeItem?.playUrlResolvedAtMs) {
+        if (activeItem == null) {
+            activeMediaUri = null
+            activeRemoteResolvedAtMs = 0L
+            activePrepareAttemptNonce = 0
+            activePausedByGesture = false
+            clearSlotBinding(primarySlot)
+            clearSlotBinding(secondarySlot)
+            return@LaunchedEffect
+        }
+        val resolvedState = resolveDouyinPlaybackState(
+            currentUri = activeMediaUri,
+            currentRemoteResolvedAtMs = activeRemoteResolvedAtMs,
+            localUri = activeLocalUri,
+            remoteUri = activeRemoteUri,
+            remoteResolvedAtMs = activeItem.playUrlResolvedAtMs
+        )
+        if (resolvedState.mediaUri != activeMediaUri || resolvedState.remoteResolvedAtMs != activeRemoteResolvedAtMs) {
+            activeMediaUri = resolvedState.mediaUri
+            activeRemoteResolvedAtMs = resolvedState.remoteResolvedAtMs
+            activePrepareAttemptNonce = 0
+            foregroundSlot.hasError = false
+            foregroundSlot.hasRenderedFirstFrame = false
+        }
+    }
+
+    val activePrepareKey = remember(activeMediaUri, activeRemoteResolvedAtMs, activePrepareAttemptNonce) {
+        buildDouyinPlaybackPrepareKey(
+            mediaUri = activeMediaUri,
+            remoteResolvedAtMs = activeRemoteResolvedAtMs,
+            attemptNonce = activePrepareAttemptNonce
+        )
+    }
+    val standbyPrepareKey = remember(standbyMediaUri, standbyRemoteResolvedAtMs) {
+        buildDouyinPlaybackPrepareKey(
+            mediaUri = standbyMediaUri,
+            remoteResolvedAtMs = standbyRemoteResolvedAtMs
+        )
+    }
+    val latestActiveMediaUri = rememberUpdatedState(activeMediaUri)
+    val latestForegroundSlotKey = rememberUpdatedState(foregroundSlotKey)
+    val latestActiveAwemeId = rememberUpdatedState(activeItem?.awemeId)
+    val latestShowTitlePage = rememberUpdatedState(uiState.showTitlePage)
+    val latestHasNextActiveItem = rememberUpdatedState(hasNextActiveItem)
+    val latestRetryCount = rememberUpdatedState(activeRetryCount)
+    val latestRequestActivePlaybackRefresh = rememberUpdatedState(
+        newValue = { resetRetryCount: Boolean -> requestActivePlaybackRefresh(resetRetryCount) }
+    )
+    DisposableEffect(primarySlot.player) {
+        val listener = object : Player.Listener {
+            override fun onIsLoadingChanged(isLoading: Boolean) {
+                primarySlot.isBuffering = isLoading
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                primarySlot.isBuffering = playbackState == Player.STATE_BUFFERING
+                if (playbackState == Player.STATE_IDLE || playbackState == Player.STATE_ENDED) {
+                    primarySlot.isPlaying = false
+                }
+                if (playbackState == Player.STATE_READY) {
+                    primarySlot.hasError = false
+                }
+            }
+
+            override fun onIsPlayingChanged(isPlayingNow: Boolean) {
+                primarySlot.isPlaying = isPlayingNow
+            }
+
+            override fun onRenderedFirstFrame() {
+                primarySlot.hasRenderedFirstFrame = true
+            }
+
+            override fun onVideoSizeChanged(videoSizeNow: androidx.media3.common.VideoSize) {
+                primarySlot.videoSize = IntSize(videoSizeNow.width, videoSizeNow.height)
+                primarySlot.videoRotation = videoSizeNow.unappliedRotationDegrees
+            }
+
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                primarySlot.hasError = true
+                primarySlot.isBuffering = false
+                primarySlot.isPlaying = false
+                val currentAwemeId = latestActiveAwemeId.value
+                val isForegroundCurrentSlot = latestForegroundSlotKey.value == primarySlot.key &&
+                    !latestShowTitlePage.value &&
+                    !currentAwemeId.isNullOrBlank() &&
+                    currentAwemeId == primarySlot.boundAwemeId
+                AppLogger.w(
+                    TAG,
+                    "playback error slot=${primarySlot.key} awemeId=${primarySlot.boundAwemeId}, uri=${primarySlot.mediaUri}",
+                    error
+                )
+                if (!isForegroundCurrentSlot) {
+                    return
+                }
+                if (isDouyinInjectedFailureUri(latestActiveMediaUri.value)) {
+                    if (latestRetryCount.value < DOUYIN_MAX_AUTO_RETRY_COUNT) {
+                        activeRetryCount += 1
+                        latestRequestActivePlaybackRefresh.value(false)
+                    } else {
+                        primarySlot.hasError = false
+                        activePausedByGesture = false
+                        stopForegroundPlayback()
+                        scheduleAutoSkipCurrentPage()
+                    }
+                    return
+                }
+                when (
+                    resolveDouyinPlaybackFailureAction(
+                        retryCount = latestRetryCount.value,
+                        maxAutoRetryCount = DOUYIN_MAX_AUTO_RETRY_COUNT,
+                        hasValidatedInternetConnection = hasValidatedInternetConnection(context),
+                        hasNextItem = latestHasNextActiveItem.value
+                    )
+                ) {
+                    DouyinPlaybackFailureAction.Retry -> {
+                        activeRetryCount += 1
+                        latestRequestActivePlaybackRefresh.value(false)
+                    }
+
+                    DouyinPlaybackFailureAction.AutoSkip -> {
+                        primarySlot.hasError = false
+                        activePausedByGesture = false
+                        stopForegroundPlayback()
+                        scheduleAutoSkipCurrentPage()
+                    }
+                }
+            }
+        }
+        primarySlot.player.addListener(listener)
+        onDispose {
+            primarySlot.player.removeListener(listener)
+        }
+    }
+
+    DisposableEffect(secondarySlot.player) {
+        val listener = object : Player.Listener {
+            override fun onIsLoadingChanged(isLoading: Boolean) {
+                secondarySlot.isBuffering = isLoading
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                secondarySlot.isBuffering = playbackState == Player.STATE_BUFFERING
+                if (playbackState == Player.STATE_IDLE || playbackState == Player.STATE_ENDED) {
+                    secondarySlot.isPlaying = false
+                }
+                if (playbackState == Player.STATE_READY) {
+                    secondarySlot.hasError = false
+                }
+            }
+
+            override fun onIsPlayingChanged(isPlayingNow: Boolean) {
+                secondarySlot.isPlaying = isPlayingNow
+            }
+
+            override fun onRenderedFirstFrame() {
+                secondarySlot.hasRenderedFirstFrame = true
+            }
+
+            override fun onVideoSizeChanged(videoSizeNow: androidx.media3.common.VideoSize) {
+                secondarySlot.videoSize = IntSize(videoSizeNow.width, videoSizeNow.height)
+                secondarySlot.videoRotation = videoSizeNow.unappliedRotationDegrees
+            }
+
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                secondarySlot.hasError = true
+                secondarySlot.isBuffering = false
+                secondarySlot.isPlaying = false
+                val currentAwemeId = latestActiveAwemeId.value
+                val isForegroundCurrentSlot = latestForegroundSlotKey.value == secondarySlot.key &&
+                    !latestShowTitlePage.value &&
+                    !currentAwemeId.isNullOrBlank() &&
+                    currentAwemeId == secondarySlot.boundAwemeId
+                AppLogger.w(
+                    TAG,
+                    "playback error slot=${secondarySlot.key} awemeId=${secondarySlot.boundAwemeId}, uri=${secondarySlot.mediaUri}",
+                    error
+                )
+                if (!isForegroundCurrentSlot) {
+                    return
+                }
+                if (isDouyinInjectedFailureUri(latestActiveMediaUri.value)) {
+                    if (latestRetryCount.value < DOUYIN_MAX_AUTO_RETRY_COUNT) {
+                        activeRetryCount += 1
+                        latestRequestActivePlaybackRefresh.value(false)
+                    } else {
+                        secondarySlot.hasError = false
+                        activePausedByGesture = false
+                        stopForegroundPlayback()
+                        scheduleAutoSkipCurrentPage()
+                    }
+                    return
+                }
+                when (
+                    resolveDouyinPlaybackFailureAction(
+                        retryCount = latestRetryCount.value,
+                        maxAutoRetryCount = DOUYIN_MAX_AUTO_RETRY_COUNT,
+                        hasValidatedInternetConnection = hasValidatedInternetConnection(context),
+                        hasNextItem = latestHasNextActiveItem.value
+                    )
+                ) {
+                    DouyinPlaybackFailureAction.Retry -> {
+                        activeRetryCount += 1
+                        latestRequestActivePlaybackRefresh.value(false)
+                    }
+
+                    DouyinPlaybackFailureAction.AutoSkip -> {
+                        secondarySlot.hasError = false
+                        activePausedByGesture = false
+                        stopForegroundPlayback()
+                        scheduleAutoSkipCurrentPage()
+                    }
+                }
+            }
+        }
+        secondarySlot.player.addListener(listener)
+        onDispose {
+            secondarySlot.player.removeListener(listener)
+        }
+    }
+
+    DisposableEffect(primarySlot.player, secondarySlot.player) {
+        onDispose {
+            primarySlot.player.release()
+            secondarySlot.player.release()
+        }
+    }
+
+    DisposableEffect(lifecycleOwner, foregroundSlotKey, primarySlot.player, secondarySlot.player) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_PAUSE || event == Lifecycle.Event.ON_STOP) {
+                stopForegroundPlayback()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    DisposableEffect(shouldKeepScreenOn, view) {
+        val window = view.context.findActivity()?.window
+        if (shouldKeepScreenOn) {
+            window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+        onDispose {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
+    LaunchedEffect(
+        activeItem?.awemeId,
+        activePrepareKey,
+        standbyItem?.awemeId,
+        standbyPrepareKey,
+        activePausedByGesture,
+        activeHasError,
+        foregroundSlotKey
+    ) {
+        if (activeItem == null || activePrepareKey.isNullOrBlank() || activeMediaUri.isNullOrBlank()) {
+            clearSlotBinding(primarySlot)
+            clearSlotBinding(secondarySlot)
+            return@LaunchedEffect
+        }
+        val promoteStandby = shouldPromoteDouyinStandbySlot(
+            standbyAwemeId = standbySlot.boundAwemeId,
+            targetAwemeId = activeItem.awemeId,
+            standbyPrepareKey = standbySlot.preparedSourceKey,
+            targetPrepareKey = activePrepareKey,
+            hasRenderedFirstFrame = standbySlot.hasRenderedFirstFrame,
+            hasError = standbySlot.hasError
+        )
+        val desiredForegroundKey = if (promoteStandby) {
+            foregroundSlotKey.other()
+        } else {
+            foregroundSlotKey
+        }
+        if (desiredForegroundKey != foregroundSlotKey) {
+            foregroundSlotKey = desiredForegroundKey
+        }
+        val desiredForegroundSlot = slotFor(desiredForegroundKey)
+        val desiredStandbySlot = slotFor(desiredForegroundKey.other())
+        val currentMediaUri = activeMediaUri ?: return@LaunchedEffect
+        bindSlotTarget(
+            slot = desiredForegroundSlot,
+            awemeId = activeItem.awemeId,
+            mediaUri = currentMediaUri,
+            remoteResolvedAtMs = activeRemoteResolvedAtMs,
+            prepareKey = activePrepareKey,
+            shouldPlay = !activePausedByGesture && !activeHasError
+        )
+        if (
+            standbyItem != null &&
+            standbyPrepareKey != null &&
+            !standbyMediaUri.isNullOrBlank() &&
+            standbyItem.awemeId != activeItem.awemeId
+        ) {
+            val nextMediaUri = standbyMediaUri ?: return@LaunchedEffect
+            bindSlotTarget(
+                slot = desiredStandbySlot,
+                awemeId = standbyItem.awemeId,
+                mediaUri = nextMediaUri,
+                remoteResolvedAtMs = standbyRemoteResolvedAtMs,
+                prepareKey = standbyPrepareKey,
+                shouldPlay = false
+            )
+        } else {
+            clearSlotBinding(desiredStandbySlot)
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -268,10 +829,12 @@ fun DouyinImmersiveScreen(
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
             flingBehavior = pagerFlingBehavior,
+            beyondViewportPageCount = 1,
             userScrollEnabled = pageCount > 1
         ) { page ->
             if (page == 0) {
                 DouyinTitlePage(
+                    hasItems = uiState.items.isNotEmpty(),
                     isRefreshing = uiState.isLoading,
                     onRefresh = onRefresh,
                     onEnterFlow = onEnterFlow,
@@ -291,22 +854,35 @@ fun DouyinImmersiveScreen(
                     )
                     return@VerticalPager
                 }
+                val pageSlot = when {
+                    foregroundSlot.boundAwemeId == item.awemeId -> foregroundSlot
+                    standbySlot.boundAwemeId == item.awemeId -> standbySlot
+                    else -> null
+                }
                 DouyinVideoPage(
                     item = item,
-                    headers = uiState.playHeaders,
-                    localPlayPath = uiState.localPlayPaths[item.awemeId],
                     isActive = pagerState.currentPage == page,
+                    videoSlot = pageSlot,
                     controlsVisible = controlsVisible,
                     scaleMode = scaleMode,
+                    isBuffering = activeIsBuffering,
+                    isVideoVisible = pageSlot?.hasRenderedFirstFrame == true && !pageSlot.hasError,
+                    hasError = activeHasError,
                     onToggleControls = { controlsVisible = !controlsVisible },
                     onToggleScaleMode = { scaleMode = scaleMode.next() },
                     onLongPress = { onItemLongPress(item) },
-                    onRequestPlaybackRefresh = onRequestPlaybackRefresh,
-                    pageIndex = page,
-                    hasNextItem = (itemIndex ?: -1) < uiState.items.lastIndex,
-                    onAutoSkipCurrentItem = { failingPage ->
-                        if (failingPage == pagerState.currentPage) {
-                            pendingAutoSkipPage = failingPage
+                    onDoubleTap = {
+                        if (activeHasError) {
+                            requestActivePlaybackRefresh(true)
+                        } else if (foregroundSlot.player.isPlaying) {
+                            activePausedByGesture = true
+                            stopForegroundPlayback()
+                        } else {
+                            activePausedByGesture = false
+                            if (activeItem?.awemeId == item.awemeId && !activeHasError) {
+                                foregroundSlot.player.playWhenReady = true
+                                foregroundSlot.player.play()
+                            }
                         }
                     }
                 )
@@ -346,6 +922,7 @@ fun DouyinImmersiveScreen(
 
 @Composable
 private fun DouyinTitlePage(
+    hasItems: Boolean,
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
     onEnterFlow: () -> Unit,
@@ -398,9 +975,11 @@ private fun DouyinTitlePage(
                             Spacer(modifier = Modifier.height(subtitleSpacing))
                             Text(
                                 text = if (isRefreshing) {
-                                    "刷新中，向上进入短视频流"
-                                } else {
+                                    "刷新中..."
+                                } else if (hasItems) {
                                     "下拉刷新，向上进入短视频流"
+                                } else {
+                                    "暂无内容，下拉刷新或点箭头重试"
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -415,12 +994,22 @@ private fun DouyinTitlePage(
                                 .align(Alignment.BottomCenter)
                                 .padding(bottom = buttonBottom)
                                 .size(buttonSize)
-                                .clickable { onEnterFlow() }
+                                .clickable {
+                                    if (hasItems) {
+                                        onEnterFlow()
+                                    } else {
+                                        onRefresh()
+                                    }
+                                }
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     imageVector = Icons.Outlined.ArrowUpward,
-                                    contentDescription = "向上进入视频流",
+                                    contentDescription = if (hasItems) {
+                                        "向上进入视频流"
+                                    } else {
+                                        "刷新抖音内容"
+                                    },
                                     tint = MaterialTheme.colorScheme.onSurface,
                                     modifier = Modifier.size(watchDimensionResource(R.dimen.hey_distance_16dp))
                                 )
@@ -434,25 +1023,86 @@ private fun DouyinTitlePage(
 }
 
 @Composable
+private fun DouyinTextureSlotHost(
+    slot: DouyinPlayerSlotState,
+    scaleMode: DouyinPlayerScaleMode,
+    visible: Boolean
+) {
+    val context = LocalContext.current
+    AndroidView(
+        modifier = Modifier.fillMaxSize(),
+        factory = {
+            TextureView(context).apply {
+                alpha = if (visible) 1f else 0f
+                surfaceTextureListener = object : TextureView.SurfaceTextureListener {
+                    override fun onSurfaceTextureAvailable(
+                        surfaceTexture: SurfaceTexture,
+                        width: Int,
+                        height: Int
+                    ) {
+                        slot.textureView = this@apply
+                        slot.viewSize = IntSize(width, height)
+                        runCatching { slot.player.setVideoTextureView(this@apply) }
+                    }
+
+                    override fun onSurfaceTextureSizeChanged(
+                        surfaceTexture: SurfaceTexture,
+                        width: Int,
+                        height: Int
+                    ) {
+                        slot.viewSize = IntSize(width, height)
+                    }
+
+                    override fun onSurfaceTextureDestroyed(surfaceTexture: SurfaceTexture): Boolean {
+                        if (slot.textureView === this@apply) {
+                            slot.textureView = null
+                        }
+                        slot.viewSize = IntSize.Zero
+                        runCatching { slot.player.clearVideoTextureView(this@apply) }
+                        return true
+                    }
+
+                    override fun onSurfaceTextureUpdated(surfaceTexture: SurfaceTexture) = Unit
+                }
+            }
+        },
+        update = { textureView ->
+            slot.textureView = textureView
+            textureView.alpha = if (visible) 1f else 0f
+            if (textureView.isAvailable) {
+                runCatching { slot.player.setVideoTextureView(textureView) }
+            }
+            val size = IntSize(textureView.width, textureView.height)
+            if (size.width > 0 && size.height > 0 && size != slot.viewSize) {
+                slot.viewSize = size
+            }
+            updateDouyinTextureTransform(
+                textureView = textureView,
+                viewSize = slot.viewSize,
+                videoSize = slot.videoSize,
+                scaleMode = scaleMode,
+                videoRotation = slot.videoRotation
+            )
+        }
+    )
+}
+
+@Composable
 private fun DouyinVideoPage(
     item: DouyinStreamItem,
-    headers: Map<String, String>,
-    localPlayPath: String?,
     isActive: Boolean,
+    videoSlot: DouyinPlayerSlotState?,
     controlsVisible: Boolean,
     scaleMode: DouyinPlayerScaleMode,
+    isBuffering: Boolean,
+    isVideoVisible: Boolean,
+    hasError: Boolean,
     onToggleControls: () -> Unit,
     onToggleScaleMode: () -> Unit,
     onLongPress: () -> Unit,
-    onRequestPlaybackRefresh: (String, DouyinPlaybackSourceKind) -> Unit,
-    pageIndex: Int,
-    hasNextItem: Boolean,
-    onAutoSkipCurrentItem: (Int) -> Unit
+    onDoubleTap: () -> Unit
 ) {
-    val context = LocalContext.current
     val density = LocalDensity.current
-    val view = LocalView.current
-    val lifecycleOwner = LocalLifecycleOwner.current
     val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
     val topPadding = watchDimensionResource(R.dimen.hey_distance_6dp)
     val bottomPadding = watchDimensionResource(R.dimen.hey_distance_8dp)
@@ -460,333 +1110,29 @@ private fun DouyinVideoPage(
     val controlsIconSize = watchDimensionResource(R.dimen.hey_listitem_widget_size)
     val titleFontSize = with(density) { watchDimensionResource(R.dimen.feed_card_title_text_size).toSp() }
 
-    val poisonedAwemeIds by DouyinPlaybackDebugController.poisonedAwemeIds.collectAsState()
-    val isPoisoned = poisonedAwemeIds.contains(item.awemeId)
-    var injectedFailureNonce by remember(item.awemeId) { mutableStateOf(0L) }
-    val localUri = if (isPoisoned) {
-        null
-    } else {
-        localPlayPath?.takeIf { it.isNotBlank() }?.let { "file://$it" }
-    }
-    val remoteUri = if (isPoisoned) {
-        buildDouyinInjectedFailureUri(
-            awemeId = item.awemeId,
-            sequence = injectedFailureNonce
-        )
-    } else {
-        item.playUrl.takeIf { it.isNotBlank() }
-    }
-    var mediaUri by remember(item.awemeId) {
-        mutableStateOf(localUri ?: remoteUri)
-    }
-    var remoteResolvedAtMs by remember(item.awemeId) {
-        mutableStateOf(item.playUrlResolvedAtMs)
-    }
-    var prepareAttemptNonce by remember(item.awemeId) { mutableIntStateOf(0) }
-    val headersSignature = remember(headers) { headers.entries.sortedBy { it.key }.joinToString(";") }
-    var preparedSourceKey by remember(item.awemeId) { mutableStateOf<String?>(null) }
-    var retryCount by remember(item.awemeId) { mutableIntStateOf(0) }
-    var pausedByGesture by remember(item.awemeId) { mutableStateOf(false) }
-    var isBuffering by remember(item.awemeId) { mutableStateOf(false) }
-    var isPlaying by remember(item.awemeId) { mutableStateOf(false) }
-    var hasError by remember(item.awemeId) { mutableStateOf(false) }
-    var viewSize by remember(item.awemeId) { mutableStateOf(IntSize.Zero) }
-    var videoSize by remember(item.awemeId) { mutableStateOf(IntSize.Zero) }
-    val shouldKeepScreenOn = isActive && !hasError && (isPlaying || isBuffering)
-    val shrinkFactor = remember(scaleMode, viewSize, videoSize) {
-        if (scaleMode == DouyinPlayerScaleMode.Shrunk) {
-            calculateDouyinPlayerShrinkFactor(
-                viewWidth = viewSize.width.toFloat(),
-                viewHeight = viewSize.height.toFloat(),
-                videoWidth = videoSize.width.toFloat(),
-                videoHeight = videoSize.height.toFloat()
-            )
-        } else {
-            1f
-        }
-    }
-    val playerResizeMode = remember(scaleMode) {
-        if (scaleMode == DouyinPlayerScaleMode.Expanded) {
-            AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-        } else {
-            AspectRatioFrameLayout.RESIZE_MODE_FIT
-        }
-    }
-
-    LaunchedEffect(localUri, remoteUri, item.playUrlResolvedAtMs) {
-        val resolvedState = resolveDouyinPlaybackState(
-            currentUri = mediaUri,
-            currentRemoteResolvedAtMs = remoteResolvedAtMs,
-            localUri = localUri,
-            remoteUri = remoteUri,
-            remoteResolvedAtMs = item.playUrlResolvedAtMs
-        )
-        if (resolvedState.mediaUri != mediaUri || resolvedState.remoteResolvedAtMs != remoteResolvedAtMs) {
-            mediaUri = resolvedState.mediaUri
-            remoteResolvedAtMs = resolvedState.remoteResolvedAtMs
-            prepareAttemptNonce = 0
-            preparedSourceKey = null
-            hasError = false
-            isBuffering = resolvedState.mediaUri != null
-        }
-    }
-
-    val player = remember(item.awemeId, headersSignature) {
-        val requestFactory = OkHttpDataSource.Factory(OkHttpClient()).apply {
-            setDefaultRequestProperties(headers)
-        }
-        val loadControl = DefaultLoadControl.Builder()
-            .setTargetBufferBytes(128 * 1024 * 1024)
-            .setBufferDurationsMs(10_000, 45_000, 1_000, 2_000)
-            .build()
-
-        ExoPlayer.Builder(context)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(requestFactory))
-            .setLoadControl(loadControl)
-            .build().apply {
-                repeatMode = Player.REPEAT_MODE_ONE
-            }
-    }
-
-    fun stopPlayback() {
-        player.playWhenReady = false
-        player.pause()
-        isPlaying = false
-        isBuffering = false
-    }
-
-    fun requestPlaybackRefresh(resetRetryCount: Boolean = false) {
-        if (isPoisoned) {
-            if (resetRetryCount) {
-                retryCount = 0
-            }
-            val nextFailureSequence = injectedFailureNonce + 1L
-            injectedFailureNonce = nextFailureSequence
-            hasError = false
-            isBuffering = true
-            pausedByGesture = false
-            preparedSourceKey = null
-            mediaUri = buildDouyinInjectedFailureUri(
-                awemeId = item.awemeId,
-                sequence = nextFailureSequence
-            )
-            AppLogger.d(
-                TAG,
-                "retry poisoned video with injected uri awemeId=${item.awemeId} sequence=$nextFailureSequence"
-            )
-            return
-        }
-        val sourceKind = currentDouyinPlaybackSourceKind(mediaUri)
-        val targetUri = mediaUri?.trim()?.takeIf { it.isNotBlank() }
-            ?: localUri
-            ?: remoteUri
-        if (targetUri.isNullOrBlank()) {
-            hasError = false
-            pausedByGesture = false
-            stopPlayback()
-            onAutoSkipCurrentItem(pageIndex)
-            return
-        }
-        if (resetRetryCount) {
-            retryCount = 0
-        }
-        hasError = false
-        isBuffering = true
-        pausedByGesture = false
-        prepareAttemptNonce += 1
-        if (sourceKind == DouyinPlaybackSourceKind.LOCAL && !remoteUri.isNullOrBlank()) {
-            mediaUri = remoteUri
-            remoteResolvedAtMs = item.playUrlResolvedAtMs
-            preparedSourceKey = null
-        }
-        onRequestPlaybackRefresh(item.awemeId, sourceKind)
-    }
-
-    val latestHasError = rememberUpdatedState(hasError)
-    val latestIsActive = rememberUpdatedState(isActive)
-    val latestRequestPlaybackRefresh = rememberUpdatedState(
-        newValue = { resetRetryCount: Boolean -> requestPlaybackRefresh(resetRetryCount) }
-    )
-    val latestAutoSkipCurrentItem = rememberUpdatedState(newValue = { onAutoSkipCurrentItem(pageIndex) })
-
-    DisposableEffect(player, item.awemeId, remoteUri) {
-        val listener = object : Player.Listener {
-            override fun onIsLoadingChanged(isLoading: Boolean) {
-                isBuffering = isLoading
-            }
-
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                isBuffering = playbackState == Player.STATE_BUFFERING
-                if (playbackState == Player.STATE_IDLE || playbackState == Player.STATE_ENDED) {
-                    isPlaying = false
-                }
-                if (playbackState == Player.STATE_READY) {
-                    hasError = false
-                    retryCount = 0
-                }
-            }
-
-            override fun onIsPlayingChanged(isPlayingNow: Boolean) {
-                isPlaying = isPlayingNow
-            }
-
-            override fun onVideoSizeChanged(videoSizeNow: androidx.media3.common.VideoSize) {
-                videoSize = IntSize(videoSizeNow.width, videoSizeNow.height)
-            }
-
-            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                AppLogger.w(TAG, "playback error awemeId=${item.awemeId}, uri=$mediaUri", error)
-                if (isDouyinInjectedFailureUri(mediaUri)) {
-                    if (retryCount < DOUYIN_MAX_AUTO_RETRY_COUNT) {
-                        retryCount += 1
-                        latestRequestPlaybackRefresh.value(false)
-                    } else {
-                        hasError = false
-                        pausedByGesture = false
-                        stopPlayback()
-                        latestAutoSkipCurrentItem.value()
-                    }
-                    return
-                }
-                when (
-                    resolveDouyinPlaybackFailureAction(
-                        retryCount = retryCount,
-                        maxAutoRetryCount = DOUYIN_MAX_AUTO_RETRY_COUNT,
-                        hasValidatedInternetConnection = hasValidatedInternetConnection(context),
-                        hasNextItem = hasNextItem
-                    )
-                ) {
-                    DouyinPlaybackFailureAction.Retry -> {
-                        retryCount += 1
-                        latestRequestPlaybackRefresh.value(false)
-                    }
-
-                    DouyinPlaybackFailureAction.AutoSkip -> {
-                        hasError = false
-                        pausedByGesture = false
-                        stopPlayback()
-                        latestAutoSkipCurrentItem.value()
-                    }
-                }
-            }
-        }
-        player.addListener(listener)
-        onDispose {
-            player.removeListener(listener)
-        }
-    }
-
-    DisposableEffect(player) {
-        onDispose {
-            player.release()
-        }
-    }
-
-    DisposableEffect(lifecycleOwner, player) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_PAUSE || event == Lifecycle.Event.ON_STOP) {
-                stopPlayback()
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-        }
-    }
-
-    DisposableEffect(shouldKeepScreenOn, isActive, view) {
-        val window = view.context.findActivity()?.window
-        if (shouldKeepScreenOn) {
-            window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        }
-        onDispose {
-            if (isActive) {
-                window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            }
-        }
-    }
-
-    val prepareKey = remember(mediaUri, remoteResolvedAtMs, prepareAttemptNonce) {
-        buildDouyinPlaybackPrepareKey(
-            mediaUri = mediaUri,
-            remoteResolvedAtMs = remoteResolvedAtMs,
-            attemptNonce = prepareAttemptNonce
-        )
-    }
-
-    LaunchedEffect(prepareKey, player) {
-        val targetPrepareKey = prepareKey
-        val targetUri = mediaUri?.trim().orEmpty()
-        if (targetPrepareKey.isNullOrBlank() || targetUri.isBlank()) {
-            hasError = false
-            pausedByGesture = false
-            stopPlayback()
-            onAutoSkipCurrentItem(pageIndex)
-            return@LaunchedEffect
-        }
-        if (preparedSourceKey == targetPrepareKey) {
-            return@LaunchedEffect
-        }
-        hasError = false
-        isBuffering = true
-        preparedSourceKey = targetPrepareKey
-        player.setMediaItem(MediaItem.fromUri(targetUri))
-        player.prepare()
-    }
-
-    LaunchedEffect(isActive, pausedByGesture, hasError) {
-        val shouldPlay = isActive && !pausedByGesture && !hasError
-        player.playWhenReady = shouldPlay
-        if (shouldPlay) {
-            player.play()
-        } else {
-            stopPlayback()
-        }
-    }
-
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .pointerInput(item.awemeId, controlsVisible) {
+            .pointerInput(item.awemeId, controlsVisible, isActive, hasError) {
                 detectTapGestures(
                     onTap = { onToggleControls() },
                     onLongPress = { onLongPress() },
                     onDoubleTap = {
-                        if (latestHasError.value) {
-                            latestRequestPlaybackRefresh.value(true)
-                        } else if (player.isPlaying) {
-                            pausedByGesture = true
-                            player.pause()
-                        } else {
-                            pausedByGesture = false
-                            if (latestIsActive.value && !latestHasError.value) {
-                                player.playWhenReady = true
-                                player.play()
-                            }
+                        if (isActive) {
+                            onDoubleTap()
                         }
                     }
                 )
             }
     ) {
-        AndroidView(
-            modifier = Modifier
-                .fillMaxSize()
-                .onSizeChanged { viewSize = it }
-                .scale(shrinkFactor),
-            factory = { ctx ->
-                PlayerView(ctx).apply {
-                    useController = false
-                    resizeMode = playerResizeMode
-                    this.player = player
-                    setShutterBackgroundColor(android.graphics.Color.BLACK)
-                }
-            },
-            update = {
-                it.player = player
-                it.resizeMode = playerResizeMode
-            }
-        )
+        if (videoSlot != null) {
+            DouyinTextureSlotHost(
+                slot = videoSlot,
+                scaleMode = scaleMode,
+                visible = isVideoVisible
+            )
+        }
 
         if (isBuffering && !hasError && isActive) {
             WatchCircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
@@ -1014,6 +1360,132 @@ internal fun calculateDouyinPlayerShrinkFactor(
     }
 }
 
+private fun buildDouyinExoPlayer(
+    context: Context,
+    headers: Map<String, String>,
+    lightweight: Boolean
+): ExoPlayer {
+    val requestFactory = OkHttpDataSource.Factory(OkHttpClient()).apply {
+        setDefaultRequestProperties(headers)
+    }
+    val loadControl = if (lightweight) {
+        DefaultLoadControl.Builder()
+            .setTargetBufferBytes(24 * 1024 * 1024)
+            .setBufferDurationsMs(2_000, 6_000, 250, 500)
+            .build()
+    } else {
+        DefaultLoadControl.Builder()
+            .setTargetBufferBytes(128 * 1024 * 1024)
+            .setBufferDurationsMs(10_000, 45_000, 1_000, 2_000)
+            .build()
+    }
+    return ExoPlayer.Builder(context)
+        .setMediaSourceFactory(DefaultMediaSourceFactory(requestFactory))
+        .setLoadControl(loadControl)
+        .build().apply {
+            repeatMode = Player.REPEAT_MODE_ONE
+        }
+}
+
+private fun updateDouyinTextureTransform(
+    textureView: TextureView?,
+    viewSize: IntSize,
+    videoSize: IntSize,
+    scaleMode: DouyinPlayerScaleMode,
+    videoRotation: Int
+) {
+    val view = textureView ?: return
+    if (viewSize.width <= 0 || viewSize.height <= 0 || videoSize.width <= 0 || videoSize.height <= 0) {
+        return
+    }
+    val rotated = videoRotation % 180 != 0
+    val effectiveVideoWidth = if (rotated) videoSize.height.toFloat() else videoSize.width.toFloat()
+    val effectiveVideoHeight = if (rotated) videoSize.width.toFloat() else videoSize.height.toFloat()
+    val scale = calculateDouyinTexturePlayerScale(
+        viewWidth = viewSize.width.toFloat(),
+        viewHeight = viewSize.height.toFloat(),
+        videoWidth = effectiveVideoWidth,
+        videoHeight = effectiveVideoHeight,
+        scaleMode = scaleMode
+    )
+    val centerX = viewSize.width / 2f
+    val centerY = viewSize.height / 2f
+    val matrix = Matrix().apply {
+        setScale(scale.scaleX, scale.scaleY, centerX, centerY)
+        if (videoRotation != 0) {
+            postRotate(videoRotation.toFloat(), centerX, centerY)
+        }
+    }
+    view.setTransform(matrix)
+    view.invalidate()
+}
+
+private fun calculateDouyinTexturePlayerScale(
+    viewWidth: Float,
+    viewHeight: Float,
+    videoWidth: Float,
+    videoHeight: Float,
+    scaleMode: DouyinPlayerScaleMode
+): DouyinPlayerScale {
+    val standardScale = calculateDouyinStandardPlayerScale(
+        viewWidth = viewWidth,
+        viewHeight = viewHeight,
+        videoWidth = videoWidth,
+        videoHeight = videoHeight
+    )
+    return when (scaleMode) {
+        DouyinPlayerScaleMode.Standard -> standardScale
+        DouyinPlayerScaleMode.Expanded -> calculateDouyinExpandedPlayerScale(
+            viewWidth = viewWidth,
+            viewHeight = viewHeight,
+            videoWidth = videoWidth,
+            videoHeight = videoHeight
+        )
+        DouyinPlayerScaleMode.Shrunk -> {
+            val shrinkFactor = calculateDouyinPlayerShrinkFactor(
+                viewWidth = viewWidth,
+                viewHeight = viewHeight,
+                videoWidth = videoWidth,
+                videoHeight = videoHeight
+            )
+            DouyinPlayerScale(
+                scaleX = standardScale.scaleX * shrinkFactor,
+                scaleY = standardScale.scaleY * shrinkFactor
+            )
+        }
+    }
+}
+
+private fun calculateDouyinStandardPlayerScale(
+    viewWidth: Float,
+    viewHeight: Float,
+    videoWidth: Float,
+    videoHeight: Float
+): DouyinPlayerScale {
+    val viewAspect = viewWidth / viewHeight
+    val videoAspect = videoWidth / videoHeight
+    return if (videoAspect > viewAspect) {
+        DouyinPlayerScale(scaleX = 1f, scaleY = viewAspect / videoAspect)
+    } else {
+        DouyinPlayerScale(scaleX = videoAspect / viewAspect, scaleY = 1f)
+    }
+}
+
+private fun calculateDouyinExpandedPlayerScale(
+    viewWidth: Float,
+    viewHeight: Float,
+    videoWidth: Float,
+    videoHeight: Float
+): DouyinPlayerScale {
+    val viewAspect = viewWidth / viewHeight
+    val videoAspect = videoWidth / videoHeight
+    return if (videoAspect > viewAspect) {
+        DouyinPlayerScale(scaleX = videoAspect / viewAspect, scaleY = 1f)
+    } else {
+        DouyinPlayerScale(scaleX = 1f, scaleY = viewAspect / videoAspect)
+    }
+}
+
 private fun DouyinPlayerScaleMode.toggleAction(): DouyinPlayerScaleToggleAction {
     return when (this) {
         DouyinPlayerScaleMode.Standard -> DouyinPlayerScaleToggleAction(
@@ -1098,12 +1570,44 @@ internal fun resolveDouyinSettledPage(
     )
 }
 
+internal fun resolveDouyinSettledPageOrNull(
+    isScrollInProgress: Boolean,
+    pagerPage: Int,
+    entryStartIndex: Int
+): Int? {
+    if (isScrollInProgress) return null
+    return resolveDouyinSettledPage(
+        pagerPage = pagerPage,
+        entryStartIndex = entryStartIndex
+    )
+}
+
 internal fun resolveDouyinItemIndexForPagerPage(
     pagerPage: Int,
     entryStartIndex: Int
 ): Int? {
     if (pagerPage <= 0) return null
     return entryStartIndex + pagerPage - 1
+}
+
+internal fun resolveDouyinStandbyItemIndex(activeItemIndex: Int?, itemCount: Int): Int? {
+    val currentIndex = activeItemIndex ?: return null
+    val nextIndex = currentIndex + 1
+    return nextIndex.takeIf { it in 0 until itemCount }
+}
+
+internal fun shouldPromoteDouyinStandbySlot(
+    standbyAwemeId: String?,
+    targetAwemeId: String?,
+    standbyPrepareKey: String?,
+    targetPrepareKey: String?,
+    hasRenderedFirstFrame: Boolean,
+    hasError: Boolean
+): Boolean {
+    if (standbyAwemeId.isNullOrBlank() || targetAwemeId.isNullOrBlank()) return false
+    if (standbyPrepareKey.isNullOrBlank() || targetPrepareKey.isNullOrBlank()) return false
+    if (hasError || !hasRenderedFirstFrame) return false
+    return standbyAwemeId == targetAwemeId && standbyPrepareKey == targetPrepareKey
 }
 
 private const val TITLE_ORIGINAL_FIRST_LINE_RATIO = 0.68f
