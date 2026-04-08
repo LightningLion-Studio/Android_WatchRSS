@@ -150,7 +150,7 @@ class DouyinSettingsActivity : BaseWatchActivity() {
             Toast.LENGTH_SHORT
         )
         startActivity(
-            Intent(this, MainActivity::class.java).apply {
+            HomeFeedListActivity.createIntent(this).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
             }
         )

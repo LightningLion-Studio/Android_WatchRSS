@@ -8,7 +8,7 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.lightningstudio.watchrss.AddRssActivity
 import com.lightningstudio.watchrss.FeedActivity
-import com.lightningstudio.watchrss.MainActivity
+import com.lightningstudio.watchrss.HomeFeedListActivity
 import com.lightningstudio.watchrss.data.rss.RssChannel
 import com.lightningstudio.watchrss.data.settings.CURRENT_OOBE_VERSION
 import com.lightningstudio.watchrss.testutil.FakeRssRepository
@@ -26,7 +26,7 @@ import org.junit.rules.RuleChain
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
-class MainActivityTest {
+class HomeFeedListActivityTest {
     private val sampleChannels = listOf(
         RssChannel(
             id = 42L,
@@ -43,7 +43,7 @@ class MainActivityTest {
     )
 
     private val containerRule = TestAppContainerRule { context ->
-        val settingsRepository = createTestSettingsRepository(context, "main-activity")
+        val settingsRepository = createTestSettingsRepository(context, "home-feed-list-activity")
         runBlocking {
             settingsRepository.setOobeSeenVersion(CURRENT_OOBE_VERSION)
             settingsRepository.setPhoneConnectionEnabled(true)
@@ -55,13 +55,13 @@ class MainActivityTest {
         )
     }
 
-    private val composeRule = createAndroidComposeRule<MainActivity>()
+    private val composeRule = createAndroidComposeRule<HomeFeedListActivity>()
 
     @get:Rule
     val ruleChain: RuleChain = RuleChain.outerRule(containerRule).around(composeRule)
 
     @Test
-    fun mainActivity_rendersHomeAndNavigatesToAddRss() {
+    fun homeFeedListActivity_rendersHomeAndNavigatesToAddRss() {
         composeRule.onNodeWithTag(HomeTestTags.ROOT).assertExists()
         composeRule.onNodeWithTag(HomeTestTags.channelCard(42L)).assertExists()
         composeRule.onNodeWithTag(HomeTestTags.CHANNEL_LIST)
@@ -74,7 +74,7 @@ class MainActivityTest {
     }
 
     @Test
-    fun mainActivity_clickingChannelOpensFeedActivityWithSelectedChannel() {
+    fun homeFeedListActivity_clickingChannelOpensFeedActivityWithSelectedChannel() {
         composeRule.onNodeWithTag(HomeTestTags.channelCard(42L)).assertExists().performClick()
 
         waitUntil(timeoutMillis = 5_000) {

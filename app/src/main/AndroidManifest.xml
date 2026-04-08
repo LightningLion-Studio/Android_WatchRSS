@@ -51,6 +51,9 @@
             </intent-filter>
         </activity>
         <activity
+            android:name=".HomeFeedListActivity"
+            android:exported="false" />
+        <activity
             android:name=".AddRssActivity"
             android:exported="false"
             android:theme="@style/Theme.WatchRSS.Translucent" />

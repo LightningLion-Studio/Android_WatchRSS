@@ -1,7 +1,41 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@color/black" />
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:endColor="#FF030506"
+                android:startColor="#FF13201E" />
+        </shape>
+    </item>
+
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:centerX="50%"
+                android:centerY="20%"
+                android:endColor="#00000000"
+                android:gradientRadius="180dp"
+                android:startColor="#26FFD0A0"
+                android:type="radial" />
+        </shape>
+    </item>
+
+    <item>
+        <shape android:shape="oval">
+            <size
+                android:width="184dp"
+                android:height="184dp" />
+            <gradient
+                android:centerColor="#104CE2B8"
+                android:endColor="#00000000"
+                android:gradientRadius="108dp"
+                android:startColor="#2AFFFFFF"
+                android:type="radial" />
+        </shape>
+    </item>
+
     <item
         android:gravity="center"
-        android:drawable="@drawable/splash_icon_64" />
+        android:drawable="@drawable/launch_screen_icon" />
 </layer-list>

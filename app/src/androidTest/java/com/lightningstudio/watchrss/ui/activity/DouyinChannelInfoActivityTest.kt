@@ -10,7 +10,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.lightningstudio.watchrss.DouyinChannelInfoActivity
 import com.lightningstudio.watchrss.DouyinSettingsActivity
-import com.lightningstudio.watchrss.MainActivity
+import com.lightningstudio.watchrss.HomeFeedListActivity
 import com.lightningstudio.watchrss.data.douyin.DouyinResult
 import com.lightningstudio.watchrss.data.settings.CURRENT_OOBE_VERSION
 import com.lightningstudio.watchrss.testutil.FakeDouyinRepository
@@ -69,7 +69,7 @@ class DouyinChannelInfoActivityTest {
     }
 
     @Test
-    fun logoutFromSettings_returnsToMainActivity() {
+    fun logoutFromSettings_returnsToHomeFeedListActivity() {
         composeRule.onNodeWithText("设置", useUnmergedTree = true)
             .assertExists()
             .performClick()
@@ -85,7 +85,7 @@ class DouyinChannelInfoActivityTest {
         composeRule.waitUntil(timeoutMillis = 5_000) {
             InstrumentationRegistry.getInstrumentation().waitForIdleSync()
             fakeDouyinRepository.logoutCount == 1 &&
-                currentResumedActivity()?.javaClass == MainActivity::class.java
+                currentResumedActivity()?.javaClass == HomeFeedListActivity::class.java
         }
     }
 

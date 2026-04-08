@@ -34,7 +34,7 @@ class OobeActivity : BaseWatchActivity() {
                     if (event == OobeEvent.Finish) {
                         if (returnHomeOnFinish) {
                             startActivity(
-                                Intent(this@OobeActivity, MainActivity::class.java).apply {
+                                HomeFeedListActivity.createIntent(this@OobeActivity).apply {
                                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
                                 }
                             )

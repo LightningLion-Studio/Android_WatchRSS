@@ -8,7 +8,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.espresso.Espresso.pressBackUnconditionally
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import com.lightningstudio.watchrss.MainActivity
+import com.lightningstudio.watchrss.HomeFeedListActivity
 import com.lightningstudio.watchrss.OobeActivity
 import com.lightningstudio.watchrss.data.network.InternetAvailabilityMonitor
 import com.lightningstudio.watchrss.data.network.InternetAvailabilityStatus
@@ -66,7 +66,7 @@ class OobeActivityTest {
         composeRule.onNodeWithTag(OobeTestTags.CONTINUE_BUTTON).assertExists().performClick()
 
         waitUntil(timeoutMillis = 5_000) {
-            currentResumedActivity()?.javaClass == MainActivity::class.java
+            currentResumedActivity()?.javaClass == HomeFeedListActivity::class.java
         }
 
         assertEquals(
@@ -103,7 +103,7 @@ class OobeActivityTest {
         composeRule.onNodeWithTag(OobeTestTags.OFFLINE_WARNING_CONFIRM_BUTTON).assertExists().performClick()
 
         waitUntil(timeoutMillis = 5_000) {
-            currentResumedActivity()?.javaClass == MainActivity::class.java
+            currentResumedActivity()?.javaClass == HomeFeedListActivity::class.java
         }
     }
 
