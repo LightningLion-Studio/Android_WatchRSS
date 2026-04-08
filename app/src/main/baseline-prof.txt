@@ -10,6 +10,14 @@ Lcom/lightningstudio/watchrss/data/DefaultAppContainer;
 Lcom/lightningstudio/watchrss/data/cache/ManagedCacheService;
 Lcom/lightningstudio/watchrss/data/settings/SettingsRepository;
 Lcom/lightningstudio/watchrss/data/db/WatchRssDatabase;
+Lcom/lightningstudio/watchrss/data/db/WatchRssDatabase_Impl;
+Lcom/lightningstudio/watchrss/data/db/RssChannelDao_Impl;
+Lcom/lightningstudio/watchrss/data/db/RssItemDao_Impl;
+Lcom/lightningstudio/watchrss/data/db/SavedEntryDao_Impl;
+Lcom/lightningstudio/watchrss/data/db/OfflineMediaDao_Impl;
+Lcom/lightningstudio/watchrss/data/db/RssChannelEntity;
+Lcom/lightningstudio/watchrss/data/db/RssItemEntity;
+Lcom/lightningstudio/watchrss/data/db/RssChannelUnreadCount;
 Lcom/lightningstudio/watchrss/data/rss/DefaultRssRepository;
 Lcom/lightningstudio/watchrss/data/rss/RssOfflineStore;
 
@@ -24,4 +32,19 @@ Lcom/lightningstudio/watchrss/ui/theme/ThemeKt;
 # Critical activity and touch methods.
 HSPLcom/lightningstudio/watchrss/MainActivity;->onCreate(Landroid/os/Bundle;)V
 HSPLcom/lightningstudio/watchrss/MainActivity;->renderHomeContent()V
+HSPLcom/lightningstudio/watchrss/WatchRssApplication;->onCreate()V
+HSPLcom/lightningstudio/watchrss/WatchRssApplication;->getContainer()Lcom/lightningstudio/watchrss/data/AppContainer;
+HSPLcom/lightningstudio/watchrss/BaseWatchActivity;->onCreate(Landroid/os/Bundle;)V
 HSPLcom/lightningstudio/watchrss/BaseWatchActivity;->dispatchTouchEvent(Landroid/view/MotionEvent;)Z
+HSPLcom/lightningstudio/watchrss/data/DefaultAppContainer;->getSettingsRepository()Lcom/lightningstudio/watchrss/data/settings/SettingsRepository;
+HSPLcom/lightningstudio/watchrss/data/DefaultAppContainer;->getRssRepository()Lcom/lightningstudio/watchrss/data/rss/RssRepository;
+HSPLcom/lightningstudio/watchrss/data/settings/SettingsRepository;->getOobeSeenVersion()Lkotlinx/coroutines/flow/Flow;
+HSPLcom/lightningstudio/watchrss/ui/viewmodel/AppViewModelFactory;->create(Ljava/lang/Class;Landroidx/lifecycle/viewmodel/CreationExtras;)Landroidx/lifecycle/ViewModel;
+HSPLcom/lightningstudio/watchrss/ui/viewmodel/HomeViewModel;-><init>(Lcom/lightningstudio/watchrss/data/rss/RssRepository;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;)V
+HSPLcom/lightningstudio/watchrss/data/rss/DefaultRssRepository;->observeChannels()Lkotlinx/coroutines/flow/Flow;
+HSPLcom/lightningstudio/watchrss/ui/screen/home/HomeComposeScreenKt;->buildHomeEntries(Ljava/util/List;Z)Ljava/util/List;
+HSPLcom/lightningstudio/watchrss/data/db/WatchRssDatabase_Impl;->createOpenHelper(Landroidx/room/DatabaseConfiguration;)Landroidx/sqlite/db/SupportSQLiteOpenHelper;
+HSPLcom/lightningstudio/watchrss/data/db/WatchRssDatabase_Impl;->rssChannelDao()Lcom/lightningstudio/watchrss/data/db/RssChannelDao;
+HSPLcom/lightningstudio/watchrss/data/db/WatchRssDatabase_Impl;->rssItemDao()Lcom/lightningstudio/watchrss/data/db/RssItemDao;
+HSPLcom/lightningstudio/watchrss/data/db/RssChannelDao_Impl;->observeChannels()Lkotlinx/coroutines/flow/Flow;
+HSPLcom/lightningstudio/watchrss/data/db/RssItemDao_Impl;->observeUnreadCounts()Lkotlinx/coroutines/flow/Flow;
