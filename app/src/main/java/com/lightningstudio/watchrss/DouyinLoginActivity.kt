@@ -6,16 +6,26 @@ import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
+import com.lightningstudio.watchrss.data.network.DefaultInternetAvailabilityMonitor
+import com.lightningstudio.watchrss.data.network.InternetAvailabilityStatus
+import com.lightningstudio.watchrss.ui.screen.douyin.DouyinLoginBannedScreen
+import com.lightningstudio.watchrss.ui.screen.douyin.DouyinLoginCheckingScreen
 import com.lightningstudio.watchrss.ui.screen.douyin.DouyinLoginScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.util.getWebViewUnavailableMessage
 import com.lightningstudio.watchrss.ui.util.warnWebViewUnavailable
 
 class DouyinLoginActivity : BaseWatchActivity() {
+    private val internetAvailabilityMonitor by lazy {
+        DefaultInternetAvailabilityMonitor(this)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setupSystemBars()
@@ -25,26 +35,44 @@ class DouyinLoginActivity : BaseWatchActivity() {
             WatchRSSTheme {
                 val baseDensity = LocalDensity.current
                 CompositionLocalProvider(LocalDensity provides Density(2f, baseDensity.fontScale)) {
+                    val internetAvailabilityStatus by internetAvailabilityMonitor.internetAvailability.collectAsState(
+                        initial = InternetAvailabilityStatus.Checking
+                    )
                     val warningMessage = remember { mutableStateOf(initialWebViewError) }
 
-                    LaunchedEffect(warningMessage.value) {
+                    LaunchedEffect(internetAvailabilityStatus, warningMessage.value) {
+                        if (internetAvailabilityStatus != InternetAvailabilityStatus.Available) {
+                            return@LaunchedEffect
+                        }
                         val message = warningMessage.value ?: return@LaunchedEffect
                         warnWebViewUnavailable(this@DouyinLoginActivity, message)
                         warningMessage.value = null
                     }
 
-                    DouyinLoginScreen(
-                        initialErrorMessage = initialWebViewError,
-                        onWebViewInitFailed = { warningMessage.value = it },
-                        onLoginComplete = { cookies ->
-                            val resultIntent = Intent().apply {
-                                putExtra(EXTRA_COOKIES, cookies)
-                            }
-                            setResult(RESULT_OK, resultIntent)
-                            finish()
-                        },
-                        onBack = { finish() }
-                    )
+                    when (internetAvailabilityStatus) {
+                        InternetAvailabilityStatus.Checking -> {
+                            DouyinLoginCheckingScreen(onBack = { finish() })
+                        }
+
+                        InternetAvailabilityStatus.Unavailable -> {
+                            DouyinLoginBannedScreen(onBack = { finish() })
+                        }
+
+                        InternetAvailabilityStatus.Available -> {
+                            DouyinLoginScreen(
+                                initialErrorMessage = initialWebViewError,
+                                onWebViewInitFailed = { warningMessage.value = it },
+                                onLoginComplete = { cookies ->
+                                    val resultIntent = Intent().apply {
+                                        putExtra(EXTRA_COOKIES, cookies)
+                                    }
+                                    setResult(RESULT_OK, resultIntent)
+                                    finish()
+                                },
+                                onBack = { finish() }
+                            )
+                        }
+                    }
                 }
             }
         }
