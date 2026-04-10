@@ -5,6 +5,7 @@ import android.webkit.CookieManager
 import android.webkit.WebStorage
 import com.lightningstudio.watchrss.data.cache.ManagedCacheBucket
 import com.lightningstudio.watchrss.data.cache.ManagedCacheService
+import com.lightningstudio.watchrss.data.settings.SettingsRepository
 import com.lightningstudio.watchrss.sdk.douyin.ABogus
 import com.lightningstudio.watchrss.sdk.douyin.DouyinContent
 import com.lightningstudio.watchrss.sdk.douyin.DouyinFeedPage
@@ -13,6 +14,8 @@ import com.lightningstudio.watchrss.sdk.douyin.DouyinVideo
 import com.lightningstudio.watchrss.sdk.douyin.DouyinWebCrawler
 import com.lightningstudio.watchrss.sdk.douyin.EncryptedDouyinCookieStore
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import org.json.JSONException
 import java.io.File
@@ -20,7 +23,9 @@ import java.io.IOException
 
 class DouyinRepository(
     context: Context,
-    private val cacheService: ManagedCacheService? = null
+    private val cacheService: ManagedCacheService? = null,
+    private val settingsRepository: SettingsRepository,
+    private val recentWindowStore: DouyinRecentWindowStoreContract? = null
 ) : DouyinRepositoryContract {
     private val appContext = context.applicationContext
     private val cookieStore = EncryptedDouyinCookieStore(context)
@@ -33,11 +38,13 @@ class DouyinRepository(
 
     override suspend fun clearCookie() {
         cookieStore.writeCookie(null)
+        recentWindowStore?.clear()
         clearWebViewSession()
     }
 
     override suspend fun logoutAndClearMediaCache() {
         clearCookie()
+        DouyinPlaybackPreviewCache.clearAll()
         if (cacheService != null) {
             cacheService.clearBucket(ManagedCacheBucket.DOUYIN_PRELOAD)
         } else {
@@ -71,7 +78,7 @@ class DouyinRepository(
         return withContext(Dispatchers.IO) {
             try {
                 val raw = crawler.fetchJingxuanFeed(cookie = cookie, cursor = cursor, count = count)
-                val page = parser.parseFeedPage(raw)
+                val page = parser.parseFeedPage(raw).applyPlaybackPreference()
                 DouyinResult(DouyinErrorCodes.OK, data = page)
             } catch (e: IOException) {
                 val msg = e.message.orEmpty()
@@ -95,7 +102,7 @@ class DouyinRepository(
         return withContext(Dispatchers.IO) {
             try {
                 val raw = crawler.fetchOneVideo(awemeId, cookie)
-                val content = parser.parse(raw)
+                val content = parser.parse(raw).applyPlaybackPreference()
                 DouyinResult(DouyinErrorCodes.OK, data = content)
             } catch (e: IOException) {
                 val msg = e.message.orEmpty()
@@ -111,6 +118,22 @@ class DouyinRepository(
         }
     }
 
+    private suspend fun DouyinFeedPage.applyPlaybackPreference(): DouyinFeedPage {
+        val preference = settingsRepository.douyinVideoCodecPreference.first()
+        val h265Supported = DouyinCodecSupport.isH265Supported()
+        items.forEach { video ->
+            applyPreferredPlayback(video, preference, h265Supported)
+        }
+        return this
+    }
+
+    private suspend fun DouyinContent.applyPlaybackPreference(): DouyinContent {
+        if (this !is DouyinContent.Video) return this
+        val preference = settingsRepository.douyinVideoCodecPreference.first()
+        val h265Supported = DouyinCodecSupport.isH265Supported()
+        return applyPreferredPlayback(this, preference, h265Supported)
+    }
+
     override suspend fun buildPlayHeaders(): Map<String, String> {
         val cookie = cookieStore.readCookie()
         val headers = mutableMapOf(
@@ -121,6 +144,10 @@ class DouyinRepository(
             headers["Cookie"] = cookie
         }
         return headers
+    }
+
+    override fun observeVideoCodecPreference(): Flow<com.lightningstudio.watchrss.data.settings.DouyinVideoCodecPreference> {
+        return settingsRepository.douyinVideoCodecPreference
     }
 
     private fun clearWebViewSession() {

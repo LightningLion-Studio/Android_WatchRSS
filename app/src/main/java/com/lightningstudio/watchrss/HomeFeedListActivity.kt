@@ -20,9 +20,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.lifecycleScope
 import com.lightningstudio.watchrss.data.cache.CacheTrimReason
-import com.lightningstudio.watchrss.data.douyin.DouyinFeedCacheStore
+import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackPreviewCache
 import com.lightningstudio.watchrss.data.douyin.DouyinSourceOrigin
 import com.lightningstudio.watchrss.data.douyin.DouyinStreamItem
+import com.lightningstudio.watchrss.data.douyin.DOUYIN_ACTIVE_PRELOAD_WINDOW_UNWATCHED
+import com.lightningstudio.watchrss.data.douyin.DOUYIN_RECENT_WINDOW_SIZE
+import com.lightningstudio.watchrss.data.douyin.mergeDouyinBootstrapItems
+import com.lightningstudio.watchrss.data.douyin.prioritizeDouyinPreloadItems
+import com.lightningstudio.watchrss.data.douyin.refreshExpiredDouyinBootstrapPlayUrls
+import com.lightningstudio.watchrss.data.douyin.resolveDouyinResumeAnchorAwemeId
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.rss.RssChannel
 import com.lightningstudio.watchrss.debug.PerformanceMonitor
@@ -34,7 +40,9 @@ import com.lightningstudio.watchrss.ui.screen.home.HomeComposeScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
 import com.lightningstudio.watchrss.ui.viewmodel.HomeViewModel
+import com.lightningstudio.watchrss.util.AppLogger
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -60,7 +68,10 @@ class HomeFeedListActivity : BaseWatchActivity() {
     private var initialStartupCompleted = false
     private var startupMaintenanceScheduled = false
     private var launcherWarmupScheduled = false
+    private var douyinWarmupJob: Job? = null
+    private var douyinCacheWarmupJob: Job? = null
     private var initialHomeLoginRefreshScheduled = false
+    private var homePinnedPreviewRestoreScheduled = false
     private val refreshPlatformLoginStateRunnable = Runnable {
         if (!isDestroyed) {
             viewModel.refreshPlatformLoginState()
@@ -107,6 +118,7 @@ class HomeFeedListActivity : BaseWatchActivity() {
         setupSystemBars()
         renderHomeContent()
         initialStartupCompleted = true
+        restorePinnedDouyinPreviewsOnHome()
 
         if (intent.getBooleanExtra(EXTRA_LAUNCHER_ENTRY, false)) {
             scheduleStartupMaintenance()
@@ -269,17 +281,183 @@ class HomeFeedListActivity : BaseWatchActivity() {
         return Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
     }
 
-    private fun prewarmDouyinFeed() = lifecycleScope.launch(Dispatchers.IO) {
+    private fun ensureDouyinWarmup(
+        cacheFirst: Boolean,
+        logReason: String
+    ): Job {
+        if (cacheFirst) {
+            return ensureDouyinCacheWarmup(logReason)
+        }
+        douyinWarmupJob?.takeIf { it.isActive }?.let { return it }
+        return launchDouyinWarmup(cacheFirst = false, logReason = logReason)
+    }
+
+    private fun ensureDouyinCacheWarmup(logReason: String): Job {
+        douyinCacheWarmupJob?.takeIf { it.isActive }?.let { return it }
+        return lifecycleScope.launch(Dispatchers.IO) {
+            val container = (application as WatchRssApplication).container
+            if (!container.douyinRepository.isLoggedIn()) return@launch
+
+            val feedCacheStore = container.douyinFeedCacheStore
+            val cachedSnapshot = feedCacheStore.readSnapshot(limit = DOUYIN_APP_OPEN_REFRESH_COUNT)
+            val cachedItems = cachedSnapshot?.items.orEmpty()
+            if (cachedItems.isEmpty()) {
+                launchDouyinWarmup(cacheFirst = false, logReason = logReason)
+                return@launch
+            }
+
+            val refreshResult = refreshExpiredDouyinBootstrapPlayUrls(
+                items = cachedItems,
+                repository = container.douyinRepository
+            )
+            if (refreshResult.refreshedAwemeIds.isNotEmpty()) {
+                AppLogger.d(
+                    "HomeFeedList",
+                    "refresh cached douyin playUrls ids=${refreshResult.refreshedAwemeIds.joinToString(",")}"
+                )
+                feedCacheStore.save(
+                    items = refreshResult.items,
+                    nextCursor = cachedSnapshot?.nextCursor,
+                    hasMore = cachedSnapshot?.hasMore ?: false
+                )
+            }
+            primeDouyinPlaybackWindow(
+                items = refreshResult.items,
+                logReason = "${logReason}_cached"
+            )
+        }.also { job ->
+            douyinCacheWarmupJob = job
+            job.invokeOnCompletion {
+                if (douyinCacheWarmupJob === job) {
+                    douyinCacheWarmupJob = null
+                }
+            }
+        }
+    }
+
+    private fun launchDouyinWarmup(
+        cacheFirst: Boolean,
+        logReason: String
+    ): Job {
+        return lifecycleScope.launch(Dispatchers.IO) {
+            val container = (application as WatchRssApplication).container
+            if (!container.douyinRepository.isLoggedIn()) return@launch
+
+            val feedCacheStore = container.douyinFeedCacheStore
+            val cachedSnapshot = if (cacheFirst) {
+                feedCacheStore.readSnapshot(limit = DOUYIN_APP_OPEN_REFRESH_COUNT)
+            } else {
+                null
+            }
+            val cachedItems = cachedSnapshot?.items.orEmpty()
+            val items = if (cachedItems.isNotEmpty()) {
+                val refreshResult = refreshExpiredDouyinBootstrapPlayUrls(
+                    items = cachedItems,
+                    repository = container.douyinRepository
+                )
+                if (refreshResult.refreshedAwemeIds.isNotEmpty()) {
+                    AppLogger.d(
+                        "HomeFeedList",
+                        "refresh cached douyin playUrls ids=${refreshResult.refreshedAwemeIds.joinToString(",")}"
+                    )
+                    feedCacheStore.save(
+                        items = refreshResult.items,
+                        nextCursor = cachedSnapshot?.nextCursor,
+                        hasMore = cachedSnapshot?.hasMore ?: false
+                    )
+                }
+                refreshResult.items
+            } else {
+                val result = container.douyinRepository.fetchFeedPage(
+                    cursor = null,
+                    count = DOUYIN_APP_OPEN_REFRESH_COUNT
+                )
+                result.data?.items.orEmpty()
+                    .mapNotNull(::toDouyinStreamItem)
+                    .also { fetchedItems ->
+                        if (fetchedItems.isNotEmpty()) {
+                            feedCacheStore.save(
+                                items = fetchedItems,
+                                nextCursor = result.data?.nextCursor,
+                                hasMore = result.data?.hasMore ?: false
+                            )
+                        }
+                    }
+            }
+            if (items.isEmpty()) return@launch
+            primeDouyinPlaybackWindow(
+                items = items,
+                logReason = if (cachedItems.isNotEmpty()) "${logReason}_cached" else "${logReason}_network"
+            )
+        }.also { job ->
+            douyinWarmupJob = job
+            job.invokeOnCompletion {
+                if (douyinWarmupJob === job) {
+                    douyinWarmupJob = null
+                }
+            }
+        }
+    }
+
+    private suspend fun primeDouyinPlaybackWindow(
+        items: List<DouyinStreamItem>,
+        logReason: String
+    ) {
+        if (items.isEmpty()) return
         val container = (application as WatchRssApplication).container
-        if (!container.douyinRepository.isLoggedIn()) return@launch
-        val result = container.douyinRepository.fetchFeedPage(
-            cursor = null,
-            count = DOUYIN_APP_OPEN_REFRESH_COUNT
+        val watchHistoryStore = container.douyinWatchHistoryStore
+        val recentWindowSnapshot = container.douyinRecentWindowStore.readSnapshot(
+            limit = DOUYIN_RECENT_WINDOW_SIZE
         )
-        val items = result.data?.items.orEmpty()
-            .mapNotNull(::toDouyinStreamItem)
-        if (items.isNotEmpty()) {
-            DouyinFeedCacheStore(this@HomeFeedListActivity).save(items)
+        val mergedItems = mergeDouyinBootstrapItems(
+            feedItems = items,
+            recentItems = recentWindowSnapshot.items,
+            limit = DOUYIN_APP_OPEN_REFRESH_COUNT + DOUYIN_RECENT_WINDOW_SIZE
+        )
+        val latestWatchedAwemeId = watchHistoryStore.readHistory()
+            .firstOrNull()
+            ?.awemeId
+            ?.takeIf { it.isNotBlank() }
+        val anchorAwemeId = when {
+            !latestWatchedAwemeId.isNullOrBlank() && mergedItems.any { it.awemeId == latestWatchedAwemeId } -> {
+                resolveDouyinResumeAnchorAwemeId(mergedItems, latestWatchedAwemeId)
+            }
+            !recentWindowSnapshot.anchorAwemeId.isNullOrBlank() -> {
+                recentWindowSnapshot.anchorAwemeId
+            }
+            else -> {
+                resolveDouyinResumeAnchorAwemeId(mergedItems, latestWatchedAwemeId)
+            }
+        }
+        val prioritizedItems = prioritizeDouyinPreloadItems(
+            items = mergedItems,
+            anchorAwemeId = anchorAwemeId
+        )
+        val headers = container.douyinRepository.buildPlayHeaders()
+        AppLogger.d(
+            "HomeFeedList",
+            "prime douyin window reason=$logReason ids=${
+                prioritizedItems.take(DOUYIN_ACTIVE_PRELOAD_WINDOW_UNWATCHED).joinToString(",") { it.awemeId }
+            }"
+        )
+        DouyinPlaybackPreviewCache.primeStartupWindow(
+            items = prioritizedItems.take(1 + DOUYIN_PLAYBACK_PREFETCH_WINDOW),
+            headers = headers,
+            reason = logReason
+        )
+    }
+
+    private fun restorePinnedDouyinPreviewsOnHome() {
+        if (homePinnedPreviewRestoreScheduled) return
+        homePinnedPreviewRestoreScheduled = true
+        lifecycleScope.launch(Dispatchers.IO) {
+            val restoredItems = DouyinPlaybackPreviewCache.restorePinnedItems()
+            if (restoredItems.isNotEmpty()) {
+                AppLogger.d(
+                    "HomeFeedList",
+                    "home restore douyin pinned previews ids=${restoredItems.joinToString(",") { it.awemeId }}"
+                )
+            }
         }
     }
 
@@ -313,10 +491,10 @@ class HomeFeedListActivity : BaseWatchActivity() {
     private fun scheduleLauncherWarmup() {
         if (launcherWarmupScheduled) return
         launcherWarmupScheduled = true
-        lifecycleScope.launch {
-            delay(STARTUP_DOUYIN_PREWARM_DELAY_MS)
-            prewarmDouyinFeed().join()
-        }
+        ensureDouyinWarmup(
+            cacheFirst = false,
+            logReason = "startup_prewarm"
+        )
     }
 
     private fun showChannelActions(channel: RssChannel, quick: Boolean) {
@@ -336,10 +514,16 @@ class HomeFeedListActivity : BaseWatchActivity() {
                 intent = Intent(this, BiliEntryActivity::class.java),
                 loadingEntryKey = loadingEntryKey
             )
-            BuiltinChannelType.DOUYIN -> startNavigatingActivity(
-                intent = Intent(this, DouyinEntryActivity::class.java),
-                loadingEntryKey = loadingEntryKey
-            )
+            BuiltinChannelType.DOUYIN -> {
+                ensureDouyinWarmup(
+                    cacheFirst = true,
+                    logReason = "channel_open"
+                )
+                startNavigatingActivity(
+                    intent = Intent(this, DouyinEntryActivity::class.java),
+                    loadingEntryKey = loadingEntryKey
+                )
+            }
             null -> {
                 val intent = Intent(this, FeedActivity::class.java)
                 intent.putExtra(FeedActivity.EXTRA_CHANNEL_ID, channel.id)
@@ -373,17 +557,19 @@ class HomeFeedListActivity : BaseWatchActivity() {
             author = video.authorName?.takeIf { it.isNotBlank() },
             likeCount = video.likeCount,
             playUrlResolvedAtMs = System.currentTimeMillis(),
-            sourceOrigin = DouyinSourceOrigin.NETWORK_FEED
+            sourceOrigin = DouyinSourceOrigin.NETWORK_FEED,
+            durationMs = video.duration.toLong().coerceAtLeast(0L),
+            variants = video.variants
         )
     }
 
     companion object {
+        private const val DOUYIN_PLAYBACK_PREFETCH_WINDOW = 2
         private const val EXTRA_LAUNCHER_ENTRY = "extra_launcher_entry"
         private const val HOME_ENTRY_PROFILE = "profile"
         private const val HOME_ENTRY_RECOMMEND = "recommend"
         private const val HOME_ENTRY_ADD_RSS = "add_rss"
         private const val INITIAL_HOME_LOGIN_STATE_REFRESH_DELAY_MS = 1_200L
-        private const val STARTUP_DOUYIN_PREWARM_DELAY_MS = 2_000L
         private const val STARTUP_CACHE_MAINTENANCE_DELAY_MS = 5_000L
         private const val DOUYIN_APP_OPEN_REFRESH_COUNT = 16
 

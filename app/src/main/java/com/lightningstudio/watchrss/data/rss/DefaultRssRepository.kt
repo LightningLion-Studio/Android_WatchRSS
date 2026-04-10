@@ -13,6 +13,7 @@ import com.lightningstudio.watchrss.data.db.RssItemEntity
 import com.lightningstudio.watchrss.data.db.SavedEntryDao
 import com.lightningstudio.watchrss.data.db.SavedEntryEntity
 import com.lightningstudio.watchrss.data.db.SavedRssItem
+import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackPreviewCache
 import com.lightningstudio.watchrss.debug.DebugLogBuffer
 import com.lightningstudio.watchrss.debug.PerfTrace
 import com.prof18.rssparser.model.RssItem as ParsedItem
@@ -572,7 +573,10 @@ class DefaultRssRepository(
             offlineStore.deleteMediaForChannel(channelId)
             when (channel.url) {
                 BuiltinChannelType.BILI.url -> cacheService.clearBucket(ManagedCacheBucket.BILI_PREVIEW)
-                BuiltinChannelType.DOUYIN.url -> cacheService.clearBucket(ManagedCacheBucket.DOUYIN_PRELOAD)
+                BuiltinChannelType.DOUYIN.url -> {
+                    cacheService.clearBucket(ManagedCacheBucket.DOUYIN_PRELOAD)
+                    DouyinPlaybackPreviewCache.clearAll()
+                }
             }
             channelDao.deleteChannel(channelId)
         }

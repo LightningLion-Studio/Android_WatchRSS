@@ -55,6 +55,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import com.lightningstudio.watchrss.BuildConfig
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.settings.CACHE_LIMIT_OPTIONS_MB
+import com.lightningstudio.watchrss.data.settings.DouyinVideoCodecPreference
 import com.lightningstudio.watchrss.data.settings.RssInlineImagePrefetchMode
 import com.lightningstudio.watchrss.ui.components.WatchSwitch
 import com.lightningstudio.watchrss.ui.components.WatchSurface
@@ -79,6 +80,7 @@ fun SettingsScreen(
     readingFontSizeSp: StateFlow<Int>,
     phoneConnectionEnabled: StateFlow<Boolean>,
     rssInlineImagePrefetchMode: StateFlow<RssInlineImagePrefetchMode>,
+    douyinVideoCodecPreference: StateFlow<DouyinVideoCodecPreference>,
     llmFeatureEnabled: StateFlow<Boolean>,
     llmAutoSummarize: StateFlow<Boolean>,
     llmShowTokenUsage: StateFlow<Boolean>,
@@ -90,6 +92,7 @@ fun SettingsScreen(
     onSelectFontSize: (Int) -> Unit,
     onTogglePhoneConnection: () -> Unit,
     onSelectRssInlineImagePrefetchMode: (RssInlineImagePrefetchMode) -> Unit,
+    onSelectDouyinVideoCodecPreference: (DouyinVideoCodecPreference) -> Unit,
     onToggleLlmFeatureEnabled: () -> Unit,
     onToggleLlmAutoSummarize: () -> Unit,
     onToggleLlmShowTokenUsage: () -> Unit,
@@ -111,6 +114,7 @@ fun SettingsScreen(
     val fontSizeSp by readingFontSizeSp.collectAsState()
     val phoneConnection by phoneConnectionEnabled.collectAsState()
     val imagePrefetchMode by rssInlineImagePrefetchMode.collectAsState()
+    val douyinCodecPreference by douyinVideoCodecPreference.collectAsState()
     val llmEnabled by llmFeatureEnabled.collectAsState()
     val llmAuto by llmAutoSummarize.collectAsState()
     val llmTokenUsage by llmShowTokenUsage.collectAsState()
@@ -156,10 +160,12 @@ fun SettingsScreen(
             cacheUsage = usage,
             shareUseSystem = useSystemShare,
             rssInlineImagePrefetchMode = imagePrefetchMode,
+            douyinVideoCodecPreference = douyinCodecPreference,
             showSystemShareSetting = showSystemShareSetting,
             onSelectCacheLimit = onSelectCacheLimit,
             onToggleShareMode = onToggleShareMode,
-            onSelectRssInlineImagePrefetchMode = onSelectRssInlineImagePrefetchMode
+            onSelectRssInlineImagePrefetchMode = onSelectRssInlineImagePrefetchMode,
+            onSelectDouyinVideoCodecPreference = onSelectDouyinVideoCodecPreference
         )
     }
 }
@@ -495,18 +501,33 @@ private fun AdvancedSettingsPage(
     cacheUsage: Long,
     shareUseSystem: Boolean,
     rssInlineImagePrefetchMode: RssInlineImagePrefetchMode,
+    douyinVideoCodecPreference: DouyinVideoCodecPreference,
     showSystemShareSetting: Boolean,
     onSelectCacheLimit: (Long) -> Unit,
     onToggleShareMode: () -> Unit,
-    onSelectRssInlineImagePrefetchMode: (RssInlineImagePrefetchMode) -> Unit
+    onSelectRssInlineImagePrefetchMode: (RssInlineImagePrefetchMode) -> Unit,
+    onSelectDouyinVideoCodecPreference: (DouyinVideoCodecPreference) -> Unit
 ) {
     val cacheOptions = remember { CACHE_LIMIT_OPTIONS_MB }
     val imagePrefetchOptions = remember { RssInlineImagePrefetchMode.values().toList() }
+    val douyinCodecOptions = remember { DouyinVideoCodecPreference.entries.toList() }
     val lowerCache = cacheOptions.lastOrNull { it < cacheLimit }
     val higherCache = cacheOptions.firstOrNull { it > cacheLimit }
     val imagePrefetchIndex = imagePrefetchOptions.indexOf(rssInlineImagePrefetchMode)
     val lowerImagePrefetchMode = imagePrefetchOptions.getOrNull(imagePrefetchIndex - 1)
     val higherImagePrefetchMode = imagePrefetchOptions.getOrNull(imagePrefetchIndex + 1)
+    val douyinCodecIndex = douyinCodecOptions.indexOf(douyinVideoCodecPreference)
+    val lowerDouyinCodecPreference = when {
+        douyinCodecOptions.isEmpty() -> null
+        douyinCodecIndex <= 0 -> douyinCodecOptions.lastOrNull()
+        else -> douyinCodecOptions.getOrNull(douyinCodecIndex - 1)
+    }
+    val higherDouyinCodecPreference = when {
+        douyinCodecOptions.isEmpty() -> null
+        douyinCodecIndex < 0 -> douyinCodecOptions.firstOrNull()
+        douyinCodecIndex >= douyinCodecOptions.lastIndex -> douyinCodecOptions.firstOrNull()
+        else -> douyinCodecOptions.getOrNull(douyinCodecIndex + 1)
+    }
     val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
     val sectionSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_content_horizontal_distance
     val entrySpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_8dp
@@ -601,6 +622,38 @@ private fun AdvancedSettingsPage(
             )
             Text(
                 text = "用于原文媒体内容；默认推荐保留前 4 项",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+            )
+
+            Spacer(modifier = Modifier.height(entrySpacing))
+
+            WatchSettingsPillRow(label = "视频编码") {
+                RoundIconButtonIcon(
+                    icon = Icons.Outlined.Remove,
+                    contentDescription = "切换到上一个抖音编码",
+                    enabled = douyinCodecOptions.size > 1,
+                    testTag = SettingsTestTags.DOUYIN_CODEC_DECREASE_BUTTON,
+                    onClick = { lowerDouyinCodecPreference?.let(onSelectDouyinVideoCodecPreference) }
+                )
+                Spacer(modifier = Modifier.width(stepperSpacing))
+                StepperValue(
+                    text = douyinVideoCodecPreference.label,
+                    width = textStepperValueWidth,
+                    testTag = SettingsTestTags.DOUYIN_CODEC_VALUE
+                )
+                Spacer(modifier = Modifier.width(stepperSpacing))
+                RoundIconButtonIcon(
+                    icon = Icons.Outlined.Add,
+                    contentDescription = "切换到下一个抖音编码",
+                    enabled = douyinCodecOptions.size > 1,
+                    testTag = SettingsTestTags.DOUYIN_CODEC_INCREASE_BUTTON,
+                    onClick = { higherDouyinCodecPreference?.let(onSelectDouyinVideoCodecPreference) }
+                )
+            }
+            Text(
+                text = douyinVideoCodecPreference.summary,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = valueIndent, top = valueSpacing)

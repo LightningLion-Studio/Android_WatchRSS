@@ -18,6 +18,7 @@ private val READING_FONT_SIZE_SP = intPreferencesKey("reading_font_size_sp")
 private val SHARE_USE_SYSTEM = booleanPreferencesKey("share_use_system")
 private val PHONE_CONNECTION_ENABLED = booleanPreferencesKey("phone_connection_enabled")
 private val RSS_INLINE_IMAGE_PREFETCH_MODE = intPreferencesKey("rss_inline_image_prefetch_mode")
+private val DOUYIN_VIDEO_CODEC_PREFERENCE = intPreferencesKey("douyin_video_codec_preference")
 private val LLM_PROVIDER = stringPreferencesKey("llm_provider")
 private val LLM_MODEL = stringPreferencesKey("llm_model")
 private val LLM_BASE_URL = stringPreferencesKey("llm_base_url")
@@ -69,6 +70,12 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         RssInlineImagePrefetchMode.fromPersistedValue(
             preferences[RSS_INLINE_IMAGE_PREFETCH_MODE]
                 ?: DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE.persistedValue
+        )
+    }
+    val douyinVideoCodecPreference: Flow<DouyinVideoCodecPreference> = dataStore.data.map { preferences ->
+        DouyinVideoCodecPreference.fromPersistedValue(
+            preferences[DOUYIN_VIDEO_CODEC_PREFERENCE]
+                ?: DEFAULT_DOUYIN_VIDEO_CODEC_PREFERENCE.persistedValue
         )
     }
     val llmProvider: Flow<String> = dataStore.data.map { it[LLM_PROVIDER] ?: "" }
@@ -128,6 +135,12 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     suspend fun setRssInlineImagePrefetchMode(value: RssInlineImagePrefetchMode) {
         dataStore.edit { preferences ->
             preferences[RSS_INLINE_IMAGE_PREFETCH_MODE] = value.persistedValue
+        }
+    }
+
+    suspend fun setDouyinVideoCodecPreference(value: DouyinVideoCodecPreference) {
+        dataStore.edit { preferences ->
+            preferences[DOUYIN_VIDEO_CODEC_PREFERENCE] = value.persistedValue
         }
     }
 

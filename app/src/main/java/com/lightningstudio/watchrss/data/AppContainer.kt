@@ -9,8 +9,19 @@ import com.lightningstudio.watchrss.data.cache.ManagedCacheService
 import com.lightningstudio.watchrss.data.bili.BiliRepository
 import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
 import com.lightningstudio.watchrss.data.db.BuiltinChannelSeed
+import com.lightningstudio.watchrss.data.douyin.DouyinFeedCacheStore
+import com.lightningstudio.watchrss.data.douyin.DouyinFeedCacheStoreContract
+import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackPreviewCache
+import com.lightningstudio.watchrss.data.douyin.DouyinPreloadManager
+import com.lightningstudio.watchrss.data.douyin.DouyinPreloadManagerContract
+import com.lightningstudio.watchrss.data.douyin.DouyinRecentWindowCacheCoordinator
+import com.lightningstudio.watchrss.data.douyin.DouyinRecentWindowCacheCoordinatorContract
+import com.lightningstudio.watchrss.data.douyin.DouyinRecentWindowStore
+import com.lightningstudio.watchrss.data.douyin.DouyinRecentWindowStoreContract
 import com.lightningstudio.watchrss.data.douyin.DouyinRepository
 import com.lightningstudio.watchrss.data.douyin.DouyinRepositoryContract
+import com.lightningstudio.watchrss.data.douyin.DouyinWatchHistoryStore
+import com.lightningstudio.watchrss.data.douyin.DouyinWatchHistoryStoreContract
 import com.lightningstudio.watchrss.data.db.WatchRssDatabase
 import com.lightningstudio.watchrss.data.network.DefaultInternetAvailabilityMonitor
 import com.lightningstudio.watchrss.data.network.InternetAvailabilityMonitor
@@ -41,12 +52,21 @@ interface AppContainer {
     val biliPlaybackCacheManager: BiliPlaybackCacheManager
     val biliRepository: BiliRepositoryContract
     val douyinRepository: DouyinRepositoryContract
+    val douyinPreloadManager: DouyinPreloadManagerContract
+    val douyinFeedCacheStore: DouyinFeedCacheStoreContract
+    val douyinWatchHistoryStore: DouyinWatchHistoryStoreContract
+    val douyinRecentWindowStore: DouyinRecentWindowStoreContract
+    val douyinRecentWindowCacheCoordinator: DouyinRecentWindowCacheCoordinatorContract
     val internetAvailabilityMonitor: InternetAvailabilityMonitor
 }
 
 class DefaultAppContainer(context: Context) : AppContainer {
     private val appContext = context.applicationContext
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    init {
+        DouyinPlaybackPreviewCache.configure(appContext)
+    }
 
     private val database: WatchRssDatabase by lazy {
         Room.databaseBuilder(
@@ -104,8 +124,36 @@ class DefaultAppContainer(context: Context) : AppContainer {
         )
     }
 
+    override val douyinFeedCacheStore: DouyinFeedCacheStoreContract by lazy {
+        DouyinFeedCacheStore(appContext)
+    }
+
+    override val douyinWatchHistoryStore: DouyinWatchHistoryStoreContract by lazy {
+        DouyinWatchHistoryStore(appContext)
+    }
+
+    override val douyinRecentWindowStore: DouyinRecentWindowStoreContract by lazy {
+        DouyinRecentWindowStore(appContext)
+    }
+
+    override val douyinPreloadManager: DouyinPreloadManagerContract by lazy {
+        DouyinPreloadManager(appContext, managedCacheService)
+    }
+
+    override val douyinRecentWindowCacheCoordinator: DouyinRecentWindowCacheCoordinatorContract by lazy {
+        DouyinRecentWindowCacheCoordinator(
+            appScope = appScope,
+            preloadManager = douyinPreloadManager
+        )
+    }
+
     override val douyinRepository: DouyinRepositoryContract by lazy {
-        DouyinRepository(appContext, managedCacheService)
+        DouyinRepository(
+            context = appContext,
+            cacheService = managedCacheService,
+            settingsRepository = settingsRepository,
+            recentWindowStore = douyinRecentWindowStore
+        )
     }
 
     override val internetAvailabilityMonitor: InternetAvailabilityMonitor by lazy {

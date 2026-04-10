@@ -20,7 +20,7 @@ class DouyinPlaybackStateResolverTest {
     }
 
     @Test
-    fun resolveDouyinPlaybackState_keepsRemoteSource_whenNewLocalFileArrivesLater() {
+    fun resolveDouyinPlaybackState_switchesToLocalSource_whenNewLocalFileArrivesLater() {
         val resolved = resolveDouyinPlaybackState(
             currentUri = "https://example.com/video.mp4",
             currentRemoteResolvedAtMs = 100L,
@@ -29,7 +29,7 @@ class DouyinPlaybackStateResolverTest {
             remoteResolvedAtMs = 100L
         )
 
-        assertEquals("https://example.com/video.mp4", resolved.mediaUri)
+        assertEquals("file:///tmp/aweme.mp4", resolved.mediaUri)
         assertEquals(100L, resolved.remoteResolvedAtMs)
     }
 

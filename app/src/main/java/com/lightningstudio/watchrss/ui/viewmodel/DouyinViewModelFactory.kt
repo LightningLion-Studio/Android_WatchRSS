@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.lightningstudio.watchrss.data.douyin.DouyinFeedCacheStoreContract
 import com.lightningstudio.watchrss.data.douyin.DouyinPreloadManagerContract
+import com.lightningstudio.watchrss.data.douyin.DouyinRecentWindowCacheCoordinatorContract
+import com.lightningstudio.watchrss.data.douyin.DouyinRecentWindowStoreContract
 import com.lightningstudio.watchrss.data.douyin.DouyinRepositoryContract
 import com.lightningstudio.watchrss.data.douyin.DouyinWatchHistoryStoreContract
 
@@ -11,13 +13,22 @@ class DouyinViewModelFactory(
     private val repository: DouyinRepositoryContract,
     private val preloadManager: DouyinPreloadManagerContract,
     private val watchHistoryStore: DouyinWatchHistoryStoreContract,
-    private val feedCacheStore: DouyinFeedCacheStoreContract
+    private val feedCacheStore: DouyinFeedCacheStoreContract,
+    private val recentWindowStore: DouyinRecentWindowStoreContract,
+    private val recentWindowCacheCoordinator: DouyinRecentWindowCacheCoordinatorContract
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         return when {
             modelClass.isAssignableFrom(DouyinFeedViewModel::class.java) -> {
-                DouyinFeedViewModel(repository, preloadManager, watchHistoryStore, feedCacheStore)
+                DouyinFeedViewModel(
+                    repository = repository,
+                    preloadManager = preloadManager,
+                    watchHistoryStore = watchHistoryStore,
+                    feedCacheStore = feedCacheStore,
+                    recentWindowStore = recentWindowStore,
+                    recentWindowCacheCoordinator = recentWindowCacheCoordinator
+                )
             }
             else -> throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
         } as T

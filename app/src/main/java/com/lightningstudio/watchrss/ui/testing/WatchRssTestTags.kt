@@ -97,5 +97,8 @@ object SettingsTestTags {
     const val IMAGE_PREFETCH_DECREASE_BUTTON = "settings/image_prefetch_decrease_button"
     const val IMAGE_PREFETCH_VALUE = "settings/image_prefetch_value"
     const val IMAGE_PREFETCH_INCREASE_BUTTON = "settings/image_prefetch_increase_button"
+    const val DOUYIN_CODEC_DECREASE_BUTTON = "settings/douyin_codec_decrease_button"
+    const val DOUYIN_CODEC_VALUE = "settings/douyin_codec_value"
+    const val DOUYIN_CODEC_INCREASE_BUTTON = "settings/douyin_codec_increase_button"
     const val BEIAN_ENTRY = "settings/beian_entry"
 }

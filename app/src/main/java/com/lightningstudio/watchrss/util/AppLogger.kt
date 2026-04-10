@@ -84,10 +84,12 @@ object AppLogger {
         val logMessage = "[$timestamp] [$levelChar] [$tag] $fullMessage"
 
         // 输出到控制台
-        when (level) {
-            Log.WARN -> if (throwable != null) Log.w(tag, message, throwable) else Log.w(tag, message)
-            Log.ERROR -> if (throwable != null) Log.e(tag, message, throwable) else Log.e(tag, message)
-            else -> Log.println(level, tag, message)
+        runCatching {
+            when (level) {
+                Log.WARN -> if (throwable != null) Log.w(tag, message, throwable) else Log.w(tag, message)
+                Log.ERROR -> if (throwable != null) Log.e(tag, message, throwable) else Log.e(tag, message)
+                else -> Log.println(level, tag, message)
+            }
         }
 
         // 写入文件

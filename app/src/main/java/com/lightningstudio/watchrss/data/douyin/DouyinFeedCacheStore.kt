@@ -5,27 +5,43 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 interface DouyinFeedCacheStoreContract {
-    fun save(items: List<DouyinStreamItem>, savedAtMs: Long = System.currentTimeMillis())
+    fun save(
+        items: List<DouyinStreamItem>,
+        nextCursor: String? = null,
+        hasMore: Boolean = items.isNotEmpty(),
+        savedAtMs: Long = System.currentTimeMillis()
+    )
     fun read(limit: Int = 20): List<DouyinStreamItem>
     fun readSnapshot(limit: Int = 20): DouyinFeedCacheSnapshot
 }
 
 data class DouyinFeedCacheSnapshot(
     val items: List<DouyinStreamItem>,
-    val savedAtMs: Long
+    val savedAtMs: Long,
+    val nextCursor: String?,
+    val hasMore: Boolean
 )
 
 class DouyinFeedCacheStore(context: Context) : DouyinFeedCacheStoreContract {
     private val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    override fun save(items: List<DouyinStreamItem>, savedAtMs: Long) {
-        prefs.edit().putString(KEY_CACHE_JSON, serializeDouyinFeedCache(items, savedAtMs)).apply()
+    override fun save(items: List<DouyinStreamItem>, nextCursor: String?, hasMore: Boolean, savedAtMs: Long) {
+        prefs.edit().putString(
+            KEY_CACHE_JSON,
+            serializeDouyinFeedCache(
+                items = items,
+                nextCursor = nextCursor,
+                hasMore = hasMore,
+                savedAtMs = savedAtMs
+            )
+        ).apply()
     }
 
     override fun read(limit: Int): List<DouyinStreamItem> = readSnapshot(limit).items
 
     override fun readSnapshot(limit: Int): DouyinFeedCacheSnapshot {
-        val raw = prefs.getString(KEY_CACHE_JSON, null) ?: return DouyinFeedCacheSnapshot(emptyList(), 0L)
+        val raw = prefs.getString(KEY_CACHE_JSON, null)
+            ?: return DouyinFeedCacheSnapshot(emptyList(), 0L, null, false)
         return parseDouyinFeedCache(raw, limit)
     }
 
@@ -37,11 +53,21 @@ class DouyinFeedCacheStore(context: Context) : DouyinFeedCacheStoreContract {
 
 internal fun serializeDouyinFeedCache(
     items: List<DouyinStreamItem>,
+    nextCursor: String? = null,
+    hasMore: Boolean = items.isNotEmpty(),
     savedAtMs: Long = System.currentTimeMillis()
 ): String {
     return buildString {
         append("{\"savedAtMs\":")
         append(savedAtMs)
+        append(",\"hasMore\":")
+        append(if (hasMore) "true" else "false")
+        append(",\"nextCursor\":")
+        if (nextCursor.isNullOrBlank()) {
+            append("null")
+        } else {
+            appendJsonStringValue(nextCursor)
+        }
         append(",\"items\":[")
         items.forEachIndexed { index, item ->
             if (index > 0) append(',')
@@ -59,8 +85,12 @@ internal fun serializeDouyinFeedCache(
             append(item.likeCount)
             append(",\"playUrlResolvedAtMs\":")
             append(item.playUrlResolvedAtMs)
+            append(",\"durationMs\":")
+            append(item.durationMs)
             append(",\"sourceOrigin\":")
             appendJsonStringValue(item.sourceOrigin.name)
+            append(",\"variants\":")
+            append(encodeDouyinVariants(item.variants).toString())
             append('}')
         }
         append("]}")
@@ -109,18 +139,30 @@ internal fun parseDouyinFeedCache(raw: String, limit: Int = 20): DouyinFeedCache
         val trimmed = raw.trim()
         val savedAtMs: Long
         val array: JSONArray
+        val nextCursor: String?
+        val hasMore: Boolean
         when {
             trimmed.startsWith("{") -> {
                 val root = JSONObject(trimmed)
                 savedAtMs = root.optLong("savedAtMs", 0L)
+                nextCursor = root.optString("nextCursor").takeIf { it.isNotBlank() }
+                hasMore = if (root.has("hasMore")) {
+                    root.optBoolean("hasMore", false)
+                } else {
+                    true
+                }
                 array = root.optJSONArray("items") ?: root.optJSONArray("aweme_list") ?: JSONArray()
             }
             trimmed.startsWith("[") -> {
                 savedAtMs = 0L
+                nextCursor = null
+                hasMore = true
                 array = JSONArray(trimmed)
             }
             else -> {
                 savedAtMs = 0L
+                nextCursor = null
+                hasMore = false
                 array = JSONArray()
             }
         }
@@ -138,12 +180,19 @@ internal fun parseDouyinFeedCache(raw: String, limit: Int = 20): DouyinFeedCache
                 author = obj.optString("author").takeIf { it.isNotBlank() },
                 likeCount = obj.optLong("likeCount", 0L),
                 playUrlResolvedAtMs = obj.optLong("playUrlResolvedAtMs", savedAtMs),
-                sourceOrigin = DouyinSourceOrigin.fromPersistedValue(obj.optString("sourceOrigin").takeIf { it.isNotBlank() })
+                sourceOrigin = DouyinSourceOrigin.fromPersistedValue(obj.optString("sourceOrigin").takeIf { it.isNotBlank() }),
+                durationMs = obj.optLong("durationMs", 0L).coerceAtLeast(0L),
+                variants = decodeDouyinVariants(obj.optJSONArray("variants"))
             )
         }
         val limited = if (limit > 0) result.take(limit) else result
-        DouyinFeedCacheSnapshot(items = limited, savedAtMs = savedAtMs)
+        DouyinFeedCacheSnapshot(
+            items = limited,
+            savedAtMs = savedAtMs,
+            nextCursor = nextCursor,
+            hasMore = hasMore && limited.isNotEmpty()
+        )
     }.getOrElse {
-        DouyinFeedCacheSnapshot(emptyList(), 0L)
+        DouyinFeedCacheSnapshot(emptyList(), 0L, null, false)
     }
 }

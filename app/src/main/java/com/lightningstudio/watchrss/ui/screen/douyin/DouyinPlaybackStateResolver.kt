@@ -33,6 +33,11 @@ internal fun resolveDouyinPlaybackState(
             remoteResolvedAtMs = remoteResolvedAtMs
         )
 
+        !currentIsLocal && !normalizedLocal.isNullOrBlank() -> DouyinResolvedPlaybackState(
+            mediaUri = normalizedLocal,
+            remoteResolvedAtMs = remoteResolvedAtMs
+        )
+
         !currentIsLocal &&
             (normalizedCurrent != normalizedRemote || currentRemoteResolvedAtMs != remoteResolvedAtMs) -> {
             DouyinResolvedPlaybackState(

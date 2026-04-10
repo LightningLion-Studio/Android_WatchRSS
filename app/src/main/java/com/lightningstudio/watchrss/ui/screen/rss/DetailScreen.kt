@@ -34,7 +34,6 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Share
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -81,6 +80,7 @@ import com.lightningstudio.watchrss.data.rss.OfflineMedia
 import com.lightningstudio.watchrss.data.rss.RssItem
 import com.lightningstudio.watchrss.data.settings.RssInlineImagePrefetchMode
 import com.lightningstudio.watchrss.ui.components.BlurFadeVisibility
+import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.screen.WarningConfirmDialog
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
@@ -362,7 +362,7 @@ internal fun DetailContent(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator(
+                WatchCircularProgressIndicator(
                     color = activeColor,
                     strokeWidth = 3.dp,
                     modifier = Modifier.size(36.dp)

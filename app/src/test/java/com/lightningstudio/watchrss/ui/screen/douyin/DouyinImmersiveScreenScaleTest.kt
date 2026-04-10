@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss.ui.screen.douyin
 
+import androidx.compose.ui.layout.ContentScale
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -33,5 +34,21 @@ class DouyinImmersiveScreenScaleTest {
 
         assertEquals(400.0, diagonal.toDouble(), 0.001)
         assertTrue(shrinkFactor < 1f)
+    }
+
+    @Test
+    fun posterFallbackUsesSameAspectPolicyAsPlayerModes() {
+        assertEquals(
+            ContentScale.Fit,
+            resolveDouyinPosterContentScale(DouyinPlayerScaleMode.Standard)
+        )
+        assertEquals(
+            ContentScale.Crop,
+            resolveDouyinPosterContentScale(DouyinPlayerScaleMode.Expanded)
+        )
+        assertEquals(
+            ContentScale.Fit,
+            resolveDouyinPosterContentScale(DouyinPlayerScaleMode.Shrunk)
+        )
     }
 }

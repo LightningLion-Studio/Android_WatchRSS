@@ -85,7 +85,7 @@ class ManagedCacheServiceTest {
 
             assertTrue(offlineA.exists())
             assertTrue(offlineB.exists())
-            assertFalse(douyinOld.exists())
+            assertTrue(douyinOld.exists())
             assertTrue(douyinMid.exists())
             assertTrue(douyinNew.exists())
             assertFalse(imageA.exists())
@@ -94,7 +94,7 @@ class ManagedCacheServiceTest {
             assertFalse(biliB.exists())
             assertFalse(File(env.roots.rssImagesDir, "dangling.tmp").exists())
             assertFalse(File(env.roots.rssImagesDir, "empty.jpg").exists())
-            assertEquals(mb(460), env.service.observeUsageBytes().value)
+            assertEquals(mb(570), env.service.observeUsageBytes().value)
         } finally {
             env.scope.cancel()
         }

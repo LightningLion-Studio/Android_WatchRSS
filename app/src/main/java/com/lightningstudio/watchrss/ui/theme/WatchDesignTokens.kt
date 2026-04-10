@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss.ui.theme
 
+import android.content.res.Configuration
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -102,6 +103,8 @@ fun rememberWatchTokens(): WatchTokens {
 
 @Composable
 fun rememberIsRoundWatch(): Boolean = LocalConfiguration.current.isScreenRound
+
+fun watchIsRound(configuration: Configuration): Boolean = configuration.isScreenRound
 
 internal fun watchTokensFor(isRound: Boolean): WatchTokens {
     return if (isRound) RoundWatchTokens else BaseWatchTokens

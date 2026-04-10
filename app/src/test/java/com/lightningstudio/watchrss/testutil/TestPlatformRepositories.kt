@@ -10,6 +10,9 @@ import com.lightningstudio.watchrss.data.douyin.DouyinErrorCodes
 import com.lightningstudio.watchrss.data.douyin.DouyinFeedCacheStoreContract
 import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackSourceKind
 import com.lightningstudio.watchrss.data.douyin.DouyinPreloadManagerContract
+import com.lightningstudio.watchrss.data.douyin.DouyinRecentWindowCacheCoordinatorContract
+import com.lightningstudio.watchrss.data.douyin.DouyinRecentWindowSnapshot
+import com.lightningstudio.watchrss.data.douyin.DouyinRecentWindowStoreContract
 import com.lightningstudio.watchrss.data.douyin.DouyinRepositoryContract
 import com.lightningstudio.watchrss.data.douyin.DouyinResult
 import com.lightningstudio.watchrss.data.douyin.DouyinSourceOrigin
@@ -455,6 +458,7 @@ class TestDouyinRepository(
     private val videoResults = mutableMapOf<String, DouyinResult<DouyinContent>>()
     var headers: Map<String, String> = mapOf("User-Agent" to "TestDouyinRepository")
     val fetchVideoCalls = mutableListOf<String>()
+    val fetchFeedPageCursors = mutableListOf<String?>()
 
     override suspend fun isLoggedIn(): Boolean = loggedIn
 
@@ -473,6 +477,7 @@ class TestDouyinRepository(
     }
 
     override suspend fun fetchFeedPage(cursor: String?, count: Int): DouyinResult<DouyinFeedPage> {
+        fetchFeedPageCursors += cursor
         return if (feedPageResults.isEmpty()) {
             DouyinResult(
                 code = DouyinErrorCodes.OK,
@@ -499,8 +504,13 @@ class TestDouyinRepository(
 
 class TestDouyinPreloadManager : DouyinPreloadManagerContract {
     val localPaths = linkedMapOf<String, String>()
+    val callbackPaths = linkedMapOf<String, String>()
     val invalidatedIds = mutableListOf<String>()
     var ensureCalls = 0
+    var ensurePlaybackWindowCalls = 0
+    val ensuredSnapshots = mutableListOf<List<String>>()
+    val playbackWindowSnapshots = mutableListOf<List<String>>()
+    val playbackWindowPrefixCounts = mutableListOf<Int>()
 
     override suspend fun localPathFor(awemeId: String): String? = localPaths[awemeId]
 
@@ -512,13 +522,38 @@ class TestDouyinPreloadManager : DouyinPreloadManagerContract {
         return result
     }
 
+    override suspend fun ensurePlaybackWindowCached(
+        items: List<DouyinStreamItem>,
+        headers: Map<String, String>,
+        requiredPrefixCount: Int,
+        onItemCached: ((awemeId: String, localPath: String) -> Unit)?
+    ) {
+        ensurePlaybackWindowCalls += 1
+        playbackWindowSnapshots += items.map { it.awemeId }
+        playbackWindowPrefixCounts += requiredPrefixCount
+        items.take(requiredPrefixCount).forEach { item ->
+            callbackPaths[item.awemeId]?.let { localPath ->
+                localPaths[item.awemeId] = localPath
+                onItemCached?.invoke(item.awemeId, localPath)
+            }
+        }
+    }
+
     override suspend fun ensureUnwatchedCache(
         items: List<DouyinStreamItem>,
         watchedIds: Set<String>,
         headers: Map<String, String>,
-        targetUnwatchedCount: Int
+        targetUnwatchedCount: Int,
+        onItemCached: ((awemeId: String, localPath: String) -> Unit)?
     ) {
         ensureCalls += 1
+        ensuredSnapshots += items.map { it.awemeId }
+        items.forEach { item ->
+            callbackPaths[item.awemeId]?.let { localPath ->
+                localPaths[item.awemeId] = localPath
+                onItemCached?.invoke(item.awemeId, localPath)
+            }
+        }
     }
 
     override suspend fun invalidate(awemeId: String): Boolean {
@@ -571,9 +606,13 @@ class TestDouyinFeedCacheStore(
 ) : DouyinFeedCacheStoreContract {
     var cachedItems: List<DouyinStreamItem> = initialItems
     val savedSnapshots = mutableListOf<List<DouyinStreamItem>>()
+    var cachedNextCursor: String? = null
+    var cachedHasMore: Boolean = false
 
-    override fun save(items: List<DouyinStreamItem>, savedAtMs: Long) {
+    override fun save(items: List<DouyinStreamItem>, nextCursor: String?, hasMore: Boolean, savedAtMs: Long) {
         cachedItems = items
+        cachedNextCursor = nextCursor
+        cachedHasMore = hasMore
         savedSnapshots += items
     }
 
@@ -585,8 +624,64 @@ class TestDouyinFeedCacheStore(
         val items = if (limit > 0) cachedItems.take(limit) else cachedItems
         return com.lightningstudio.watchrss.data.douyin.DouyinFeedCacheSnapshot(
             items = items,
-            savedAtMs = items.maxOfOrNull { it.playUrlResolvedAtMs } ?: 0L
+            savedAtMs = items.maxOfOrNull { it.playUrlResolvedAtMs } ?: 0L,
+            nextCursor = cachedNextCursor,
+            hasMore = cachedHasMore
         )
+    }
+}
+
+class TestDouyinRecentWindowStore(
+    initialSnapshot: DouyinRecentWindowSnapshot = DouyinRecentWindowSnapshot(
+        items = emptyList(),
+        anchorAwemeId = null,
+        savedAtMs = 0L
+    )
+) : DouyinRecentWindowStoreContract {
+    var snapshot: DouyinRecentWindowSnapshot = initialSnapshot
+    val savedSnapshots = mutableListOf<DouyinRecentWindowSnapshot>()
+
+    override fun saveWindow(items: List<DouyinStreamItem>, anchorAwemeId: String?, savedAtMs: Long) {
+        snapshot = DouyinRecentWindowSnapshot(
+            items = items,
+            anchorAwemeId = anchorAwemeId,
+            savedAtMs = savedAtMs
+        )
+        savedSnapshots += snapshot
+    }
+
+    override fun readSnapshot(limit: Int): DouyinRecentWindowSnapshot {
+        val items = if (limit > 0) snapshot.items.take(limit) else snapshot.items
+        return snapshot.copy(items = items)
+    }
+
+    override fun clear() {
+        snapshot = DouyinRecentWindowSnapshot(
+            items = emptyList(),
+            anchorAwemeId = null,
+            savedAtMs = 0L
+        )
+    }
+}
+
+class TestDouyinRecentWindowCacheCoordinator : DouyinRecentWindowCacheCoordinatorContract {
+    var enqueueCalls = 0
+    val windowSnapshots = mutableListOf<List<String>>()
+    val anchorAwemeIds = mutableListOf<String?>()
+    val headerSnapshots = mutableListOf<Map<String, String>>()
+    val reasons = mutableListOf<String>()
+
+    override fun enqueueWindow(
+        items: List<DouyinStreamItem>,
+        anchorAwemeId: String?,
+        headers: Map<String, String>,
+        reason: String
+    ) {
+        enqueueCalls += 1
+        windowSnapshots += items.map { it.awemeId }
+        anchorAwemeIds += anchorAwemeId
+        headerSnapshots += headers
+        reasons += reason
     }
 }
 

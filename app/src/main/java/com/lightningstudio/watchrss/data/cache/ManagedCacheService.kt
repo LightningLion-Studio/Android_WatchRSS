@@ -2,6 +2,8 @@ package com.lightningstudio.watchrss.data.cache
 
 import android.content.Context
 import com.lightningstudio.watchrss.data.bili.BiliRepository
+import com.lightningstudio.watchrss.data.douyin.DOUYIN_PRELOAD_CACHE_FLOOR_COUNT
+import com.lightningstudio.watchrss.data.douyin.DOUYIN_PRELOAD_CACHE_RESERVE_COUNT
 import com.lightningstudio.watchrss.data.douyin.DouyinPreloadManager
 import com.lightningstudio.watchrss.data.rss.RssOfflineStore
 import com.lightningstudio.watchrss.data.settings.SettingsRepository
@@ -135,7 +137,7 @@ class ManagedCacheService internal constructor(
                 bucket = ManagedCacheBucket.DOUYIN_PRELOAD,
                 totalBytes = total,
                 limitBytes = limit,
-                protectedCount = MIN_DOUYIN_CACHE_COUNT
+                protectedCount = DOUYIN_PRELOAD_CACHE_RESERVE_COUNT
             )
             if (total > limit) {
                 files = scanAllBucketsLocked()
@@ -155,6 +157,17 @@ class ManagedCacheService internal constructor(
                     bucket = ManagedCacheBucket.BILI_PREVIEW,
                     totalBytes = total,
                     limitBytes = limit
+                )
+            }
+            if (total > limit) {
+                files = scanAllBucketsLocked()
+                total = totalUsageBytes(files)
+                total = evictBucket(
+                    files = files,
+                    bucket = ManagedCacheBucket.DOUYIN_PRELOAD,
+                    totalBytes = total,
+                    limitBytes = limit,
+                    protectedCount = DOUYIN_PRELOAD_CACHE_FLOOR_COUNT
                 )
             }
         }
@@ -289,6 +302,5 @@ class ManagedCacheService internal constructor(
 
     companion object {
         private const val MAINTENANCE_DEBOUNCE_MS = 300L
-        private const val MIN_DOUYIN_CACHE_COUNT = 2
     }
 }

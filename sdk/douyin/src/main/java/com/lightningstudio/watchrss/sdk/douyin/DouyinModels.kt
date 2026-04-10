@@ -1,5 +1,22 @@
 package com.lightningstudio.watchrss.sdk.douyin
 
+enum class DouyinVideoCodec {
+    H264,
+    H265,
+    UNKNOWN
+}
+
+data class DouyinVideoVariant(
+    val playUrl: String,
+    val codec: DouyinVideoCodec,
+    val bitrate: Long,
+    val width: Int,
+    val height: Int,
+    val definition: String? = null,
+    val quality: String? = null,
+    val gearName: String? = null
+)
+
 class DouyinVideo {
     var awemeId: String? = null
     var desc: String? = null
@@ -17,6 +34,7 @@ class DouyinVideo {
     var playUrl: String? = null
     var coverUrl: String? = null
     var duration: Int = 0
+    var variants: List<DouyinVideoVariant> = emptyList()
 
     override fun toString(): String {
         return String.format(
@@ -47,7 +65,8 @@ sealed class DouyinContent {
         override val authorName: String,
         override val diggCount: Long,
         val playUrl: String,
-        val coverUrl: String
+        val coverUrl: String,
+        val variants: List<DouyinVideoVariant> = emptyList()
     ) : DouyinContent()
 
     data class Note(

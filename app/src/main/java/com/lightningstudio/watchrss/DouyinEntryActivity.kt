@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -21,19 +22,19 @@ import androidx.lifecycle.lifecycleScope
 import com.lightningstudio.watchrss.data.douyin.DouyinStreamItem
 import com.lightningstudio.watchrss.data.douyin.buildDouyinExternalSavedItem
 import com.lightningstudio.watchrss.data.douyin.containsDouyinSavedItem
-import com.lightningstudio.watchrss.data.douyin.DouyinFeedCacheStore
-import com.lightningstudio.watchrss.data.douyin.DouyinPreloadManager
-import com.lightningstudio.watchrss.data.douyin.DouyinWatchHistoryStore
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.rss.SaveType
+import com.lightningstudio.watchrss.debug.DouyinPlaybackDebugController
 import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.screen.douyin.DouyinImmersiveScreen
 import com.lightningstudio.watchrss.ui.screen.douyin.DouyinLoginScreen
 import com.lightningstudio.watchrss.ui.screen.douyin.DouyinRssFeedScreen
+import com.lightningstudio.watchrss.ui.screen.douyin.rememberDouyinPlayerPoolSession
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.util.getWebViewUnavailableMessage
 import com.lightningstudio.watchrss.ui.util.warnWebViewUnavailable
 import com.lightningstudio.watchrss.ui.viewmodel.DouyinFeedViewModel
+import com.lightningstudio.watchrss.ui.viewmodel.DouyinFeedUiState
 import com.lightningstudio.watchrss.ui.viewmodel.DouyinViewModelFactory
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -42,15 +43,26 @@ class DouyinEntryActivity : BaseWatchActivity() {
     private val container by lazy { (application as WatchRssApplication).container }
     private val repository by lazy { container.douyinRepository }
     private val rssRepository by lazy { container.rssRepository }
-    private val preloadManager by lazy { DouyinPreloadManager(this, container.managedCacheService) }
-    private val watchHistoryStore by lazy { DouyinWatchHistoryStore(this) }
-    private val feedCacheStore by lazy { DouyinFeedCacheStore(this) }
+    private val preloadManager by lazy { container.douyinPreloadManager }
+    private val watchHistoryStore by lazy { container.douyinWatchHistoryStore }
+    private val feedCacheStore by lazy { container.douyinFeedCacheStore }
+    private val recentWindowStore by lazy { container.douyinRecentWindowStore }
+    private val recentWindowCacheCoordinator by lazy { container.douyinRecentWindowCacheCoordinator }
     private val viewModel: DouyinFeedViewModel by viewModels {
-        DouyinViewModelFactory(repository, preloadManager, watchHistoryStore, feedCacheStore)
+        DouyinViewModelFactory(
+            repository = repository,
+            preloadManager = preloadManager,
+            watchHistoryStore = watchHistoryStore,
+            feedCacheStore = feedCacheStore,
+            recentWindowStore = recentWindowStore,
+            recentWindowCacheCoordinator = recentWindowCacheCoordinator
+        )
     }
     private var disableSwipeBack = false
     private var handledLauncherOpenToken = AppLaunchSignal.currentToken()
     private var isNavigating by mutableStateOf(false)
+    private var pendingAutoEnterFlow = false
+    private var pendingResumeAwemeId: String? = null
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
@@ -73,6 +85,10 @@ class DouyinEntryActivity : BaseWatchActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setupSystemBars()
+        pendingAutoEnterFlow = shouldAutoEnterFlow(intent)
+        pendingResumeAwemeId = intent?.getStringExtra(EXTRA_RESUME_AWEME_ID)
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
 
         val initialWebViewError = getWebViewUnavailableMessage(this)
         setContent {
@@ -117,6 +133,18 @@ class DouyinEntryActivity : BaseWatchActivity() {
                             }
                         }
                     }
+                    LaunchedEffect(uiState.isLoggedIn, uiState.items.size, uiState.showTitlePage) {
+                        if (
+                            pendingAutoEnterFlow &&
+                            uiState.isLoggedIn &&
+                            uiState.showTitlePage &&
+                            uiState.items.isNotEmpty()
+                        ) {
+                            pendingAutoEnterFlow = false
+                            viewModel.enterVideoFlow(pendingResumeAwemeId)
+                            pendingResumeAwemeId = null
+                        }
+                    }
 
                     if (!uiState.isLoggedIn) {
                         SideEffect { disableSwipeBack = true }
@@ -128,33 +156,53 @@ class DouyinEntryActivity : BaseWatchActivity() {
                         )
                     } else {
                         SideEffect { disableSwipeBack = false }
+                        val playerSession = rememberDouyinPlayerPoolSession(
+                            headers = uiState.playHeaders,
+                            enabled = originalContentEnabled
+                        )
                         if (originalContentEnabled) {
-                            DouyinImmersiveScreen(
-                                uiState = uiState,
-                                onRefresh = viewModel::loadInitial,
-                                onPageSettled = viewModel::onPageSettled,
-                                onEnterFlow = viewModel::enterVideoFlow,
-                                onItemLongPress = { item ->
-                                    isNavigating = true
-                                    startActivity(
-                                        DouyinVideoActionsActivity.createIntent(
-                                            context = this@DouyinEntryActivity,
-                                            awemeId = item.awemeId,
-                                            title = item.title,
-                                            author = item.author,
-                                            playUrl = item.playUrl,
-                                            coverUrl = item.coverUrl,
-                                            likeCount = item.likeCount
-                                        )
-                                    )
-                                },
-                                onRequestPlaybackRefresh = viewModel::refreshPlaybackSource,
-                                onMessageShown = viewModel::clearMessage,
-                                onHeaderClick = {
-                                    isNavigating = true
-                                    startActivity(DouyinChannelInfoActivity.createIntent(this@DouyinEntryActivity))
+                            if (playerSession == null) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    WatchCircularProgressIndicator()
                                 }
-                            )
+                            } else {
+                                DouyinImmersiveScreen(
+                                    playerSession = playerSession,
+                                    uiState = uiState,
+                                    onRefresh = {
+                                        if (uiState.showTitlePage) {
+                                            viewModel.refreshTitlePageFeed()
+                                        } else {
+                                            viewModel.loadInitial()
+                                        }
+                                    },
+                                    onPageSettled = viewModel::onPageSettled,
+                                    onEnterFlow = viewModel::enterVideoFlow,
+                                    onItemLongPress = { item ->
+                                        isNavigating = true
+                                        startActivity(
+                                            DouyinVideoActionsActivity.createIntent(
+                                                context = this@DouyinEntryActivity,
+                                                awemeId = item.awemeId,
+                                                title = item.title,
+                                                author = item.author,
+                                                playUrl = item.playUrl,
+                                                coverUrl = item.coverUrl,
+                                                likeCount = item.likeCount
+                                            )
+                                        )
+                                    },
+                                    onRequestPlaybackRefresh = viewModel::refreshPlaybackSource,
+                                    onMessageShown = viewModel::clearMessage,
+                                    onHeaderClick = {
+                                        isNavigating = true
+                                        startActivity(DouyinChannelInfoActivity.createIntent(this@DouyinEntryActivity))
+                                    }
+                                )
+                            }
                         } else {
                             DouyinRssFeedScreen(
                                 uiState = uiState,
@@ -237,6 +285,35 @@ class DouyinEntryActivity : BaseWatchActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent?.action == ACTION_DEBUG_ADVANCE_TO_NEXT_VIDEO) {
+            DouyinPlaybackDebugController.requestAdvanceToNextVideo(source = "intent")
+            return
+        }
+        if (!shouldAutoEnterFlow(intent)) return
+        pendingAutoEnterFlow = true
+        pendingResumeAwemeId = intent?.getStringExtra(EXTRA_RESUME_AWEME_ID)
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+        val state = viewModel.uiState.value
+        if (state.isLoggedIn && state.showTitlePage && state.items.isNotEmpty()) {
+            pendingAutoEnterFlow = false
+            viewModel.enterVideoFlow(pendingResumeAwemeId)
+            pendingResumeAwemeId = null
+        }
+    }
+
+    override fun buildResumeIntent(): Intent {
+        val state = viewModel.uiState.value
+        return createIntent(
+            context = this,
+            resumeToVideoFlow = shouldResumeDouyinVideoFlow(state),
+            resumeAwemeId = resolveResumeDouyinAwemeId(state)
+        )
+    }
+
     override fun isSwipeBackEnabled(): Boolean = !disableSwipeBack
 
     private fun openDouyinItemActions(item: DouyinStreamItem) {
@@ -285,4 +362,49 @@ class DouyinEntryActivity : BaseWatchActivity() {
             android.widget.Toast.LENGTH_SHORT
         )
     }
+
+    private fun shouldAutoEnterFlow(intent: Intent? = this.intent): Boolean {
+        return intent?.action == ACTION_DEBUG_OPEN_DOUYIN ||
+            intent?.getBooleanExtra(EXTRA_RESUME_TO_VIDEO_FLOW, false) == true ||
+            intent?.getBooleanExtra(EXTRA_DEBUG_AUTO_ENTER_FLOW, false) == true
+    }
+
+    companion object {
+        const val EXTRA_DEBUG_AUTO_ENTER_FLOW = "watchrss.debug.auto_enter_douyin_flow"
+        const val EXTRA_RESUME_TO_VIDEO_FLOW = "resume_to_video_flow"
+        const val EXTRA_RESUME_AWEME_ID = "resume_aweme_id"
+        const val ACTION_DEBUG_OPEN_DOUYIN = "com.lightningstudio.watchrss.debug.action.OPEN_DOUYIN"
+        const val ACTION_DEBUG_ADVANCE_TO_NEXT_VIDEO =
+            DouyinPlaybackDebugController.ACTION_ADVANCE_TO_NEXT_VIDEO
+
+        fun createIntent(
+            context: android.content.Context,
+            resumeToVideoFlow: Boolean = false,
+            resumeAwemeId: String? = null
+        ): Intent {
+            return Intent(context, DouyinEntryActivity::class.java).apply {
+                putExtra(EXTRA_RESUME_TO_VIDEO_FLOW, resumeToVideoFlow)
+                resumeAwemeId
+                    ?.trim()
+                    ?.takeIf { it.isNotEmpty() }
+                    ?.let { putExtra(EXTRA_RESUME_AWEME_ID, it) }
+            }
+        }
+    }
+}
+
+internal fun shouldResumeDouyinVideoFlow(uiState: DouyinFeedUiState): Boolean {
+    return uiState.isLoggedIn &&
+        !uiState.showTitlePage &&
+        uiState.currentPage > 0 &&
+        uiState.items.isNotEmpty()
+}
+
+internal fun resolveResumeDouyinAwemeId(uiState: DouyinFeedUiState): String? {
+    if (!shouldResumeDouyinVideoFlow(uiState)) return null
+    return uiState.items
+        .getOrNull(uiState.currentPage - 1)
+        ?.awemeId
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
 }

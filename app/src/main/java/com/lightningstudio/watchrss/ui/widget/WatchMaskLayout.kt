@@ -11,6 +11,7 @@ import android.util.AttributeSet
 import android.view.View
 import android.view.ViewOutlineProvider
 import android.widget.FrameLayout
+import com.lightningstudio.watchrss.ui.theme.watchIsRound
 import kotlin.math.min
 
 class WatchMaskLayout @JvmOverloads constructor(
@@ -50,7 +51,7 @@ class WatchMaskLayout @JvmOverloads constructor(
         maskPath.addRect(0f, 0f, w.toFloat(), h.toFloat(), Path.Direction.CW)
         maskPath.addCircle(centerX, centerY, radius, Path.Direction.CW)
         maskPath.fillType = Path.FillType.EVEN_ODD
-        val canUseOutlineClip = resources.configuration.isScreenRound &&
+        val canUseOutlineClip = watchIsRound(resources.configuration) &&
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP
         if (canUseOutlineClip) {
             clipToOutline = true
@@ -58,7 +59,7 @@ class WatchMaskLayout @JvmOverloads constructor(
             shouldDrawFallbackMask = false
         } else {
             clipToOutline = false
-            shouldDrawFallbackMask = resources.configuration.isScreenRound
+            shouldDrawFallbackMask = watchIsRound(resources.configuration)
         }
     }
 
