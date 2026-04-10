@@ -196,6 +196,7 @@ class DouyinEntryActivity : BaseWatchActivity() {
                                         )
                                     },
                                     onRequestPlaybackRefresh = viewModel::refreshPlaybackSource,
+                                    onDiscardPlaybackItem = viewModel::discardPlaybackItem,
                                     onMessageShown = viewModel::clearMessage,
                                     onHeaderClick = {
                                         isNavigating = true

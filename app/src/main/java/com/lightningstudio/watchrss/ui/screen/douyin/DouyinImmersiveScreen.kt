@@ -9,6 +9,7 @@ import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.graphics.SurfaceTexture
+import android.os.SystemClock
 import android.text.TextPaint
 import android.view.TextureView
 import android.view.WindowManager
@@ -51,6 +52,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -97,6 +99,7 @@ import com.lightningstudio.watchrss.data.douyin.resolveDouyinLookaheadItemIndice
 import com.lightningstudio.watchrss.data.douyin.selectPreferredVariant
 import com.lightningstudio.watchrss.data.settings.DouyinVideoCodecPreference
 import com.lightningstudio.watchrss.debug.DouyinPlaybackDebugController
+import com.lightningstudio.watchrss.phoneconnection.PhoneConnectionFeature
 import com.lightningstudio.watchrss.ui.components.ToastMessage
 import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.components.WatchIconButton
@@ -172,6 +175,23 @@ private data class DouyinPreparedSlotTarget(
     val prepareKey: String,
     val codec: DouyinVideoCodec,
     val trackAutoHevcAttempt: Boolean
+)
+
+private enum class DouyinPlaybackQuarantineReason(val debugLabel: String) {
+    CodecInitFailed("codec"),
+    StandbyPlaybackError("standby"),
+    LookaheadPlaybackError("lookahead"),
+    ForegroundFailureBurst("fg_burst"),
+    PrefetchHttpStatusError("http");
+}
+
+private data class DouyinPlaybackQuarantineRecord(
+    val awemeId: String,
+    val reason: DouyinPlaybackQuarantineReason,
+    val failureCount: Int,
+    val firstFailedAtMs: Long,
+    val lastFailedAtMs: Long,
+    val detail: String?
 )
 
 private data class DouyinResolvedPlaybackTarget(
@@ -489,6 +509,7 @@ internal fun DouyinImmersiveScreen(
     onEnterFlow: () -> Unit,
     onItemLongPress: (DouyinStreamItem) -> Unit,
     onRequestPlaybackRefresh: (String, DouyinPlaybackSourceKind) -> Unit,
+    onDiscardPlaybackItem: (String) -> Unit,
     onMessageShown: () -> Unit,
     onHeaderClick: () -> Unit
 ) {
@@ -542,6 +563,7 @@ internal fun DouyinImmersiveScreen(
     val view = LocalView.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val poisonedAwemeIds by DouyinPlaybackDebugController.poisonedAwemeIds.collectAsState()
+    val quarantinedPlaybackRecords = remember { mutableStateMapOf<String, DouyinPlaybackQuarantineRecord>() }
     val playbackAnchorPagerPage = resolveDouyinPlaybackAnchorPagerPage(
         isScrollInProgress = pagerState.isScrollInProgress,
         pagerPage = pagerState.currentPage,
@@ -653,7 +675,8 @@ internal fun DouyinImmersiveScreen(
         mutableStateOf(preparedItem?.playUrlResolvedAtMs ?: 0L)
     }
     var activePrepareAttemptNonce by remember(preparedItem?.awemeId) { mutableIntStateOf(0) }
-    var activeRetryCount by remember(preparedItem?.awemeId) { mutableIntStateOf(0) }
+    val activeRetryCountState = remember { mutableIntStateOf(0) }
+    val activeFailureBurstState = remember { mutableStateOf<DouyinPlaybackFailureBurst?>(null) }
     var activePausedByGesture by remember(preparedItem?.awemeId) { mutableStateOf(false) }
     var activePausedByLifecycle by remember { mutableStateOf(false) }
     var activeAutoplayEnabled by remember(
@@ -1042,7 +1065,8 @@ internal fun DouyinImmersiveScreen(
         val item = activeItem ?: return
         if (activeIsPoisoned) {
             if (resetRetryCount) {
-                activeRetryCount = 0
+                activeRetryCountState.intValue = 0
+                activeFailureBurstState.value = null
             }
             val nextFailureSequence = injectedFailureNonce + 1L
             injectedFailureNonce = nextFailureSequence
@@ -1072,7 +1096,8 @@ internal fun DouyinImmersiveScreen(
             return
         }
         if (resetRetryCount) {
-            activeRetryCount = 0
+            activeRetryCountState.intValue = 0
+            activeFailureBurstState.value = null
         }
         foregroundSlot.hasError = false
         foregroundSlot.hasRenderedFirstFrame = false
@@ -1084,6 +1109,64 @@ internal fun DouyinImmersiveScreen(
             activeRemoteResolvedAtMs = item.playUrlResolvedAtMs
         }
         onRequestPlaybackRefresh(item.awemeId, sourceKind)
+    }
+
+    fun quarantinePlaybackItem(
+        awemeId: String?,
+        reason: DouyinPlaybackQuarantineReason,
+        detail: String? = null,
+        slot: DouyinPlayerSlotState? = null,
+        autoSkipCurrent: Boolean = false
+    ): Boolean {
+        val normalizedAwemeId = awemeId?.trim().orEmpty()
+        if (normalizedAwemeId.isEmpty()) {
+            slot?.let(::clearSlotBinding)
+            return false
+        }
+        val failureAtMs = SystemClock.elapsedRealtime()
+        val previous = quarantinedPlaybackRecords[normalizedAwemeId]
+        quarantinedPlaybackRecords[normalizedAwemeId] = DouyinPlaybackQuarantineRecord(
+            awemeId = normalizedAwemeId,
+            reason = reason,
+            failureCount = (previous?.failureCount ?: 0) + 1,
+            firstFailedAtMs = previous?.firstFailedAtMs ?: failureAtMs,
+            lastFailedAtMs = failureAtMs,
+            detail = detail ?: previous?.detail
+        )
+        runtimePlaybackOverrides = runtimePlaybackOverrides - normalizedAwemeId
+        slot?.let(::clearSlotBinding)
+        if (previous == null) {
+            onDiscardPlaybackItem(normalizedAwemeId)
+        }
+        AppLogger.d(
+            TAG,
+            "TEST_EVENT quarantine awemeId=$normalizedAwemeId reason=${reason.debugLabel} count=${quarantinedPlaybackRecords[normalizedAwemeId]?.failureCount ?: 1} detail=${detail.orEmpty()}"
+        )
+        if (autoSkipCurrent) {
+            activePausedByGesture = false
+            activeAutoplayEnabled = false
+            stopForegroundPlayback()
+            autoSkipMessage = DOUYIN_AUTO_SKIP_MESSAGE
+        }
+        return previous == null
+    }
+
+    fun buildQuarantinedDebugEntries(): List<DouyinPlaybackQuarantinedDebugEntry> {
+        return quarantinedPlaybackRecords.values
+            .sortedByDescending { it.lastFailedAtMs }
+            .map { entry ->
+                val reason = if (entry.detail.isNullOrBlank()) {
+                    entry.reason.debugLabel
+                } else {
+                    "${entry.reason.debugLabel}:${entry.detail}"
+                }
+                DouyinPlaybackQuarantinedDebugEntry(
+                    awemeId = entry.awemeId,
+                    reason = reason,
+                    failureCount = entry.failureCount,
+                    lastFailedAtMs = entry.lastFailedAtMs
+                )
+            }
     }
 
     InstallDigitalCrownPagerHandler(
@@ -1266,8 +1349,77 @@ internal fun DouyinImmersiveScreen(
     val latestPreparedAwemeId = rememberUpdatedState(preparedItem?.awemeId)
     val latestActivePrepareKey = rememberUpdatedState(activePrepareKey)
     val latestShowTitlePage = rememberUpdatedState(uiState.showTitlePage)
+    LaunchedEffect(Unit) {
+        DouyinPlaybackPreviewCache.prefetchHttpFailures.collect { failure ->
+            if (latestItems.value.none { it.awemeId == failure.awemeId }) return@collect
+            val isForegroundAweme = latestActiveAwemeId.value == failure.awemeId && !latestShowTitlePage.value
+            val boundSlot = allSlots.firstOrNull { it.boundAwemeId == failure.awemeId }
+            quarantinePlaybackItem(
+                awemeId = failure.awemeId,
+                reason = DouyinPlaybackQuarantineReason.PrefetchHttpStatusError,
+                detail = failure.httpStatusCode.toString(),
+                slot = boundSlot?.takeUnless { isForegroundAweme },
+                autoSkipCurrent = isForegroundAweme
+            )
+        }
+    }
+    LaunchedEffect(preparedItem?.awemeId) {
+        activeRetryCountState.intValue = 0
+        activeFailureBurstState.value = null
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            DouyinPlaybackDebugController.clearOverlaySnapshot()
+        }
+    }
+
+    LaunchedEffect(
+        activeItem?.awemeId,
+        preparedItem?.awemeId,
+        pagerState.currentPage,
+        settledPagerPage,
+        pagerState.isScrollInProgress,
+        foregroundSlotKey,
+        primarySlot.boundAwemeId,
+        primarySlot.mediaUri,
+        primarySlot.boundCodec,
+        primarySlot.isReady,
+        primarySlot.hasRenderedFirstFrame,
+        primarySlot.isBuffering,
+        primarySlot.isPlaying,
+        primarySlot.hasError,
+        secondarySlot.boundAwemeId,
+        secondarySlot.mediaUri,
+        secondarySlot.boundCodec,
+        secondarySlot.isReady,
+        secondarySlot.hasRenderedFirstFrame,
+        secondarySlot.isBuffering,
+        secondarySlot.isPlaying,
+        secondarySlot.hasError,
+        quarantinedPlaybackRecords.values.toList(),
+        uiState.showTitlePage
+    ) {
+        if (!PhoneConnectionFeature.isDebugBuild) {
+            DouyinPlaybackDebugController.clearOverlaySnapshot()
+            return@LaunchedEffect
+        }
+        DouyinPlaybackDebugController.updateOverlaySnapshot(
+            buildDouyinPlaybackDebugOverlayText(
+                snapshot = DouyinPlaybackPreviewCache.debugSnapshot(),
+                activeAwemeId = activeItem?.awemeId,
+                preparedAwemeId = preparedItem?.awemeId,
+                currentPage = pagerState.currentPage,
+                settledPage = settledPagerPage,
+                isScrollInProgress = pagerState.isScrollInProgress,
+                foregroundSlotKey = foregroundSlotKey,
+                primarySlot = primarySlot,
+                secondarySlot = secondarySlot,
+                quarantinedItems = buildQuarantinedDebugEntries()
+            )
+        )
+    }
     val latestHasNextActiveItem = rememberUpdatedState(hasNextActiveItem)
-    val latestRetryCount = rememberUpdatedState(activeRetryCount)
     val latestRequestActivePlaybackRefresh = rememberUpdatedState(
         newValue = { resetRetryCount: Boolean -> requestActivePlaybackRefresh(resetRetryCount) }
     )
@@ -1459,6 +1611,30 @@ internal fun DouyinImmersiveScreen(
         }
         return true
     }
+    fun discardStandbyPlaybackItem(
+        slot: DouyinPlayerSlotState,
+        error: PlaybackException
+    ) {
+        if (slot.boundCodec == DouyinVideoCodec.H265 && isLikelyDouyinCodecFailure(error)) {
+            recordAutoHevcFailure(slot)
+        }
+        val awemeId = slot.boundAwemeId?.trim().orEmpty()
+        if (awemeId.isBlank()) {
+            clearSlotBinding(slot)
+            return
+        }
+        val reason = if (slot.inFlightPrewarmKey == slot.preparedSourceKey) {
+            DouyinPlaybackQuarantineReason.LookaheadPlaybackError
+        } else {
+            DouyinPlaybackQuarantineReason.StandbyPlaybackError
+        }
+        quarantinePlaybackItem(
+            awemeId = awemeId,
+            reason = reason,
+            detail = slot.key.name,
+            slot = slot
+        )
+    }
     fun logPlaybackStarted(
         slot: DouyinPlayerSlotState,
         mode: String,
@@ -1476,6 +1652,24 @@ internal fun DouyinImmersiveScreen(
             "TEST_EVENT playback_started awemeId=$currentAwemeId mode=$mode slot=${slot.key.name}"
         )
     }
+    fun resetActiveFailureTracking(slot: DouyinPlayerSlotState) {
+        if (latestForegroundSlotKey.value != slot.key) return
+        if (latestShowTitlePage.value) return
+        if (slot.boundAwemeId != latestActiveAwemeId.value) return
+        activeRetryCountState.intValue = 0
+        activeFailureBurstState.value = null
+    }
+
+    fun recordActiveFailureBurst(awemeId: String?): Int {
+        val nextBurst = recordDouyinPlaybackFailureBurst(
+            previous = activeFailureBurstState.value,
+            awemeId = awemeId,
+            failureAtMs = SystemClock.elapsedRealtime(),
+            burstWindowMs = DOUYIN_FOREGROUND_FAILURE_BURST_WINDOW_MS
+        )
+        activeFailureBurstState.value = nextBurst
+        return nextBurst?.count ?: 0
+    }
     DisposableEffect(primarySlot.player) {
         val listener = object : Player.Listener {
             override fun onIsLoadingChanged(isLoading: Boolean) {
@@ -1490,6 +1684,7 @@ internal fun DouyinImmersiveScreen(
                 }
                 if (playbackState == Player.STATE_READY) {
                     primarySlot.hasError = false
+                    resetActiveFailureTracking(primarySlot)
                     logPlaybackStarted(primarySlot, mode = "ready")
                 }
             }
@@ -1500,6 +1695,7 @@ internal fun DouyinImmersiveScreen(
 
             override fun onRenderedFirstFrame() {
                 primarySlot.hasRenderedFirstFrame = true
+                resetActiveFailureTracking(primarySlot)
                 logPlaybackStarted(primarySlot, mode = "first_frame")
             }
 
@@ -1522,19 +1718,40 @@ internal fun DouyinImmersiveScreen(
                     "playback error slot=${primarySlot.key} awemeId=${primarySlot.boundAwemeId}, uri=${primarySlot.mediaUri}",
                     error
                 )
+                if (!isForegroundCurrentSlot) {
+                    discardStandbyPlaybackItem(primarySlot, error)
+                    return
+                }
                 if (applyH264FallbackIfAvailable(primarySlot, error, isForegroundCurrentSlot)) {
                     return
                 }
-                if (!isForegroundCurrentSlot) {
+                if (isLikelyDouyinCodecFailure(error)) {
+                    quarantinePlaybackItem(
+                        awemeId = currentAwemeId,
+                        reason = DouyinPlaybackQuarantineReason.CodecInitFailed,
+                        detail = primarySlot.boundCodec.name,
+                        autoSkipCurrent = true
+                    )
                     return
                 }
+                val currentRetryCount = activeRetryCountState.intValue
+                val failureBurstCount = recordActiveFailureBurst(currentAwemeId)
                 AppLogger.d(
                     TAG,
-                    "TEST_EVENT playback_failed awemeId=$currentAwemeId slot=${primarySlot.key.name} retryCount=${latestRetryCount.value}"
+                    "TEST_EVENT playback_failed awemeId=$currentAwemeId slot=${primarySlot.key.name} retryCount=$currentRetryCount burst=$failureBurstCount"
                 )
+                if (failureBurstCount >= DOUYIN_FOREGROUND_FAILURE_BURST_THRESHOLD) {
+                    quarantinePlaybackItem(
+                        awemeId = currentAwemeId,
+                        reason = DouyinPlaybackQuarantineReason.ForegroundFailureBurst,
+                        detail = primarySlot.key.name,
+                        autoSkipCurrent = true
+                    )
+                    return
+                }
                 if (isDouyinInjectedFailureUri(latestActiveMediaUri.value)) {
-                    if (latestRetryCount.value < DOUYIN_MAX_AUTO_RETRY_COUNT) {
-                        activeRetryCount += 1
+                    if (currentRetryCount < DOUYIN_MAX_AUTO_RETRY_COUNT) {
+                        activeRetryCountState.intValue = currentRetryCount + 1
                         latestRequestActivePlaybackRefresh.value(false)
                     } else {
                         primarySlot.hasError = false
@@ -1546,14 +1763,14 @@ internal fun DouyinImmersiveScreen(
                 }
                 when (
                     resolveDouyinPlaybackFailureAction(
-                        retryCount = latestRetryCount.value,
+                        retryCount = currentRetryCount,
                         maxAutoRetryCount = DOUYIN_MAX_AUTO_RETRY_COUNT,
                         hasValidatedInternetConnection = hasValidatedInternetConnection(context),
                         hasNextItem = latestHasNextActiveItem.value
                     )
                 ) {
                     DouyinPlaybackFailureAction.Retry -> {
-                        activeRetryCount += 1
+                        activeRetryCountState.intValue = currentRetryCount + 1
                         latestRequestActivePlaybackRefresh.value(false)
                     }
 
@@ -1586,6 +1803,7 @@ internal fun DouyinImmersiveScreen(
                 }
                 if (playbackState == Player.STATE_READY) {
                     secondarySlot.hasError = false
+                    resetActiveFailureTracking(secondarySlot)
                     logPlaybackStarted(secondarySlot, mode = "ready")
                 }
             }
@@ -1596,6 +1814,7 @@ internal fun DouyinImmersiveScreen(
 
             override fun onRenderedFirstFrame() {
                 secondarySlot.hasRenderedFirstFrame = true
+                resetActiveFailureTracking(secondarySlot)
                 logPlaybackStarted(secondarySlot, mode = "first_frame")
             }
 
@@ -1618,19 +1837,40 @@ internal fun DouyinImmersiveScreen(
                     "playback error slot=${secondarySlot.key} awemeId=${secondarySlot.boundAwemeId}, uri=${secondarySlot.mediaUri}",
                     error
                 )
+                if (!isForegroundCurrentSlot) {
+                    discardStandbyPlaybackItem(secondarySlot, error)
+                    return
+                }
                 if (applyH264FallbackIfAvailable(secondarySlot, error, isForegroundCurrentSlot)) {
                     return
                 }
-                if (!isForegroundCurrentSlot) {
+                if (isLikelyDouyinCodecFailure(error)) {
+                    quarantinePlaybackItem(
+                        awemeId = currentAwemeId,
+                        reason = DouyinPlaybackQuarantineReason.CodecInitFailed,
+                        detail = secondarySlot.boundCodec.name,
+                        autoSkipCurrent = true
+                    )
                     return
                 }
+                val currentRetryCount = activeRetryCountState.intValue
+                val failureBurstCount = recordActiveFailureBurst(currentAwemeId)
                 AppLogger.d(
                     TAG,
-                    "TEST_EVENT playback_failed awemeId=$currentAwemeId slot=${secondarySlot.key.name} retryCount=${latestRetryCount.value}"
+                    "TEST_EVENT playback_failed awemeId=$currentAwemeId slot=${secondarySlot.key.name} retryCount=$currentRetryCount burst=$failureBurstCount"
                 )
+                if (failureBurstCount >= DOUYIN_FOREGROUND_FAILURE_BURST_THRESHOLD) {
+                    quarantinePlaybackItem(
+                        awemeId = currentAwemeId,
+                        reason = DouyinPlaybackQuarantineReason.ForegroundFailureBurst,
+                        detail = secondarySlot.key.name,
+                        autoSkipCurrent = true
+                    )
+                    return
+                }
                 if (isDouyinInjectedFailureUri(latestActiveMediaUri.value)) {
-                    if (latestRetryCount.value < DOUYIN_MAX_AUTO_RETRY_COUNT) {
-                        activeRetryCount += 1
+                    if (currentRetryCount < DOUYIN_MAX_AUTO_RETRY_COUNT) {
+                        activeRetryCountState.intValue = currentRetryCount + 1
                         latestRequestActivePlaybackRefresh.value(false)
                     } else {
                         secondarySlot.hasError = false
@@ -1642,14 +1882,14 @@ internal fun DouyinImmersiveScreen(
                 }
                 when (
                     resolveDouyinPlaybackFailureAction(
-                        retryCount = latestRetryCount.value,
+                        retryCount = currentRetryCount,
                         maxAutoRetryCount = DOUYIN_MAX_AUTO_RETRY_COUNT,
                         hasValidatedInternetConnection = hasValidatedInternetConnection(context),
                         hasNextItem = latestHasNextActiveItem.value
                     )
                 ) {
                     DouyinPlaybackFailureAction.Retry -> {
-                        activeRetryCount += 1
+                        activeRetryCountState.intValue = currentRetryCount + 1
                         latestRequestActivePlaybackRefresh.value(false)
                     }
 
@@ -3004,7 +3244,9 @@ private suspend fun awaitDouyinFrames(frameCount: Int) {
 
 private const val TITLE_ORIGINAL_FIRST_LINE_RATIO = 0.68f
 private const val TITLE_ORIGINAL_SECOND_LINE_RATIO = 0.82f
-private const val DOUYIN_MAX_AUTO_RETRY_COUNT = 0
+private const val DOUYIN_MAX_AUTO_RETRY_COUNT = 1
+private const val DOUYIN_FOREGROUND_FAILURE_BURST_THRESHOLD = 3
+private const val DOUYIN_FOREGROUND_FAILURE_BURST_WINDOW_MS = 2_000L
 private const val DOUYIN_AUTO_SKIP_MESSAGE = "当前视频无法播放\n已为您自动跳过"
 private const val DOUYIN_AUTO_SKIP_MESSAGE_DURATION_MS = 2_000L
 private const val DOUYIN_SETTLE_AUTOPLAY_DELAY_FRAMES = 3

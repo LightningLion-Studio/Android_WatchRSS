@@ -112,6 +112,62 @@ class DouyinPlaybackStateResolverTest {
     }
 
     @Test
+    fun recordDouyinPlaybackFailureBurst_incrementsForSameAwemeWithinWindow() {
+        val first = recordDouyinPlaybackFailureBurst(
+            previous = null,
+            awemeId = "aweme-1",
+            failureAtMs = 1_000L,
+            burstWindowMs = 2_000L
+        )
+        val second = recordDouyinPlaybackFailureBurst(
+            previous = first,
+            awemeId = "aweme-1",
+            failureAtMs = 2_200L,
+            burstWindowMs = 2_000L
+        )
+
+        assertEquals(1, first?.count)
+        assertEquals(2, second?.count)
+    }
+
+    @Test
+    fun recordDouyinPlaybackFailureBurst_resetsForDifferentAweme() {
+        val previous = recordDouyinPlaybackFailureBurst(
+            previous = null,
+            awemeId = "aweme-1",
+            failureAtMs = 1_000L,
+            burstWindowMs = 2_000L
+        )
+        val next = recordDouyinPlaybackFailureBurst(
+            previous = previous,
+            awemeId = "aweme-2",
+            failureAtMs = 1_500L,
+            burstWindowMs = 2_000L
+        )
+
+        assertEquals(1, next?.count)
+        assertEquals("aweme-2", next?.awemeId)
+    }
+
+    @Test
+    fun recordDouyinPlaybackFailureBurst_resetsAfterWindowExpires() {
+        val previous = recordDouyinPlaybackFailureBurst(
+            previous = null,
+            awemeId = "aweme-1",
+            failureAtMs = 1_000L,
+            burstWindowMs = 2_000L
+        )
+        val next = recordDouyinPlaybackFailureBurst(
+            previous = previous,
+            awemeId = "aweme-1",
+            failureAtMs = 3_500L,
+            burstWindowMs = 2_000L
+        )
+
+        assertEquals(1, next?.count)
+    }
+
+    @Test
     fun resolveDouyinAutoSkipTargetPage_prefersNextVideo() {
         val targetPage = resolveDouyinAutoSkipTargetPage(
             failingPage = 2,

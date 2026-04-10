@@ -53,3 +53,20 @@ Notes: list/article screenshots captured on 2026-01-26 via Android MCP.
   - `adb shell dumpsys activity provider com.lightningstudio.watchrss.debug.DebugLogProvider`
 - Clear buffer:
   - `adb shell dumpsys activity provider com.lightningstudio.watchrss.debug.DebugLogProvider --clear`
+
+## Douyin Playback Debug TUI
+- 用途：在宿主机终端实时查看抖音沉浸式播放调试状态，替代手表端半透明 overlay。
+- 当前输出包含：
+  - 当前页 / settled 页 / 是否在滚动
+  - 正在下载的视频及其缓存进度
+  - RAM 预览缓存槽中的字节流
+  - `Primary` / `Secondary` 两个播放器槽当前绑定的视频、codec、来源、缓存字节和状态
+- 单次抓取：
+  - `python3 scripts/douyin_debug_tui.py --once`
+- 持续刷新 TUI：
+  - `python3 scripts/douyin_debug_tui.py`
+- 可选参数：
+  - `python3 scripts/douyin_debug_tui.py --serial <adb-serial>`
+  - `python3 scripts/douyin_debug_tui.py --interval 0.25`
+- 底层 provider 导出命令：
+  - `adb shell dumpsys activity provider com.lightningstudio.watchrss/.debug.DebugLogProvider --douyin-playback`

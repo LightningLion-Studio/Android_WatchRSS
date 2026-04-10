@@ -10,6 +10,12 @@ internal enum class DouyinPlaybackFailureAction {
     AutoSkip
 }
 
+internal data class DouyinPlaybackFailureBurst(
+    val awemeId: String,
+    val count: Int,
+    val lastFailureAtMs: Long
+)
+
 internal fun resolveDouyinPlaybackState(
     currentUri: String?,
     currentRemoteResolvedAtMs: Long,
@@ -63,6 +69,25 @@ internal fun resolveDouyinPlaybackFailureAction(
         retryCount < maxAutoRetryCount -> DouyinPlaybackFailureAction.Retry
         else -> DouyinPlaybackFailureAction.AutoSkip
     }
+}
+
+internal fun recordDouyinPlaybackFailureBurst(
+    previous: DouyinPlaybackFailureBurst?,
+    awemeId: String?,
+    failureAtMs: Long,
+    burstWindowMs: Long
+): DouyinPlaybackFailureBurst? {
+    val normalizedAwemeId = awemeId?.trim().orEmpty()
+    if (normalizedAwemeId.isEmpty()) return null
+    val withinBurstWindow = previous != null &&
+        previous.awemeId == normalizedAwemeId &&
+        failureAtMs >= previous.lastFailureAtMs &&
+        failureAtMs - previous.lastFailureAtMs <= burstWindowMs
+    return DouyinPlaybackFailureBurst(
+        awemeId = normalizedAwemeId,
+        count = if (withinBurstWindow) previous.count + 1 else 1,
+        lastFailureAtMs = failureAtMs
+    )
 }
 
 internal fun buildDouyinPlaybackPrepareKey(

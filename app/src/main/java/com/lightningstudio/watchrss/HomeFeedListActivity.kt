@@ -24,6 +24,7 @@ import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackPreviewCache
 import com.lightningstudio.watchrss.data.douyin.DouyinSourceOrigin
 import com.lightningstudio.watchrss.data.douyin.DouyinStreamItem
 import com.lightningstudio.watchrss.data.douyin.DOUYIN_ACTIVE_PRELOAD_WINDOW_UNWATCHED
+import com.lightningstudio.watchrss.data.douyin.DOUYIN_PLAYBACK_PREFETCH_COUNT
 import com.lightningstudio.watchrss.data.douyin.DOUYIN_RECENT_WINDOW_SIZE
 import com.lightningstudio.watchrss.data.douyin.mergeDouyinBootstrapItems
 import com.lightningstudio.watchrss.data.douyin.prioritizeDouyinPreloadItems
@@ -441,7 +442,7 @@ class HomeFeedListActivity : BaseWatchActivity() {
             }"
         )
         DouyinPlaybackPreviewCache.primeStartupWindow(
-            items = prioritizedItems.take(1 + DOUYIN_PLAYBACK_PREFETCH_WINDOW),
+            items = prioritizedItems.take(1 + DOUYIN_PLAYBACK_PREFETCH_COUNT),
             headers = headers,
             reason = logReason
         )
@@ -564,7 +565,6 @@ class HomeFeedListActivity : BaseWatchActivity() {
     }
 
     companion object {
-        private const val DOUYIN_PLAYBACK_PREFETCH_WINDOW = 2
         private const val EXTRA_LAUNCHER_ENTRY = "extra_launcher_entry"
         private const val HOME_ENTRY_PROFILE = "profile"
         private const val HOME_ENTRY_RECOMMEND = "recommend"

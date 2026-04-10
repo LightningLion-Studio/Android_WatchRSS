@@ -36,6 +36,10 @@ class DebugLogProvider : ContentProvider() {
             return
         }
         val argList = args?.toList().orEmpty()
+        if ("--douyin-playback" in argList) {
+            DouyinPlaybackDebugController.dumpOverlaySnapshot(writer)
+            return
+        }
         if ("--clear" in argList) {
             DebugLogBuffer.clear()
             writer.println("DebugLogBuffer cleared.")

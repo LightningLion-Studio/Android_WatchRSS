@@ -393,6 +393,25 @@ interface ChannelRepository {
   - 若广播无效，先确认当前页后面确实还有下一条视频；
   - 可通过 `adb logcat -d -v time | rg 'DouyinPlaybackDebug|DouyinImmersive'` 查看是否收到广播与注入失败日志。
 
+### 14.5 抖音播放调试视图（ADB TUI）
+- 现状：手表端的半透明 overlay 已移除，避免遮挡圆屏内容；调试信息改为通过 `adb` 拉取到宿主机终端展示。
+- 调试入口：
+  - 单次抓取：`python3 scripts/douyin_debug_tui.py --once`
+  - 持续刷新：`python3 scripts/douyin_debug_tui.py`
+- 终端视图内容：
+  - 当前页 / settled 页 / 是否滚动
+  - 当前正在下载的抖音视频与缓存进度
+  - 预览缓存 RAM 槽中的字节流占用
+  - `Primary` / `Secondary` 两个播放器槽当前绑定的视频、codec、来源与状态
+- 底层实现：
+  - 沉浸式页面会把最新快照写入 `DouyinPlaybackDebugController`
+  - `DebugLogProvider` 支持 `--douyin-playback` 参数导出当前快照
+  - 底层 adb 命令：`adb shell dumpsys activity provider com.lightningstudio.watchrss/.debug.DebugLogProvider --douyin-playback`
+- 适用场景：
+  - 低分辨率手表屏上不便阅读 overlay
+  - 需要录屏时避免调试层污染画面
+  - 需要边滑动边在宿主机观察预取、缓存与双播放器槽状态
+
 ---
 
 ## 15. 里程碑（建议）

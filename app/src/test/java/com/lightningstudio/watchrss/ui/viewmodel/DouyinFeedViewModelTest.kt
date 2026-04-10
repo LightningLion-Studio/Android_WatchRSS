@@ -504,6 +504,40 @@ class DouyinFeedViewModelTest {
     }
 
     @Test
+    fun discardPlaybackItem_removesStandbyItemWithoutShiftingCurrentPage() = runTest {
+        val first = sampleDouyinStreamItem(awemeId = "aweme-a")
+        val second = sampleDouyinStreamItem(awemeId = "aweme-b")
+        val third = sampleDouyinStreamItem(awemeId = "aweme-c")
+        val fourth = sampleDouyinStreamItem(awemeId = "aweme-d")
+        val preloadManager = TestDouyinPreloadManager().apply {
+            localPaths[third.awemeId] = "/tmp/${third.awemeId}.mp4"
+        }
+        val feedCacheStore = TestDouyinFeedCacheStore(
+            initialItems = listOf(first, second, third, fourth)
+        ).apply {
+            cachedHasMore = false
+        }
+        val viewModel = newViewModel(
+            repository = TestDouyinRepository(initialLoggedIn = true),
+            preloadManager = preloadManager,
+            watchHistoryStore = TestDouyinWatchHistoryStore(),
+            feedCacheStore = feedCacheStore
+        )
+        advanceUntilIdle()
+
+        viewModel.enterVideoFlow(targetAwemeId = second.awemeId)
+        advanceUntilIdle()
+
+        viewModel.discardPlaybackItem(third.awemeId)
+        advanceUntilIdle()
+
+        assertEquals(listOf("aweme-a", "aweme-b", "aweme-d"), viewModel.uiState.value.items.map { it.awemeId })
+        assertEquals(2, viewModel.uiState.value.currentPage)
+        assertFalse(viewModel.uiState.value.localPlayPaths.containsKey(third.awemeId))
+        assertEquals(listOf("aweme-a", "aweme-b", "aweme-c", "aweme-d"), feedCacheStore.cachedItems.map { it.awemeId })
+    }
+
+    @Test
     fun onPageSettled_persistsRecentWindowWithoutEnqueuingDurableFullFileCache() = runTest {
         val first = sampleDouyinStreamItem(awemeId = "aweme-a")
         val second = sampleDouyinStreamItem(awemeId = "aweme-b")

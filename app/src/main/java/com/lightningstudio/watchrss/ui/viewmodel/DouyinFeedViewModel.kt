@@ -73,7 +73,10 @@ class DouyinFeedViewModel(
 
     private var nextCursor: String? = null
     private var isRequestingMore: Boolean = false
+    private var sourceItems: List<DouyinStreamItem> = emptyList()
+    private var sourceLocalPlayPaths: Map<String, String> = emptyMap()
     private val awemeIdSet = linkedSetOf<String>()
+    private val sessionQuarantinedAwemeIds = linkedSetOf<String>()
     private val playbackRefreshJobs = linkedMapOf<String, Job>()
 
     init {
@@ -183,6 +186,7 @@ class DouyinFeedViewModel(
                     preservedPrefix = preservePrefix,
                     freshItems = mapped
                 )
+                replaceSourceState(items = mergedItems)
                 mergedItems.forEach { awemeIdSet.add(it.awemeId) }
                 nextCursor = page?.nextCursor
                 val hasMore = page?.hasMore ?: false
@@ -195,37 +199,44 @@ class DouyinFeedViewModel(
                 val localPaths = withContext(storageDispatcher) {
                     preloadManager.resolveLocalPaths(mergedItems.map { it.awemeId })
                 }
+                replaceSourceState(
+                    items = mergedItems,
+                    localPlayPaths = localPaths
+                )
+                val visibleMergedItems = projectVisibleItems()
+                val visibleLocalPaths = projectVisibleLocalPlayPaths(visibleMergedItems)
                 val adjustedCurrentPage = when {
                     replaceExistingFeed -> 0
-                    latestState.showTitlePage -> latestState.currentPage.coerceAtMost(mergedItems.size)
-                    mergedItems.isEmpty() -> 0
+                    latestState.showTitlePage -> latestState.currentPage.coerceAtMost(visibleMergedItems.size)
+                    visibleMergedItems.isEmpty() -> 0
                     latestState.currentPage <= 0 -> 1
-                    else -> latestState.currentPage.coerceAtMost(mergedItems.size)
+                    else -> latestState.currentPage.coerceAtMost(visibleMergedItems.size)
                 }
                 _uiState.update {
                     it.copy(
                         isLoading = false,
-                        items = mergedItems,
+                        items = visibleMergedItems,
                         hasMore = hasMore,
                         playHeaders = headers,
-                        localPlayPaths = localPaths,
+                        localPlayPaths = visibleLocalPaths,
                         showTitlePage = latestState.showTitlePage,
                         currentPage = adjustedCurrentPage,
                         message = null
                     )
                 }
                 maybePersistRecentWindow(
-                    items = mergedItems,
+                    visibleItems = visibleMergedItems,
+                    sourceItems = sourceItems,
                     targetPage = adjustedCurrentPage,
                     headers = headers,
                     reason = "load_initial"
                 )
                 cacheBootstrapPage(
-                    items = mapped,
+                    items = sourceItems,
                     nextCursorSnapshot = nextCursor,
                     hasMore = hasMore
                 )
-                schedulePreload(mergedItems, headers)
+                schedulePreload(visibleMergedItems, headers)
             } else {
                 handleFeedFailure(
                     code = result.code,
@@ -245,13 +256,15 @@ class DouyinFeedViewModel(
         if (playbackRefreshJobs[normalizedAwemeId]?.isActive == true) return
 
         playbackRefreshJobs[normalizedAwemeId] = viewModelScope.launch {
-            val localFallbackAvailable = _uiState.value.items.any {
+            val localFallbackAvailable = sourceItems.any {
                 it.awemeId == normalizedAwemeId && it.playUrl.isNotBlank()
             }
             if (failedSource == DouyinPlaybackSourceKind.LOCAL) {
                 preloadManager.invalidate(normalizedAwemeId)
+                sourceLocalPlayPaths = sourceLocalPlayPaths - normalizedAwemeId
+                val visibleItems = projectVisibleItems()
                 _uiState.update { state ->
-                    state.copy(localPlayPaths = state.localPlayPaths - normalizedAwemeId)
+                    state.copy(localPlayPaths = projectVisibleLocalPlayPaths(visibleItems))
                 }
             }
 
@@ -263,7 +276,7 @@ class DouyinFeedViewModel(
                         if (updated) {
                             val currentState = _uiState.value
                             cacheBootstrapPage(
-                                items = currentState.items,
+                                items = sourceItems,
                                 nextCursorSnapshot = nextCursor,
                                 hasMore = currentState.hasMore
                             )
@@ -283,6 +296,7 @@ class DouyinFeedViewModel(
                 }
             } else if (result.code == DouyinErrorCodes.NOT_LOGGED_IN) {
                 repository.clearCookie()
+                replaceSourceState(items = emptyList(), localPlayPaths = emptyMap())
                 _uiState.update {
                     it.copy(
                         isLoggedIn = false,
@@ -307,14 +321,20 @@ class DouyinFeedViewModel(
 
     private suspend fun loadCachedBootstrap(headers: Map<String, String>): Long {
         val bootstrapState = readBootstrapState()
-        seedFeedWindow(bootstrapState.items)
+        replaceSourceState(
+            items = bootstrapState.items,
+            localPlayPaths = bootstrapState.localPaths
+        )
+        seedFeedWindow(sourceItems)
         nextCursor = bootstrapState.nextCursor
+        val visibleItems = projectVisibleItems()
+        val visibleLocalPaths = projectVisibleLocalPlayPaths(visibleItems)
         _uiState.update {
             it.copy(
-                items = bootstrapState.items,
+                items = visibleItems,
                 hasMore = bootstrapState.hasMore,
                 playHeaders = headers,
-                localPlayPaths = bootstrapState.localPaths
+                localPlayPaths = visibleLocalPaths
             )
         }
         return bootstrapState.savedAtMs
@@ -322,7 +342,13 @@ class DouyinFeedViewModel(
 
     private suspend fun restoreEntryPlayback(headers: Map<String, String>): Boolean {
         val bootstrapState = readBootstrapState()
-        val hasBootstrapItems = bootstrapState.items.isNotEmpty()
+        replaceSourceState(
+            items = bootstrapState.items,
+            localPlayPaths = bootstrapState.localPaths
+        )
+        val visibleBootstrapItems = projectVisibleItems()
+        val visibleLocalPaths = projectVisibleLocalPlayPaths(visibleBootstrapItems)
+        val hasBootstrapItems = visibleBootstrapItems.isNotEmpty()
         val latestAwemeId = withContext(storageDispatcher) {
             watchHistoryStore.readHistory()
                 .firstOrNull()
@@ -331,14 +357,14 @@ class DouyinFeedViewModel(
         }
         val resumeAnchorPage = resolvePageForAwemeId(
             awemeId = bootstrapState.resumeAnchorAwemeId,
-            items = bootstrapState.items
+            items = visibleBootstrapItems
         )
         val targetPage = when {
             !latestAwemeId.isNullOrBlank() -> {
                 resolveNextPageAfter(
                     awemeId = latestAwemeId,
-                    items = bootstrapState.items
-                ) ?: resumeAnchorPage ?: if (bootstrapState.items.isNotEmpty()) 1 else 0
+                    items = visibleBootstrapItems
+                ) ?: resumeAnchorPage ?: if (visibleBootstrapItems.isNotEmpty()) 1 else 0
             }
             else -> resumeAnchorPage ?: 0
         }
@@ -348,26 +374,27 @@ class DouyinFeedViewModel(
                 "resume=${bootstrapState.resumeAnchorAwemeId} targetPage=$targetPage " +
                 "nextCursor=${bootstrapState.nextCursor} hasMore=${bootstrapState.hasMore}"
         )
-        seedFeedWindow(bootstrapState.items)
+        seedFeedWindow(sourceItems)
         nextCursor = bootstrapState.nextCursor
         _uiState.update {
             it.copy(
-                items = bootstrapState.items,
+                items = visibleBootstrapItems,
                 hasMore = bootstrapState.hasMore,
                 playHeaders = headers,
-                localPlayPaths = bootstrapState.localPaths,
+                localPlayPaths = visibleLocalPaths,
                 currentPage = targetPage,
                 showTitlePage = true,
                 message = null
             )
         }
         maybePersistRecentWindow(
-            items = bootstrapState.items,
+            visibleItems = visibleBootstrapItems,
+            sourceItems = sourceItems,
             targetPage = targetPage,
             headers = headers,
             reason = "restore_entry"
         )
-        schedulePreload(bootstrapState.items, headers)
+        schedulePreload(visibleBootstrapItems, headers)
         return hasBootstrapItems
     }
 
@@ -474,12 +501,14 @@ class DouyinFeedViewModel(
         val itemIndex = resolvedPage - 1
         val currentItems = _uiState.value.items
         val current = currentItems.getOrNull(itemIndex) ?: return
+        val rawAnchorIndex = sourceItems.indexOfFirst { it.awemeId == current.awemeId }
+        if (rawAnchorIndex < 0) return
         val playHeaders = _uiState.value.playHeaders
         viewModelScope.launch(storageDispatcher) {
             watchHistoryStore.markWatched(current)
             persistRecentWindow(
-                items = currentItems,
-                anchorIndex = itemIndex,
+                items = sourceItems,
+                anchorIndex = rawAnchorIndex,
                 headers = playHeaders,
                 reason = "page_settled"
             )
@@ -515,6 +544,30 @@ class DouyinFeedViewModel(
         loadMore()
     }
 
+    fun discardPlaybackItem(awemeId: String) {
+        val normalizedAwemeId = awemeId.trim()
+        if (normalizedAwemeId.isEmpty()) return
+        if (!sessionQuarantinedAwemeIds.add(normalizedAwemeId)) return
+
+        playbackRefreshJobs.remove(normalizedAwemeId)?.cancel()
+        val previousVisibleItems = _uiState.value.items
+        val removedIndex = previousVisibleItems.indexOfFirst { it.awemeId == normalizedAwemeId }
+        val nextVisibleItems = projectVisibleItems()
+        val nextVisibleLocalPaths = projectVisibleLocalPlayPaths(nextVisibleItems)
+        _uiState.update { state ->
+            state.copy(
+                items = nextVisibleItems,
+                localPlayPaths = nextVisibleLocalPaths,
+                currentPage = resolveCurrentPageAfterDiscard(
+                    currentPage = state.currentPage,
+                    removedIndex = removedIndex,
+                    remainingCount = nextVisibleItems.size
+                ),
+                showTitlePage = if (nextVisibleItems.isEmpty()) true else state.showTitlePage
+            )
+        }
+    }
+
     private fun loadMore() {
         val state = _uiState.value
         if (isRequestingMore || !state.hasMore || state.isLoadingMore || state.isLoading) return
@@ -527,19 +580,25 @@ class DouyinFeedViewModel(
                 val incoming = mapToStreamItems(page?.items.orEmpty())
                     .filter { awemeIdSet.add(it.awemeId) }
                 nextCursor = page?.nextCursor ?: nextCursor
-                val merged = _uiState.value.items + incoming
+                val merged = sourceItems + incoming
                 val localPaths = withContext(storageDispatcher) {
                     preloadManager.resolveLocalPaths(merged.map { it.awemeId })
                 }
+                replaceSourceState(
+                    items = merged,
+                    localPlayPaths = localPaths
+                )
+                val visibleMergedItems = projectVisibleItems()
+                val visibleLocalPaths = projectVisibleLocalPlayPaths(visibleMergedItems)
                 _uiState.update {
                     it.copy(
                         isLoadingMore = false,
                         hasMore = page?.hasMore ?: false,
-                        items = merged,
-                        localPlayPaths = localPaths
+                        items = visibleMergedItems,
+                        localPlayPaths = visibleLocalPaths
                     )
                 }
-                schedulePreload(merged, _uiState.value.playHeaders)
+                schedulePreload(visibleMergedItems, _uiState.value.playHeaders)
             } else {
                 handleFeedFailure(
                     code = result.code,
@@ -559,6 +618,7 @@ class DouyinFeedViewModel(
         if (code == DouyinErrorCodes.NOT_LOGGED_IN) {
             viewModelScope.launch {
                 repository.clearCookie()
+                replaceSourceState(items = emptyList(), localPlayPaths = emptyMap())
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -628,25 +688,32 @@ class DouyinFeedViewModel(
     ): Boolean {
         val resolvedAtMs = System.currentTimeMillis()
         var updated = false
-        _uiState.update { state ->
-            val refreshedItems = state.items.map { item ->
-                if (item.awemeId != awemeId) {
-                    item
-                } else {
-                    updated = true
-                    item.copy(
-                        playUrl = content.playUrl.trim(),
-                        coverUrl = content.coverUrl.takeIf { it.isNotBlank() } ?: item.coverUrl,
-                        title = content.desc.takeIf { it.isNotBlank() } ?: item.title,
-                        author = content.authorName.takeIf { it.isNotBlank() } ?: item.author,
-                        likeCount = content.diggCount,
-                        playUrlResolvedAtMs = resolvedAtMs,
-                        sourceOrigin = DouyinSourceOrigin.VIDEO_REFRESH,
-                        variants = content.variants
-                    )
-                }
+        sourceItems = sourceItems.map { item ->
+            if (item.awemeId != awemeId) {
+                item
+            } else {
+                updated = true
+                item.copy(
+                    playUrl = content.playUrl.trim(),
+                    coverUrl = content.coverUrl.takeIf { it.isNotBlank() } ?: item.coverUrl,
+                    title = content.desc.takeIf { it.isNotBlank() } ?: item.title,
+                    author = content.authorName.takeIf { it.isNotBlank() } ?: item.author,
+                    likeCount = content.diggCount,
+                    playUrlResolvedAtMs = resolvedAtMs,
+                    sourceOrigin = DouyinSourceOrigin.VIDEO_REFRESH,
+                    variants = content.variants
+                )
             }
-            if (!updated) state else state.copy(items = refreshedItems)
+        }
+        if (updated) {
+            val visibleItems = projectVisibleItems()
+            val visibleLocalPaths = projectVisibleLocalPlayPaths(visibleItems)
+            _uiState.update { state ->
+                state.copy(
+                    items = visibleItems,
+                    localPlayPaths = visibleLocalPaths
+                )
+            }
         }
         return updated
     }
@@ -714,16 +781,19 @@ class DouyinFeedViewModel(
     }
 
     private fun maybePersistRecentWindow(
-        items: List<DouyinStreamItem>,
+        visibleItems: List<DouyinStreamItem>,
+        sourceItems: List<DouyinStreamItem>,
         targetPage: Int,
         headers: Map<String, String>,
         reason: String
     ) {
         if (targetPage <= 0) return
-        val anchorIndex = targetPage - 1
+        val anchorAwemeId = visibleItems.getOrNull(targetPage - 1)?.awemeId ?: return
+        val anchorIndex = sourceItems.indexOfFirst { it.awemeId == anchorAwemeId }
+        if (anchorIndex < 0) return
         viewModelScope.launch(storageDispatcher) {
             persistRecentWindow(
-                items = items,
+                items = sourceItems,
                 anchorIndex = anchorIndex,
                 headers = headers,
                 reason = reason
@@ -757,6 +827,46 @@ class DouyinFeedViewModel(
         awemeIdSet.clear()
         items.forEach { awemeIdSet.add(it.awemeId) }
         nextCursor = null
+    }
+
+    private fun replaceSourceState(
+        items: List<DouyinStreamItem> = sourceItems,
+        localPlayPaths: Map<String, String> = sourceLocalPlayPaths
+    ) {
+        sourceItems = items
+        sourceLocalPlayPaths = localPlayPaths
+    }
+
+    private fun projectVisibleItems(
+        items: List<DouyinStreamItem> = sourceItems
+    ): List<DouyinStreamItem> {
+        if (sessionQuarantinedAwemeIds.isEmpty()) return items
+        return items.filterNot { sessionQuarantinedAwemeIds.contains(it.awemeId) }
+    }
+
+    private fun projectVisibleLocalPlayPaths(
+        visibleItems: List<DouyinStreamItem>,
+        localPlayPaths: Map<String, String> = sourceLocalPlayPaths
+    ): Map<String, String> {
+        if (visibleItems.isEmpty() || localPlayPaths.isEmpty()) return emptyMap()
+        val visibleAwemeIds = visibleItems.mapTo(linkedSetOf()) { it.awemeId }
+        return localPlayPaths.filterKeys { visibleAwemeIds.contains(it) }
+    }
+
+    private fun resolveCurrentPageAfterDiscard(
+        currentPage: Int,
+        removedIndex: Int,
+        remainingCount: Int
+    ): Int {
+        if (remainingCount <= 0) return 0
+        if (currentPage <= 0 || removedIndex < 0) {
+            return currentPage.coerceIn(0, remainingCount)
+        }
+        val removedPage = removedIndex + 1
+        return when {
+            removedPage < currentPage -> (currentPage - 1).coerceAtLeast(1)
+            else -> currentPage.coerceAtMost(remainingCount)
+        }
     }
 
     companion object {

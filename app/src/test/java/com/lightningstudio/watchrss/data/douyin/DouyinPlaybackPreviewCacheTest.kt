@@ -4,6 +4,11 @@ import android.net.Uri
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.TransferListener
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertArrayEquals
@@ -89,11 +94,17 @@ class DouyinPlaybackPreviewCacheTest {
             durationMs = 30_000L,
             prefetchOrder = 2
         )
+        val fifthPrefetchBudget = estimatePrefetchBytes(
+            contentLength = null,
+            durationMs = 30_000L,
+            prefetchOrder = 4
+        )
 
         assertTrue(firstPrefetchBudget < previewBudget)
-        assertEquals(2 * 1024 * 1024, firstPrefetchBudget)
-        assertEquals(1024 * 1024, secondPrefetchBudget)
-        assertEquals(512 * 1024, thirdPrefetchBudget)
+        assertEquals(4 * 1024 * 1024, firstPrefetchBudget)
+        assertEquals(3 * 1024 * 1024, secondPrefetchBudget)
+        assertEquals(2 * 1024 * 1024, thirdPrefetchBudget)
+        assertEquals(1024 * 1024, fifthPrefetchBudget)
     }
 
     @Test
@@ -245,8 +256,8 @@ class DouyinPlaybackPreviewCacheTest {
     }
 
     @Test
-    fun updatePlaybackWindow_registersCurrentNextThreeAndPreviousOne() {
-        val items = (0..5).map { index ->
+    fun updatePlaybackWindow_registersCurrentNextSevenAndPreviousOne() {
+        val items = (0..9).map { index ->
             DouyinStreamItem(
                 awemeId = "aweme-$index",
                 playUrl = "file:///tmp/aweme-$index.mp4",
@@ -271,8 +282,79 @@ class DouyinPlaybackPreviewCacheTest {
         assertTrue(DouyinPlaybackPreviewCache.hasRegistrationForTests(items[3].playUrl))
         assertTrue(DouyinPlaybackPreviewCache.hasRegistrationForTests(items[4].playUrl))
         assertTrue(DouyinPlaybackPreviewCache.hasRegistrationForTests(items[5].playUrl))
+        assertTrue(DouyinPlaybackPreviewCache.hasRegistrationForTests(items[6].playUrl))
+        assertTrue(DouyinPlaybackPreviewCache.hasRegistrationForTests(items[7].playUrl))
+        assertTrue(DouyinPlaybackPreviewCache.hasRegistrationForTests(items[8].playUrl))
+        assertTrue(DouyinPlaybackPreviewCache.hasRegistrationForTests(items[9].playUrl))
         assertTrue(DouyinPlaybackPreviewCache.hasRegistrationForTests(items[1].playUrl))
         assertTrue(!DouyinPlaybackPreviewCache.hasRegistrationForTests(items[0].playUrl))
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun emitPrefetchHttpFailureForTests_publishesFailureEvent() = runTest {
+        val awaited = async(start = CoroutineStart.UNDISPATCHED) {
+            DouyinPlaybackPreviewCache.prefetchHttpFailures.first()
+        }
+
+        DouyinPlaybackPreviewCache.emitPrefetchHttpFailureForTests(
+            DouyinPlaybackPrefetchHttpFailure(
+                awemeId = "aweme-http-fail",
+                mediaUri = "https://example.com/fail.mp4",
+                httpStatusCode = 403,
+                reason = "unit_test",
+                occurredAtMs = 123L
+            )
+        )
+
+        val failure = awaited.await()
+        assertEquals("aweme-http-fail", failure.awemeId)
+        assertEquals(403, failure.httpStatusCode)
+        assertEquals("unit_test", failure.reason)
+    }
+
+    @Test
+    fun debugSnapshot_exposesRegistrationWindowAndMemoryEntries() {
+        val snapshotDir = createTempDir(prefix = "douyin-preview-debug")
+        DouyinPlaybackPreviewCache.configureForTests(snapshotDir)
+        val items = (0..9).map { index ->
+            DouyinStreamItem(
+                awemeId = "aweme-$index",
+                playUrl = "file:///tmp/aweme-$index.mp4",
+                coverUrl = null,
+                title = "title-$index",
+                author = "author",
+                likeCount = 0L,
+                playUrlResolvedAtMs = 200L + index,
+                sourceOrigin = DouyinSourceOrigin.NETWORK_FEED,
+                durationMs = 30_000L
+            )
+        }
+
+        DouyinPlaybackPreviewCache.updatePlaybackWindow(
+            items = items,
+            anchorIndex = 2,
+            headers = emptyMap(),
+            reason = "unit_test"
+        )
+
+        var debugSnapshot = DouyinPlaybackPreviewCache.debugSnapshot()
+        assertEquals(9, debugSnapshot.registrations.size)
+        assertEquals("aweme-2", debugSnapshot.registrations.first().awemeId)
+        assertEquals("aweme-9", debugSnapshot.registrations[7].awemeId)
+        assertEquals("aweme-1", debugSnapshot.registrations.last().awemeId)
+        assertEquals(0, debugSnapshot.activePrefetches.size)
+
+        val previewBytes = byteArrayOf(7, 8, 9, 10)
+        DouyinPlaybackPreviewCache.writeSnapshotForTests(0, items[3], previewBytes)
+        DouyinPlaybackPreviewCache.restorePinnedItems()
+
+        debugSnapshot = DouyinPlaybackPreviewCache.debugSnapshot()
+        assertEquals(1, debugSnapshot.memoryEntries.size)
+        assertEquals("aweme-3", debugSnapshot.memoryEntries.first().awemeId)
+        assertEquals(previewBytes.size, debugSnapshot.memoryEntries.first().cachedBytes)
+
+        snapshotDir.deleteRecursively()
     }
 }
 

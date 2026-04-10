@@ -1,6 +1,7 @@
 package com.lightningstudio.watchrss.debug
 
 import com.lightningstudio.watchrss.util.AppLogger
+import java.io.PrintWriter
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -31,6 +32,8 @@ object DouyinPlaybackDebugController {
     private var nextAwemeId: String? = null
     @Volatile
     private var inVideoFlow: Boolean = false
+    @Volatile
+    private var overlaySnapshotText: String? = null
 
     val poisonedAwemeIds: StateFlow<Set<String>> = _poisonedAwemeIds.asStateFlow()
     val advanceRequests: SharedFlow<Long> = _advanceRequests
@@ -51,6 +54,24 @@ object DouyinPlaybackDebugController {
 
     fun snapshotPlaybackContext(): Triple<String?, String?, Boolean> {
         return Triple(activeAwemeId, nextAwemeId, inVideoFlow)
+    }
+
+    fun updateOverlaySnapshot(text: String?) {
+        overlaySnapshotText = text?.trimEnd()?.takeIf { it.isNotBlank() }
+    }
+
+    fun clearOverlaySnapshot() {
+        overlaySnapshotText = null
+    }
+
+    fun dumpOverlaySnapshot(writer: PrintWriter) {
+        writer.println("DOUYIN_PLAYBACK_DEBUG")
+        val snapshot = overlaySnapshotText
+        if (snapshot.isNullOrBlank()) {
+            writer.println("state=unavailable")
+            return
+        }
+        writer.println(snapshot)
     }
 
     fun requestForceFailNextVideo(source: String = "unknown"): String? {

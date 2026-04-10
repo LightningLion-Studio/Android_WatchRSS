@@ -16,6 +16,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.IOException
@@ -31,18 +34,19 @@ import kotlin.math.min
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
-internal const val DOUYIN_PLAYBACK_PREVIEW_ENTRY_LIMIT = 5
+internal const val DOUYIN_PLAYBACK_PREVIEW_ENTRY_LIMIT = 10
 
 private const val DOUYIN_PLAYBACK_SNAPSHOT_COUNT = 2
-private const val DOUYIN_PLAYBACK_PREFETCH_COUNT = 3
+internal const val DOUYIN_PLAYBACK_PREFETCH_COUNT = 7
+private const val DOUYIN_PLAYBACK_PREFETCH_CONCURRENCY = 3
 private const val DOUYIN_PLAYBACK_BACKWARD_REGISTRATION_COUNT = 1
 private const val PREVIEW_DURATION_MS = 30_000L
-private const val PREFETCH_DURATION_MS = 8_000L
+private const val PREFETCH_DURATION_MS = 16_000L
 private const val MIN_ENTRY_BYTES = 512 * 1024
 private const val DEFAULT_UNKNOWN_DURATION_BYTES = 8 * 1024 * 1024
 private const val MAX_ENTRY_BYTES = 12 * 1024 * 1024
-private const val MAX_PREFETCH_ENTRY_BYTES = 2 * 1024 * 1024
-private const val MAX_TOTAL_PREVIEW_BYTES = 48L * 1024L * 1024L
+private const val MAX_PREFETCH_ENTRY_BYTES = 4 * 1024 * 1024
+private const val MAX_TOTAL_PREVIEW_BYTES = 96L * 1024L * 1024L
 private const val MAX_TOTAL_POSTER_BYTES = 4L * 1024L * 1024L
 private const val DEFAULT_ESTIMATED_BYTES_PER_SECOND = 256 * 1024L
 
@@ -73,6 +77,60 @@ private data class DouyinPlaybackPreviewEntry(
     val budgetBytes: Int
 )
 
+internal data class DouyinPlaybackPrefetchDebugEntry(
+    val awemeId: String,
+    val mediaUri: String,
+    val downloadedBytes: Int,
+    val budgetBytes: Int,
+    val prefetchOrder: Int,
+    val reason: String,
+    val startedAtMs: Long
+)
+
+internal data class DouyinPlaybackPreviewRegistrationDebugEntry(
+    val awemeId: String,
+    val mediaUri: String,
+    val cachedBytes: Int,
+    val budgetBytes: Int,
+    val captureEnabled: Boolean,
+    val isPrefetching: Boolean
+)
+
+internal data class DouyinPlaybackPreviewMemoryDebugEntry(
+    val awemeId: String,
+    val mediaUri: String,
+    val cachedBytes: Int,
+    val budgetBytes: Int
+)
+
+internal data class DouyinPlaybackPreviewDebugSnapshot(
+    val sessionGeneration: Long,
+    val totalPreviewBytes: Long,
+    val totalPosterBytes: Long,
+    val activePrefetches: List<DouyinPlaybackPrefetchDebugEntry>,
+    val registrations: List<DouyinPlaybackPreviewRegistrationDebugEntry>,
+    val memoryEntries: List<DouyinPlaybackPreviewMemoryDebugEntry>
+)
+
+internal data class DouyinPlaybackPrefetchHttpFailure(
+    val awemeId: String,
+    val mediaUri: String,
+    val httpStatusCode: Int,
+    val reason: String,
+    val occurredAtMs: Long
+)
+
+private data class DouyinPlaybackPrefetchProgress(
+    val key: DouyinPlaybackPreviewKey,
+    val awemeId: String,
+    val mediaUri: String,
+    val downloadedBytes: Int,
+    val budgetBytes: Int,
+    val prefetchOrder: Int,
+    val reason: String,
+    val startedAtMs: Long
+)
+
 internal data class DouyinPlaybackPreviewReadOutcome(
     val bytes: ByteArray,
     val error: Throwable?
@@ -80,7 +138,8 @@ internal data class DouyinPlaybackPreviewReadOutcome(
 
 internal fun readDouyinPreviewBytes(
     input: InputStream,
-    budgetBytes: Int
+    budgetBytes: Int,
+    onBytesRead: (Int) -> Unit = {}
 ): DouyinPlaybackPreviewReadOutcome {
     if (budgetBytes <= 0) {
         return DouyinPlaybackPreviewReadOutcome(bytes = ByteArray(0), error = null)
@@ -92,6 +151,7 @@ internal fun readDouyinPreviewBytes(
             val read = input.read(buffer, offset, budgetBytes - offset)
             if (read <= 0) break
             offset += read
+            onBytesRead(offset)
         }
         return DouyinPlaybackPreviewReadOutcome(
             bytes = buffer.copyOf(offset),
@@ -107,6 +167,11 @@ internal fun readDouyinPreviewBytes(
 
 object DouyinPlaybackPreviewCache {
     private val manager = DouyinPlaybackPreviewManager()
+    private val _prefetchHttpFailures =
+        MutableSharedFlow<DouyinPlaybackPrefetchHttpFailure>(extraBufferCapacity = 32)
+
+    internal val prefetchHttpFailures: SharedFlow<DouyinPlaybackPrefetchHttpFailure> =
+        _prefetchHttpFailures.asSharedFlow()
 
     fun configure(context: Context) {
         manager.configure(File(context.applicationContext.cacheDir, SNAPSHOT_DIR_NAME))
@@ -180,6 +245,10 @@ object DouyinPlaybackPreviewCache {
         return manager.captureSessionGeneration()
     }
 
+    internal fun debugSnapshot(): DouyinPlaybackPreviewDebugSnapshot {
+        return manager.debugSnapshot()
+    }
+
     fun clearAll() {
         manager.clearAll()
     }
@@ -191,6 +260,12 @@ object DouyinPlaybackPreviewCache {
     internal fun resetForTests() {
         manager.clearAll()
         manager.configure(null)
+    }
+
+    internal fun emitPrefetchHttpFailureForTests(
+        failure: DouyinPlaybackPrefetchHttpFailure
+    ) {
+        reportPrefetchHttpFailure(failure)
     }
 
     internal fun hasRegistrationForTests(
@@ -207,6 +282,12 @@ object DouyinPlaybackPreviewCache {
         manager.writeSnapshotForTests(slotIndex, item, bytes)
     }
 
+    internal fun reportPrefetchHttpFailure(
+        failure: DouyinPlaybackPrefetchHttpFailure
+    ) {
+        _prefetchHttpFailures.tryEmit(failure)
+    }
+
     private const val SNAPSHOT_DIR_NAME = "douyin_preview_snapshots"
 }
 
@@ -217,9 +298,10 @@ private class DouyinPlaybackPreviewManager {
     private val registrationsByUri = linkedMapOf<String, DouyinPlaybackPreviewRegistration>()
     private val keyByUri = linkedMapOf<String, DouyinPlaybackPreviewKey>()
     private val prefetchJobs = linkedMapOf<DouyinPlaybackPreviewKey, Job>()
+    private val prefetchProgressByKey = linkedMapOf<DouyinPlaybackPreviewKey, DouyinPlaybackPrefetchProgress>()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val prefetchDispatcher =
-        Dispatchers.IO.limitedParallelism(DOUYIN_PLAYBACK_PREFETCH_COUNT)
+        Dispatchers.IO.limitedParallelism(DOUYIN_PLAYBACK_PREFETCH_CONCURRENCY)
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
@@ -410,6 +492,7 @@ private class DouyinPlaybackPreviewManager {
             sessionGeneration += 1
             val runningJobs = prefetchJobs.values.toList()
             prefetchJobs.clear()
+            prefetchProgressByKey.clear()
             entries.clear()
             posterEntries.clear()
             registrationsByUri.clear()
@@ -432,6 +515,48 @@ private class DouyinPlaybackPreviewManager {
 
     fun captureSessionGeneration(): Long {
         return synchronized(lock) { sessionGeneration }
+    }
+
+    fun debugSnapshot(): DouyinPlaybackPreviewDebugSnapshot {
+        return synchronized(lock) {
+            DouyinPlaybackPreviewDebugSnapshot(
+                sessionGeneration = sessionGeneration,
+                totalPreviewBytes = totalBytes,
+                totalPosterBytes = totalPosterBytes,
+                activePrefetches = prefetchProgressByKey.values
+                    .sortedBy { it.prefetchOrder }
+                    .map { progress ->
+                        DouyinPlaybackPrefetchDebugEntry(
+                            awemeId = progress.awemeId,
+                            mediaUri = progress.mediaUri,
+                            downloadedBytes = progress.downloadedBytes,
+                            budgetBytes = progress.budgetBytes,
+                            prefetchOrder = progress.prefetchOrder,
+                            reason = progress.reason,
+                            startedAtMs = progress.startedAtMs
+                        )
+                    },
+                registrations = registrationsByUri.values.map { registration ->
+                    val cachedBytes = entries[registration.key]?.bytes?.size ?: 0
+                    DouyinPlaybackPreviewRegistrationDebugEntry(
+                        awemeId = registration.key.awemeId,
+                        mediaUri = registration.mediaUri,
+                        cachedBytes = cachedBytes,
+                        budgetBytes = registration.budgetBytes,
+                        captureEnabled = registration.captureEnabled,
+                        isPrefetching = prefetchProgressByKey.containsKey(registration.key)
+                    )
+                },
+                memoryEntries = entries.values.toList().asReversed().map { entry ->
+                    DouyinPlaybackPreviewMemoryDebugEntry(
+                        awemeId = entry.key.awemeId,
+                        mediaUri = entry.mediaUri,
+                        cachedBytes = entry.bytes.size,
+                        budgetBytes = entry.budgetBytes
+                    )
+                }
+            )
+        }
     }
 
     fun writeSnapshotForTests(slotIndex: Int, item: DouyinStreamItem, bytes: ByteArray) {
@@ -644,17 +769,30 @@ private class DouyinPlaybackPreviewManager {
                 if (running?.isActive == true) {
                     false
                 } else {
+                    prefetchProgressByKey[key] = DouyinPlaybackPrefetchProgress(
+                        key = key,
+                        awemeId = target.awemeId,
+                        mediaUri = target.mediaUri,
+                        downloadedBytes = existingBytes.coerceAtMost(requiredBytes),
+                        budgetBytes = requiredBytes,
+                        prefetchOrder = index,
+                        reason = reason,
+                        startedAtMs = System.currentTimeMillis()
+                    )
                     prefetchJobs[key] = scope.launch(prefetchDispatcher) {
                         try {
                             prefetchTarget(
                                 target = target,
                                 headers = headers,
                                 reason = reason,
-                                budgetBytes = requiredBytes
+                                budgetBytes = requiredBytes,
+                                initialBytes = existingBytes.coerceAtMost(requiredBytes),
+                                prefetchOrder = index
                             )
                         } finally {
                             synchronized(lock) {
                                 prefetchJobs.remove(key)
+                                prefetchProgressByKey.remove(key)
                             }
                         }
                     }
@@ -674,9 +812,20 @@ private class DouyinPlaybackPreviewManager {
         target: DouyinPlaybackPreviewWarmTarget,
         headers: Map<String, String>,
         reason: String,
-        budgetBytes: Int
+        budgetBytes: Int,
+        initialBytes: Int,
+        prefetchOrder: Int
     ) {
         if (budgetBytes <= 0) return
+        updatePrefetchProgress(
+            key = target.key(),
+            awemeId = target.awemeId,
+            mediaUri = target.mediaUri,
+            downloadedBytes = initialBytes,
+            budgetBytes = budgetBytes,
+            prefetchOrder = prefetchOrder,
+            reason = reason
+        )
         val requestBuilder = Request.Builder()
             .url(target.mediaUri)
             .header("Range", "bytes=0-${budgetBytes - 1}")
@@ -687,10 +836,35 @@ private class DouyinPlaybackPreviewManager {
         }
         try {
             httpClient.newCall(requestBuilder.build()).execute().use { response ->
-                if (!response.isSuccessful) return
+                if (!response.isSuccessful) {
+                    AppLogger.w(
+                        TAG,
+                        "prefetch http failure awemeId=${target.awemeId} code=${response.code} reason=$reason"
+                    )
+                    DouyinPlaybackPreviewCache.reportPrefetchHttpFailure(
+                        DouyinPlaybackPrefetchHttpFailure(
+                            awemeId = target.awemeId,
+                            mediaUri = target.mediaUri,
+                            httpStatusCode = response.code,
+                            reason = reason,
+                            occurredAtMs = System.currentTimeMillis()
+                        )
+                    )
+                    return
+                }
                 val body = response.body ?: return
                 val outcome = body.byteStream().use { input ->
-                    readDouyinPreviewBytes(input, budgetBytes)
+                    readDouyinPreviewBytes(input, budgetBytes) { downloadedBytes ->
+                        updatePrefetchProgress(
+                            key = target.key(),
+                            awemeId = target.awemeId,
+                            mediaUri = target.mediaUri,
+                            downloadedBytes = downloadedBytes.coerceAtLeast(initialBytes),
+                            budgetBytes = budgetBytes,
+                            prefetchOrder = prefetchOrder,
+                            reason = reason
+                        )
+                    }
                 }
                 val bytes = outcome.bytes
                 if (bytes.isEmpty()) return
@@ -770,6 +944,30 @@ private class DouyinPlaybackPreviewManager {
         keyByUri[mediaUri] = key
         totalBytes += cappedBytes.size.toLong()
         trimToBudgetLocked()
+    }
+
+    private fun updatePrefetchProgress(
+        key: DouyinPlaybackPreviewKey,
+        awemeId: String,
+        mediaUri: String,
+        downloadedBytes: Int,
+        budgetBytes: Int,
+        prefetchOrder: Int,
+        reason: String
+    ) {
+        synchronized(lock) {
+            val existing = prefetchProgressByKey[key]
+            prefetchProgressByKey[key] = DouyinPlaybackPrefetchProgress(
+                key = key,
+                awemeId = awemeId,
+                mediaUri = mediaUri,
+                downloadedBytes = downloadedBytes.coerceAtLeast(0).coerceAtMost(budgetBytes),
+                budgetBytes = budgetBytes,
+                prefetchOrder = prefetchOrder,
+                reason = reason,
+                startedAtMs = existing?.startedAtMs ?: System.currentTimeMillis()
+            )
+        }
     }
 
     private fun putPosterBytesLocked(
@@ -1007,12 +1205,14 @@ internal fun estimatePrefetchBytes(
         durationMs = cappedDuration
     )
     val boundedBase = base.coerceAtMost(MAX_PREFETCH_ENTRY_BYTES)
-    val divisor = when (prefetchOrder.coerceAtLeast(0)) {
-        0 -> 1
-        1 -> 2
-        else -> 4
+    val normalizedOrder = prefetchOrder.coerceAtLeast(0)
+    val targetBytes = when (normalizedOrder) {
+        0 -> boundedBase
+        1 -> boundedBase * 3 / 4
+        2, 3 -> boundedBase / 2
+        else -> boundedBase / 4
     }
-    return max(MIN_ENTRY_BYTES, boundedBase / divisor)
+    return max(MIN_ENTRY_BYTES, targetBytes)
 }
 
 private class DouyinPlaybackPreviewDataSource(
