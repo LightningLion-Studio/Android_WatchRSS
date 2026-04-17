@@ -1,12 +1,8 @@
 package com.lightningstudio.watchrss.data.douyin
 
-import com.lightningstudio.watchrss.data.settings.DEFAULT_DOUYIN_VIDEO_CODEC_PREFERENCE
-import com.lightningstudio.watchrss.data.settings.DouyinVideoCodecPreference
 import com.lightningstudio.watchrss.sdk.douyin.DouyinContent
 import com.lightningstudio.watchrss.sdk.douyin.DouyinFeedPage
 import com.lightningstudio.watchrss.sdk.douyin.DouyinVideo
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flowOf
 
 private fun unsupportedDouyinRepositoryMethod(): Nothing {
     throw UnsupportedOperationException("DouyinRepositoryContract method is not implemented")
@@ -24,6 +20,4 @@ interface DouyinRepositoryContract {
     suspend fun fetchVideo(awemeId: String): DouyinResult<DouyinContent> =
         unsupportedDouyinRepositoryMethod()
     suspend fun buildPlayHeaders(): Map<String, String> = unsupportedDouyinRepositoryMethod()
-    fun observeVideoCodecPreference(): Flow<DouyinVideoCodecPreference> =
-        flowOf(DEFAULT_DOUYIN_VIDEO_CODEC_PREFERENCE)
 }

@@ -8,6 +8,7 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Paint
+import android.net.ConnectivityManager
 import android.graphics.SurfaceTexture
 import android.os.SystemClock
 import android.text.TextPaint
@@ -55,6 +56,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -90,14 +92,11 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.douyin.DOUYIN_PLAYBACK_PREVIEW_ENTRY_LIMIT
 import com.lightningstudio.watchrss.data.douyin.DouyinCodecRuntimePolicy
-import com.lightningstudio.watchrss.data.douyin.DouyinCodecSupport
 import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackPreviewCache
 import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackSourceKind
 import com.lightningstudio.watchrss.data.douyin.DouyinStreamItem
-import com.lightningstudio.watchrss.data.douyin.effectiveDouyinVideoCodecPreference
 import com.lightningstudio.watchrss.data.douyin.resolveDouyinLookaheadItemIndices
 import com.lightningstudio.watchrss.data.douyin.selectPreferredVariant
-import com.lightningstudio.watchrss.data.settings.DouyinVideoCodecPreference
 import com.lightningstudio.watchrss.debug.DouyinPlaybackDebugController
 import com.lightningstudio.watchrss.phoneconnection.PhoneConnectionFeature
 import com.lightningstudio.watchrss.ui.components.ToastMessage
@@ -126,9 +125,9 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
 import kotlin.math.abs
-import coil.compose.AsyncImage
 import com.lightningstudio.watchrss.sdk.douyin.DouyinVideoCodec
 import com.lightningstudio.watchrss.sdk.douyin.DouyinVideoVariant
+import java.io.IOException
 import kotlin.math.min
 import kotlin.math.sqrt
 
@@ -161,6 +160,11 @@ internal enum class DouyinPlayerSlotKey {
             Secondary -> Primary
         }
     }
+}
+
+internal enum class DouyinPlayerSurfaceRole {
+    VisiblePlayback,
+    HiddenPrewarm
 }
 
 private data class DouyinPlayerScale(
@@ -197,6 +201,7 @@ private data class DouyinPlaybackQuarantineRecord(
 private data class DouyinResolvedPlaybackTarget(
     val mediaUri: String,
     val codec: DouyinVideoCodec,
+    val bitrateBitsPerSecond: Long?,
     val trackAutoHevcAttempt: Boolean
 )
 
@@ -206,6 +211,7 @@ internal class DouyinPlayerSlotState(
 ) {
     var textureView by mutableStateOf<TextureView?>(null)
     var attachedTextureView: TextureView? = null
+    var attachedSurfaceRole by mutableStateOf<DouyinPlayerSurfaceRole?>(null)
     var viewSize by mutableStateOf(IntSize.Zero)
     var boundAwemeId by mutableStateOf<String?>(null)
     var mediaUri by mutableStateOf<String?>(null)
@@ -214,6 +220,7 @@ internal class DouyinPlayerSlotState(
     var boundCodec by mutableStateOf(DouyinVideoCodec.UNKNOWN)
     var isReady by mutableStateOf(false)
     var hasRenderedFirstFrame by mutableStateOf(false)
+    var visibleRenderedPrepareKey by mutableStateOf<String?>(null)
     var isBuffering by mutableStateOf(false)
     var isPlaying by mutableStateOf(false)
     var hasError by mutableStateOf(false)
@@ -223,6 +230,22 @@ internal class DouyinPlayerSlotState(
     var trackedAutoHevcAttemptKey by mutableStateOf<String?>(null)
     var trackedAutoHevcFailureKey by mutableStateOf<String?>(null)
     var inFlightPrewarmKey by mutableStateOf<String?>(null)
+
+    fun clearRenderedFirstFrame() {
+        hasRenderedFirstFrame = false
+        visibleRenderedPrepareKey = null
+    }
+
+    fun clearVisibleRenderedFirstFrame() {
+        visibleRenderedPrepareKey = null
+    }
+
+    fun markRenderedFirstFrame() {
+        hasRenderedFirstFrame = true
+        if (attachedSurfaceRole == DouyinPlayerSurfaceRole.VisiblePlayback) {
+            visibleRenderedPrepareKey = preparedSourceKey
+        }
+    }
 }
 
 internal data class DouyinPlayerPoolSession(
@@ -372,6 +395,7 @@ private fun disposeDouyinPlayerSlot(slot: DouyinPlayerSlotState) {
     runCatching { slot.player.release() }
     slot.textureView = null
     slot.attachedTextureView = null
+    slot.attachedSurfaceRole = null
     slot.viewSize = IntSize.Zero
     slot.boundAwemeId = null
     slot.mediaUri = null
@@ -379,7 +403,7 @@ private fun disposeDouyinPlayerSlot(slot: DouyinPlayerSlotState) {
     slot.preparedSourceKey = null
     slot.boundCodec = DouyinVideoCodec.UNKNOWN
     slot.isReady = false
-    slot.hasRenderedFirstFrame = false
+    slot.clearRenderedFirstFrame()
     slot.isBuffering = false
     slot.isPlaying = false
     slot.hasError = false
@@ -394,23 +418,32 @@ private fun disposeDouyinPlayerSlot(slot: DouyinPlayerSlotState) {
 private fun syncDouyinTextureAttachment(
     slot: DouyinPlayerSlotState,
     textureView: TextureView?,
-    attachToPlayer: Boolean
+    attachToPlayer: Boolean,
+    surfaceRole: DouyinPlayerSurfaceRole
 ) {
     val attachedTextureView = slot.attachedTextureView
     if (!attachToPlayer) {
         if (attachedTextureView != null) {
             runCatching { slot.player.clearVideoTextureView(attachedTextureView) }
             slot.attachedTextureView = null
+            slot.attachedSurfaceRole = null
         }
         return
     }
     if (textureView == null) return
-    if (attachedTextureView === textureView) return
+    if (attachedTextureView === textureView) {
+        slot.attachedSurfaceRole = surfaceRole
+        return
+    }
     attachedTextureView?.let { view ->
         runCatching { slot.player.clearVideoTextureView(view) }
     }
     runCatching { slot.player.setVideoTextureView(textureView) }
     slot.attachedTextureView = textureView
+    slot.attachedSurfaceRole = surfaceRole
+    if (surfaceRole == DouyinPlayerSurfaceRole.VisiblePlayback) {
+        slot.clearVisibleRenderedFirstFrame()
+    }
 }
 
 private fun DouyinStreamItem.findVariantByUrl(playUrl: String): DouyinVideoVariant? {
@@ -421,34 +454,24 @@ private fun DouyinStreamItem.findVariantByUrl(playUrl: String): DouyinVideoVaria
 
 private fun resolveDouyinPlaybackTarget(
     item: DouyinStreamItem,
-    preference: DouyinVideoCodecPreference,
-    h265Supported: Boolean,
     overridePlayUrl: String?
 ): DouyinResolvedPlaybackTarget? {
-    val normalizedOverride = overridePlayUrl?.trim()?.takeIf { it.isNotEmpty() }
+    val normalizedOverride = overridePlayUrl
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() && isAllowedDouyinPlaybackUri(it) }
     if (normalizedOverride != null) {
+        val overrideVariant = item.findVariantByUrl(normalizedOverride)
+        val selectedVariant = overrideVariant
+            ?: selectPreferredVariant(variants = item.variants)
+            ?: item.findVariantByUrl(item.playUrl)
         return DouyinResolvedPlaybackTarget(
             mediaUri = normalizedOverride,
-            codec = item.findVariantByUrl(normalizedOverride)?.codec ?: DouyinVideoCodec.UNKNOWN,
+            codec = overrideVariant?.codec ?: selectedVariant?.codec ?: DouyinVideoCodec.UNKNOWN,
+            bitrateBitsPerSecond = selectedVariant?.bitrate?.takeIf { it > 0L },
             trackAutoHevcAttempt = false
         )
     }
-    val effectivePreference = effectiveDouyinVideoCodecPreference(preference)
-    val selectedVariant = selectPreferredVariant(
-        variants = item.variants,
-        preference = preference,
-        h265Supported = h265Supported
-    )
-    val targetUri = selectedVariant?.playUrl?.trim()?.takeIf { it.isNotEmpty() }
-        ?: item.playUrl.trim().takeIf { it.isNotEmpty() }
-        ?: return null
-    return DouyinResolvedPlaybackTarget(
-        mediaUri = targetUri,
-        codec = selectedVariant?.codec ?: item.findVariantByUrl(targetUri)?.codec ?: DouyinVideoCodec.UNKNOWN,
-        trackAutoHevcAttempt = preference == DouyinVideoCodecPreference.AUTO &&
-            effectivePreference == DouyinVideoCodecPreference.AUTO &&
-            selectedVariant?.codec == DouyinVideoCodec.H265
-    )
+    return null
 }
 
 private fun resolveDouyinCachedLocalPlayUri(
@@ -463,26 +486,56 @@ private fun resolveDouyinCachedLocalPlayUri(
         ?.let { "file://$it" }
 }
 
+private fun resolveDouyinProxyPlayUri(
+    awemeId: String?,
+    proxyPlayUris: Map<String, String>
+): String? {
+    val normalizedAwemeId = awemeId?.trim().orEmpty()
+    if (normalizedAwemeId.isEmpty()) return null
+    return proxyPlayUris[normalizedAwemeId]
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+}
+
 private fun resolveDouyinH264FallbackTarget(
     item: DouyinStreamItem,
     currentUri: String?,
-    h265Supported: Boolean
+    cachePlayUri: String?
 ): DouyinResolvedPlaybackTarget? {
     val current = currentUri?.trim().orEmpty()
-    val selectedVariant = selectPreferredVariant(
-        variants = item.variants,
-        preference = DouyinVideoCodecPreference.H264,
-        h265Supported = h265Supported
-    ) ?: return null
-    val targetUri = selectedVariant.playUrl.trim()
+    val selectedVariant = selectPreferredVariant(variants = item.variants) ?: return null
+    val targetUri = cachePlayUri
+        ?.trim()
+        ?.takeIf { isDouyinCachePlaybackUri(it) }
+        ?: return null
     if (targetUri.isEmpty() || targetUri == current || selectedVariant.codec == DouyinVideoCodec.H265) {
         return null
     }
     return DouyinResolvedPlaybackTarget(
         mediaUri = targetUri,
         codec = selectedVariant.codec,
+        bitrateBitsPerSecond = selectedVariant.bitrate.takeIf { it > 0L },
         trackAutoHevcAttempt = false
     )
+}
+
+private fun isAllowedDouyinPlaybackUri(mediaUri: String): Boolean {
+    return mediaUri.startsWith("file://") ||
+        isDouyinCachePlaybackUri(mediaUri) ||
+        isDouyinInjectedFailureUri(mediaUri)
+}
+
+private fun isDouyinCachePlaybackUri(mediaUri: String?): Boolean {
+    return mediaUri?.startsWith(DOUYIN_CACHE_PLAYBACK_URI_PREFIX) == true
+}
+
+private fun hasIOExceptionCause(error: Throwable): Boolean {
+    var current: Throwable? = error
+    while (current != null) {
+        if (current is IOException) return true
+        current = current.cause
+    }
+    return false
 }
 
 private fun isLikelyDouyinCodecFailure(error: PlaybackException): Boolean {
@@ -533,7 +586,6 @@ internal fun DouyinImmersiveScreen(
         itemCount = uiState.items.size,
         entryStartIndex = entryStartIndex
     )
-    val h265Supported = remember { DouyinCodecSupport.isH265Supported() }
     val initialPage = if (uiState.showTitlePage) {
         0
     } else {
@@ -560,6 +612,15 @@ internal fun DouyinImmersiveScreen(
     val volumeState = rememberPlayerVolumeState()
     var foregroundSlotKey by rememberSaveable { mutableStateOf(DouyinPlayerSlotKey.Primary) }
     val context = LocalContext.current
+    val networkBandwidthEstimateBytesPerSecond by produceState<Long?>(
+        initialValue = null,
+        key1 = context.applicationContext
+    ) {
+        while (true) {
+            value = resolveDouyinNetworkBandwidthEstimateBytesPerSecond(context)
+            delay(DOUYIN_NETWORK_BANDWIDTH_REFRESH_MS)
+        }
+    }
     val view = LocalView.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val poisonedAwemeIds by DouyinPlaybackDebugController.poisonedAwemeIds.collectAsState()
@@ -596,9 +657,9 @@ internal fun DouyinImmersiveScreen(
     var codecPolicyVersion by remember { mutableIntStateOf(0) }
     val activeIsPoisoned = activeItem?.awemeId?.let(poisonedAwemeIds::contains) == true
     val preparedIsPoisoned = preparedItem?.awemeId?.let(poisonedAwemeIds::contains) == true
-    val preparedLocalUri = resolveDouyinCachedLocalPlayUri(
+    val preparedProxyUri = resolveDouyinProxyPlayUri(
         awemeId = preparedItem?.awemeId,
-        localPlayPaths = uiState.localPlayPaths
+        proxyPlayUris = uiState.proxyPlayUris
     )
     val preparedPlaybackOverrideUri = preparedItem?.awemeId?.let(runtimePlaybackOverrides::get)
     val preparedPlaybackTarget = when {
@@ -609,15 +670,14 @@ internal fun DouyinImmersiveScreen(
                 sequence = injectedFailureNonce
             ),
             codec = DouyinVideoCodec.UNKNOWN,
+            bitrateBitsPerSecond = null,
             trackAutoHevcAttempt = false
         )
         else -> {
             codecPolicyVersion
             resolveDouyinPlaybackTarget(
                 item = preparedItem,
-                preference = uiState.codecPreference,
-                h265Supported = h265Supported,
-                overridePlayUrl = preparedPlaybackOverrideUri ?: preparedLocalUri
+                overridePlayUrl = preparedPlaybackOverrideUri ?: preparedProxyUri
             )
         }
     }
@@ -641,17 +701,15 @@ internal fun DouyinImmersiveScreen(
     )
     val lookaheadTargets = preparedBackgroundItemIndices.mapNotNull { itemIndex ->
         val item = uiState.items.getOrNull(itemIndex) ?: return@mapNotNull null
-        val itemLocalUri = resolveDouyinCachedLocalPlayUri(
+        val itemProxyUri = resolveDouyinProxyPlayUri(
             awemeId = item.awemeId,
-            localPlayPaths = uiState.localPlayPaths
+            proxyPlayUris = uiState.proxyPlayUris
         )
         codecPolicyVersion
         val itemPlaybackOverrideUri = runtimePlaybackOverrides[item.awemeId]
         val playbackTarget = resolveDouyinPlaybackTarget(
             item = item,
-            preference = uiState.codecPreference,
-            h265Supported = h265Supported,
-            overridePlayUrl = itemPlaybackOverrideUri ?: itemLocalUri
+            overridePlayUrl = itemPlaybackOverrideUri ?: itemProxyUri
         ) ?: return@mapNotNull null
         val mediaUri = playbackTarget.mediaUri
         val prepareKey = buildDouyinPlaybackPrepareKey(
@@ -668,6 +726,9 @@ internal fun DouyinImmersiveScreen(
         )
     }
     val preparedPlaybackTargetMediaUri = preparedPlaybackTarget?.mediaUri
+    val foregroundBitrateBitsPerSecond = preparedPlaybackTarget
+        ?.bitrateBitsPerSecond
+        ?.takeUnless { uiState.showTitlePage }
     var activeMediaUri by remember(preparedItem?.awemeId, preparedPlaybackTargetMediaUri) {
         mutableStateOf(preparedPlaybackTargetMediaUri)
     }
@@ -696,6 +757,22 @@ internal fun DouyinImmersiveScreen(
             DouyinPlayerSlotKey.Secondary -> secondarySlot
         }
     }
+    val allSlots = listOf(primarySlot, secondarySlot)
+    val preparedPosterBytes = remember(
+        preparedItem?.awemeId,
+        preparedItem?.playUrlResolvedAtMs,
+        posterCacheVersion
+    ) {
+        DouyinPlaybackPreviewCache.readPosterBytes(preparedItem)
+    }
+    val canEnterPreparedVideoFlow = shouldEnterDouyinVideoFlowImmediately(
+        hasPreparedItem = preparedItem != null
+    )
+    fun requestEnterVideoFlowImmediately() {
+        if (!uiState.showTitlePage || canEnterPreparedVideoFlow) {
+            onEnterFlow()
+        }
+    }
     fun logSettledPlaybackStarted(
         settledItem: DouyinStreamItem,
         settledSlot: DouyinPlayerSlotState
@@ -714,8 +791,8 @@ internal fun DouyinImmersiveScreen(
             "TEST_EVENT playback_started awemeId=${settledItem.awemeId} mode=$mode slot=${settledSlot.key.name}"
         )
     }
-    val allSlots = listOf(primarySlot, secondarySlot)
     val latestItems = rememberUpdatedState(uiState.items)
+    val latestProxyPlayUris = rememberUpdatedState(uiState.proxyPlayUris)
     val latestPrewarmForegroundSlotKey = rememberUpdatedState(foregroundSlotKey)
     val latestPrewarmPreparedAwemeId = rememberUpdatedState(preparedItem?.awemeId)
     val latestPrewarmPreparedPrepareKey = rememberUpdatedState(
@@ -804,6 +881,19 @@ internal fun DouyinImmersiveScreen(
         }
         slot.inFlightPrewarmKey = prepareKey
         val previousVolume = slot.player.volume
+        fun shouldKeepPlayingForPreparedTarget(): Boolean {
+            return !latestPrewarmShowTitlePage.value &&
+                latestPrewarmPreparedAwemeId.value == item.awemeId &&
+                latestPrewarmPreparedPrepareKey.value == prepareKey
+        }
+        fun shouldPausePrewarmPlayback(): Boolean {
+            val slotStillMatchesTarget = slot.boundAwemeId == item.awemeId &&
+                slot.preparedSourceKey == prepareKey
+            if (!slotStillMatchesTarget) return false
+            val slotIsForeground = !latestPrewarmShowTitlePage.value &&
+                latestPrewarmForegroundSlotKey.value == slot.key
+            return !slotIsForeground && !shouldKeepPlayingForPreparedTarget()
+        }
         try {
             slot.player.volume = 0f
             slot.player.playWhenReady = true
@@ -813,16 +903,16 @@ internal fun DouyinImmersiveScreen(
                 "TEST_EVENT lookahead_prewarm_start awemeId=${item.awemeId} slot=${slot.key.name}"
             )
 
-            withTimeoutOrNull(DOUYIN_LOOKAHEAD_PREWARM_TIMEOUT_MS) {
+            val finishedBeforeTimeout = withTimeoutOrNull(DOUYIN_LOOKAHEAD_PREWARM_TIMEOUT_MS) {
                 snapshotFlow {
                     slot.hasRenderedFirstFrame ||
                         slot.hasError ||
-                        latestPrewarmShowTitlePage.value ||
                         latestPrewarmForegroundSlotKey.value == slot.key ||
                         slot.boundAwemeId != item.awemeId ||
                         slot.preparedSourceKey != prepareKey
                 }.first { it }
-            }
+                true
+            } == true
 
             if (slot.hasRenderedFirstFrame) {
                 capturePosterFromSlotWithRetries(
@@ -831,15 +921,14 @@ internal fun DouyinImmersiveScreen(
                 )
             }
 
-            val slotBecamePreparedTarget = !latestPrewarmShowTitlePage.value &&
-                latestPrewarmPreparedAwemeId.value == item.awemeId &&
-                latestPrewarmPreparedPrepareKey.value == prepareKey
-            val shouldPauseAfterWarmup = !latestPrewarmShowTitlePage.value &&
-                latestPrewarmForegroundSlotKey.value != slot.key &&
-                !slotBecamePreparedTarget &&
-                slot.boundAwemeId == item.awemeId &&
-                slot.preparedSourceKey == prepareKey
-            if (shouldPauseAfterWarmup) {
+            val slotBecamePreparedTarget = shouldKeepPlayingForPreparedTarget()
+            val keepMutedAfterTimeout = shouldKeepDouyinPrewarmPlayingAfterTimeout(
+                finishedBeforeTimeout = finishedBeforeTimeout,
+                hasRenderedFirstFrame = slot.hasRenderedFirstFrame,
+                hasError = slot.hasError,
+                isStillTarget = shouldPausePrewarmPlayback()
+            )
+            if (shouldPausePrewarmPlayback() && !keepMutedAfterTimeout) {
                 slot.player.playWhenReady = false
                 slot.player.pause()
                 slot.isPlaying = false
@@ -848,10 +937,26 @@ internal fun DouyinImmersiveScreen(
                 TAG,
                 "TEST_EVENT lookahead_prewarm_end awemeId=${item.awemeId} slot=${slot.key.name} " +
                     "firstFrame=${slot.hasRenderedFirstFrame} error=${slot.hasError} " +
-                    "keptForTarget=$slotBecamePreparedTarget"
+                    "keptForTarget=$slotBecamePreparedTarget keepMuted=$keepMutedAfterTimeout"
             )
+            if (keepMutedAfterTimeout) {
+                return
+            }
         } finally {
-            slot.player.volume = previousVolume
+            val keepMutedAfterTimeout = shouldKeepDouyinPrewarmPlayingAfterTimeout(
+                finishedBeforeTimeout = false,
+                hasRenderedFirstFrame = slot.hasRenderedFirstFrame,
+                hasError = slot.hasError,
+                isStillTarget = shouldPausePrewarmPlayback()
+            )
+            if (!keepMutedAfterTimeout) {
+                slot.player.volume = previousVolume
+            }
+            if (shouldPausePrewarmPlayback() && !keepMutedAfterTimeout) {
+                slot.player.playWhenReady = false
+                slot.player.pause()
+                slot.isPlaying = false
+            }
             if (slot.inFlightPrewarmKey == prepareKey) {
                 slot.inFlightPrewarmKey = null
             }
@@ -867,7 +972,8 @@ internal fun DouyinImmersiveScreen(
         isActive = activeSlotMatchesCurrentItem,
         isBuffering = activeIsBuffering,
         isPlaying = activeIsPlaying,
-        hasError = activeHasError
+        hasError = activeHasError,
+        isScrollInProgress = pagerState.isScrollInProgress
     )
     val shouldKeepScreenOn = activeItem != null &&
         !activeHasError &&
@@ -884,8 +990,20 @@ internal fun DouyinImmersiveScreen(
         }
     }
 
+    fun restoreAudibleSlotVolume(slot: DouyinPlayerSlotState) {
+        slot.player.volume = DOUYIN_PLAYER_AUDIBLE_VOLUME
+    }
+
     fun stopSlotPlayback(slot: DouyinPlayerSlotState) {
         pauseSlotPlayback(slot, suppressBuffering = true)
+    }
+
+    fun resetSlotPlayerMedia(slot: DouyinPlayerSlotState) {
+        slot.player.playWhenReady = false
+        runCatching {
+            slot.player.stop()
+            slot.player.clearMediaItems()
+        }
     }
 
     fun detachSlotTextureView(slot: DouyinPlayerSlotState) {
@@ -893,17 +1011,14 @@ internal fun DouyinImmersiveScreen(
             runCatching { slot.player.clearVideoTextureView(attachedTextureView) }
         }
         slot.attachedTextureView = null
+        slot.attachedSurfaceRole = null
         slot.textureView = null
         slot.viewSize = IntSize.Zero
-        slot.hasRenderedFirstFrame = false
+        slot.clearVisibleRenderedFirstFrame()
     }
 
     fun clearSlotBinding(slot: DouyinPlayerSlotState) {
-        slot.player.playWhenReady = false
-        runCatching {
-            slot.player.stop()
-            slot.player.clearMediaItems()
-        }
+        resetSlotPlayerMedia(slot)
         detachSlotTextureView(slot)
         slot.boundAwemeId = null
         slot.mediaUri = null
@@ -911,7 +1026,7 @@ internal fun DouyinImmersiveScreen(
         slot.preparedSourceKey = null
         slot.boundCodec = DouyinVideoCodec.UNKNOWN
         slot.isReady = false
-        slot.hasRenderedFirstFrame = false
+        slot.clearRenderedFirstFrame()
         slot.isBuffering = false
         slot.isPlaying = false
         slot.hasError = false
@@ -937,6 +1052,7 @@ internal fun DouyinImmersiveScreen(
             slot.boundCodec = codec
             slot.player.playWhenReady = shouldPlay
             if (shouldPlay) {
+                restoreAudibleSlotVolume(slot)
                 slot.player.play()
                 val loggedPrepareKey = slot.preparedSourceKey ?: prepareKey
                 if (slot.loggedPlaybackStartKey != loggedPrepareKey) {
@@ -957,13 +1073,16 @@ internal fun DouyinImmersiveScreen(
             }
             return
         }
+        if (slot.preparedSourceKey != null || slot.mediaUri != null) {
+            resetSlotPlayerMedia(slot)
+        }
         slot.boundAwemeId = awemeId
         slot.mediaUri = targetUri
         slot.remoteResolvedAtMs = remoteResolvedAtMs
         slot.preparedSourceKey = prepareKey
         slot.boundCodec = codec
         slot.isReady = false
-        slot.hasRenderedFirstFrame = false
+        slot.clearRenderedFirstFrame()
         slot.isBuffering = true
         slot.isPlaying = false
         slot.hasError = false
@@ -984,6 +1103,7 @@ internal fun DouyinImmersiveScreen(
         slot.player.setMediaItem(MediaItem.fromUri(targetUri))
         slot.player.prepare()
         if (shouldPlay) {
+            restoreAudibleSlotVolume(slot)
             slot.player.play()
         }
     }
@@ -1071,7 +1191,7 @@ internal fun DouyinImmersiveScreen(
             val nextFailureSequence = injectedFailureNonce + 1L
             injectedFailureNonce = nextFailureSequence
             foregroundSlot.hasError = false
-            foregroundSlot.hasRenderedFirstFrame = false
+            foregroundSlot.clearRenderedFirstFrame()
             activePausedByGesture = false
             activeAutoplayEnabled = false
             activeMediaUri = buildDouyinInjectedFailureUri(
@@ -1100,7 +1220,7 @@ internal fun DouyinImmersiveScreen(
             activeFailureBurstState.value = null
         }
         foregroundSlot.hasError = false
-        foregroundSlot.hasRenderedFirstFrame = false
+        foregroundSlot.clearRenderedFirstFrame()
         activePausedByGesture = false
         activeAutoplayEnabled = false
         activePrepareAttemptNonce += 1
@@ -1304,15 +1424,10 @@ internal fun DouyinImmersiveScreen(
             allSlots.forEach(::clearSlotBinding)
             return@LaunchedEffect
         }
-        val playbackResolutionLocalUri = if (preparedPlaybackOverrideUri.isNullOrBlank()) {
-            preparedLocalUri
-        } else {
-            null
-        }
         val resolvedState = resolveDouyinPlaybackState(
             currentUri = activeMediaUri,
             currentRemoteResolvedAtMs = activeRemoteResolvedAtMs,
-            localUri = playbackResolutionLocalUri,
+            localUri = null,
             remoteUri = preparedPlaybackTargetMediaUri,
             remoteResolvedAtMs = preparedItem.playUrlResolvedAtMs
         )
@@ -1322,7 +1437,7 @@ internal fun DouyinImmersiveScreen(
             activePrepareAttemptNonce = 0
             activeAutoplayEnabled = false
             foregroundSlot.hasError = false
-            foregroundSlot.hasRenderedFirstFrame = false
+            foregroundSlot.clearRenderedFirstFrame()
         }
     }
     LaunchedEffect(preparedItem?.awemeId, activeMediaUri, lookaheadTargets.map { it.awemeId }, uiState.showTitlePage) {
@@ -1334,12 +1449,38 @@ internal fun DouyinImmersiveScreen(
                 "recent=${recentVisitedAwemeIds.joinToString(",")}"
         )
     }
-    LaunchedEffect(preparedItemIndex, uiState.items, uiState.playHeaders, uiState.showTitlePage) {
+    LaunchedEffect(
+        preparedItemIndex,
+        uiState.items,
+        uiState.proxyPlayUris,
+        uiState.showTitlePage,
+        foregroundBitrateBitsPerSecond,
+        networkBandwidthEstimateBytesPerSecond
+    ) {
+        if (!shouldUpdateDouyinPlaybackWindow(
+                showTitlePage = uiState.showTitlePage,
+                currentPage = uiState.currentPage
+            )
+        ) {
+            AppLogger.d(
+                TAG,
+                "skip playback window reason=title_page_resume targetPage=${uiState.currentPage} " +
+                    "prepared=${preparedItem?.awemeId.orEmpty()}"
+            )
+            return@LaunchedEffect
+        }
+        val playbackWindowItems = uiState.items.map { item ->
+            uiState.proxyPlayUris[item.awemeId]
+                ?.let { proxyUri -> item.copy(playUrl = proxyUri) }
+                ?: item
+        }
         DouyinPlaybackPreviewCache.updatePlaybackWindow(
-            items = uiState.items,
+            items = playbackWindowItems,
             anchorIndex = preparedItemIndex,
-            headers = uiState.playHeaders,
-            reason = if (uiState.showTitlePage) "title_page" else "immersive_page"
+            headers = emptyMap(),
+            reason = if (uiState.showTitlePage) "title_page" else "immersive_page",
+            foregroundBitrateBitsPerSecond = foregroundBitrateBitsPerSecond,
+            totalBandwidthBytesPerSecond = networkBandwidthEstimateBytesPerSecond
         )
     }
     val latestActiveMediaUri = rememberUpdatedState(activeMediaUri)
@@ -1353,13 +1494,21 @@ internal fun DouyinImmersiveScreen(
         DouyinPlaybackPreviewCache.prefetchHttpFailures.collect { failure ->
             if (latestItems.value.none { it.awemeId == failure.awemeId }) return@collect
             val isForegroundAweme = latestActiveAwemeId.value == failure.awemeId && !latestShowTitlePage.value
+            if (!shouldQuarantineDouyinPrefetchHttpFailure(isForegroundAweme, failure.httpStatusCode)) {
+                AppLogger.d(
+                    TAG,
+                    "ignore prefetch http failure awemeId=${failure.awemeId} " +
+                        "code=${failure.httpStatusCode} foreground=$isForegroundAweme reason=${failure.reason}"
+                )
+                return@collect
+            }
             val boundSlot = allSlots.firstOrNull { it.boundAwemeId == failure.awemeId }
             quarantinePlaybackItem(
                 awemeId = failure.awemeId,
                 reason = DouyinPlaybackQuarantineReason.PrefetchHttpStatusError,
                 detail = failure.httpStatusCode.toString(),
-                slot = boundSlot?.takeUnless { isForegroundAweme },
-                autoSkipCurrent = isForegroundAweme
+                slot = boundSlot,
+                autoSkipCurrent = false
             )
         }
     }
@@ -1429,6 +1578,7 @@ internal fun DouyinImmersiveScreen(
         activePrepareKey,
         foregroundSlotKey,
         foregroundSlot.textureView,
+        foregroundSlot.attachedSurfaceRole,
         foregroundSlot.hasRenderedFirstFrame,
         foregroundSlot.hasError
     ) {
@@ -1439,35 +1589,61 @@ internal fun DouyinImmersiveScreen(
         if (currentForegroundSlot.boundAwemeId != targetItem.awemeId) return@LaunchedEffect
         if (currentForegroundSlot.preparedSourceKey != targetPrepareKey) return@LaunchedEffect
         if (currentForegroundSlot.textureView == null || currentForegroundSlot.viewSize == IntSize.Zero) return@LaunchedEffect
+        if (currentForegroundSlot.attachedSurfaceRole != DouyinPlayerSurfaceRole.HiddenPrewarm) return@LaunchedEffect
         if (currentForegroundSlot.hasRenderedFirstFrame || currentForegroundSlot.hasError) return@LaunchedEffect
 
         val previousVolume = currentForegroundSlot.player.volume
-        currentForegroundSlot.player.volume = 0f
-        currentForegroundSlot.player.playWhenReady = true
-        currentForegroundSlot.player.play()
-        AppLogger.d(
-            TAG,
-            "TEST_EVENT title_prewarm_start awemeId=${targetItem.awemeId} slot=${currentForegroundSlot.key.name}"
-        )
-
-        withTimeoutOrNull(DOUYIN_TITLE_PREWARM_TIMEOUT_MS) {
-            snapshotFlow {
-                currentForegroundSlot.hasRenderedFirstFrame ||
-                    currentForegroundSlot.hasError ||
-                    !latestShowTitlePage.value ||
-                    currentForegroundSlot.boundAwemeId != targetItem.awemeId ||
-                    currentForegroundSlot.preparedSourceKey != targetPrepareKey
-            }.first { it }
-        }
-
-        if (currentForegroundSlot.hasRenderedFirstFrame) {
-            capturePosterFromSlotWithRetries(
-                slot = currentForegroundSlot,
-                reason = "title_prewarm"
+        var keepMutedAfterTimeout = false
+        try {
+            currentForegroundSlot.player.volume = 0f
+            currentForegroundSlot.player.playWhenReady = true
+            currentForegroundSlot.player.play()
+            AppLogger.d(
+                TAG,
+                "TEST_EVENT title_prewarm_start awemeId=${targetItem.awemeId} slot=${currentForegroundSlot.key.name}"
             )
+
+            val finishedBeforeTimeout = withTimeoutOrNull(DOUYIN_TITLE_PREWARM_TIMEOUT_MS) {
+                snapshotFlow {
+                    currentForegroundSlot.hasRenderedFirstFrame ||
+                        currentForegroundSlot.hasError ||
+                        !latestShowTitlePage.value ||
+                        currentForegroundSlot.boundAwemeId != targetItem.awemeId ||
+                        currentForegroundSlot.preparedSourceKey != targetPrepareKey
+                }.first { it }
+                true
+            } == true
+
+            if (currentForegroundSlot.hasRenderedFirstFrame) {
+                capturePosterFromSlotWithRetries(
+                    slot = currentForegroundSlot,
+                    reason = "title_prewarm"
+                )
+            }
+
+            keepMutedAfterTimeout = shouldKeepDouyinPrewarmPlayingAfterTimeout(
+                finishedBeforeTimeout = finishedBeforeTimeout,
+                hasRenderedFirstFrame = currentForegroundSlot.hasRenderedFirstFrame,
+                hasError = currentForegroundSlot.hasError,
+                isStillTarget = latestShowTitlePage.value &&
+                    currentForegroundSlot.boundAwemeId == targetItem.awemeId &&
+                    currentForegroundSlot.preparedSourceKey == targetPrepareKey
+            )
+        } finally {
+            if (!keepMutedAfterTimeout) {
+                currentForegroundSlot.player.volume = previousVolume
+            }
         }
 
-        currentForegroundSlot.player.volume = previousVolume
+        if (keepMutedAfterTimeout) {
+            AppLogger.d(
+                TAG,
+                "TEST_EVENT title_prewarm_continue awemeId=${targetItem.awemeId} slot=${currentForegroundSlot.key.name} " +
+                    "firstFrame=${currentForegroundSlot.hasRenderedFirstFrame} error=${currentForegroundSlot.hasError}"
+            )
+            return@LaunchedEffect
+        }
+
         val shouldPauseAfterWarmup = latestShowTitlePage.value &&
             currentForegroundSlot.boundAwemeId == targetItem.awemeId &&
             currentForegroundSlot.preparedSourceKey == targetPrepareKey
@@ -1499,10 +1675,8 @@ internal fun DouyinImmersiveScreen(
         foregroundSlotKey,
         primarySlot.boundAwemeId,
         primarySlot.preparedSourceKey,
-        primarySlot.inFlightPrewarmKey,
-        primarySlot.hasRenderedFirstFrame,
-        primarySlot.hasError,
         primarySlot.textureView,
+        primarySlot.attachedSurfaceRole,
         lookaheadTargets.map { it.prepareKey }
     ) {
         val hasMatchingLookaheadTarget = lookaheadTargets.any { target ->
@@ -1516,7 +1690,9 @@ internal fun DouyinImmersiveScreen(
                 hasMatchingLookaheadTarget = hasMatchingLookaheadTarget,
                 hasRenderedFirstFrame = primarySlot.hasRenderedFirstFrame,
                 hasError = primarySlot.hasError,
-                hasTextureView = primarySlot.textureView != null && primarySlot.viewSize != IntSize.Zero,
+                hasPrewarmSurface = primarySlot.textureView != null &&
+                    primarySlot.viewSize != IntSize.Zero &&
+                    primarySlot.attachedSurfaceRole == DouyinPlayerSurfaceRole.HiddenPrewarm,
                 isPrewarming = primarySlot.inFlightPrewarmKey == primarySlot.preparedSourceKey
             )
         ) {
@@ -1532,10 +1708,8 @@ internal fun DouyinImmersiveScreen(
         foregroundSlotKey,
         secondarySlot.boundAwemeId,
         secondarySlot.preparedSourceKey,
-        secondarySlot.inFlightPrewarmKey,
-        secondarySlot.hasRenderedFirstFrame,
-        secondarySlot.hasError,
         secondarySlot.textureView,
+        secondarySlot.attachedSurfaceRole,
         lookaheadTargets.map { it.prepareKey }
     ) {
         val hasMatchingLookaheadTarget = lookaheadTargets.any { target ->
@@ -1549,7 +1723,9 @@ internal fun DouyinImmersiveScreen(
                 hasMatchingLookaheadTarget = hasMatchingLookaheadTarget,
                 hasRenderedFirstFrame = secondarySlot.hasRenderedFirstFrame,
                 hasError = secondarySlot.hasError,
-                hasTextureView = secondarySlot.textureView != null && secondarySlot.viewSize != IntSize.Zero,
+                hasPrewarmSurface = secondarySlot.textureView != null &&
+                    secondarySlot.viewSize != IntSize.Zero &&
+                    secondarySlot.attachedSurfaceRole == DouyinPlayerSurfaceRole.HiddenPrewarm,
                 isPrewarming = secondarySlot.inFlightPrewarmKey == secondarySlot.preparedSourceKey
             )
         ) {
@@ -1580,6 +1756,9 @@ internal fun DouyinImmersiveScreen(
         error: PlaybackException,
         isForegroundCurrentSlot: Boolean
     ): Boolean {
+        if (hasIOExceptionCause(error)) {
+            return false
+        }
         if (!isLikelyDouyinCodecFailure(error)) {
             return false
         }
@@ -1591,12 +1770,12 @@ internal fun DouyinImmersiveScreen(
         val fallbackTarget = resolveDouyinH264FallbackTarget(
             item = item,
             currentUri = slot.mediaUri,
-            h265Supported = h265Supported
+            cachePlayUri = latestProxyPlayUris.value[awemeId]
         ) ?: return false
         runtimePlaybackOverrides = runtimePlaybackOverrides + (awemeId to fallbackTarget.mediaUri)
         slot.hasError = false
         slot.isBuffering = true
-        slot.hasRenderedFirstFrame = false
+        slot.clearRenderedFirstFrame()
         slot.isPlaying = false
         AppLogger.d(
             TAG,
@@ -1628,12 +1807,48 @@ internal fun DouyinImmersiveScreen(
         } else {
             DouyinPlaybackQuarantineReason.StandbyPlaybackError
         }
-        quarantinePlaybackItem(
-            awemeId = awemeId,
-            reason = reason,
-            detail = slot.key.name,
-            slot = slot
+        pauseSlotPlayback(slot, suppressBuffering = true)
+        slot.hasError = true
+        slot.isBuffering = false
+        slot.isPlaying = false
+        slot.inFlightPrewarmKey = null
+        AppLogger.d(
+            TAG,
+            "TEST_EVENT standby_playback_failed awemeId=$awemeId reason=${reason.debugLabel} slot=${slot.key.name}"
         )
+    }
+
+    fun handleForegroundCodecFailure(
+        slot: DouyinPlayerSlotState,
+        awemeId: String?
+    ): Boolean {
+        val normalizedAwemeId = awemeId?.trim().orEmpty()
+        if (normalizedAwemeId.isEmpty()) return false
+        val currentRetryCount = activeRetryCountState.intValue
+        AppLogger.d(
+            TAG,
+            "TEST_EVENT playback_codec_failed awemeId=$normalizedAwemeId slot=${slot.key.name} retryCount=$currentRetryCount codec=${slot.boundCodec.name}"
+        )
+        if (currentRetryCount < DOUYIN_MAX_AUTO_RETRY_COUNT) {
+            activeRetryCountState.intValue = currentRetryCount + 1
+            allSlots
+                .filter { it.key != slot.key }
+                .forEach(::clearSlotBinding)
+            slot.hasError = false
+            slot.clearRenderedFirstFrame()
+            activePausedByGesture = false
+            activeAutoplayEnabled = false
+            latestRequestActivePlaybackRefresh.value(false)
+            return true
+        }
+        quarantinePlaybackItem(
+            awemeId = normalizedAwemeId,
+            reason = DouyinPlaybackQuarantineReason.CodecInitFailed,
+            detail = slot.boundCodec.name,
+            slot = slot,
+            autoSkipCurrent = false
+        )
+        return true
     }
     fun logPlaybackStarted(
         slot: DouyinPlayerSlotState,
@@ -1694,7 +1909,7 @@ internal fun DouyinImmersiveScreen(
             }
 
             override fun onRenderedFirstFrame() {
-                primarySlot.hasRenderedFirstFrame = true
+                primarySlot.markRenderedFirstFrame()
                 resetActiveFailureTracking(primarySlot)
                 logPlaybackStarted(primarySlot, mode = "first_frame")
             }
@@ -1726,12 +1941,7 @@ internal fun DouyinImmersiveScreen(
                     return
                 }
                 if (isLikelyDouyinCodecFailure(error)) {
-                    quarantinePlaybackItem(
-                        awemeId = currentAwemeId,
-                        reason = DouyinPlaybackQuarantineReason.CodecInitFailed,
-                        detail = primarySlot.boundCodec.name,
-                        autoSkipCurrent = true
-                    )
+                    handleForegroundCodecFailure(primarySlot, currentAwemeId)
                     return
                 }
                 val currentRetryCount = activeRetryCountState.intValue
@@ -1813,7 +2023,7 @@ internal fun DouyinImmersiveScreen(
             }
 
             override fun onRenderedFirstFrame() {
-                secondarySlot.hasRenderedFirstFrame = true
+                secondarySlot.markRenderedFirstFrame()
                 resetActiveFailureTracking(secondarySlot)
                 logPlaybackStarted(secondarySlot, mode = "first_frame")
             }
@@ -1845,12 +2055,7 @@ internal fun DouyinImmersiveScreen(
                     return
                 }
                 if (isLikelyDouyinCodecFailure(error)) {
-                    quarantinePlaybackItem(
-                        awemeId = currentAwemeId,
-                        reason = DouyinPlaybackQuarantineReason.CodecInitFailed,
-                        detail = secondarySlot.boundCodec.name,
-                        autoSkipCurrent = true
-                    )
+                    handleForegroundCodecFailure(secondarySlot, currentAwemeId)
                     return
                 }
                 val currentRetryCount = activeRetryCountState.intValue
@@ -1908,22 +2113,24 @@ internal fun DouyinImmersiveScreen(
         }
     }
 
-    val latestPreviewCacheSessionGeneration = rememberUpdatedState(
-        DouyinPlaybackPreviewCache.captureSessionGeneration()
-    )
+    fun persistCurrentPreviewSnapshots(clearAfterPersist: Boolean) {
+        val snapshotItems = latestItems.value
+        val snapshotAnchorIndex = latestPreparedItemIndex.value
+        val playbackUrisByAwemeId = latestProxyPlayUris.value
+        CoroutineScope(Dispatchers.IO).launch {
+            DouyinPlaybackPreviewCache.persistExitSnapshotsIfCurrent(
+                items = snapshotItems,
+                playbackUrisByAwemeId = playbackUrisByAwemeId,
+                anchorIndex = snapshotAnchorIndex,
+                expectedGeneration = DouyinPlaybackPreviewCache.captureSessionGeneration(),
+                clearAfterPersist = clearAfterPersist
+            )
+        }
+    }
 
     DisposableEffect(playerSession) {
         onDispose {
-            val snapshotItems = latestItems.value
-            val snapshotAnchorIndex = latestPreparedItemIndex.value
-            val expectedGeneration = latestPreviewCacheSessionGeneration.value
-            CoroutineScope(Dispatchers.IO).launch {
-                DouyinPlaybackPreviewCache.persistExitSnapshotsIfCurrent(
-                    items = snapshotItems,
-                    anchorIndex = snapshotAnchorIndex,
-                    expectedGeneration = expectedGeneration
-                )
-            }
+            persistCurrentPreviewSnapshots(clearAfterPersist = true)
         }
     }
 
@@ -1937,6 +2144,9 @@ internal fun DouyinImmersiveScreen(
             when (event) {
                 Lifecycle.Event.ON_PAUSE,
                 Lifecycle.Event.ON_STOP -> {
+                    if (event == Lifecycle.Event.ON_STOP) {
+                        persistCurrentPreviewSnapshots(clearAfterPersist = false)
+                    }
                     activePausedByLifecycle = true
                     activeAutoplayEnabled = false
                     stopAllPlayback()
@@ -2002,6 +2212,14 @@ internal fun DouyinImmersiveScreen(
         }
         val desiredForegroundSlot = slotFor(desiredForegroundKey)
         val currentMediaUri = activeMediaUri ?: return@LaunchedEffect
+        val foregroundNeedsFreshPrepare =
+            desiredForegroundSlot.boundAwemeId != preparedItem.awemeId ||
+                desiredForegroundSlot.preparedSourceKey != activePrepareKey
+        if (foregroundNeedsFreshPrepare) {
+            allSlots
+                .filter { it.key != desiredForegroundKey }
+                .forEach(::clearSlotBinding)
+        }
         val shouldKeepForegroundPlaying = shouldPlayBoundDouyinForegroundSlot(
             showTitlePage = uiState.showTitlePage,
             autoplayEnabled = activeAutoplayEnabled,
@@ -2070,12 +2288,12 @@ internal fun DouyinImmersiveScreen(
         }
         val slotMatchesTarget = currentForegroundSlot.boundAwemeId == targetItem.awemeId &&
             currentForegroundSlot.preparedSourceKey == targetPrepareKey
-        if (!slotMatchesTarget || (!currentForegroundSlot.isReady && !currentForegroundSlot.hasRenderedFirstFrame)) {
+        if (!slotMatchesTarget) {
             activeAutoplayEnabled = false
             return@LaunchedEffect
         }
-        if (activeAutoplayEnabled) return@LaunchedEffect
         if (useImmediateEntryPlayback) {
+            if (activeAutoplayEnabled) return@LaunchedEffect
             activeAutoplayEnabled = true
             AppLogger.d(
                 TAG,
@@ -2083,7 +2301,16 @@ internal fun DouyinImmersiveScreen(
             )
             return@LaunchedEffect
         }
-        if (currentForegroundSlot.hasRenderedFirstFrame) {
+        val autoplayDelayFrames = resolveDouyinSettleAutoplayDelayFrames(
+            isReady = currentForegroundSlot.isReady,
+            hasRenderedFirstFrame = currentForegroundSlot.hasRenderedFirstFrame
+        )
+        if (autoplayDelayFrames == null) {
+            activeAutoplayEnabled = false
+            return@LaunchedEffect
+        }
+        if (activeAutoplayEnabled) return@LaunchedEffect
+        if (autoplayDelayFrames == 0) {
             activeAutoplayEnabled = true
             AppLogger.d(
                 TAG,
@@ -2094,9 +2321,9 @@ internal fun DouyinImmersiveScreen(
 
         AppLogger.d(
             TAG,
-            "TEST_EVENT settle_delay_start awemeId=${targetItem.awemeId} slot=${currentForegroundSlot.key.name} frames=$DOUYIN_SETTLE_AUTOPLAY_DELAY_FRAMES"
+            "TEST_EVENT settle_delay_start awemeId=${targetItem.awemeId} slot=${currentForegroundSlot.key.name} frames=$autoplayDelayFrames"
         )
-        awaitDouyinFrames(DOUYIN_SETTLE_AUTOPLAY_DELAY_FRAMES)
+        awaitDouyinFrames(autoplayDelayFrames)
         activeAutoplayEnabled = true
         AppLogger.d(
             TAG,
@@ -2131,6 +2358,7 @@ internal fun DouyinImmersiveScreen(
             ) &&
             !pagerState.isScrollInProgress
         if (shouldPlay) {
+            restoreAudibleSlotVolume(currentForegroundSlot)
             currentForegroundSlot.player.playWhenReady = true
             currentForegroundSlot.player.play()
             AppLogger.d(
@@ -2149,24 +2377,54 @@ internal fun DouyinImmersiveScreen(
         }
     }
 
+    val hiddenPrewarmSlots = allSlots.filter { slot ->
+        val hasPreparedTitleTarget = preparedItem != null &&
+            activePrepareKey != null &&
+            slot.boundAwemeId == preparedItem.awemeId &&
+            slot.preparedSourceKey == activePrepareKey
+        val hasMatchingLookaheadTarget = lookaheadTargets.any { target ->
+            target.awemeId == slot.boundAwemeId &&
+                target.prepareKey == slot.preparedSourceKey
+        }
+        shouldHostDouyinHiddenPrewarmSurface(
+            showTitlePage = uiState.showTitlePage,
+            isForegroundSlot = foregroundSlotKey == slot.key,
+            hasPreparedTitleTarget = hasPreparedTitleTarget,
+            hasMatchingLookaheadTarget = hasMatchingLookaheadTarget
+        )
+    }
+    val pagerUserScrollEnabled = pageCount > 1
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
     ) {
+        hiddenPrewarmSlots.forEach { slot ->
+            key(slot.key) {
+                DouyinTextureSlotHost(
+                    slot = slot,
+                    scaleMode = scaleMode,
+                    surfaceRole = DouyinPlayerSurfaceRole.HiddenPrewarm,
+                    attachToPlayer = true,
+                    renderVisible = false
+                )
+            }
+        }
+
         VerticalPager(
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
             flingBehavior = pagerFlingBehavior,
             beyondViewportPageCount = 1,
-            userScrollEnabled = pageCount > 1
+            userScrollEnabled = pagerUserScrollEnabled
         ) { page ->
             if (page == 0) {
                 DouyinTitlePage(
                     hasItems = uiState.items.isNotEmpty(),
                     isRefreshing = uiState.isLoading,
                     onRefresh = onRefresh,
-                    onEnterFlow = onEnterFlow,
+                    onEnterFlow = { requestEnterVideoFlowImmediately() },
                     onHeaderClick = onHeaderClick
                 )
             } else {
@@ -2186,16 +2444,23 @@ internal fun DouyinImmersiveScreen(
                 val pageSlot = allSlots.firstOrNull { it.boundAwemeId == item.awemeId }
                 val pageIsActive = playbackAnchorPagerPage == page
                 val pageHasError = if (pageIsActive) activeHasError else pageSlot?.hasError == true
-                val pageIsVideoVisible = pageSlot?.hasRenderedFirstFrame == true && !pageSlot.hasError
+                val pageIsVideoVisible = isDouyinPageVideoVisible(
+                    isActivePage = pageIsActive,
+                    pageAwemeId = item.awemeId,
+                    slotAwemeId = pageSlot?.boundAwemeId,
+                    slotPrepareKey = pageSlot?.preparedSourceKey,
+                    visibleRenderedPrepareKey = pageSlot?.visibleRenderedPrepareKey,
+                    hasError = pageHasError
+                )
+                val visibleVideoSlot = pageSlot?.takeIf {
+                    shouldAttachDouyinVisibleSurface(
+                        isActivePage = pageIsActive,
+                        hasSlot = true,
+                        hasError = pageHasError
+                    )
+                }
                 val pagePosterBytes = remember(item.awemeId, item.playUrlResolvedAtMs, posterCacheVersion) {
                     DouyinPlaybackPreviewCache.readPosterBytes(item)
-                }
-                val transitionPosterBytes = remember(
-                    activeItem?.awemeId,
-                    activeItem?.playUrlResolvedAtMs,
-                    posterCacheVersion
-                ) {
-                    activeItem?.let(DouyinPlaybackPreviewCache::readPosterBytes)
                 }
                 val showPosterFallback = shouldShowDouyinPosterFallback(
                     pagerPage = page,
@@ -2203,25 +2468,37 @@ internal fun DouyinImmersiveScreen(
                     playbackAnchorPagerPage = playbackAnchorPagerPage,
                     isScrollInProgress = pagerState.isScrollInProgress,
                     isVideoVisible = pageIsVideoVisible,
+                    hasFirstFramePoster = pagePosterBytes != null,
                     hasError = pageHasError
                 )
-                val posterBytes = pagePosterBytes ?: transitionPosterBytes?.takeIf {
-                    shouldUseDouyinTransitionPosterFallback(
+                val showFirstVideoStartupLoadingIndicator =
+                    shouldShowDouyinFirstVideoStartupLoadingIndicator(
                         pagerPage = page,
-                        playbackAnchorPagerPage = playbackAnchorPagerPage,
+                        isActive = pageIsActive,
+                        isVideoVisible = pageIsVideoVisible,
+                        isPlaying = activeIsPlaying,
+                        hasError = pageHasError,
                         isScrollInProgress = pagerState.isScrollInProgress
                     )
-                }
                 DouyinVideoPage(
                     item = item,
                     isActive = pageIsActive,
-                    videoSlot = pageSlot,
+                    videoSlot = visibleVideoSlot,
                     controlsVisible = controlsVisible,
                     scaleMode = scaleMode,
-                    isBuffering = if (pageIsActive) activeShouldShowLoadingIndicator else false,
+                    isBuffering = if (pageIsActive) {
+                        if (showPosterFallback) {
+                            showFirstVideoStartupLoadingIndicator
+                        } else {
+                            activeShouldShowLoadingIndicator || showFirstVideoStartupLoadingIndicator
+                        }
+                    } else {
+                        false
+                    },
                     isVideoVisible = pageIsVideoVisible,
                     showPosterFallback = showPosterFallback,
-                    posterBytes = posterBytes,
+                    showBufferingOverPosterImmediately = showFirstVideoStartupLoadingIndicator,
+                    posterBytes = pagePosterBytes,
                     hasError = pageHasError,
                     onToggleControls = { controlsVisible = !controlsVisible },
                     onToggleScaleMode = { scaleMode = scaleMode.next() },
@@ -2237,6 +2514,7 @@ internal fun DouyinImmersiveScreen(
                             activePausedByGesture = false
                             activeAutoplayEnabled = true
                             if (activeItem?.awemeId == item.awemeId && !activeHasError) {
+                                restoreAudibleSlotVolume(foregroundSlot)
                                 foregroundSlot.player.playWhenReady = true
                                 foregroundSlot.player.play()
                             }
@@ -2383,6 +2661,7 @@ private fun DouyinTitlePage(
 private fun DouyinTextureSlotHost(
     slot: DouyinPlayerSlotState,
     scaleMode: DouyinPlayerScaleMode,
+    surfaceRole: DouyinPlayerSurfaceRole,
     attachToPlayer: Boolean,
     renderVisible: Boolean
 ) {
@@ -2391,7 +2670,7 @@ private fun DouyinTextureSlotHost(
         modifier = Modifier.fillMaxSize(),
         factory = {
             TextureView(context).apply {
-                alpha = if (renderVisible) 1f else 0f
+                alpha = if (renderVisible) 1f else DOUYIN_HIDDEN_PREWARM_ALPHA
                 surfaceTextureListener = object : TextureView.SurfaceTextureListener {
                     override fun onSurfaceTextureAvailable(
                         surfaceTexture: SurfaceTexture,
@@ -2400,7 +2679,7 @@ private fun DouyinTextureSlotHost(
                     ) {
                         slot.textureView = this@apply
                         slot.viewSize = IntSize(width, height)
-                        syncDouyinTextureAttachment(slot, this@apply, attachToPlayer)
+                        syncDouyinTextureAttachment(slot, this@apply, attachToPlayer, surfaceRole)
                     }
 
                     override fun onSurfaceTextureSizeChanged(
@@ -2417,9 +2696,12 @@ private fun DouyinTextureSlotHost(
                         }
                         if (slot.attachedTextureView === this@apply) {
                             slot.attachedTextureView = null
+                            slot.attachedSurfaceRole = null
                         }
                         slot.viewSize = IntSize.Zero
-                        slot.hasRenderedFirstFrame = false
+                        if (surfaceRole == DouyinPlayerSurfaceRole.VisiblePlayback) {
+                            slot.clearVisibleRenderedFirstFrame()
+                        }
                         runCatching { slot.player.clearVideoTextureView(this@apply) }
                         return true
                     }
@@ -2430,9 +2712,9 @@ private fun DouyinTextureSlotHost(
         },
         update = { textureView ->
             slot.textureView = textureView
-            textureView.alpha = if (renderVisible) 1f else 0f
+            textureView.alpha = if (renderVisible) 1f else DOUYIN_HIDDEN_PREWARM_ALPHA
             if (textureView.isAvailable) {
-                syncDouyinTextureAttachment(slot, textureView, attachToPlayer)
+                syncDouyinTextureAttachment(slot, textureView, attachToPlayer, surfaceRole)
             }
             val size = IntSize(textureView.width, textureView.height)
             if (size.width > 0 && size.height > 0 && size != slot.viewSize) {
@@ -2459,6 +2741,7 @@ private fun DouyinVideoPage(
     isBuffering: Boolean,
     isVideoVisible: Boolean,
     showPosterFallback: Boolean,
+    showBufferingOverPosterImmediately: Boolean,
     posterBytes: ByteArray?,
     hasError: Boolean,
     onToggleControls: () -> Unit,
@@ -2473,6 +2756,16 @@ private fun DouyinVideoPage(
     val controlsSize = watchDimensionResource(R.dimen.hey_button_height)
     val controlsIconSize = watchDimensionResource(R.dimen.hey_listitem_widget_size)
     val titleFontSize = with(density) { watchDimensionResource(R.dimen.feed_card_title_text_size).toSp() }
+    var showBufferingIndicator by remember(item.awemeId, isActive) { mutableStateOf(false) }
+
+    LaunchedEffect(isActive, isBuffering, showPosterFallback, showBufferingOverPosterImmediately) {
+        showBufferingIndicator = false
+        if (!isActive || !isBuffering) return@LaunchedEffect
+        if (showPosterFallback && !showBufferingOverPosterImmediately) {
+            delay(DOUYIN_BUFFERING_INDICATOR_POSTER_DELAY_MS)
+        }
+        showBufferingIndicator = true
+    }
 
     Box(
         modifier = Modifier
@@ -2493,7 +2786,6 @@ private fun DouyinVideoPage(
         if (showPosterFallback) {
             DouyinPosterFallback(
                 posterBytes = posterBytes,
-                coverUrl = item.coverUrl,
                 scaleMode = scaleMode
             )
         }
@@ -2502,12 +2794,13 @@ private fun DouyinVideoPage(
             DouyinTextureSlotHost(
                 slot = videoSlot,
                 scaleMode = scaleMode,
+                surfaceRole = DouyinPlayerSurfaceRole.VisiblePlayback,
                 attachToPlayer = true,
                 renderVisible = isVideoVisible
             )
         }
 
-        if (isBuffering && !hasError && isActive) {
+        if (showBufferingIndicator && !hasError && isActive) {
             WatchCircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
         }
 
@@ -2611,7 +2904,6 @@ private fun DouyinVideoPage(
 @Composable
 private fun DouyinPosterFallback(
     posterBytes: ByteArray?,
-    coverUrl: String?,
     scaleMode: DouyinPlayerScaleMode
 ) {
     val posterBitmap by rememberDouyinPosterBitmap(posterBytes)
@@ -2623,24 +2915,13 @@ private fun DouyinPosterFallback(
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        when {
-            posterBitmap != null -> posterBitmap?.let { bitmap ->
-                Image(
-                    bitmap = bitmap,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = contentScale
-                )
-            }
-
-            !coverUrl.isNullOrBlank() -> {
-                AsyncImage(
-                    model = coverUrl,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = contentScale
-                )
-            }
+        posterBitmap?.let { bitmap ->
+            Image(
+                bitmap = bitmap,
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = contentScale
+            )
         }
     }
 }
@@ -2819,6 +3100,19 @@ private fun buildDouyinPlayerHeadersSignature(headers: Map<String, String>): Str
     return headers.entries
         .sortedBy { it.key }
         .joinToString(";") { (key, value) -> "$key=$value" }
+}
+
+private fun resolveDouyinNetworkBandwidthEstimateBytesPerSecond(context: Context): Long? {
+    val connectivityManager = context.applicationContext
+        .getSystemService(ConnectivityManager::class.java)
+        ?: return null
+    val activeNetwork = connectivityManager.activeNetwork ?: return null
+    val networkCapabilities = connectivityManager.getNetworkCapabilities(activeNetwork) ?: return null
+    val downstreamKbps = networkCapabilities.linkDownstreamBandwidthKbps
+    return downstreamKbps
+        .takeIf { it > 0 }
+        ?.toLong()
+        ?.let { it * 1_000L / 8L }
 }
 
 private fun updateDouyinTextureTransform(
@@ -3160,15 +3454,36 @@ internal fun shouldUseDouyinImmediateEntryPlayback(
     return activePage == 1 && activeItemIndex == entryStartIndex
 }
 
+internal fun shouldUpdateDouyinPlaybackWindow(
+    showTitlePage: Boolean,
+    currentPage: Int
+): Boolean {
+    return if (showTitlePage) {
+        currentPage >= 0
+    } else {
+        true
+    }
+}
+
+internal fun shouldQuarantineDouyinPrefetchHttpFailure(
+    isForegroundAweme: Boolean,
+    httpStatusCode: Int
+): Boolean {
+    if (isForegroundAweme) return false
+    if (httpStatusCode == HTTP_STATUS_RANGE_NOT_SATISFIABLE) return false
+    return true
+}
+
 internal fun shouldShowDouyinPosterFallback(
     pagerPage: Int,
     currentPagerPage: Int,
     playbackAnchorPagerPage: Int,
     isScrollInProgress: Boolean,
     isVideoVisible: Boolean,
+    hasFirstFramePoster: Boolean,
     hasError: Boolean
 ): Boolean {
-    if (pagerPage <= 0 || hasError || isVideoVisible) return false
+    if (pagerPage <= 0 || hasError || isVideoVisible || !hasFirstFramePoster) return false
     return if (isScrollInProgress) {
         abs(pagerPage - currentPagerPage) <= 1
     } else {
@@ -3176,13 +3491,53 @@ internal fun shouldShowDouyinPosterFallback(
     }
 }
 
-internal fun shouldUseDouyinTransitionPosterFallback(
+internal fun shouldShowDouyinFirstVideoStartupLoadingIndicator(
     pagerPage: Int,
-    playbackAnchorPagerPage: Int,
+    isActive: Boolean,
+    isVideoVisible: Boolean,
+    isPlaying: Boolean,
+    hasError: Boolean,
     isScrollInProgress: Boolean
 ): Boolean {
-    if (!isScrollInProgress || pagerPage <= 0) return false
-    return pagerPage != playbackAnchorPagerPage
+    if (pagerPage != 1) return false
+    if (!isActive || hasError || isScrollInProgress) return false
+    return !isVideoVisible && !isPlaying
+}
+
+internal fun shouldAttachDouyinVisibleSurface(
+    isActivePage: Boolean,
+    hasSlot: Boolean,
+    hasError: Boolean
+): Boolean {
+    return isActivePage && hasSlot && !hasError
+}
+
+internal fun isDouyinPageVideoVisible(
+    isActivePage: Boolean,
+    pageAwemeId: String,
+    slotAwemeId: String?,
+    slotPrepareKey: String?,
+    visibleRenderedPrepareKey: String?,
+    hasError: Boolean
+): Boolean {
+    if (!isActivePage || hasError) return false
+    if (pageAwemeId.isBlank() || slotAwemeId != pageAwemeId) return false
+    if (slotPrepareKey.isNullOrBlank()) return false
+    return visibleRenderedPrepareKey == slotPrepareKey
+}
+
+internal fun shouldHostDouyinHiddenPrewarmSurface(
+    showTitlePage: Boolean,
+    isForegroundSlot: Boolean,
+    hasPreparedTitleTarget: Boolean,
+    hasMatchingLookaheadTarget: Boolean
+): Boolean {
+    return if (showTitlePage) {
+        (isForegroundSlot && hasPreparedTitleTarget) ||
+            (!isForegroundSlot && hasMatchingLookaheadTarget)
+    } else {
+        !isForegroundSlot && hasMatchingLookaheadTarget
+    }
 }
 
 internal fun shouldPrewarmDouyinLookaheadSlot(
@@ -3191,22 +3546,52 @@ internal fun shouldPrewarmDouyinLookaheadSlot(
     hasMatchingLookaheadTarget: Boolean,
     hasRenderedFirstFrame: Boolean,
     hasError: Boolean,
-    hasTextureView: Boolean,
+    hasPrewarmSurface: Boolean,
     isPrewarming: Boolean
 ): Boolean {
-    if (showTitlePage || isForegroundSlot) return false
+    if (isForegroundSlot) return false
     if (isPrewarming) return false
     if (!hasMatchingLookaheadTarget || hasRenderedFirstFrame || hasError) return false
-    return hasTextureView
+    return hasPrewarmSurface
+}
+
+internal fun shouldEnterDouyinVideoFlowImmediately(
+    hasPreparedItem: Boolean
+): Boolean {
+    return hasPreparedItem
 }
 
 internal fun shouldShowDouyinLoadingIndicator(
     isActive: Boolean,
     isBuffering: Boolean,
     isPlaying: Boolean,
-    hasError: Boolean
+    hasError: Boolean,
+    isScrollInProgress: Boolean = false
 ): Boolean {
+    if (isScrollInProgress) return false
     return isActive && isBuffering && !isPlaying && !hasError
+}
+
+internal fun resolveDouyinSettleAutoplayDelayFrames(
+    isReady: Boolean,
+    hasRenderedFirstFrame: Boolean
+): Int? {
+    if (hasRenderedFirstFrame) return 0
+    if (!isReady) return null
+    return DOUYIN_SETTLE_AUTOPLAY_DELAY_FRAMES
+        .coerceAtMost(DOUYIN_MAX_SETTLE_AUTOPLAY_DELAY_FRAMES)
+}
+
+internal fun shouldKeepDouyinPrewarmPlayingAfterTimeout(
+    finishedBeforeTimeout: Boolean,
+    hasRenderedFirstFrame: Boolean,
+    hasError: Boolean,
+    isStillTarget: Boolean
+): Boolean {
+    return !finishedBeforeTimeout &&
+        !hasRenderedFirstFrame &&
+        !hasError &&
+        isStillTarget
 }
 
 internal fun shouldAutoPlayDouyinActiveSlot(
@@ -3249,11 +3634,18 @@ private const val DOUYIN_FOREGROUND_FAILURE_BURST_THRESHOLD = 3
 private const val DOUYIN_FOREGROUND_FAILURE_BURST_WINDOW_MS = 2_000L
 private const val DOUYIN_AUTO_SKIP_MESSAGE = "当前视频无法播放\n已为您自动跳过"
 private const val DOUYIN_AUTO_SKIP_MESSAGE_DURATION_MS = 2_000L
+private const val DOUYIN_MAX_SETTLE_AUTOPLAY_DELAY_FRAMES = 3
 private const val DOUYIN_SETTLE_AUTOPLAY_DELAY_FRAMES = 3
+private const val DOUYIN_BUFFERING_INDICATOR_POSTER_DELAY_MS = 350L
+private const val DOUYIN_HIDDEN_PREWARM_ALPHA = 0.01f
 private const val DOUYIN_POSTER_CAPTURE_RETRY_FRAMES = 4
-private const val DOUYIN_TITLE_PREWARM_TIMEOUT_MS = 1_500L
-private const val DOUYIN_LOOKAHEAD_PREWARM_TIMEOUT_MS = 1_000L
+private const val DOUYIN_TITLE_PREWARM_TIMEOUT_MS = 10_000L
+private const val DOUYIN_LOOKAHEAD_PREWARM_TIMEOUT_MS = 10_000L
 private const val DOUYIN_PAGER_SNAP_POSITIONAL_THRESHOLD = 0.18f
+private const val DOUYIN_NETWORK_BANDWIDTH_REFRESH_MS = 5_000L
+private const val DOUYIN_PLAYER_AUDIBLE_VOLUME = 1f
+private const val HTTP_STATUS_RANGE_NOT_SATISFIABLE = 416
 private const val DOUYIN_INJECTED_FAILURE_URI_PREFIX = "watchrss-debug://douyin/force-fail/"
+private const val DOUYIN_CACHE_PLAYBACK_URI_PREFIX = "watchrss-douyin-cache://"
 private const val DOUYIN_PLAYER_RECENT_HISTORY_SIZE = DOUYIN_PLAYBACK_PREVIEW_ENTRY_LIMIT
 private const val TAG = "DouyinImmersive"

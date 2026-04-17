@@ -26,6 +26,7 @@ import com.lightningstudio.watchrss.data.douyin.DouyinStreamItem
 import com.lightningstudio.watchrss.data.douyin.DOUYIN_ACTIVE_PRELOAD_WINDOW_UNWATCHED
 import com.lightningstudio.watchrss.data.douyin.DOUYIN_PLAYBACK_PREFETCH_COUNT
 import com.lightningstudio.watchrss.data.douyin.DOUYIN_RECENT_WINDOW_SIZE
+import com.lightningstudio.watchrss.data.douyin.dropDouyinItemsBeforeAwemeId
 import com.lightningstudio.watchrss.data.douyin.mergeDouyinBootstrapItems
 import com.lightningstudio.watchrss.data.douyin.prioritizeDouyinPreloadItems
 import com.lightningstudio.watchrss.data.douyin.refreshExpiredDouyinBootstrapPlayUrls
@@ -96,6 +97,14 @@ class HomeFeedListActivity : BaseWatchActivity() {
     override fun shouldScheduleDelayedViewStateResetOnTouchEnd(): Boolean = false
 
     override fun buildResumeIntent(): Intent = createIntent(this)
+
+    override fun onStop() {
+        super.onStop()
+        douyinWarmupJob?.cancel()
+        douyinWarmupJob = null
+        douyinCacheWarmupJob?.cancel()
+        douyinCacheWarmupJob = null
+    }
 
     override fun onResume() {
         super.onResume()
@@ -430,19 +439,43 @@ class HomeFeedListActivity : BaseWatchActivity() {
                 resolveDouyinResumeAnchorAwemeId(mergedItems, latestWatchedAwemeId)
             }
         }
-        val prioritizedItems = prioritizeDouyinPreloadItems(
+        val forwardItems = dropDouyinItemsBeforeAwemeId(
             items = mergedItems,
             anchorAwemeId = anchorAwemeId
         )
+        val prioritizedItems = prioritizeDouyinPreloadItems(
+            items = forwardItems,
+            anchorAwemeId = anchorAwemeId
+        )
+        val pinnedSnapshotItems = DouyinPlaybackPreviewCache.restorePinnedItems()
+        val startupPrimeItems = buildList {
+            val seenAwemeIds = linkedSetOf<String>()
+            if (anchorAwemeId.isNullOrBlank()) {
+                pinnedSnapshotItems.forEach { item ->
+                    if (seenAwemeIds.add(item.awemeId)) {
+                        add(item)
+                    }
+                }
+            }
+            prioritizedItems
+                .take(1 + DOUYIN_PLAYBACK_PREFETCH_COUNT)
+                .forEach { item ->
+                    if (seenAwemeIds.add(item.awemeId)) {
+                        add(item)
+                    }
+                }
+        }
         val headers = container.douyinRepository.buildPlayHeaders()
         AppLogger.d(
             "HomeFeedList",
             "prime douyin window reason=$logReason ids=${
-                prioritizedItems.take(DOUYIN_ACTIVE_PRELOAD_WINDOW_UNWATCHED).joinToString(",") { it.awemeId }
+                startupPrimeItems.take(DOUYIN_ACTIVE_PRELOAD_WINDOW_UNWATCHED).joinToString(",") { it.awemeId }
+            } pinned=${
+                pinnedSnapshotItems.joinToString(",") { it.awemeId }
             }"
         )
-        DouyinPlaybackPreviewCache.primeStartupWindow(
-            items = prioritizedItems.take(1 + DOUYIN_PLAYBACK_PREFETCH_COUNT),
+        container.douyinPlaybackTransport.primeStartupWindow(
+            items = startupPrimeItems,
             headers = headers,
             reason = logReason
         )

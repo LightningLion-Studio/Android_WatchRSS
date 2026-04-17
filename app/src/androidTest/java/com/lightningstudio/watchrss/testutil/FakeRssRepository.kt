@@ -22,6 +22,8 @@ class FakeRssRepository(
     private val channelsFlow = MutableStateFlow(initialChannels)
     private val cacheUsageBytesFlow = MutableStateFlow(initialCacheUsageBytes)
 
+    override fun observeHomeChannels(): Flow<List<RssChannel>> = channelsFlow
+
     override fun observeChannels(): Flow<List<RssChannel>> = channelsFlow
 
     override fun observeChannel(channelId: Long): Flow<RssChannel?> {

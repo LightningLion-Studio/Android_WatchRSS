@@ -1,6 +1,5 @@
 package com.lightningstudio.watchrss.data.douyin
 
-import com.lightningstudio.watchrss.data.settings.DouyinVideoCodecPreference
 import com.lightningstudio.watchrss.sdk.douyin.DouyinContent
 import com.lightningstudio.watchrss.sdk.douyin.DouyinVideo
 import com.lightningstudio.watchrss.sdk.douyin.DouyinVideoCodec
@@ -10,30 +9,18 @@ import kotlin.math.max
 
 internal const val DOUYIN_TARGET_VERTICAL_RESOLUTION = 540
 
-internal fun applyPreferredPlayback(
-    video: DouyinVideo,
-    preference: DouyinVideoCodecPreference,
-    h265Supported: Boolean
-) {
-    selectPreferredPlayUrl(
+internal fun applyPreferredPlayback(video: DouyinVideo) {
+    video.playUrl = selectPreferredPlayUrl(
         variants = video.variants,
-        fallbackPlayUrl = video.playUrl,
-        preference = preference,
-        h265Supported = h265Supported
-    )?.let { video.playUrl = it }
+        fallbackPlayUrl = video.playUrl
+    )
 }
 
-internal fun applyPreferredPlayback(
-    content: DouyinContent.Video,
-    preference: DouyinVideoCodecPreference,
-    h265Supported: Boolean
-): DouyinContent.Video {
+internal fun applyPreferredPlayback(content: DouyinContent.Video): DouyinContent.Video {
     val preferredPlayUrl = selectPreferredPlayUrl(
         variants = content.variants,
-        fallbackPlayUrl = content.playUrl,
-        preference = preference,
-        h265Supported = h265Supported
-    ) ?: content.playUrl
+        fallbackPlayUrl = content.playUrl
+    ).orEmpty()
     return if (preferredPlayUrl == content.playUrl) {
         content
     } else {
@@ -43,68 +30,33 @@ internal fun applyPreferredPlayback(
 
 internal fun selectPreferredPlayUrl(
     variants: List<DouyinVideoVariant>,
-    fallbackPlayUrl: String?,
-    preference: DouyinVideoCodecPreference,
-    h265Supported: Boolean
+    fallbackPlayUrl: String?
 ): String? {
-    val preferredVariant = selectPreferredVariant(
-        variants = variants,
-        preference = preference,
-        h265Supported = h265Supported
-    )
-    return preferredVariant?.playUrl ?: fallbackPlayUrl?.trim()?.takeIf { it.isNotEmpty() }
+    val preferredVariant = selectPreferredVariant(variants = variants)
+    val fallback = fallbackPlayUrl?.trim()?.takeIf { it.isNotEmpty() }
+    return preferredVariant?.playUrl ?: fallback?.takeUnless {
+        variants.any { variant ->
+            variant.codec == DouyinVideoCodec.H265 && variant.playUrl.trim() == fallback
+        }
+    }
 }
 
-internal fun selectPreferredVariant(
-    variants: List<DouyinVideoVariant>,
-    preference: DouyinVideoCodecPreference,
-    h265Supported: Boolean
-): DouyinVideoVariant? {
-    val effectivePreference = effectiveDouyinVideoCodecPreference(preference)
+internal fun selectPreferredVariant(variants: List<DouyinVideoVariant>): DouyinVideoVariant? {
     val playableVariants = variants
         .asSequence()
         .filter { it.playUrl.isNotBlank() }
-        .filter { it.codec != DouyinVideoCodec.H265 || h265Supported }
+        .filter { it.codec != DouyinVideoCodec.H265 }
         .toList()
     if (playableVariants.isEmpty()) return null
-    val preferredVariants = preferredCodecPlayableVariants(
-        variants = playableVariants,
-        preference = effectivePreference,
-        h265Supported = h265Supported
-    )
+    val preferredVariants = playableVariants
+        .filter { it.codec == DouyinVideoCodec.H264 }
+        .ifEmpty { playableVariants }
     return preferredVariants.minWithOrNull(
         compareBy<DouyinVideoVariant> { resolutionDistance(it) }
-            .thenBy { codecPriority(it.codec, effectivePreference, h265Supported) }
+            .thenBy { codecPriority(it.codec) }
             .thenByDescending { it.bitrate }
             .thenByDescending { max(it.width, it.height) }
     )
-}
-
-private fun preferredCodecPlayableVariants(
-    variants: List<DouyinVideoVariant>,
-    preference: DouyinVideoCodecPreference,
-    h265Supported: Boolean
-): List<DouyinVideoVariant> {
-    val preferredCodec = when (preference) {
-        DouyinVideoCodecPreference.AUTO -> null
-        DouyinVideoCodecPreference.H264 -> DouyinVideoCodec.H264
-        DouyinVideoCodecPreference.H265 -> DouyinVideoCodec.H265.takeIf { h265Supported }
-    } ?: return variants
-    val matchingVariants = variants.filter { it.codec == preferredCodec }
-    return matchingVariants.ifEmpty { variants }
-}
-
-internal fun effectiveDouyinVideoCodecPreference(
-    preference: DouyinVideoCodecPreference
-): DouyinVideoCodecPreference {
-    return if (
-        preference == DouyinVideoCodecPreference.AUTO &&
-        DouyinCodecRuntimePolicy.shouldPreferH264InAutoMode()
-    ) {
-        DouyinVideoCodecPreference.H264
-    } else {
-        preference
-    }
 }
 
 private fun resolutionDistance(variant: DouyinVideoVariant): Int {
@@ -139,23 +91,12 @@ private fun extractLabeledResolution(variant: DouyinVideoVariant): Int? {
         .firstOrNull()
 }
 
-private fun codecPriority(
-    codec: DouyinVideoCodec,
-    preference: DouyinVideoCodecPreference,
-    h265Supported: Boolean
-): Int {
-    val preferredOrder = when (preference) {
-        DouyinVideoCodecPreference.AUTO ->
-            if (h265Supported) listOf(DouyinVideoCodec.H264, DouyinVideoCodec.H265, DouyinVideoCodec.UNKNOWN)
-            else listOf(DouyinVideoCodec.H264, DouyinVideoCodec.UNKNOWN, DouyinVideoCodec.H265)
-        DouyinVideoCodecPreference.H264 ->
-            if (h265Supported) listOf(DouyinVideoCodec.H264, DouyinVideoCodec.H265, DouyinVideoCodec.UNKNOWN)
-            else listOf(DouyinVideoCodec.H264, DouyinVideoCodec.UNKNOWN, DouyinVideoCodec.H265)
-        DouyinVideoCodecPreference.H265 ->
-            if (h265Supported) listOf(DouyinVideoCodec.H265, DouyinVideoCodec.H264, DouyinVideoCodec.UNKNOWN)
-            else listOf(DouyinVideoCodec.H264, DouyinVideoCodec.UNKNOWN, DouyinVideoCodec.H265)
+private fun codecPriority(codec: DouyinVideoCodec): Int {
+    return when (codec) {
+        DouyinVideoCodec.H264 -> 0
+        DouyinVideoCodec.UNKNOWN -> 1
+        DouyinVideoCodec.H265 -> 2
     }
-    return preferredOrder.indexOf(codec).takeIf { it >= 0 } ?: preferredOrder.size
 }
 
 private val RESOLUTION_PATTERN = Regex("""(?<!\d)(2160|1440|1080|720|540|480)(?:p)?(?!\d)""")

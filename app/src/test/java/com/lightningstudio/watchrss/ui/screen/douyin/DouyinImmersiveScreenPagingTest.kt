@@ -317,6 +317,16 @@ class DouyinImmersiveScreenPagingTest {
                 hasError = true
             )
         )
+        assertEquals(
+            false,
+            shouldShowDouyinLoadingIndicator(
+                isActive = true,
+                isBuffering = true,
+                isPlaying = false,
+                hasError = false,
+                isScrollInProgress = true
+            )
+        )
     }
 
     @Test
@@ -421,6 +431,63 @@ class DouyinImmersiveScreenPagingTest {
     }
 
     @Test
+    fun shouldUpdateDouyinPlaybackWindow_keepsDeferredTitlePageResumeWarm() {
+        assertEquals(
+            true,
+            shouldUpdateDouyinPlaybackWindow(
+                showTitlePage = true,
+                currentPage = 3
+            )
+        )
+        assertEquals(
+            true,
+            shouldUpdateDouyinPlaybackWindow(
+                showTitlePage = true,
+                currentPage = 0
+            )
+        )
+        assertEquals(
+            true,
+            shouldUpdateDouyinPlaybackWindow(
+                showTitlePage = false,
+                currentPage = 3
+            )
+        )
+    }
+
+    @Test
+    fun shouldQuarantineDouyinPrefetchHttpFailure_keepsForegroundPlaybackAlive() {
+        assertEquals(
+            false,
+            shouldQuarantineDouyinPrefetchHttpFailure(
+                isForegroundAweme = true,
+                httpStatusCode = 416
+            )
+        )
+        assertEquals(
+            false,
+            shouldQuarantineDouyinPrefetchHttpFailure(
+                isForegroundAweme = true,
+                httpStatusCode = 403
+            )
+        )
+        assertEquals(
+            false,
+            shouldQuarantineDouyinPrefetchHttpFailure(
+                isForegroundAweme = false,
+                httpStatusCode = 416
+            )
+        )
+        assertEquals(
+            true,
+            shouldQuarantineDouyinPrefetchHttpFailure(
+                isForegroundAweme = false,
+                httpStatusCode = 403
+            )
+        )
+    }
+
+    @Test
     fun shouldShowDouyinPosterFallback_showsForTargetPageAndNearbyScrollPagesWithoutFrame() {
         assertEquals(
             true,
@@ -430,6 +497,7 @@ class DouyinImmersiveScreenPagingTest {
                 playbackAnchorPagerPage = 1,
                 isScrollInProgress = false,
                 isVideoVisible = false,
+                hasFirstFramePoster = true,
                 hasError = false
             )
         )
@@ -441,6 +509,7 @@ class DouyinImmersiveScreenPagingTest {
                 playbackAnchorPagerPage = 1,
                 isScrollInProgress = true,
                 isVideoVisible = false,
+                hasFirstFramePoster = true,
                 hasError = false
             )
         )
@@ -452,6 +521,7 @@ class DouyinImmersiveScreenPagingTest {
                 playbackAnchorPagerPage = 1,
                 isScrollInProgress = false,
                 isVideoVisible = true,
+                hasFirstFramePoster = true,
                 hasError = false
             )
         )
@@ -463,29 +533,243 @@ class DouyinImmersiveScreenPagingTest {
                 playbackAnchorPagerPage = 1,
                 isScrollInProgress = true,
                 isVideoVisible = false,
+                hasFirstFramePoster = true,
+                hasError = false
+            )
+        )
+        assertEquals(
+            false,
+            shouldShowDouyinPosterFallback(
+                pagerPage = 2,
+                currentPagerPage = 2,
+                playbackAnchorPagerPage = 1,
+                isScrollInProgress = true,
+                isVideoVisible = false,
+                hasFirstFramePoster = false,
                 hasError = false
             )
         )
     }
 
     @Test
-    fun transitionFallbackAndLookaheadPrewarm_onlyActivateForRealTransitionTargets() {
+    fun shouldShowDouyinFirstVideoStartupLoadingIndicator_onlyShowsBeforeFirstVideoStarts() {
         assertEquals(
             true,
-            shouldUseDouyinTransitionPosterFallback(
-                pagerPage = 2,
-                playbackAnchorPagerPage = 1,
-                isScrollInProgress = true
+            shouldShowDouyinFirstVideoStartupLoadingIndicator(
+                pagerPage = 1,
+                isActive = true,
+                isVideoVisible = false,
+                isPlaying = false,
+                hasError = false,
+                isScrollInProgress = false
             )
         )
         assertEquals(
             false,
-            shouldUseDouyinTransitionPosterFallback(
+            shouldShowDouyinFirstVideoStartupLoadingIndicator(
+                pagerPage = 2,
+                isActive = true,
+                isVideoVisible = false,
+                isPlaying = false,
+                hasError = false,
+                isScrollInProgress = false
+            )
+        )
+        assertEquals(
+            false,
+            shouldShowDouyinFirstVideoStartupLoadingIndicator(
                 pagerPage = 1,
-                playbackAnchorPagerPage = 1,
+                isActive = true,
+                isVideoVisible = true,
+                isPlaying = false,
+                hasError = false,
+                isScrollInProgress = false
+            )
+        )
+        assertEquals(
+            false,
+            shouldShowDouyinFirstVideoStartupLoadingIndicator(
+                pagerPage = 1,
+                isActive = true,
+                isVideoVisible = false,
+                isPlaying = false,
+                hasError = false,
                 isScrollInProgress = true
             )
         )
+    }
+
+    @Test
+    fun resolveDouyinSettleAutoplayDelayFrames_staysWithinThreeFrames() {
+        assertEquals(
+            0,
+            resolveDouyinSettleAutoplayDelayFrames(
+                isReady = false,
+                hasRenderedFirstFrame = true
+            )
+        )
+        assertEquals(
+            3,
+            resolveDouyinSettleAutoplayDelayFrames(
+                isReady = true,
+                hasRenderedFirstFrame = false
+            )
+        )
+        assertNull(
+            resolveDouyinSettleAutoplayDelayFrames(
+                isReady = false,
+                hasRenderedFirstFrame = false
+            )
+        )
+    }
+
+    @Test
+    fun shouldKeepDouyinPrewarmPlayingAfterTimeout_onlyKeepsSilentCurrentTarget() {
+        assertEquals(
+            true,
+            shouldKeepDouyinPrewarmPlayingAfterTimeout(
+                finishedBeforeTimeout = false,
+                hasRenderedFirstFrame = false,
+                hasError = false,
+                isStillTarget = true
+            )
+        )
+        assertEquals(
+            false,
+            shouldKeepDouyinPrewarmPlayingAfterTimeout(
+                finishedBeforeTimeout = true,
+                hasRenderedFirstFrame = false,
+                hasError = false,
+                isStillTarget = true
+            )
+        )
+        assertEquals(
+            false,
+            shouldKeepDouyinPrewarmPlayingAfterTimeout(
+                finishedBeforeTimeout = false,
+                hasRenderedFirstFrame = true,
+                hasError = false,
+                isStillTarget = true
+            )
+        )
+        assertEquals(
+            false,
+            shouldKeepDouyinPrewarmPlayingAfterTimeout(
+                finishedBeforeTimeout = false,
+                hasRenderedFirstFrame = false,
+                hasError = false,
+                isStillTarget = false
+            )
+        )
+    }
+
+    @Test
+    fun shouldAttachDouyinVisibleSurface_onlyAttachesCurrentHealthyPage() {
+        assertEquals(
+            true,
+            shouldAttachDouyinVisibleSurface(
+                isActivePage = true,
+                hasSlot = true,
+                hasError = false
+            )
+        )
+        assertEquals(
+            false,
+            shouldAttachDouyinVisibleSurface(
+                isActivePage = false,
+                hasSlot = true,
+                hasError = false
+            )
+        )
+        assertEquals(
+            false,
+            shouldAttachDouyinVisibleSurface(
+                isActivePage = true,
+                hasSlot = true,
+                hasError = true
+            )
+        )
+    }
+
+    @Test
+    fun isDouyinPageVideoVisible_requiresVisibleSurfaceFirstFrameForActivePage() {
+        assertEquals(
+            true,
+            isDouyinPageVideoVisible(
+                isActivePage = true,
+                pageAwemeId = "aweme-next",
+                slotAwemeId = "aweme-next",
+                slotPrepareKey = "uri#1",
+                visibleRenderedPrepareKey = "uri#1",
+                hasError = false
+            )
+        )
+        assertEquals(
+            false,
+            isDouyinPageVideoVisible(
+                isActivePage = true,
+                pageAwemeId = "aweme-next",
+                slotAwemeId = "aweme-next",
+                slotPrepareKey = "uri#1",
+                visibleRenderedPrepareKey = null,
+                hasError = false
+            )
+        )
+        assertEquals(
+            false,
+            isDouyinPageVideoVisible(
+                isActivePage = false,
+                pageAwemeId = "aweme-next",
+                slotAwemeId = "aweme-next",
+                slotPrepareKey = "uri#1",
+                visibleRenderedPrepareKey = "uri#1",
+                hasError = false
+            )
+        )
+    }
+
+    @Test
+    fun shouldHostDouyinHiddenPrewarmSurface_usesTitleTargetOrLookaheadSlot() {
+        assertEquals(
+            true,
+            shouldHostDouyinHiddenPrewarmSurface(
+                showTitlePage = true,
+                isForegroundSlot = false,
+                hasPreparedTitleTarget = false,
+                hasMatchingLookaheadTarget = true
+            )
+        )
+        assertEquals(
+            true,
+            shouldHostDouyinHiddenPrewarmSurface(
+                showTitlePage = true,
+                isForegroundSlot = true,
+                hasPreparedTitleTarget = true,
+                hasMatchingLookaheadTarget = false
+            )
+        )
+        assertEquals(
+            true,
+            shouldHostDouyinHiddenPrewarmSurface(
+                showTitlePage = false,
+                isForegroundSlot = false,
+                hasPreparedTitleTarget = false,
+                hasMatchingLookaheadTarget = true
+            )
+        )
+        assertEquals(
+            false,
+            shouldHostDouyinHiddenPrewarmSurface(
+                showTitlePage = false,
+                isForegroundSlot = true,
+                hasPreparedTitleTarget = false,
+                hasMatchingLookaheadTarget = true
+            )
+        )
+    }
+
+    @Test
+    fun lookaheadPrewarm_onlyActivatesForRealTransitionTargets() {
         assertEquals(
             true,
             shouldPrewarmDouyinLookaheadSlot(
@@ -494,7 +778,19 @@ class DouyinImmersiveScreenPagingTest {
                 hasMatchingLookaheadTarget = true,
                 hasRenderedFirstFrame = false,
                 hasError = false,
-                hasTextureView = true,
+                hasPrewarmSurface = true,
+                isPrewarming = false
+            )
+        )
+        assertEquals(
+            true,
+            shouldPrewarmDouyinLookaheadSlot(
+                showTitlePage = true,
+                isForegroundSlot = false,
+                hasMatchingLookaheadTarget = true,
+                hasRenderedFirstFrame = false,
+                hasError = false,
+                hasPrewarmSurface = true,
                 isPrewarming = false
             )
         )
@@ -506,7 +802,7 @@ class DouyinImmersiveScreenPagingTest {
                 hasMatchingLookaheadTarget = true,
                 hasRenderedFirstFrame = false,
                 hasError = false,
-                hasTextureView = true,
+                hasPrewarmSurface = true,
                 isPrewarming = false
             )
         )
@@ -518,8 +814,36 @@ class DouyinImmersiveScreenPagingTest {
                 hasMatchingLookaheadTarget = true,
                 hasRenderedFirstFrame = false,
                 hasError = false,
-                hasTextureView = true,
+                hasPrewarmSurface = true,
                 isPrewarming = true
+            )
+        )
+        assertEquals(
+            false,
+            shouldPrewarmDouyinLookaheadSlot(
+                showTitlePage = false,
+                isForegroundSlot = false,
+                hasMatchingLookaheadTarget = true,
+                hasRenderedFirstFrame = false,
+                hasError = false,
+                hasPrewarmSurface = false,
+                isPrewarming = false
+            )
+        )
+    }
+
+    @Test
+    fun shouldEnterDouyinVideoFlowImmediately_requiresOnlyPreparedItem() {
+        assertEquals(
+            true,
+            shouldEnterDouyinVideoFlowImmediately(
+                hasPreparedItem = true
+            )
+        )
+        assertEquals(
+            false,
+            shouldEnterDouyinVideoFlowImmediately(
+                hasPreparedItem = false
             )
         )
     }

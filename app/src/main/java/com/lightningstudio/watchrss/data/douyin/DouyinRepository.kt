@@ -5,7 +5,6 @@ import android.webkit.CookieManager
 import android.webkit.WebStorage
 import com.lightningstudio.watchrss.data.cache.ManagedCacheBucket
 import com.lightningstudio.watchrss.data.cache.ManagedCacheService
-import com.lightningstudio.watchrss.data.settings.SettingsRepository
 import com.lightningstudio.watchrss.sdk.douyin.ABogus
 import com.lightningstudio.watchrss.sdk.douyin.DouyinContent
 import com.lightningstudio.watchrss.sdk.douyin.DouyinFeedPage
@@ -14,8 +13,6 @@ import com.lightningstudio.watchrss.sdk.douyin.DouyinVideo
 import com.lightningstudio.watchrss.sdk.douyin.DouyinWebCrawler
 import com.lightningstudio.watchrss.sdk.douyin.EncryptedDouyinCookieStore
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import org.json.JSONException
 import java.io.File
@@ -24,7 +21,6 @@ import java.io.IOException
 class DouyinRepository(
     context: Context,
     private val cacheService: ManagedCacheService? = null,
-    private val settingsRepository: SettingsRepository,
     private val recentWindowStore: DouyinRecentWindowStoreContract? = null
 ) : DouyinRepositoryContract {
     private val appContext = context.applicationContext
@@ -118,20 +114,16 @@ class DouyinRepository(
         }
     }
 
-    private suspend fun DouyinFeedPage.applyPlaybackPreference(): DouyinFeedPage {
-        val preference = settingsRepository.douyinVideoCodecPreference.first()
-        val h265Supported = DouyinCodecSupport.isH265Supported()
+    private fun DouyinFeedPage.applyPlaybackPreference(): DouyinFeedPage {
         items.forEach { video ->
-            applyPreferredPlayback(video, preference, h265Supported)
+            applyPreferredPlayback(video)
         }
         return this
     }
 
-    private suspend fun DouyinContent.applyPlaybackPreference(): DouyinContent {
+    private fun DouyinContent.applyPlaybackPreference(): DouyinContent {
         if (this !is DouyinContent.Video) return this
-        val preference = settingsRepository.douyinVideoCodecPreference.first()
-        val h265Supported = DouyinCodecSupport.isH265Supported()
-        return applyPreferredPlayback(this, preference, h265Supported)
+        return applyPreferredPlayback(this)
     }
 
     override suspend fun buildPlayHeaders(): Map<String, String> {
@@ -144,10 +136,6 @@ class DouyinRepository(
             headers["Cookie"] = cookie
         }
         return headers
-    }
-
-    override fun observeVideoCodecPreference(): Flow<com.lightningstudio.watchrss.data.settings.DouyinVideoCodecPreference> {
-        return settingsRepository.douyinVideoCodecPreference
     }
 
     private fun clearWebViewSession() {

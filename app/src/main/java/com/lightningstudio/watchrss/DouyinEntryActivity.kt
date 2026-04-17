@@ -44,6 +44,7 @@ class DouyinEntryActivity : BaseWatchActivity() {
     private val repository by lazy { container.douyinRepository }
     private val rssRepository by lazy { container.rssRepository }
     private val preloadManager by lazy { container.douyinPreloadManager }
+    private val playbackTransport by lazy { container.douyinPlaybackTransport }
     private val watchHistoryStore by lazy { container.douyinWatchHistoryStore }
     private val feedCacheStore by lazy { container.douyinFeedCacheStore }
     private val recentWindowStore by lazy { container.douyinRecentWindowStore }
@@ -52,10 +53,13 @@ class DouyinEntryActivity : BaseWatchActivity() {
         DouyinViewModelFactory(
             repository = repository,
             preloadManager = preloadManager,
+            playbackTransport = playbackTransport,
             watchHistoryStore = watchHistoryStore,
             feedCacheStore = feedCacheStore,
             recentWindowStore = recentWindowStore,
-            recentWindowCacheCoordinator = recentWindowCacheCoordinator
+            recentWindowCacheCoordinator = recentWindowCacheCoordinator,
+            resumeToVideoFlowOnEntry = shouldResumeToVideoFlow(intent),
+            resumeAwemeIdOnEntry = readResumeAwemeId(intent)
         )
     }
     private var disableSwipeBack = false
@@ -76,7 +80,8 @@ class DouyinEntryActivity : BaseWatchActivity() {
         val currentToken = AppLaunchSignal.currentToken()
         if (currentToken != handledLauncherOpenToken) {
             handledLauncherOpenToken = currentToken
-            if (viewModel.uiState.value.isLoggedIn) {
+            val state = viewModel.uiState.value
+            if (state.isLoggedIn && state.showTitlePage) {
                 viewModel.loadCachedFeedForAppLaunch()
             }
         }
@@ -86,9 +91,7 @@ class DouyinEntryActivity : BaseWatchActivity() {
         super.onCreate(savedInstanceState)
         setupSystemBars()
         pendingAutoEnterFlow = shouldAutoEnterFlow(intent)
-        pendingResumeAwemeId = intent?.getStringExtra(EXTRA_RESUME_AWEME_ID)
-            ?.trim()
-            ?.takeIf { it.isNotEmpty() }
+        pendingResumeAwemeId = readResumeAwemeId(intent)
 
         val initialWebViewError = getWebViewUnavailableMessage(this)
         setContent {
@@ -140,8 +143,9 @@ class DouyinEntryActivity : BaseWatchActivity() {
                             uiState.showTitlePage &&
                             uiState.items.isNotEmpty()
                         ) {
+                            val resumeAwemeId = pendingResumeAwemeId
                             pendingAutoEnterFlow = false
-                            viewModel.enterVideoFlow(pendingResumeAwemeId)
+                            viewModel.enterVideoFlow(resumeAwemeId)
                             pendingResumeAwemeId = null
                         }
                     }
@@ -295,13 +299,12 @@ class DouyinEntryActivity : BaseWatchActivity() {
         }
         if (!shouldAutoEnterFlow(intent)) return
         pendingAutoEnterFlow = true
-        pendingResumeAwemeId = intent?.getStringExtra(EXTRA_RESUME_AWEME_ID)
-            ?.trim()
-            ?.takeIf { it.isNotEmpty() }
+        pendingResumeAwemeId = readResumeAwemeId(intent)
         val state = viewModel.uiState.value
         if (state.isLoggedIn && state.showTitlePage && state.items.isNotEmpty()) {
+            val resumeAwemeId = pendingResumeAwemeId
             pendingAutoEnterFlow = false
-            viewModel.enterVideoFlow(pendingResumeAwemeId)
+            viewModel.enterVideoFlow(resumeAwemeId)
             pendingResumeAwemeId = null
         }
     }
@@ -366,8 +369,17 @@ class DouyinEntryActivity : BaseWatchActivity() {
 
     private fun shouldAutoEnterFlow(intent: Intent? = this.intent): Boolean {
         return intent?.action == ACTION_DEBUG_OPEN_DOUYIN ||
-            intent?.getBooleanExtra(EXTRA_RESUME_TO_VIDEO_FLOW, false) == true ||
             intent?.getBooleanExtra(EXTRA_DEBUG_AUTO_ENTER_FLOW, false) == true
+    }
+
+    private fun shouldResumeToVideoFlow(intent: Intent? = this.intent): Boolean {
+        return intent?.getBooleanExtra(EXTRA_RESUME_TO_VIDEO_FLOW, false) == true
+    }
+
+    private fun readResumeAwemeId(intent: Intent? = this.intent): String? {
+        return intent?.getStringExtra(EXTRA_RESUME_AWEME_ID)
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
     }
 
     companion object {

@@ -9,6 +9,7 @@ import com.lightningstudio.watchrss.data.bili.BiliPlaybackCacheManager
 import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
 import com.lightningstudio.watchrss.data.cache.ManagedCacheService
 import com.lightningstudio.watchrss.data.douyin.DouyinFeedCacheStoreContract
+import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackTransportContract
 import com.lightningstudio.watchrss.data.douyin.DouyinPreloadManagerContract
 import com.lightningstudio.watchrss.data.douyin.DouyinRecentWindowCacheCoordinatorContract
 import com.lightningstudio.watchrss.data.douyin.DouyinRecentWindowStoreContract
@@ -62,6 +63,9 @@ class TestAppContainer(
 
     override val douyinPreloadManager: DouyinPreloadManagerContract
         get() = fallback.douyinPreloadManager
+
+    override val douyinPlaybackTransport: DouyinPlaybackTransportContract
+        get() = fallback.douyinPlaybackTransport
 
     override val douyinFeedCacheStore: DouyinFeedCacheStoreContract
         get() = fallback.douyinFeedCacheStore

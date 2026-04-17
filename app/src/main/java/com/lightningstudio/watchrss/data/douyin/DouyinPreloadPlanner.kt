@@ -56,9 +56,20 @@ fun buildDouyinRecentWindow(
     anchorIndex: Int
 ): List<DouyinStreamItem> {
     if (items.isEmpty() || anchorIndex !in items.indices) return emptyList()
-    val startIndex = (anchorIndex - 1).coerceAtLeast(0)
-    val endExclusive = (anchorIndex + 3).coerceAtMost(items.size)
+    val startIndex = anchorIndex
+    val endExclusive = (anchorIndex + DOUYIN_RECENT_WINDOW_SIZE).coerceAtMost(items.size)
     return items.subList(startIndex, endExclusive).toList()
+}
+
+fun dropDouyinItemsBeforeAwemeId(
+    items: List<DouyinStreamItem>,
+    anchorAwemeId: String?
+): List<DouyinStreamItem> {
+    val normalizedAnchorAwemeId = anchorAwemeId?.trim().orEmpty()
+    if (items.isEmpty() || normalizedAnchorAwemeId.isEmpty()) return items
+    val anchorIndex = items.indexOfFirst { it.awemeId == normalizedAnchorAwemeId }
+    if (anchorIndex <= 0) return items
+    return items.drop(anchorIndex)
 }
 
 fun mergeDouyinBootstrapItems(

@@ -12,6 +12,8 @@ import com.lightningstudio.watchrss.data.db.BuiltinChannelSeed
 import com.lightningstudio.watchrss.data.douyin.DouyinFeedCacheStore
 import com.lightningstudio.watchrss.data.douyin.DouyinFeedCacheStoreContract
 import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackPreviewCache
+import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackTransport
+import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackTransportContract
 import com.lightningstudio.watchrss.data.douyin.DouyinPreloadManager
 import com.lightningstudio.watchrss.data.douyin.DouyinPreloadManagerContract
 import com.lightningstudio.watchrss.data.douyin.DouyinRecentWindowCacheCoordinator
@@ -53,6 +55,7 @@ interface AppContainer {
     val biliRepository: BiliRepositoryContract
     val douyinRepository: DouyinRepositoryContract
     val douyinPreloadManager: DouyinPreloadManagerContract
+    val douyinPlaybackTransport: DouyinPlaybackTransportContract
     val douyinFeedCacheStore: DouyinFeedCacheStoreContract
     val douyinWatchHistoryStore: DouyinWatchHistoryStoreContract
     val douyinRecentWindowStore: DouyinRecentWindowStoreContract
@@ -140,6 +143,10 @@ class DefaultAppContainer(context: Context) : AppContainer {
         DouyinPreloadManager(appContext, managedCacheService)
     }
 
+    override val douyinPlaybackTransport: DouyinPlaybackTransportContract by lazy {
+        DouyinPlaybackTransport()
+    }
+
     override val douyinRecentWindowCacheCoordinator: DouyinRecentWindowCacheCoordinatorContract by lazy {
         DouyinRecentWindowCacheCoordinator(
             appScope = appScope,
@@ -151,7 +158,6 @@ class DefaultAppContainer(context: Context) : AppContainer {
         DouyinRepository(
             context = appContext,
             cacheService = managedCacheService,
-            settingsRepository = settingsRepository,
             recentWindowStore = douyinRecentWindowStore
         )
     }

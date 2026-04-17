@@ -6,6 +6,7 @@ import com.lightningstudio.watchrss.data.douyin.DouyinErrorCodes
 import com.lightningstudio.watchrss.data.douyin.DouyinFeedCacheStoreContract
 import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackPreviewCache
 import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackSourceKind
+import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackTransportContract
 import com.lightningstudio.watchrss.data.douyin.DouyinPreloadManagerContract
 import com.lightningstudio.watchrss.data.douyin.DouyinRecentWindowCacheCoordinatorContract
 import com.lightningstudio.watchrss.data.douyin.DouyinRecentWindowStoreContract
@@ -17,12 +18,12 @@ import com.lightningstudio.watchrss.data.douyin.DOUYIN_PRELOAD_LOAD_MORE_THRESHO
 import com.lightningstudio.watchrss.data.douyin.DOUYIN_RECENT_WINDOW_SIZE
 import com.lightningstudio.watchrss.data.douyin.NoOpDouyinRecentWindowCacheCoordinator
 import com.lightningstudio.watchrss.data.douyin.NoOpDouyinRecentWindowStore
+import com.lightningstudio.watchrss.data.douyin.NoOpDouyinPlaybackTransport
 import com.lightningstudio.watchrss.data.douyin.buildDouyinRecentWindow
+import com.lightningstudio.watchrss.data.douyin.dropDouyinItemsBeforeAwemeId
 import com.lightningstudio.watchrss.data.douyin.formatDouyinError
 import com.lightningstudio.watchrss.data.douyin.mergeDouyinBootstrapItems
 import com.lightningstudio.watchrss.data.douyin.resolveDouyinPlaybackAnchorAwemeId
-import com.lightningstudio.watchrss.data.settings.DEFAULT_DOUYIN_VIDEO_CODEC_PREFERENCE
-import com.lightningstudio.watchrss.data.settings.DouyinVideoCodecPreference
 import com.lightningstudio.watchrss.sdk.douyin.DouyinContent
 import com.lightningstudio.watchrss.util.AppLogger
 import kotlinx.coroutines.Dispatchers
@@ -30,7 +31,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -44,7 +44,7 @@ data class DouyinFeedUiState(
     val currentPage: Int = 0,
     val playHeaders: Map<String, String> = emptyMap(),
     val localPlayPaths: Map<String, String> = emptyMap(),
-    val codecPreference: DouyinVideoCodecPreference = DEFAULT_DOUYIN_VIDEO_CODEC_PREFERENCE,
+    val proxyPlayUris: Map<String, String> = emptyMap(),
     val message: String? = null,
     val showTitlePage: Boolean = true
 )
@@ -61,12 +61,15 @@ private data class DouyinBootstrapState(
 class DouyinFeedViewModel(
     private val repository: DouyinRepositoryContract,
     private val preloadManager: DouyinPreloadManagerContract,
+    private val playbackTransport: DouyinPlaybackTransportContract = NoOpDouyinPlaybackTransport,
     private val watchHistoryStore: DouyinWatchHistoryStoreContract,
     private val feedCacheStore: DouyinFeedCacheStoreContract,
     private val recentWindowStore: DouyinRecentWindowStoreContract = NoOpDouyinRecentWindowStore,
     private val recentWindowCacheCoordinator: DouyinRecentWindowCacheCoordinatorContract =
         NoOpDouyinRecentWindowCacheCoordinator,
-    private val storageDispatcher: CoroutineDispatcher = Dispatchers.IO.limitedParallelism(1)
+    private val storageDispatcher: CoroutineDispatcher = Dispatchers.IO.limitedParallelism(1),
+    private val resumeToVideoFlowOnEntry: Boolean = false,
+    private val resumeAwemeIdOnEntry: String? = null
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(DouyinFeedUiState())
     val uiState: StateFlow<DouyinFeedUiState> = _uiState
@@ -81,11 +84,6 @@ class DouyinFeedViewModel(
 
     init {
         viewModelScope.launch {
-            repository.observeVideoCodecPreference().collectLatest { preference ->
-                _uiState.update { it.copy(codecPreference = preference) }
-            }
-        }
-        viewModelScope.launch {
             val loggedIn = repository.isLoggedIn()
             if (loggedIn) {
                 val headers = repository.buildPlayHeaders()
@@ -96,8 +94,12 @@ class DouyinFeedViewModel(
                         message = null
                     )
                 }
-                val hasBootstrapItems = restoreEntryPlayback(headers)
-                if (!hasBootstrapItems || shouldRefreshBootstrapWindow() || shouldPrimeBootstrapCursor()) {
+                val hasBootstrapItems = restoreEntryPlayback(
+                    headers = headers,
+                    resumeToVideoFlow = resumeToVideoFlowOnEntry,
+                    resumeAwemeId = resumeAwemeIdOnEntry
+                )
+                if (shouldLoadInitialAfterRestore(hasBootstrapItems, resumeToVideoFlowOnEntry)) {
                     loadInitial()
                 }
             } else {
@@ -140,7 +142,7 @@ class DouyinFeedViewModel(
                 )
             }
             val hasBootstrapItems = restoreEntryPlayback(headers)
-            if (!hasBootstrapItems || shouldRefreshBootstrapWindow() || shouldPrimeBootstrapCursor()) {
+            if (shouldLoadInitialAfterRestore(hasBootstrapItems, resumeToVideoFlow = false)) {
                 loadInitial()
             }
         }
@@ -205,6 +207,11 @@ class DouyinFeedViewModel(
                 )
                 val visibleMergedItems = projectVisibleItems()
                 val visibleLocalPaths = projectVisibleLocalPlayPaths(visibleMergedItems)
+                val visibleProxyUris = projectVisibleProxyPlayUris(
+                    visibleItems = visibleMergedItems,
+                    headers = headers,
+                    reason = "load_initial"
+                )
                 val adjustedCurrentPage = when {
                     replaceExistingFeed -> 0
                     latestState.showTitlePage -> latestState.currentPage.coerceAtMost(visibleMergedItems.size)
@@ -219,18 +226,21 @@ class DouyinFeedViewModel(
                         hasMore = hasMore,
                         playHeaders = headers,
                         localPlayPaths = visibleLocalPaths,
-                        showTitlePage = latestState.showTitlePage,
+                        proxyPlayUris = visibleProxyUris,
+                        showTitlePage = if (replaceExistingFeed) true else latestState.showTitlePage,
                         currentPage = adjustedCurrentPage,
                         message = null
                     )
                 }
-                maybePersistRecentWindow(
-                    visibleItems = visibleMergedItems,
-                    sourceItems = sourceItems,
-                    targetPage = adjustedCurrentPage,
-                    headers = headers,
-                    reason = "load_initial"
-                )
+                if (!latestState.showTitlePage) {
+                    maybePersistRecentWindow(
+                        visibleItems = visibleMergedItems,
+                        sourceItems = sourceItems,
+                        targetPage = adjustedCurrentPage,
+                        headers = headers,
+                        reason = "load_initial"
+                    )
+                }
                 cacheBootstrapPage(
                     items = sourceItems,
                     nextCursorSnapshot = nextCursor,
@@ -264,7 +274,14 @@ class DouyinFeedViewModel(
                 sourceLocalPlayPaths = sourceLocalPlayPaths - normalizedAwemeId
                 val visibleItems = projectVisibleItems()
                 _uiState.update { state ->
-                    state.copy(localPlayPaths = projectVisibleLocalPlayPaths(visibleItems))
+                    state.copy(
+                        localPlayPaths = projectVisibleLocalPlayPaths(visibleItems),
+                        proxyPlayUris = projectVisibleProxyPlayUris(
+                            visibleItems = visibleItems,
+                            headers = state.playHeaders,
+                            reason = "local_invalidate"
+                        )
+                    )
                 }
             }
 
@@ -302,6 +319,7 @@ class DouyinFeedViewModel(
                         isLoggedIn = false,
                         items = emptyList(),
                         localPlayPaths = emptyMap(),
+                        proxyPlayUris = emptyMap(),
                         message = "需要登录"
                     )
                 }
@@ -329,49 +347,79 @@ class DouyinFeedViewModel(
         nextCursor = bootstrapState.nextCursor
         val visibleItems = projectVisibleItems()
         val visibleLocalPaths = projectVisibleLocalPlayPaths(visibleItems)
+        val visibleProxyUris = projectVisibleProxyPlayUris(
+            visibleItems = visibleItems,
+            headers = headers,
+            reason = "load_cached_bootstrap"
+        )
         _uiState.update {
             it.copy(
                 items = visibleItems,
                 hasMore = bootstrapState.hasMore,
                 playHeaders = headers,
-                localPlayPaths = visibleLocalPaths
+                localPlayPaths = visibleLocalPaths,
+                proxyPlayUris = visibleProxyUris
             )
         }
         return bootstrapState.savedAtMs
     }
 
-    private suspend fun restoreEntryPlayback(headers: Map<String, String>): Boolean {
+    private suspend fun restoreEntryPlayback(
+        headers: Map<String, String>,
+        resumeToVideoFlow: Boolean = false,
+        resumeAwemeId: String? = null
+    ): Boolean {
         val bootstrapState = readBootstrapState()
-        replaceSourceState(
-            items = bootstrapState.items,
-            localPlayPaths = bootstrapState.localPaths
-        )
-        val visibleBootstrapItems = projectVisibleItems()
-        val visibleLocalPaths = projectVisibleLocalPlayPaths(visibleBootstrapItems)
-        val hasBootstrapItems = visibleBootstrapItems.isNotEmpty()
         val latestAwemeId = withContext(storageDispatcher) {
             watchHistoryStore.readHistory()
                 .firstOrNull()
                 ?.awemeId
                 ?.takeIf { it.isNotBlank() }
         }
-        val resumeAnchorPage = resolvePageForAwemeId(
-            awemeId = bootstrapState.resumeAnchorAwemeId,
+        val persistedResumeAnchorAwemeId = resumeAwemeId
+            ?: bootstrapState.resumeAnchorAwemeId
+        val resumeAnchorAwemeId = persistedResumeAnchorAwemeId ?: latestAwemeId
+        val restoredItems = dropDouyinItemsBeforeAwemeId(
+            items = bootstrapState.items,
+            anchorAwemeId = persistedResumeAnchorAwemeId
+        )
+        replaceSourceState(
+            items = restoredItems,
+            localPlayPaths = bootstrapState.localPaths
+        )
+        val visibleBootstrapItems = projectVisibleItems()
+        val visibleLocalPaths = projectVisibleLocalPlayPaths(visibleBootstrapItems)
+        val visibleProxyUris = projectVisibleProxyPlayUris(
+            visibleItems = visibleBootstrapItems,
+            headers = headers,
+            reason = "restore_entry"
+        )
+        val hasBootstrapItems = visibleBootstrapItems.isNotEmpty()
+        val resumeAnchorPage = resolvePageAfterAwemeId(
+            awemeId = resumeAnchorAwemeId,
+            items = visibleBootstrapItems
+        ) ?: resolvePageForAwemeId(
+            awemeId = resumeAnchorAwemeId,
             items = visibleBootstrapItems
         )
         val targetPage = when {
+            resumeAnchorPage != null -> resumeAnchorPage
             !latestAwemeId.isNullOrBlank() -> {
-                resolveNextPageAfter(
+                resolvePageAfterAwemeId(
                     awemeId = latestAwemeId,
                     items = visibleBootstrapItems
-                ) ?: resumeAnchorPage ?: if (visibleBootstrapItems.isNotEmpty()) 1 else 0
+                ) ?: resolvePageForAwemeId(
+                    awemeId = latestAwemeId,
+                    items = visibleBootstrapItems
+                ) ?: 0
             }
-            else -> resumeAnchorPage ?: 0
+            else -> 0
         }
         AppLogger.d(
             TAG,
-            "restore bootstrap items=${bootstrapState.items.size} latest=$latestAwemeId " +
-                "resume=${bootstrapState.resumeAnchorAwemeId} targetPage=$targetPage " +
+            "restore bootstrap items=${bootstrapState.items.size} restored=${restoredItems.size} latest=$latestAwemeId " +
+                "resume=${bootstrapState.resumeAnchorAwemeId} explicit=$resumeAwemeId " +
+                "resumeFlow=$resumeToVideoFlow targetPage=$targetPage " +
                 "nextCursor=${bootstrapState.nextCursor} hasMore=${bootstrapState.hasMore}"
         )
         seedFeedWindow(sourceItems)
@@ -382,20 +430,23 @@ class DouyinFeedViewModel(
                 hasMore = bootstrapState.hasMore,
                 playHeaders = headers,
                 localPlayPaths = visibleLocalPaths,
+                proxyPlayUris = visibleProxyUris,
                 currentPage = targetPage,
                 showTitlePage = true,
                 message = null
             )
         }
-        maybePersistRecentWindow(
-            visibleItems = visibleBootstrapItems,
-            sourceItems = sourceItems,
-            targetPage = targetPage,
-            headers = headers,
-            reason = "restore_entry"
-        )
         schedulePreload(visibleBootstrapItems, headers)
         return hasBootstrapItems
+    }
+
+    private fun shouldLoadInitialAfterRestore(
+        hasBootstrapItems: Boolean,
+        resumeToVideoFlow: Boolean
+    ): Boolean {
+        if (!hasBootstrapItems) return true
+        if (resumeToVideoFlow) return false
+        return shouldRefreshBootstrapWindow() || shouldPrimeBootstrapCursor()
     }
 
     private fun shouldRefreshBootstrapWindow(): Boolean {
@@ -432,23 +483,33 @@ class DouyinFeedViewModel(
             recentItems = recentItems,
             limit = BOOTSTRAP_ITEMS + DOUYIN_RECENT_WINDOW_SIZE
         )
-        val bootstrapItems = buildList {
-            val seenAwemeIds = linkedSetOf<String>()
-            pinnedSnapshotItems.forEach { item ->
-                if (seenAwemeIds.add(item.awemeId)) {
-                    add(item)
+        val anchorAwemeId = recentWindowSnapshot.anchorAwemeId
+        val mergedWithPinnedItems = if (anchorAwemeId.isNullOrBlank()) {
+            buildList {
+                val seenAwemeIds = linkedSetOf<String>()
+                pinnedSnapshotItems.forEach { item ->
+                    if (seenAwemeIds.add(item.awemeId)) {
+                        add(item)
+                    }
+                }
+                mergedBootstrapItems.forEach { item ->
+                    if (seenAwemeIds.add(item.awemeId)) {
+                        add(item)
+                    }
                 }
             }
-            mergedBootstrapItems.forEach { item ->
-                if (seenAwemeIds.add(item.awemeId)) {
-                    add(item)
-                }
-            }
-        }.take(BOOTSTRAP_ITEMS + DOUYIN_PLAYBACK_SNAPSHOT_STARTUP_COUNT)
+        } else {
+            dropDouyinItemsBeforeAwemeId(
+                items = mergedBootstrapItems,
+                anchorAwemeId = anchorAwemeId
+            )
+        }
+        val bootstrapItems = mergedWithPinnedItems
+            .take(BOOTSTRAP_ITEMS + DOUYIN_PLAYBACK_SNAPSHOT_STARTUP_COUNT)
         AppLogger.d(
             TAG,
             "read bootstrap pinned=${pinnedSnapshotItems.size} feed=${cachedItems.size} recent=${recentItems.size} " +
-                "merged=${bootstrapItems.size} anchor=${recentWindowSnapshot.anchorAwemeId}"
+                "merged=${mergedWithPinnedItems.size} restored=${bootstrapItems.size} anchor=${recentWindowSnapshot.anchorAwemeId}"
         )
         if (bootstrapItems.isEmpty()) {
             return@withContext DouyinBootstrapState(
@@ -558,6 +619,11 @@ class DouyinFeedViewModel(
             state.copy(
                 items = nextVisibleItems,
                 localPlayPaths = nextVisibleLocalPaths,
+                proxyPlayUris = projectVisibleProxyPlayUris(
+                    visibleItems = nextVisibleItems,
+                    headers = state.playHeaders,
+                    reason = "discard_item"
+                ),
                 currentPage = resolveCurrentPageAfterDiscard(
                     currentPage = state.currentPage,
                     removedIndex = removedIndex,
@@ -590,12 +656,18 @@ class DouyinFeedViewModel(
                 )
                 val visibleMergedItems = projectVisibleItems()
                 val visibleLocalPaths = projectVisibleLocalPlayPaths(visibleMergedItems)
+                val visibleProxyUris = projectVisibleProxyPlayUris(
+                    visibleItems = visibleMergedItems,
+                    headers = _uiState.value.playHeaders,
+                    reason = "load_more"
+                )
                 _uiState.update {
                     it.copy(
                         isLoadingMore = false,
                         hasMore = page?.hasMore ?: false,
                         items = visibleMergedItems,
-                        localPlayPaths = visibleLocalPaths
+                        localPlayPaths = visibleLocalPaths,
+                        proxyPlayUris = visibleProxyUris
                     )
                 }
                 schedulePreload(visibleMergedItems, _uiState.value.playHeaders)
@@ -625,7 +697,8 @@ class DouyinFeedViewModel(
                         isLoadingMore = false,
                         isLoggedIn = false,
                         items = emptyList(),
-                        localPlayPaths = emptyMap()
+                        localPlayPaths = emptyMap(),
+                        proxyPlayUris = emptyMap()
                     )
                 }
             }
@@ -676,7 +749,7 @@ class DouyinFeedViewModel(
         if (items.isEmpty()) return
         AppLogger.d(
             TAG,
-            "skip full-file preload items=${items.size} anchor=${
+            "proxy playback window active; skip full-file preload items=${items.size} anchor=${
                 resolveDouyinPlaybackAnchorAwemeId(items = items, currentPage = _uiState.value.currentPage)
             }"
         )
@@ -708,10 +781,16 @@ class DouyinFeedViewModel(
         if (updated) {
             val visibleItems = projectVisibleItems()
             val visibleLocalPaths = projectVisibleLocalPlayPaths(visibleItems)
+            val visibleProxyUris = projectVisibleProxyPlayUris(
+                visibleItems = visibleItems,
+                headers = _uiState.value.playHeaders,
+                reason = "playback_source_update"
+            )
             _uiState.update { state ->
                 state.copy(
                     items = visibleItems,
-                    localPlayPaths = visibleLocalPaths
+                    localPlayPaths = visibleLocalPaths,
+                    proxyPlayUris = visibleProxyUris
                 )
             }
         }
@@ -757,11 +836,14 @@ class DouyinFeedViewModel(
         val recentWindow = buildDouyinRecentWindow(items, anchorIndex)
         if (recentWindow.isEmpty()) return
         val anchorAwemeId = items.getOrNull(anchorIndex)?.awemeId ?: return
-        val mergedBootstrapItems = mergeDouyinBootstrapItems(
-            feedItems = feedCacheStore.readSnapshot(limit = BOOTSTRAP_ITEMS).items,
-            recentItems = recentWindow,
-            limit = BOOTSTRAP_ITEMS
-        )
+        val mergedBootstrapItems = dropDouyinItemsBeforeAwemeId(
+            items = mergeDouyinBootstrapItems(
+                feedItems = feedCacheStore.readSnapshot(limit = BOOTSTRAP_ITEMS).items,
+                recentItems = recentWindow,
+                limit = BOOTSTRAP_ITEMS
+            ),
+            anchorAwemeId = anchorAwemeId
+        ).take(BOOTSTRAP_ITEMS)
         AppLogger.d(
             TAG,
             "persist recent window reason=$reason anchor=$anchorAwemeId items=${recentWindow.size}"
@@ -801,13 +883,15 @@ class DouyinFeedViewModel(
         }
     }
 
-    private fun resolveNextPageAfter(
-        awemeId: String,
+    private fun resolvePageAfterAwemeId(
+        awemeId: String?,
         items: List<DouyinStreamItem>
     ): Int? {
-        val currentIndex = items.indexOfFirst { it.awemeId == awemeId }
-        if (currentIndex < 0) return null
-        val nextIndex = currentIndex + 1
+        val normalizedAwemeId = awemeId?.trim().orEmpty()
+        if (normalizedAwemeId.isEmpty()) return null
+        val itemIndex = items.indexOfFirst { it.awemeId == normalizedAwemeId }
+        if (itemIndex < 0) return null
+        val nextIndex = itemIndex + 1
         if (nextIndex >= items.size) return null
         return nextIndex + 1
     }
@@ -853,6 +937,19 @@ class DouyinFeedViewModel(
         return localPlayPaths.filterKeys { visibleAwemeIds.contains(it) }
     }
 
+    private fun projectVisibleProxyPlayUris(
+        visibleItems: List<DouyinStreamItem>,
+        headers: Map<String, String>,
+        reason: String
+    ): Map<String, String> {
+        if (visibleItems.isEmpty()) return emptyMap()
+        return playbackTransport.proxyUrisFor(
+            items = visibleItems,
+            headers = headers,
+            reason = reason
+        )
+    }
+
     private fun resolveCurrentPageAfterDiscard(
         currentPage: Int,
         removedIndex: Int,
@@ -873,7 +970,7 @@ class DouyinFeedViewModel(
         private const val TAG = "DouyinFeedVM"
         private const val PAGE_SIZE = 16
         private const val BOOTSTRAP_ITEMS = PAGE_SIZE
-        private const val DOUYIN_PLAYBACK_SNAPSHOT_STARTUP_COUNT = 2
+        private const val DOUYIN_PLAYBACK_SNAPSHOT_STARTUP_COUNT = 6
         private const val MIN_BOOTSTRAP_ITEMS_BEFORE_NETWORK_REFRESH = 3
         private const val MIN_FORWARD_ITEMS_BEFORE_NETWORK_REFRESH = 3
     }

@@ -120,42 +120,6 @@ class SettingsRepositoryTest {
     }
 
     @Test
-    fun douyinVideoCodecPreference_defaultsToAuto() = runBlocking {
-        val env = createRepository("douyin-codec-default.preferences_pb")
-        try {
-            assertEquals(
-                DEFAULT_DOUYIN_VIDEO_CODEC_PREFERENCE,
-                env.repository.douyinVideoCodecPreference.first()
-            )
-        } finally {
-            env.scope.cancel()
-        }
-    }
-
-    @Test
-    fun douyinVideoCodecPreference_fallsBackForUnknownStoredValue_andPersistsUpdates() = runBlocking {
-        val env = createRepository("douyin-codec-updated.preferences_pb")
-        val key = intPreferencesKey("douyin_video_codec_preference")
-        try {
-            env.dataStore.edit { preferences ->
-                preferences[key] = 99
-            }
-            assertEquals(
-                DEFAULT_DOUYIN_VIDEO_CODEC_PREFERENCE,
-                env.repository.douyinVideoCodecPreference.first()
-            )
-
-            env.repository.setDouyinVideoCodecPreference(DouyinVideoCodecPreference.H265)
-            assertEquals(
-                DouyinVideoCodecPreference.H265,
-                env.repository.douyinVideoCodecPreference.first()
-            )
-        } finally {
-            env.scope.cancel()
-        }
-    }
-
-    @Test
     fun temporaryOriginalContentHint_showsOnThirdEnableWithinWindow_andOnlyOncePerWindow() = runBlocking {
         val env = createRepository("temporary-original-hint.preferences_pb")
         val baseTime = 1_700_000_000_000L

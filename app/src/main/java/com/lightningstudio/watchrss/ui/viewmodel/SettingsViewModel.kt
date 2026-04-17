@@ -4,10 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lightningstudio.watchrss.data.rss.RssRepository
 import com.lightningstudio.watchrss.data.settings.DEFAULT_CACHE_LIMIT_MB
-import com.lightningstudio.watchrss.data.settings.DEFAULT_DOUYIN_VIDEO_CODEC_PREFERENCE
 import com.lightningstudio.watchrss.data.settings.DEFAULT_READING_FONT_SIZE_SP
 import com.lightningstudio.watchrss.data.settings.DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE
-import com.lightningstudio.watchrss.data.settings.DouyinVideoCodecPreference
 import com.lightningstudio.watchrss.data.settings.MB_BYTES
 import com.lightningstudio.watchrss.data.settings.RssInlineImagePrefetchMode
 import com.lightningstudio.watchrss.data.settings.SettingsRepository
@@ -49,14 +47,6 @@ class SettingsViewModel(
                 viewModelScope,
                 SharingStarted.WhileSubscribed(5_000),
                 DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE
-            )
-
-    val douyinVideoCodecPreference: StateFlow<DouyinVideoCodecPreference> =
-        settingsRepository.douyinVideoCodecPreference
-            .stateIn(
-                viewModelScope,
-                SharingStarted.WhileSubscribed(5_000),
-                DEFAULT_DOUYIN_VIDEO_CODEC_PREFERENCE
             )
 
     val llmFeatureEnabled: StateFlow<Boolean> = settingsRepository.llmFeatureEnabled
@@ -108,12 +98,6 @@ class SettingsViewModel(
     fun updateRssInlineImagePrefetchMode(value: RssInlineImagePrefetchMode) {
         viewModelScope.launch {
             settingsRepository.setRssInlineImagePrefetchMode(value)
-        }
-    }
-
-    fun updateDouyinVideoCodecPreference(value: DouyinVideoCodecPreference) {
-        viewModelScope.launch {
-            settingsRepository.setDouyinVideoCodecPreference(value)
         }
     }
 
