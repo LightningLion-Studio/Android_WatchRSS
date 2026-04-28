@@ -3,12 +3,13 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VARIANT="profileableRelease"
+VARIANT_TASK_SUFFIX="ProfileableRelease"
 GRADLEW="${ROOT_DIR}/gradlew"
 APK_DIR="${ROOT_DIR}/app/build/outputs/apk/${VARIANT}"
 MAPPING_DIR="${ROOT_DIR}/app/build/outputs/mapping/${VARIANT}"
 DIST_DIR_DEFAULT="${ROOT_DIR}/app/build/outputs/dist/${VARIANT}"
 DIST_DIR="${DIST_DIR:-${DIST_DIR_DEFAULT}}"
-MANIFEST_REPORT="${ROOT_DIR}/app/build/outputs/logs/manifest-merger-${VARIANT}-report.txt"
+PACKAGED_MANIFEST="${ROOT_DIR}/app/build/intermediates/packaged_manifests/${VARIANT}/process${VARIANT_TASK_SUFFIX}ManifestForPackage/AndroidManifest.xml"
 
 usage() {
     cat <<'EOF'
@@ -87,15 +88,10 @@ BASELINE_PROFILES_DIR="${APK_DIR}/baselineProfiles"
 require_file "${APK_PATH}"
 require_file "${MAPPING_PATH}"
 require_file "${OUTPUT_METADATA_PATH}"
-require_file "${MANIFEST_REPORT}"
+require_file "${PACKAGED_MANIFEST}"
 
-if ! grep -q '^profileable$' "${MANIFEST_REPORT}"; then
-    echo "Manifest merge report does not contain a profileable node" >&2
-    exit 1
-fi
-
-if ! grep -q 'android:shell' "${MANIFEST_REPORT}"; then
-    echo "Manifest merge report does not contain android:shell for profileable" >&2
+if ! grep -q '<profileable' "${PACKAGED_MANIFEST}" || ! grep -q 'android:shell="true"' "${PACKAGED_MANIFEST}"; then
+    echo "Packaged manifest does not contain <profileable android:shell=\"true\" />" >&2
     exit 1
 fi
 
