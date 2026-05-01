@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -25,6 +24,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
+import com.lightningstudio.watchrss.data.llm.LlmProviderCatalog
 import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownScrollHandler
@@ -41,6 +41,7 @@ fun LlmConnectivityScreen(viewModel: LlmConnectivityViewModel) {
     LlmConnectivityContent(
         state = state,
         onRunTest = viewModel::runTest,
+        onUsePublicWelfareSite = viewModel::usePublicWelfareSite,
         onOpenPhoneConfig = {}
     )
 }
@@ -54,6 +55,7 @@ fun LlmConnectivityScreen(
     LlmConnectivityContent(
         state = state,
         onRunTest = viewModel::runTest,
+        onUsePublicWelfareSite = viewModel::usePublicWelfareSite,
         onOpenPhoneConfig = onOpenPhoneConfig
     )
 }
@@ -62,6 +64,7 @@ fun LlmConnectivityScreen(
 private fun LlmConnectivityContent(
     state: LlmConnectivityState,
     onRunTest: () -> Unit,
+    onUsePublicWelfareSite: () -> Unit,
     onOpenPhoneConfig: () -> Unit
 ) {
     val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
@@ -87,7 +90,7 @@ private fun LlmConnectivityContent(
             Spacer(modifier = Modifier.height(WatchDimens.hey_content_horizontal_distance))
 
             // 当前配置摘要
-            val providerLabel = providerDisplayName(state.provider)
+            val providerLabel = LlmProviderCatalog.displayName(state.provider)
             WatchSettingsPillRow(label = "服务商") {
                 Text(
                     text = if (state.provider.isEmpty()) "未配置" else providerLabel,
@@ -111,6 +114,23 @@ private fun LlmConnectivityContent(
                     MaterialTheme.colorScheme.onSurfaceVariant
                 else
                     Color(0xFFFF6B6B),
+                modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+            )
+
+            Spacer(modifier = Modifier.height(entrySpacing))
+
+            WatchSettingsPillRow(
+                label = if (LlmProviderCatalog.isPublicWelfare(state.provider)) {
+                    "已使用公益站点"
+                } else {
+                    "使用公益站点"
+                },
+                onClick = onUsePublicWelfareSite
+            )
+            Text(
+                text = state.configMessage.ifBlank { "公益站不保证稳定性。" },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
             )
 
@@ -231,13 +251,4 @@ private fun ResultCard(isSuccess: Boolean, content: @Composable ColumnScope.() -
             content = content
         )
     }
-}
-
-private fun providerDisplayName(provider: String): String = when (provider) {
-    "openai" -> "OpenAI (ChatGPT)"
-    "deepseek" -> "DeepSeek"
-    "qwen" -> "通义千问"
-    "zhipu" -> "智谱 GLM"
-    "custom" -> "自定义"
-    else -> provider
 }

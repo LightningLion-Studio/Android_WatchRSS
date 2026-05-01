@@ -2,6 +2,7 @@ package com.lightningstudio.watchrss.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.lightningstudio.watchrss.data.llm.LlmProviderCatalog
 import com.lightningstudio.watchrss.data.settings.LlmApiKeyStore
 import com.lightningstudio.watchrss.data.settings.SettingsRepository
 import com.lightningstudio.watchrss.util.AppLogger
@@ -28,6 +29,7 @@ data class LlmConnectivityState(
     val baseUrl: String = "",
     val enabled: Boolean = false,
     val hasApiKey: Boolean = false,
+    val configMessage: String = "",
     val testStatus: LlmTestStatus = LlmTestStatus.Idle
 )
 
@@ -80,13 +82,47 @@ class LlmConnectivityViewModel(
         val current = _state.value
         if (current.testStatus is LlmTestStatus.Testing) return
 
-        _state.update { it.copy(testStatus = LlmTestStatus.Testing) }
+        _state.update { it.copy(configMessage = "", testStatus = LlmTestStatus.Testing) }
 
         viewModelScope.launch {
             val result = withContext(Dispatchers.IO) {
                 doConnectivityTest(current)
             }
             _state.update { it.copy(testStatus = result) }
+        }
+    }
+
+    fun usePublicWelfareSite() {
+        viewModelScope.launch {
+            runCatching {
+                llmApiKeyStore.setApiKey(LlmProviderCatalog.PUBLIC_WELFARE_API_KEY)
+                settingsRepository.setLlmConfig(
+                    provider = LlmProviderCatalog.PROVIDER_PUBLIC_WELFARE,
+                    model = LlmProviderCatalog.PUBLIC_WELFARE_MODEL,
+                    baseUrl = LlmProviderCatalog.PUBLIC_WELFARE_BASE_URL,
+                    enabled = true
+                )
+            }.onSuccess {
+                _state.update {
+                    it.copy(
+                        provider = LlmProviderCatalog.PROVIDER_PUBLIC_WELFARE,
+                        model = LlmProviderCatalog.PUBLIC_WELFARE_MODEL,
+                        baseUrl = LlmProviderCatalog.PUBLIC_WELFARE_BASE_URL,
+                        enabled = true,
+                        hasApiKey = true,
+                        configMessage = "已应用公益站点",
+                        testStatus = LlmTestStatus.Idle
+                    )
+                }
+            }.onFailure { error ->
+                AppLogger.e(TAG, "Apply public welfare LLM site failed", error)
+                _state.update {
+                    it.copy(
+                        configMessage = error.message ?: "应用公益站点失败",
+                        testStatus = LlmTestStatus.Idle
+                    )
+                }
+            }
         }
     }
 
@@ -99,11 +135,11 @@ class LlmConnectivityViewModel(
             return LlmTestStatus.Failure("未配置服务商")
         }
 
-        val baseUrl = resolveBaseUrl(state.provider, state.baseUrl)
+        val baseUrl = LlmProviderCatalog.resolveBaseUrl(state.provider, state.baseUrl)
         if (baseUrl.isEmpty()) {
             return LlmTestStatus.Failure("无法解析 Base URL")
         }
-        val model = state.model.ifEmpty { defaultModel(state.provider) }
+        val model = state.model.ifEmpty { LlmProviderCatalog.defaultModel(state.provider) }
         val url = "${baseUrl.trimEnd('/')}/chat/completions"
 
         val body = JSONObject().apply {
@@ -131,7 +167,11 @@ class LlmConnectivityViewModel(
             val responseBody = response.body?.string() ?: ""
 
             if (!response.isSuccessful) {
-                val errorMsg = runCatching {
+                val errorMsg = LlmProviderCatalog.publicWelfareOverloadedMessage(
+                    provider = state.provider,
+                    httpCode = response.code,
+                    responseBody = responseBody
+                ) ?: runCatching {
                     JSONObject(responseBody).optJSONObject("error")?.optString("message") ?: ""
                 }.getOrDefault("").ifEmpty { "HTTP ${response.code}" }
                 return LlmTestStatus.Failure(errorMsg)
@@ -155,20 +195,4 @@ class LlmConnectivityViewModel(
         }
     }
 
-    private fun resolveBaseUrl(provider: String, customBaseUrl: String): String = when (provider) {
-        "openai" -> "https://api.openai.com/v1"
-        "deepseek" -> "https://api.deepseek.com/v1"
-        "qwen" -> "https://dashscope.aliyuncs.com/compatible-mode/v1"
-        "zhipu" -> "https://open.bigmodel.cn/api/paas/v4"
-        "custom" -> customBaseUrl
-        else -> ""
-    }
-
-    private fun defaultModel(provider: String): String = when (provider) {
-        "openai" -> "gpt-4o-mini"
-        "deepseek" -> "deepseek-chat"
-        "qwen" -> "qwen-turbo"
-        "zhipu" -> "glm-4-flash"
-        else -> ""
-    }
 }

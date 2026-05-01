@@ -2,6 +2,7 @@ package com.lightningstudio.watchrss.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.lightningstudio.watchrss.data.llm.LlmProviderCatalog
 import com.lightningstudio.watchrss.data.rss.RssRepository
 import com.lightningstudio.watchrss.data.rss.effectiveContent
 import com.lightningstudio.watchrss.data.rss.isOriginalContentMissing
@@ -195,8 +196,13 @@ class LlmSummaryViewModel(
                     return@launch
                 }
 
-                val model = settingsRepository.llmModel.first().ifEmpty { defaultModel(provider) }
-                val baseUrl = resolveBaseUrl(provider, settingsRepository.llmBaseUrl.first())
+                val model = settingsRepository.llmModel.first().ifEmpty {
+                    LlmProviderCatalog.defaultModel(provider)
+                }
+                val baseUrl = LlmProviderCatalog.resolveBaseUrl(
+                    provider,
+                    settingsRepository.llmBaseUrl.first()
+                )
                 if (baseUrl.isEmpty()) {
                     _state.update { it.copy(status = SummaryStatus.Error("无法解析 Base URL")) }
                     return@launch
@@ -235,7 +241,11 @@ class LlmSummaryViewModel(
                 val response = client.newCall(request).execute()
                 if (!response.isSuccessful) {
                     val errBody = response.body?.string() ?: ""
-                    val errMsg = runCatching {
+                    val errMsg = LlmProviderCatalog.publicWelfareOverloadedMessage(
+                        provider = provider,
+                        httpCode = response.code,
+                        responseBody = errBody
+                    ) ?: runCatching {
                         JSONObject(errBody).optJSONObject("error")?.optString("message") ?: ""
                     }.getOrDefault("").ifEmpty { "HTTP ${response.code}" }
                     _state.update { it.copy(status = SummaryStatus.Error(errMsg)) }
@@ -322,20 +332,4 @@ class LlmSummaryViewModel(
         return sb.toString().ifBlank { title.ifBlank { "（空文章）" } }
     }
 
-    private fun resolveBaseUrl(provider: String, customBaseUrl: String): String = when (provider) {
-        "openai" -> "https://api.openai.com/v1"
-        "deepseek" -> "https://api.deepseek.com/v1"
-        "qwen" -> "https://dashscope.aliyuncs.com/compatible-mode/v1"
-        "zhipu" -> "https://open.bigmodel.cn/api/paas/v4"
-        "custom" -> customBaseUrl
-        else -> ""
-    }
-
-    private fun defaultModel(provider: String): String = when (provider) {
-        "openai" -> "gpt-4o-mini"
-        "deepseek" -> "deepseek-chat"
-        "qwen" -> "qwen-turbo"
-        "zhipu" -> "glm-4-flash"
-        else -> ""
-    }
 }
