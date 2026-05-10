@@ -1,6 +1,7 @@
 package com.lightningstudio.watchrss.ui.screen.bili
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -355,7 +356,7 @@ private fun BiliRssTextCard(
             .fillMaxWidth()
             .clip(shape)
             .background(background)
-            .clickableWithoutRipple(
+            .clickableWithRipple(
                 enabled = enabled,
                 onClick = onClick,
                 onLongClick = onLongClick,
@@ -401,7 +402,7 @@ private fun BiliRssFeedHeader(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickableWithoutRipple(onClick = onHeaderClick),
+                .clickableWithRipple(onClick = onHeaderClick),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(spacing)
         ) {
@@ -460,7 +461,7 @@ private fun textSize(id: Int): TextUnit {
 
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
-private fun Modifier.clickableWithoutRipple(
+private fun Modifier.clickableWithRipple(
     enabled: Boolean = true,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
@@ -470,7 +471,7 @@ private fun Modifier.clickableWithoutRipple(
     return combinedClickable(
         enabled = enabled,
         interactionSource = interactionSource,
-        indication = null,
+        indication = LocalIndication.current,
         onClick = onClick,
         onLongClick = onLongClick
     )

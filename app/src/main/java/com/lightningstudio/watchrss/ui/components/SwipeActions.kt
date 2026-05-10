@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -68,7 +69,7 @@ fun SwipeActionButton(
             .clip(RoundedCornerShape(radius))
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .semantics { contentDescription = semanticLabel }
-            .clickableWithoutRipple(onClick),
+            .clickableWithRipple(onClick),
         contentAlignment = Alignment.Center
     ) {
         if (icon != null) {
@@ -193,10 +194,10 @@ private fun textSize(id: Int): TextUnit {
 }
 
 @Composable
-private fun Modifier.clickableWithoutRipple(onClick: () -> Unit): Modifier {
+private fun Modifier.clickableWithRipple(onClick: () -> Unit): Modifier {
     return clickable(
         interactionSource = remember { MutableInteractionSource() },
-        indication = null,
+        indication = LocalIndication.current,
         onClick = onClick
     )
 }

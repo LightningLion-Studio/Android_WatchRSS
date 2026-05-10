@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Paint
 import android.text.TextPaint
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -309,7 +310,7 @@ private fun BiliRssVideoCard(
             .padding(top = topPadding)
             .then(cardModifier)
             .background(containerColor)
-            .clickableWithoutRipple(enabled = !isScrolling, onClick = onClick)
+            .clickableWithRipple(enabled = !isScrolling, onClick = onClick)
     ) {
         val bitmap = cover
         if (bitmap != null) {
@@ -379,7 +380,7 @@ private fun CircleIconButton(
             .then(
                 if (borderColor.alpha > 0f) Modifier.border(1.dp, borderColor, CircleShape) else Modifier
             )
-            .clickableWithoutRipple(
+            .clickableWithRipple(
                 enabled = enabled,
                 interactionSource = interactionSource,
                 onClick = onClick
@@ -404,7 +405,7 @@ private fun textSize(id: Int): TextUnit {
 }
 
 @Composable
-private fun Modifier.clickableWithoutRipple(
+private fun Modifier.clickableWithRipple(
     enabled: Boolean = true,
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
     onClick: () -> Unit
@@ -412,7 +413,7 @@ private fun Modifier.clickableWithoutRipple(
     return clickable(
         enabled = enabled,
         interactionSource = interactionSource,
-        indication = null,
+        indication = LocalIndication.current,
         onClick = onClick
     )
 }

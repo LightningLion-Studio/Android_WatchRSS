@@ -3,6 +3,7 @@ package com.lightningstudio.watchrss.ui.components
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
@@ -58,7 +59,7 @@ fun WatchSwitch(
                 enabled = enabled,
                 role = Role.Switch,
                 interactionSource = remember { MutableInteractionSource() },
-                indication = null,
+                indication = LocalIndication.current,
                 onValueChange = onCheckedChange
             ),
         contentAlignment = Alignment.Center

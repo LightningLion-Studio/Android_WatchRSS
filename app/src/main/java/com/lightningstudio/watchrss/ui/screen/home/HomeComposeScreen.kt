@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -274,9 +275,7 @@ private fun HomeProfileEntry(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(padding)
-            .clickableWithoutRipple(onClick = onProfileClick)
-            .testTag(HomeTestTags.PROFILE_ENTRY),
+            .padding(padding),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
@@ -285,6 +284,8 @@ private fun HomeProfileEntry(
                 .clip(shape)
                 .border(strokeWidth, accentColor, shape)
                 .background(cardColor, shape)
+                .clickableWithRipple(onClick = onProfileClick)
+                .testTag(HomeTestTags.PROFILE_ENTRY)
                 .semantics { contentDescription = "个人中心" },
             contentAlignment = Alignment.Center
         ) {
@@ -341,7 +342,7 @@ private fun HomeAddEntry(
                 .clip(shape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 .testTag(HomeTestTags.ADD_ENTRY)
-                .clickableWithoutRipple(
+                .clickableWithRipple(
                     onClick = onAddRssClick,
                     interactionSource = pressState.interactionSource
                 )
@@ -405,11 +406,6 @@ private fun HomeChannelEntry(
             modifier = Modifier
                 .fillMaxWidth()
                 .then(offsetModifier)
-                .clickableWithoutRipple(
-                    onClick = onChannelClick,
-                    onLongClick = onChannelLongClick,
-                    interactionSource = interactionSource
-                )
                 .testTag(HomeTestTags.channelRow(channel.id))
         ) {
             HomeDefaultItem(
@@ -424,7 +420,10 @@ private fun HomeChannelEntry(
                 isLoading = isLoading,
                 showIndicator = shouldShowUnreadUi(builtinType) && channel.unreadCount > 0,
                 indicatorTestTag = HomeTestTags.channelIndicator(channel.id),
-                testTag = HomeTestTags.channelCard(channel.id)
+                testTag = HomeTestTags.channelCard(channel.id),
+                onClick = onChannelClick,
+                onLongClick = onChannelLongClick,
+                interactionSource = interactionSource
             )
         }
     }
@@ -519,7 +518,7 @@ private fun HomeSwipeActionButton(
             .fillMaxHeight()
             .background(MaterialTheme.colorScheme.surfaceVariant, shape)
             .then(testTag?.let(Modifier::testTag) ?: Modifier)
-            .clickableWithoutRipple(onClick = onClick)
+            .clickableWithRipple(onClick = onClick)
             .alpha(alpha),
         contentAlignment = Alignment.Center
     ) {
@@ -694,7 +693,9 @@ private fun HomeDefaultItem(
     indicatorTestTag: String? = null,
     testTag: String? = null,
     modifier: Modifier = Modifier,
-    onClick: (() -> Unit)? = null
+    onClick: (() -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null,
+    interactionSource: MutableInteractionSource? = null
 ) {
     val paddingStart = watchDimensionResource(R.dimen.hey_content_horizontal_distance_6_0)
     val paddingEnd = watchDimensionResource(R.dimen.hey_listitem_padding_right)
@@ -707,7 +708,11 @@ private fun HomeDefaultItem(
     val indicatorSize = watchDimensionResource(R.dimen.hey_distance_6dp)
     val shape = RoundedCornerShape(watchDimensionResource(R.dimen.hey_card_normal_bg_radius))
     val clickModifier = if (onClick != null) {
-        Modifier.clickableWithoutRipple(onClick = onClick)
+        Modifier.clickableWithRipple(
+            onClick = onClick,
+            onLongClick = onLongClick,
+            interactionSource = interactionSource
+        )
     } else {
         Modifier
     }
@@ -716,9 +721,9 @@ private fun HomeDefaultItem(
         modifier = modifier
             .fillMaxWidth()
             .clip(shape)
+            .background(backgroundColor, shape)
             .then(clickModifier)
             .then(testTag?.let(Modifier::testTag) ?: Modifier)
-            .background(backgroundColor, shape)
     ) {
         Row(
             modifier = Modifier
@@ -875,7 +880,7 @@ private fun HomeBeianEntry(onBeianClick: () -> Unit) {
             textAlign = TextAlign.Center,
             modifier = Modifier
                 .testTag(HomeTestTags.BEIAN_ENTRY)
-                .clickableWithoutRipple(onClick = onBeianClick)
+                .clickableWithRipple(onClick = onBeianClick)
         )
     }
 }
@@ -908,7 +913,7 @@ private fun textSize(id: Int): TextUnit {
 }
 
 @OptIn(ExperimentalFoundationApi::class)
-private fun Modifier.clickableWithoutRipple(
+private fun Modifier.clickableWithRipple(
     enabled: Boolean = true,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
@@ -919,7 +924,7 @@ private fun Modifier.clickableWithoutRipple(
         if (onLongClick != null) {
             combinedClickable(
                 interactionSource = resolvedInteractionSource,
-                indication = null,
+                indication = LocalIndication.current,
                 enabled = enabled,
                 onClick = onClick,
                 onLongClick = onLongClick
@@ -927,7 +932,7 @@ private fun Modifier.clickableWithoutRipple(
         } else {
             clickable(
                 interactionSource = resolvedInteractionSource,
-                indication = null,
+                indication = LocalIndication.current,
                 enabled = enabled,
                 onClick = onClick
             )

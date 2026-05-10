@@ -1,6 +1,7 @@
 package com.lightningstudio.watchrss.ui.screen.bili
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -186,7 +187,7 @@ private fun BiliCoverCard(
             .aspectRatio(3f / 2f)
             .clip(RoundedCornerShape(radius))
             .background(MaterialTheme.colorScheme.surface)
-            .clickableWithoutRipple(onClick),
+            .clickableWithRipple(onClick),
         contentAlignment = Alignment.Center
     ) {
         val safeBitmap = bitmap
@@ -435,7 +436,7 @@ private fun BiliDescriptionCard(text: String) {
             .fillMaxWidth()
             .clip(RoundedCornerShape(radius))
             .background(background)
-            .clickableWithoutRipple(
+            .clickableWithRipple(
                 onClick = {
                     if (canExpand || expanded) {
                         expanded = !expanded
@@ -490,7 +491,7 @@ private fun BiliCommentEntryCard(onClick: () -> Unit) {
             .fillMaxWidth()
             .clip(RoundedCornerShape(radius))
             .background(background)
-            .clickableWithoutRipple(onClick)
+            .clickableWithRipple(onClick)
             .padding(padding),
         contentAlignment = Alignment.Center
     ) {
@@ -541,7 +542,7 @@ private fun BiliPageEntry(
             .clip(RoundedCornerShape(radius))
             .background(background)
             .border(1.dp, borderColor, RoundedCornerShape(radius))
-            .clickableWithoutRipple(onClick)
+            .clickableWithRipple(onClick)
             .padding(padding)
     ) {
         Row(
@@ -578,10 +579,10 @@ private fun textSize(id: Int): androidx.compose.ui.unit.TextUnit {
 }
 
 @Composable
-private fun Modifier.clickableWithoutRipple(onClick: () -> Unit): Modifier {
+private fun Modifier.clickableWithRipple(onClick: () -> Unit): Modifier {
     return clickable(
         interactionSource = androidx.compose.runtime.remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-        indication = null,
+        indication = LocalIndication.current,
         onClick = onClick
     )
 }

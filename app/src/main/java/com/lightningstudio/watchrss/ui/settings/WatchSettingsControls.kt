@@ -2,6 +2,7 @@ package com.lightningstudio.watchrss.ui.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
@@ -60,7 +61,7 @@ fun WatchReadingThemeToggle(
                 value = isDark,
                 role = Role.Switch,
                 interactionSource = interactionSource,
-                indication = null,
+                indication = LocalIndication.current,
                 onValueChange = { onToggle() }
             ),
         contentAlignment = Alignment.Center
@@ -118,7 +119,7 @@ fun WatchRoundIconButtonIcon(
             .clickable(
                 enabled = enabled,
                 interactionSource = interactionSource,
-                indication = null,
+                indication = LocalIndication.current,
                 onClick = onClick
             ),
         contentAlignment = Alignment.Center

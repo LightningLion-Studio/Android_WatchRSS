@@ -183,7 +183,7 @@ internal fun DetailImageBlock(
                 .fillMaxWidth()
                 .padding(top = topPadding)
                 .aspectRatio(aspectRatio)
-                .clickableWithoutRipple(enabled = !isScrolling, onClick = onClick)
+                .clickableWithRipple(enabled = !isScrolling, onClick = onClick)
                 .scrollSemanticsDisabled(isScrolling)
                 .debugTraceLayout("DetailImageBlock/layout")
                 .debugTraceDraw("DetailImageBlock/draw"),
@@ -294,7 +294,7 @@ internal fun DetailVideoBlock(
             .padding(top = topPadding)
             .then(cardModifier)
             .background(containerColor)
-            .clickableWithoutRipple(enabled = !isScrolling, onClick = onClick)
+            .clickableWithRipple(enabled = !isScrolling, onClick = onClick)
             .scrollSemanticsDisabled(isScrolling)
             .debugTraceLayout("DetailVideoBlock/layout")
             .debugTraceDraw("DetailVideoBlock/draw")

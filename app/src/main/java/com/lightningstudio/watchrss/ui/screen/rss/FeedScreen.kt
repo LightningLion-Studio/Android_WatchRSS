@@ -11,6 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
@@ -423,7 +424,7 @@ internal fun FeedHeader(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = verticalPadding)
-            .clickableWithoutRipple(
+            .clickableWithRipple(
                 enabled = enabled,
                 onClick = onClick
             )
@@ -971,7 +972,7 @@ private fun FeedTextCard(
             .fillMaxWidth()
             .clip(shape)
             .background(background)
-            .clickableWithoutRipple(
+            .clickableWithRipple(
                 enabled = enabled,
                 onClick = onClick,
                 onLongClick = onLongClick,
@@ -1039,7 +1040,7 @@ private fun FeedImageCard(
             .fillMaxWidth()
             .clip(shape)
             .background(background)
-            .clickableWithoutRipple(
+            .clickableWithRipple(
                 enabled = enabled,
                 onClick = onClick,
                 onLongClick = onLongClick,
@@ -1186,7 +1187,7 @@ private fun textSize(id: Int): TextUnit {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Modifier.clickableWithoutRipple(
+private fun Modifier.clickableWithRipple(
     enabled: Boolean = true,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
@@ -1196,7 +1197,7 @@ private fun Modifier.clickableWithoutRipple(
     return if (onLongClick != null) {
         combinedClickable(
             interactionSource = interactionSource,
-            indication = null,
+            indication = LocalIndication.current,
             enabled = enabled,
             onClick = onClick,
             onLongClick = onLongClick
@@ -1204,7 +1205,7 @@ private fun Modifier.clickableWithoutRipple(
     } else {
         clickable(
             interactionSource = interactionSource,
-            indication = null,
+            indication = LocalIndication.current,
             enabled = enabled,
             onClick = onClick
         )

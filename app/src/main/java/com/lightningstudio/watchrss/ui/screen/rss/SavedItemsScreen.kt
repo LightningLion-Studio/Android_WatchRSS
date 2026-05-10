@@ -9,6 +9,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.scrollBy
@@ -404,7 +405,7 @@ private fun SavedItemRow(
             .fillMaxWidth()
             .clip(shape)
             .background(backgroundColor)
-            .clickableWithoutRipple(onClick)
+            .clickableWithRipple(onClick)
             .padding(
                 start = paddingStart,
                 end = paddingEnd,
@@ -594,7 +595,7 @@ private fun UndoFloatingButton(
             .size(size)
             .clip(RoundedCornerShape(radius))
             .background(background)
-            .clickableWithoutRipple(onClick)
+            .clickableWithRipple(onClick)
             .semantics {
                 contentDescription = "撤回按钮"
                 role = Role.Button
@@ -665,10 +666,10 @@ private fun textSize(id: Int): TextUnit {
 }
 
 @Composable
-private fun Modifier.clickableWithoutRipple(onClick: () -> Unit): Modifier {
+private fun Modifier.clickableWithRipple(onClick: () -> Unit): Modifier {
     return clickable(
         interactionSource = remember { MutableInteractionSource() },
-        indication = null,
+        indication = LocalIndication.current,
         onClick = onClick
     )
 }

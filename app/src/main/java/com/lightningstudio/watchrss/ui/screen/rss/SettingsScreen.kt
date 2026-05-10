@@ -3,6 +3,7 @@ package com.lightningstudio.watchrss.ui.screen.rss
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -669,7 +670,7 @@ private fun ReadingThemeToggle(
                 value = isDark,
                 role = Role.Switch,
                 interactionSource = interactionSource,
-                indication = null,
+                indication = LocalIndication.current,
                 onValueChange = { onToggle() }
             ),
         contentAlignment = Alignment.Center
@@ -744,7 +745,7 @@ private fun RoundIconButton(
             .clickable(
                 enabled = enabled,
                 interactionSource = interactionSource,
-                indication = null,
+                indication = LocalIndication.current,
                 onClick = onClick
             ),
         contentAlignment = Alignment.Center
@@ -784,7 +785,7 @@ private fun RoundIconButtonIcon(
             .clickable(
                 enabled = enabled,
                 interactionSource = interactionSource,
-                indication = null,
+                indication = LocalIndication.current,
                 onClick = onClick
             ),
         contentAlignment = Alignment.Center

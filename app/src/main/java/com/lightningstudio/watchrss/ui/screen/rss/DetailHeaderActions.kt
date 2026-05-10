@@ -10,6 +10,7 @@ import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
@@ -89,7 +90,7 @@ internal fun AiSummaryBanner(
             .fillMaxWidth()
             .clip(RoundedCornerShape(WatchDimens.hey_card_normal_bg_radius))
             .background(bannerBg)
-            .clickableWithoutRipple(onClick = onClick)
+            .clickableWithRipple(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 8.dp)
     ) {
         androidx.compose.foundation.layout.Row(
@@ -162,7 +163,7 @@ internal fun AiFloatingButton(
                 if (borderColor.alpha > 0f) Modifier.border(1.dp, borderColor, CircleShape)
                 else Modifier
             )
-            .clickableWithoutRipple(interactionSource = interactionSource, onClick = onClick),
+            .clickableWithRipple(interactionSource = interactionSource, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         androidx.compose.material3.Icon(
@@ -265,7 +266,7 @@ internal fun DetailActionButton(
             .combinedClickable(
                 enabled = enabled,
                 interactionSource = interactionSource,
-                indication = null,
+                indication = LocalIndication.current,
                 onClick = onClick,
                 onLongClick = onLongClick
             )
@@ -721,7 +722,7 @@ internal fun CircleIconButton(
                 if (borderColor.alpha > 0f) Modifier.border(1.dp, borderColor, CircleShape)
                 else Modifier
             )
-            .clickableWithoutRipple(
+            .clickableWithRipple(
                 enabled = enabled,
                 interactionSource = interactionSource,
                 onClick = onClick
@@ -747,7 +748,7 @@ private fun textSize(id: Int): TextUnit {
 }
 
 @Composable
-internal fun Modifier.clickableWithoutRipple(
+internal fun Modifier.clickableWithRipple(
     enabled: Boolean = true,
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
     onClick: () -> Unit
@@ -755,7 +756,7 @@ internal fun Modifier.clickableWithoutRipple(
     return clickable(
         enabled = enabled,
         interactionSource = interactionSource,
-        indication = null,
+        indication = LocalIndication.current,
         onClick = onClick
     )
 }

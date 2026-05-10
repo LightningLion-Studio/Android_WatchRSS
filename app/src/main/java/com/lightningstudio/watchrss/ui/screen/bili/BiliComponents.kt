@@ -4,6 +4,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -199,7 +200,7 @@ fun BiliFeedCard(
             .fillMaxWidth()
             .clip(shape)
             .background(background)
-            .clickableWithoutRipple(
+            .clickableWithRipple(
                 onClick = onClick,
                 onLongClick = onLongClick,
                 interactionSource = resolvedInteractionSource
@@ -280,11 +281,11 @@ fun rememberPressScaleState(enabled: Boolean): PressScaleState {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Modifier.clickableWithoutRipple(
+private fun Modifier.clickableWithRipple(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null
 ): Modifier {
-    return clickableWithoutRipple(
+    return clickableWithRipple(
         onClick = onClick,
         onLongClick = onLongClick,
         interactionSource = remember { MutableInteractionSource() }
@@ -293,7 +294,7 @@ private fun Modifier.clickableWithoutRipple(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun Modifier.clickableWithoutRipple(
+private fun Modifier.clickableWithRipple(
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
     interactionSource: MutableInteractionSource
@@ -301,13 +302,13 @@ private fun Modifier.clickableWithoutRipple(
     return if (onLongClick == null) {
         clickable(
             interactionSource = interactionSource,
-            indication = null,
+            indication = LocalIndication.current,
             onClick = onClick
         )
     } else {
         combinedClickable(
             interactionSource = interactionSource,
-            indication = null,
+            indication = LocalIndication.current,
             onClick = onClick,
             onLongClick = onLongClick
         )

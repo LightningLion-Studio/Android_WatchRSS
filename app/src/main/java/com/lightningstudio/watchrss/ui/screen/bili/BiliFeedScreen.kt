@@ -2,6 +2,7 @@ package com.lightningstudio.watchrss.ui.screen.bili
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -224,7 +225,7 @@ fun BiliFeedScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.background.copy(alpha = 0.45f))
-                    .clickableWithoutRipple { menuOpen = false }
+                    .clickableWithRipple { menuOpen = false }
             )
         } else {
             var dragDistance by remember { mutableStateOf(0f) }
@@ -449,7 +450,7 @@ private fun BiliFeedHeader(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickableWithoutRipple(onClick = onHeaderClick),
+                .clickableWithRipple(onClick = onHeaderClick),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(spacing)
         ) {
@@ -507,10 +508,10 @@ private fun textSize(id: Int): androidx.compose.ui.unit.TextUnit {
 }
 
 @Composable
-private fun Modifier.clickableWithoutRipple(onClick: () -> Unit): Modifier {
+private fun Modifier.clickableWithRipple(onClick: () -> Unit): Modifier {
     return clickable(
         interactionSource = androidx.compose.runtime.remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-        indication = null,
+        indication = LocalIndication.current,
         onClick = onClick
     )
 }
