@@ -68,8 +68,11 @@ fun JoinGroupScreen(
                 qrContentDescription = "QQ群二维码，扫描后可在手机上加入群聊",
                 title = "加入 QQ 群",
                 subtitle = "群号 $groupNumber",
+                modifier = Modifier.padding(top = 4.dp),
                 titleContentDescription = "标题：加入 QQ 群",
                 subtitleContentDescription = "QQ群号：$groupNumber",
+                titleSubtitleSpacing = 4.dp,
+                subtitleQrSpacing = 4.dp,
             )
             Spacer(modifier = Modifier.height(12.dp))
         }

@@ -24,6 +24,8 @@ import com.lightningstudio.watchrss.data.douyin.buildDouyinExternalSavedItem
 import com.lightningstudio.watchrss.data.douyin.containsDouyinSavedItem
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.rss.SaveType
+import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED
+import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
 import com.lightningstudio.watchrss.debug.DouyinPlaybackDebugController
 import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.screen.douyin.DouyinImmersiveScreen
@@ -100,6 +102,12 @@ class DouyinEntryActivity : BaseWatchActivity() {
                 CompositionLocalProvider(LocalDensity provides Density(2f, baseDensity.fontScale)) {
                     val warningMessage = remember { mutableStateOf<String?>(null) }
                     val uiState by viewModel.uiState.collectAsState()
+                    val volumeGuardEnabled by container.settingsRepository.mediaVolumeGuardEnabled.collectAsState(
+                        initial = DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
+                    )
+                    val volumeControlEnabled by container.settingsRepository.mediaVolumeControlEnabled.collectAsState(
+                        initial = DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED
+                    )
                     val originalContentEnabled by remember(rssRepository) {
                         rssRepository.observeChannels().map { channels ->
                             channels.firstOrNull { it.url == BuiltinChannelType.DOUYIN.url }?.useOriginalContent
@@ -176,6 +184,8 @@ class DouyinEntryActivity : BaseWatchActivity() {
                                 DouyinImmersiveScreen(
                                     playerSession = playerSession,
                                     uiState = uiState,
+                                    digitalCrownVolumeEnabled = volumeControlEnabled,
+                                    volumeGuardEnabled = volumeGuardEnabled,
                                     onRefresh = {
                                         if (uiState.showTitlePage) {
                                             viewModel.refreshTitlePageFeed()

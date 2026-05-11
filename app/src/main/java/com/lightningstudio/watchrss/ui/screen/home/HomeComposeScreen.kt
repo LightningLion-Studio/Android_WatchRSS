@@ -1,6 +1,7 @@
 package com.lightningstudio.watchrss.ui.screen.home
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -9,6 +10,7 @@ import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -41,7 +43,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Stable
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -52,10 +53,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.composed
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -74,7 +73,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.PullRefreshBox
-import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.components.rememberPullRefreshEnabled
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.rss.RssChannel
@@ -84,6 +82,7 @@ import com.lightningstudio.watchrss.ui.theme.watchColorResource
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import com.lightningstudio.watchrss.ui.util.formatTime
 import com.lightningstudio.watchrss.ui.viewmodel.HomePlatformLoginState
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.roundToInt
@@ -95,7 +94,7 @@ fun HomeComposeScreen(
     platformLoginState: HomePlatformLoginState = HomePlatformLoginState(),
     enableChannelSwipeActions: Boolean = false,
     isRefreshing: Boolean,
-    loadingEntryKey: String? = null,
+    debugAutoScrollPerf: Boolean = false,
     onMinimalContentReady: () -> Unit = {},
     onRefreshAll: () -> Unit,
     openSwipeId: Long?,
@@ -127,8 +126,30 @@ fun HomeComposeScreen(
         val view = LocalView.current
         val firstLayoutReported = remember { AtomicBoolean(false) }
         val onMinimalContentReadyState = rememberUpdatedState(onMinimalContentReady)
-        val isScrolling by remember(listState) {
-            derivedStateOf { listState.isScrollInProgress }
+        LaunchedEffect(debugAutoScrollPerf, entries.size) {
+            if (!debugAutoScrollPerf || entries.size < DEBUG_AUTOSCROLL_MIN_ENTRIES) return@LaunchedEffect
+            listState.scrollToItem(0)
+            delay(DEBUG_AUTOSCROLL_START_DELAY_MS)
+            repeat(DEBUG_AUTOSCROLL_SEGMENT_COUNT) {
+                listState.animateScrollBy(
+                    value = DEBUG_AUTOSCROLL_DISTANCE_PX,
+                    animationSpec = tween(
+                        durationMillis = DEBUG_AUTOSCROLL_DURATION_MS,
+                        easing = LinearEasing
+                    )
+                )
+                delay(DEBUG_AUTOSCROLL_TURNAROUND_DELAY_MS)
+            }
+            repeat(DEBUG_AUTOSCROLL_SEGMENT_COUNT) {
+                listState.animateScrollBy(
+                    value = -DEBUG_AUTOSCROLL_DISTANCE_PX,
+                    animationSpec = tween(
+                        durationMillis = DEBUG_AUTOSCROLL_DURATION_MS,
+                        easing = LinearEasing
+                    )
+                )
+                delay(DEBUG_AUTOSCROLL_TURNAROUND_DELAY_MS)
+            }
         }
         PullRefreshBox(
             isRefreshing = isRefreshing,
@@ -169,7 +190,7 @@ fun HomeComposeScreen(
                             HomeEntry.Profile -> {
                                 HomeProfileEntry(
                                     onProfileClick = onProfileClick,
-                                    isLoading = loadingEntryKey == entry.key
+                                    interactionsEnabled = true
                                 )
                             }
                             HomeEntry.Empty -> {
@@ -177,7 +198,6 @@ fun HomeComposeScreen(
                                     title = "还没有 RSS 频道",
                                     summary = "点击下方添加你的第一个订阅源",
                                     backgroundColor = MaterialTheme.colorScheme.surface,
-                                    isLoading = loadingEntryKey == entry.key,
                                     showIndicator = false,
                                     testTag = HomeTestTags.EMPTY_ENTRY
                                 )
@@ -187,7 +207,6 @@ fun HomeComposeScreen(
                                     title = "RSS推荐",
                                     summary = "一键加入官方支持频道",
                                     backgroundColor = MaterialTheme.colorScheme.surface,
-                                    isLoading = loadingEntryKey == entry.key,
                                     showIndicator = false,
                                     testTag = HomeTestTags.RECOMMEND_ENTRY,
                                     onClick = onRecommendClick
@@ -196,12 +215,14 @@ fun HomeComposeScreen(
                             HomeEntry.AddRss -> {
                                 HomeAddEntry(
                                     onAddRssClick = onAddRssClick,
-                                    interactionsEnabled = !isScrolling,
-                                    isLoading = loadingEntryKey == entry.key
+                                    interactionsEnabled = true
                                 )
                             }
                             HomeEntry.Beian -> {
-                                HomeBeianEntry(onBeianClick = onBeianClick)
+                                HomeBeianEntry(
+                                    onBeianClick = onBeianClick,
+                                    interactionsEnabled = true
+                                )
                             }
                             is HomeEntry.Channel -> {
                                 HomeChannelEntry(
@@ -216,10 +237,10 @@ fun HomeComposeScreen(
                                     onChannelClick = { onChannelClick(entry.channel) },
                                     onChannelLongClick = { onChannelLongClick(entry.channel) },
                                     onSwipeBack = onSwipeBack,
-                                    swipeInteractionsEnabled = enableChannelSwipeActions && !isScrolling,
+                                    swipeInteractionsEnabled = enableChannelSwipeActions,
+                                    interactionsEnabled = true,
                                     onMoveTopClick = { onMoveTopClick(entry.channel) },
-                                    onMarkReadClick = { onMarkReadClick(entry.channel) },
-                                    isLoading = loadingEntryKey == entry.key
+                                    onMarkReadClick = { onMarkReadClick(entry.channel) }
                                 )
                             }
                         }
@@ -261,7 +282,7 @@ private fun buildHomeEntries(
 @Composable
 private fun HomeProfileEntry(
     onProfileClick: () -> Unit,
-    isLoading: Boolean
+    interactionsEnabled: Boolean
 ) {
     val avatarSize = watchDimensionResource(R.dimen.hey_listitem_big_lefticon_height_width)
     val padding = watchDimensionResource(R.dimen.hey_distance_4dp)
@@ -281,10 +302,16 @@ private fun HomeProfileEntry(
         Box(
             modifier = Modifier
                 .size(avatarSize)
-                .clip(shape)
+                .graphicsLayer {
+                    this.shape = shape
+                    clip = true
+                }
                 .border(strokeWidth, accentColor, shape)
                 .background(cardColor, shape)
-                .clickableWithRipple(onClick = onProfileClick)
+                .clickableWithRipple(
+                    enabled = interactionsEnabled,
+                    onClick = onProfileClick
+                )
                 .testTag(HomeTestTags.PROFILE_ENTRY)
                 .semantics { contentDescription = "个人中心" },
             contentAlignment = Alignment.Center
@@ -293,10 +320,6 @@ private fun HomeProfileEntry(
                 text = "我",
                 color = MaterialTheme.colorScheme.onSurface,
                 fontSize = avatarTextSize
-            )
-            CardLoadingOverlay(
-                visible = isLoading,
-                shape = shape
             )
         }
         Spacer(modifier = Modifier.height(padding))
@@ -311,8 +334,7 @@ private fun HomeProfileEntry(
 @Composable
 private fun HomeAddEntry(
     onAddRssClick: () -> Unit,
-    interactionsEnabled: Boolean,
-    isLoading: Boolean
+    interactionsEnabled: Boolean
 ) {
     val buttonSize = watchDimensionResource(R.dimen.hey_button_height)
     val padding = watchDimensionResource(R.dimen.hey_distance_4dp)
@@ -339,10 +361,14 @@ private fun HomeAddEntry(
             modifier = Modifier
                 .size(buttonSize)
                 .then(scaleModifier)
-                .clip(shape)
+                .graphicsLayer {
+                    this.shape = shape
+                    clip = true
+                }
                 .background(MaterialTheme.colorScheme.surfaceVariant)
                 .testTag(HomeTestTags.ADD_ENTRY)
                 .clickableWithRipple(
+                    enabled = interactionsEnabled,
                     onClick = onAddRssClick,
                     interactionSource = pressState.interactionSource
                 )
@@ -353,10 +379,6 @@ private fun HomeAddEntry(
                 text = "+",
                 color = MaterialTheme.colorScheme.onSurface,
                 fontSize = textSize(R.dimen.hey_s_title)
-            )
-            CardLoadingOverlay(
-                visible = isLoading,
-                shape = shape
             )
         }
     }
@@ -376,19 +398,11 @@ private fun HomeChannelEntry(
     onChannelLongClick: () -> Unit,
     onSwipeBack: () -> Unit,
     swipeInteractionsEnabled: Boolean,
+    interactionsEnabled: Boolean,
     onMoveTopClick: () -> Unit,
-    onMarkReadClick: () -> Unit,
-    isLoading: Boolean
+    onMarkReadClick: () -> Unit
 ) {
-    val actionPadding = watchDimensionResource(R.dimen.hey_distance_4dp)
-    val actionWidth = watchDimensionResource(R.dimen.watch_swipe_action_button_width)
-    val cardShape = RoundedCornerShape(watchDimensionResource(R.dimen.hey_card_normal_bg_radius))
-    val actionsWidthPx = with(LocalDensity.current) {
-        (actionWidth * 2 + actionPadding * 2).toPx()
-    }
-    val revealGapPx = with(LocalDensity.current) { (actionPadding * 2).toPx() }
     val builtinType = BuiltinChannelType.fromUrl(channel.url)
-    val interactionSource = remember { MutableInteractionSource() }
     val summary = remember(
         channel.id,
         channel.description,
@@ -417,13 +431,12 @@ private fun HomeChannelEntry(
                     MaterialTheme.colorScheme.surface
                 },
                 titleFontSize = 16.sp,
-                isLoading = isLoading,
                 showIndicator = shouldShowUnreadUi(builtinType) && channel.unreadCount > 0,
                 indicatorTestTag = HomeTestTags.channelIndicator(channel.id),
                 testTag = HomeTestTags.channelCard(channel.id),
                 onClick = onChannelClick,
                 onLongClick = onChannelLongClick,
-                interactionSource = interactionSource
+                interactionsEnabled = interactionsEnabled,
             )
         }
     }
@@ -432,6 +445,13 @@ private fun HomeChannelEntry(
         cardContent(Modifier)
         return
     }
+
+    val actionPadding = watchDimensionResource(R.dimen.hey_distance_4dp)
+    val actionWidth = watchDimensionResource(R.dimen.watch_swipe_action_button_width)
+    val actionsWidthPx = with(LocalDensity.current) {
+        (actionWidth * 2 + actionPadding * 2).toPx()
+    }
+    val revealGapPx = with(LocalDensity.current) { (actionPadding * 2).toPx() }
 
     HomeSwipeRow(
         itemId = channel.id,
@@ -516,6 +536,10 @@ private fun HomeSwipeActionButton(
         modifier = Modifier
             .width(width)
             .fillMaxHeight()
+            .graphicsLayer {
+                this.shape = shape
+                clip = true
+            }
             .background(MaterialTheme.colorScheme.surfaceVariant, shape)
             .then(testTag?.let(Modifier::testTag) ?: Modifier)
             .clickableWithRipple(onClick = onClick)
@@ -688,13 +712,13 @@ private fun HomeDefaultItem(
     summary: String,
     backgroundColor: Color,
     titleFontSize: TextUnit? = null,
-    isLoading: Boolean = false,
     showIndicator: Boolean,
     indicatorTestTag: String? = null,
     testTag: String? = null,
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
+    interactionsEnabled: Boolean = true,
     interactionSource: MutableInteractionSource? = null
 ) {
     val paddingStart = watchDimensionResource(R.dimen.hey_content_horizontal_distance_6_0)
@@ -709,6 +733,7 @@ private fun HomeDefaultItem(
     val shape = RoundedCornerShape(watchDimensionResource(R.dimen.hey_card_normal_bg_radius))
     val clickModifier = if (onClick != null) {
         Modifier.clickableWithRipple(
+            enabled = interactionsEnabled,
             onClick = onClick,
             onLongClick = onLongClick,
             interactionSource = interactionSource
@@ -720,7 +745,10 @@ private fun HomeDefaultItem(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .clip(shape)
+            .graphicsLayer {
+                this.shape = shape
+                clip = true
+            }
             .background(backgroundColor, shape)
             .then(clickModifier)
             .then(testTag?.let(Modifier::testTag) ?: Modifier)
@@ -763,63 +791,6 @@ private fun HomeDefaultItem(
                 )
             }
         }
-        CardLoadingOverlay(
-            visible = isLoading,
-            shape = shape
-        )
-    }
-}
-
-@Composable
-private fun CardLoadingOverlay(
-    visible: Boolean,
-    shape: Shape
-) {
-    val overlayAlpha = remember { Animatable(if (visible) 1f else 0f) }
-    val overlayBlur = remember { Animatable(0f) }
-    var keepOverlayMounted by remember { mutableStateOf(visible) }
-
-    LaunchedEffect(visible) {
-        if (visible) {
-            keepOverlayMounted = true
-            overlayBlur.snapTo(0f)
-            overlayAlpha.snapTo(1f)
-        } else if (keepOverlayMounted) {
-            val fadeOut = launch {
-                overlayAlpha.animateTo(
-                    targetValue = 0f,
-                    animationSpec = tween(durationMillis = 240)
-                )
-            }
-            val blurOut = launch {
-                overlayBlur.animateTo(
-                    targetValue = 10f,
-                    animationSpec = tween(durationMillis = 240)
-                )
-            }
-            fadeOut.join()
-            blurOut.join()
-            keepOverlayMounted = false
-            overlayBlur.snapTo(0f)
-        }
-    }
-
-    if (!keepOverlayMounted) {
-        return
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .clip(shape)
-            .blur(overlayBlur.value.dp)
-            .graphicsLayer { alpha = overlayAlpha.value }
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.78f)),
-        contentAlignment = Alignment.Center
-    ) {
-        WatchCircularProgressIndicator(
-            modifier = Modifier.size(18.dp)
-        )
     }
 }
 
@@ -863,7 +834,10 @@ private fun shouldShowUnreadUi(builtinType: BuiltinChannelType?): Boolean {
 }
 
 @Composable
-private fun HomeBeianEntry(onBeianClick: () -> Unit) {
+private fun HomeBeianEntry(
+    onBeianClick: () -> Unit,
+    interactionsEnabled: Boolean
+) {
     val padding = watchDimensionResource(R.dimen.hey_distance_4dp)
     val textSize = textSize(R.dimen.hey_caption)
 
@@ -880,7 +854,10 @@ private fun HomeBeianEntry(onBeianClick: () -> Unit) {
             textAlign = TextAlign.Center,
             modifier = Modifier
                 .testTag(HomeTestTags.BEIAN_ENTRY)
-                .clickableWithRipple(onClick = onBeianClick)
+                .clickableWithRipple(
+                    enabled = interactionsEnabled,
+                    onClick = onBeianClick
+                )
         )
     }
 }
@@ -921,10 +898,11 @@ private fun Modifier.clickableWithRipple(
 ): Modifier {
     return composed {
         val resolvedInteractionSource = interactionSource ?: remember { MutableInteractionSource() }
+        val indication = LocalIndication.current
         if (onLongClick != null) {
             combinedClickable(
                 interactionSource = resolvedInteractionSource,
-                indication = LocalIndication.current,
+                indication = indication,
                 enabled = enabled,
                 onClick = onClick,
                 onLongClick = onLongClick
@@ -932,10 +910,17 @@ private fun Modifier.clickableWithRipple(
         } else {
             clickable(
                 interactionSource = resolvedInteractionSource,
-                indication = LocalIndication.current,
+                indication = indication,
                 enabled = enabled,
                 onClick = onClick
             )
         }
     }
 }
+
+private const val DEBUG_AUTOSCROLL_MIN_ENTRIES = 8
+private const val DEBUG_AUTOSCROLL_START_DELAY_MS = 8_000L
+private const val DEBUG_AUTOSCROLL_DURATION_MS = 1_100
+private const val DEBUG_AUTOSCROLL_TURNAROUND_DELAY_MS = 160L
+private const val DEBUG_AUTOSCROLL_SEGMENT_COUNT = 2
+private const val DEBUG_AUTOSCROLL_DISTANCE_PX = 320f

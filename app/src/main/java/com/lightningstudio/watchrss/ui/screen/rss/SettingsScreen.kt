@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss.ui.screen.rss
 
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -39,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
@@ -64,6 +66,7 @@ import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownScrollHandler
 import com.lightningstudio.watchrss.ui.settings.MainSettingsCatalog
 import com.lightningstudio.watchrss.ui.testing.SettingsTestTags
 import com.lightningstudio.watchrss.ui.util.isSystemShareSettingSupported
+import com.lightningstudio.watchrss.ui.util.showAppToast
 import kotlinx.coroutines.flow.StateFlow
 
 private enum class SettingsPage {
@@ -79,6 +82,8 @@ fun SettingsScreen(
     shareUseSystem: StateFlow<Boolean>,
     readingFontSizeSp: StateFlow<Int>,
     phoneConnectionEnabled: StateFlow<Boolean>,
+    mediaVolumeControlEnabled: StateFlow<Boolean>,
+    mediaVolumeGuardEnabled: StateFlow<Boolean>,
     rssInlineImagePrefetchMode: StateFlow<RssInlineImagePrefetchMode>,
     llmFeatureEnabled: StateFlow<Boolean>,
     llmAutoSummarize: StateFlow<Boolean>,
@@ -90,6 +95,8 @@ fun SettingsScreen(
     onToggleShareMode: () -> Unit,
     onSelectFontSize: (Int) -> Unit,
     onTogglePhoneConnection: () -> Unit,
+    onToggleMediaVolumeControl: () -> Unit,
+    onToggleMediaVolumeGuard: () -> Unit,
     onSelectRssInlineImagePrefetchMode: (RssInlineImagePrefetchMode) -> Unit,
     onToggleLlmFeatureEnabled: () -> Unit,
     onToggleLlmAutoSummarize: () -> Unit,
@@ -111,6 +118,8 @@ fun SettingsScreen(
     val useSystemShare by shareUseSystem.collectAsState()
     val fontSizeSp by readingFontSizeSp.collectAsState()
     val phoneConnection by phoneConnectionEnabled.collectAsState()
+    val mediaVolumeControl by mediaVolumeControlEnabled.collectAsState()
+    val mediaVolumeGuard by mediaVolumeGuardEnabled.collectAsState()
     val imagePrefetchMode by rssInlineImagePrefetchMode.collectAsState()
     val llmEnabled by llmFeatureEnabled.collectAsState()
     val llmAuto by llmAutoSummarize.collectAsState()
@@ -130,6 +139,8 @@ fun SettingsScreen(
             readingThemeDark = themeDark,
             readingFontSizeSp = fontSizeSp,
             phoneConnectionEnabled = phoneConnection,
+            mediaVolumeControlEnabled = mediaVolumeControl,
+            mediaVolumeGuardEnabled = mediaVolumeGuard,
             llmFeatureEnabled = llmEnabled,
             llmAutoSummarize = llmAuto,
             llmShowTokenUsage = llmTokenUsage,
@@ -138,6 +149,8 @@ fun SettingsScreen(
             onToggleReadingTheme = onToggleReadingTheme,
             onSelectFontSize = onSelectFontSize,
             onTogglePhoneConnection = onTogglePhoneConnection,
+            onToggleMediaVolumeControl = onToggleMediaVolumeControl,
+            onToggleMediaVolumeGuard = onToggleMediaVolumeGuard,
             onToggleLlmFeatureEnabled = onToggleLlmFeatureEnabled,
             onToggleLlmAutoSummarize = onToggleLlmAutoSummarize,
             onToggleLlmShowTokenUsage = onToggleLlmShowTokenUsage,
@@ -170,6 +183,8 @@ private fun MainSettingsPage(
     readingThemeDark: Boolean,
     readingFontSizeSp: Int,
     phoneConnectionEnabled: Boolean,
+    mediaVolumeControlEnabled: Boolean,
+    mediaVolumeGuardEnabled: Boolean,
     llmFeatureEnabled: Boolean,
     llmAutoSummarize: Boolean,
     llmShowTokenUsage: Boolean,
@@ -178,6 +193,8 @@ private fun MainSettingsPage(
     onToggleReadingTheme: () -> Unit,
     onSelectFontSize: (Int) -> Unit,
     onTogglePhoneConnection: () -> Unit,
+    onToggleMediaVolumeControl: () -> Unit,
+    onToggleMediaVolumeGuard: () -> Unit,
     onToggleLlmFeatureEnabled: () -> Unit,
     onToggleLlmAutoSummarize: () -> Unit,
     onToggleLlmShowTokenUsage: () -> Unit,
@@ -204,8 +221,19 @@ private fun MainSettingsPage(
     val valueIndent = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_10dp
     val pillHeight = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_multiple_item_height
     val scrollState = rememberScrollState()
+    val context = LocalContext.current
     val readingThemeInfo = remember { MainSettingsCatalog.readingTheme }
     val fontSizeInfo = remember { MainSettingsCatalog.fontSize }
+    val mediaVolumeControlInfo = remember { MainSettingsCatalog.mediaVolumeControl }
+    val mediaVolumeGuardInfo = remember { MainSettingsCatalog.mediaVolumeGuard }
+    val mediaVolumeGuardUnavailableMessage = "仅在启用滚轮调节音量后可使用音量调节防干扰"
+    val showVolumeGuardUnavailableToast = {
+        showAppToast(
+            context,
+            mediaVolumeGuardUnavailableMessage,
+            Toast.LENGTH_SHORT
+        )
+    }
 
     InstallDigitalCrownScrollHandler(scrollState)
 
@@ -268,6 +296,69 @@ private fun MainSettingsPage(
             }
             Text(
                 text = fontSizeInfo.description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+            )
+
+            Spacer(modifier = Modifier.height(entrySpacing))
+
+            WatchSettingsPillRow(label = mediaVolumeControlInfo.title, endPaddingMultiplier = 1.5f) {
+                WatchSwitch(
+                    checked = mediaVolumeControlEnabled,
+                    modifier = Modifier.testTag(SettingsTestTags.MEDIA_VOLUME_CONTROL_SWITCH),
+                    onCheckedChange = { onToggleMediaVolumeControl() }
+                )
+            }
+            Text(
+                text = mediaVolumeControlInfo.description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+            )
+
+            Spacer(modifier = Modifier.height(entrySpacing))
+
+            WatchSettingsPillRow(
+                label = mediaVolumeGuardInfo.title,
+                testTag = SettingsTestTags.MEDIA_VOLUME_GUARD_ROW,
+                onClick = if (mediaVolumeControlEnabled) {
+                    null
+                } else {
+                    showVolumeGuardUnavailableToast
+                },
+                endPaddingMultiplier = 1.5f
+            ) {
+                if (mediaVolumeControlEnabled) {
+                    WatchSwitch(
+                        checked = mediaVolumeGuardEnabled,
+                        modifier = Modifier.testTag(SettingsTestTags.MEDIA_VOLUME_GUARD_SWITCH),
+                        onCheckedChange = { onToggleMediaVolumeGuard() }
+                    )
+                } else {
+                    WatchSwitch(
+                        checked = mediaVolumeGuardEnabled,
+                        modifier = Modifier
+                            .testTag(SettingsTestTags.MEDIA_VOLUME_GUARD_SWITCH)
+                            .alpha(0.5f),
+                        onCheckedChange = { showVolumeGuardUnavailableToast() }
+                    )
+                }
+            }
+            Text(
+                text = if (!mediaVolumeControlEnabled) {
+                    "已随滚轮音量调节停用"
+                } else if (mediaVolumeGuardEnabled) {
+                    "已开启"
+                } else {
+                    "已关闭"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+            )
+            Text(
+                text = "滚轮连续上调时会先停在约16%，停一下再滚可继续升高",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
@@ -670,7 +761,7 @@ private fun ReadingThemeToggle(
                 value = isDark,
                 role = Role.Switch,
                 interactionSource = interactionSource,
-                indication = LocalIndication.current,
+                indication = null,
                 onValueChange = { onToggle() }
             ),
         contentAlignment = Alignment.Center

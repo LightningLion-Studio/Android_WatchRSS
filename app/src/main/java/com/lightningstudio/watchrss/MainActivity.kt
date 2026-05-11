@@ -78,7 +78,14 @@ class MainActivity : BaseWatchActivity() {
                 HomeFeedListActivity.createIntent(
                     context = this@MainActivity,
                     launcherEntry = launcherEntry
-                )
+                ).apply {
+                    if (intent.getBooleanExtra(EXTRA_DEBUG_HOME_AUTOSCROLL_PERF, false)) {
+                        putExtra(
+                            HomeFeedListActivity.EXTRA_DEBUG_AUTOSCROLL_PERF,
+                            true
+                        )
+                    }
+                }
             )
             finish()
         }
@@ -122,6 +129,7 @@ class MainActivity : BaseWatchActivity() {
     }
 
     companion object {
+        private const val EXTRA_DEBUG_HOME_AUTOSCROLL_PERF = "debug_home_autoscroll_perf"
         private const val SYSTEM_SPLASH_FADE_DURATION_MS = 80L
     }
 }

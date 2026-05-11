@@ -19,10 +19,6 @@ import org.junit.Test
 import org.mockito.Mockito
 import java.io.IOException
 import java.io.InputStream
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.atomic.AtomicReference
 
 class DouyinPlaybackPreviewCacheTest {
 
@@ -107,10 +103,10 @@ class DouyinPlaybackPreviewCacheTest {
         )
 
         assertTrue(firstPrefetchBudget < previewBudget)
-        assertEquals(4 * 1024 * 1024, firstPrefetchBudget)
-        assertEquals(3 * 1024 * 1024, secondPrefetchBudget)
-        assertEquals(2 * 1024 * 1024, thirdPrefetchBudget)
-        assertEquals(1024 * 1024, fifthPrefetchBudget)
+        assertEquals(2 * 1024 * 1024, firstPrefetchBudget)
+        assertEquals(1536 * 1024, secondPrefetchBudget)
+        assertEquals(1024 * 1024, thirdPrefetchBudget)
+        assertEquals(512 * 1024, fifthPrefetchBudget)
     }
 
     @Test
@@ -181,7 +177,7 @@ class DouyinPlaybackPreviewCacheTest {
     }
 
     @Test
-    fun playbackDataSource_waitsForDownloaderBytesAfterPreviewPrefix() {
+    fun playbackDataSource_streamsUpstreamAfterCachedPrefixRunsOut() {
         val item = DouyinStreamItem(
             awemeId = "1001",
             playUrl = "https://example.com/video.mp4",
@@ -194,7 +190,6 @@ class DouyinPlaybackPreviewCacheTest {
             durationMs = 30_000L
         )
         val previewBytes = byteArrayOf(9, 8)
-        val completedBytes = byteArrayOf(9, 8, 7, 6)
         DouyinPlaybackPreviewCache.putPreviewBytesForTests(item, previewBytes)
 
         val upstream = RecordingDataSource()
@@ -218,43 +213,19 @@ class DouyinPlaybackPreviewCacheTest {
         assertEquals(0, upstream.openCount)
 
         val nextBuffer = ByteArray(2)
-        val latch = CountDownLatch(1)
-        val readResult = AtomicInteger(Int.MIN_VALUE)
-        val readError = AtomicReference<Throwable?>(null)
-        val reader = Thread {
-            try {
-                readResult.set(dataSource.read(nextBuffer, 0, nextBuffer.size))
-            } catch (error: Throwable) {
-                readError.set(error)
-            } finally {
-                latch.countDown()
-            }
-        }
-        reader.start()
-
-        Thread.sleep(100L)
-        assertEquals(1L, latch.count)
-
-        DouyinPlaybackPreviewCache.putPreviewBytesForTests(
-            item = item,
-            bytes = completedBytes,
-            isComplete = true
-        )
-
-        assertTrue(latch.await(2, TimeUnit.SECONDS))
-        readError.get()?.let { throw it }
-        assertEquals(2, readResult.get())
-        assertArrayEquals(byteArrayOf(7, 6), nextBuffer)
-        assertEquals(0, upstream.openCount)
+        assertEquals(2, dataSource.read(nextBuffer, 0, nextBuffer.size))
+        assertArrayEquals(byteArrayOf(2, 3), nextBuffer)
+        assertEquals(1, upstream.openCount)
 
         dataSource.close()
+        assertEquals(1, upstream.closeCount)
     }
 
     @Test
     fun playbackDataSource_reportsDownloaderFailureWithoutOpeningUpstream() {
         val item = DouyinStreamItem(
             awemeId = "1001-fail",
-            playUrl = "https://example.com/fail-video.mp4",
+            playUrl = "file:///tmp/fail-video.mp4",
             coverUrl = null,
             title = "title",
             author = "author",

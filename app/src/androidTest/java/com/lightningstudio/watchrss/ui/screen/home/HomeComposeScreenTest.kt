@@ -70,7 +70,6 @@ class HomeComposeScreenTest {
                 channels = emptyList(),
                 hasLoadedChannels = false,
                 isRefreshing = false,
-                loadingEntryKey = null,
                 onMinimalContentReady = { minimalContentReadyCount++ },
                 onRefreshAll = {},
                 openSwipeId = null,

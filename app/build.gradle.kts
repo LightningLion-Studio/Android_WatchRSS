@@ -36,6 +36,8 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
+        buildConfigField("boolean", "ENABLE_RUNTIME_PERF_MONITOR", "false")
+        buildConfigField("boolean", "ENABLE_WATCH_DEBUG_MASK", "false")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         if (clearPackageDataForInstrumentation) {
@@ -55,6 +57,8 @@ android {
     }
     buildTypes {
         debug {
+            buildConfigField("boolean", "ENABLE_RUNTIME_PERF_MONITOR", "true")
+            buildConfigField("boolean", "ENABLE_WATCH_DEBUG_MASK", "true")
             if (hasKeystoreProperties) {
                 signingConfig = signingConfigs.getByName("release")
             }
@@ -73,6 +77,15 @@ android {
         create("profileableRelease") {
             initWith(getByName("release"))
             matchingFallbacks += listOf("release")
+            isProfileable = true
+            if (hasKeystoreProperties) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
+        create("debuggableRelease") {
+            initWith(getByName("release"))
+            matchingFallbacks += listOf("release")
+            isDebuggable = true
             if (hasKeystoreProperties) {
                 signingConfig = signingConfigs.getByName("release")
             }

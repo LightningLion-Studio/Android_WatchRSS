@@ -61,6 +61,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.network.InternetAvailabilityStatus
+import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED
+import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
 import com.lightningstudio.watchrss.data.settings.DEFAULT_READING_FONT_SIZE_SP
 import com.lightningstudio.watchrss.ui.components.WatchCheckbox
 import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
@@ -361,6 +363,8 @@ private fun OobeCustomizationStep(
     val scrollState = rememberScrollState()
     val readingThemeInfo = remember { MainSettingsCatalog.readingTheme }
     val fontSizeInfo = remember { MainSettingsCatalog.fontSize }
+    val mediaVolumeControlInfo = remember { MainSettingsCatalog.mediaVolumeControl }
+    val mediaVolumeGuardInfo = remember { MainSettingsCatalog.mediaVolumeGuard }
     val fontOptions = remember { (12..32 step 2).toList() }
     val entrySpacing = WatchDimens.hey_distance_8dp
     val pillHeight = WatchDimens.hey_multiple_item_height
@@ -368,6 +372,12 @@ private fun OobeCustomizationStep(
     val stepperValueWidth = watchDimensionResource(R.dimen.watch_action_button_height)
     var previewReadingThemeDark by rememberSaveable { mutableStateOf(true) }
     var previewFontSizeSp by rememberSaveable { mutableStateOf(DEFAULT_READING_FONT_SIZE_SP) }
+    var previewMediaVolumeControlEnabled by rememberSaveable {
+        mutableStateOf(DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED)
+    }
+    var previewMediaVolumeGuardEnabled by rememberSaveable {
+        mutableStateOf(DEFAULT_MEDIA_VOLUME_GUARD_ENABLED)
+    }
     val lowerFont = fontOptions.lastOrNull { it < previewFontSizeSp }
     val higherFont = fontOptions.firstOrNull { it > previewFontSizeSp }
 
@@ -435,7 +445,35 @@ private fun OobeCustomizationStep(
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(entrySpacing))
+
+        OobeCustomizationSetting(
+            info = mediaVolumeControlInfo,
+            endPaddingMultiplier = 1.5f
+        ) {
+            WatchSwitch(
+                checked = previewMediaVolumeControlEnabled,
+                modifier = Modifier.testTag(OobeTestTags.CUSTOM_MEDIA_VOLUME_CONTROL_SWITCH),
+                onCheckedChange = { previewMediaVolumeControlEnabled = it }
+            )
+        }
+
+        if (previewMediaVolumeControlEnabled) {
+            Spacer(modifier = Modifier.height(entrySpacing))
+
+            OobeCustomizationSetting(
+                info = mediaVolumeGuardInfo,
+                endPaddingMultiplier = 1.5f
+            ) {
+                WatchSwitch(
+                    checked = previewMediaVolumeGuardEnabled,
+                    modifier = Modifier.testTag(OobeTestTags.CUSTOM_MEDIA_GUARD_SWITCH),
+                    onCheckedChange = { previewMediaVolumeGuardEnabled = it }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(entrySpacing))
 
         OobePrimaryButton(
             text = "下一页",

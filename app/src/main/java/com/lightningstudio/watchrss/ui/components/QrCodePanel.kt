@@ -49,9 +49,9 @@ import androidx.compose.ui.unit.dp
  *
  * 布局结构：
  *   [title]        ← 标题，Heading 语义
- *   8 dp
+ *   [titleSubtitleSpacing]
  *   [subtitle]     ← 副标题，超长时跑马灯展示
- *   16 dp
+ *   [subtitleQrSpacing]
  *   二维码图片      ← Role.Image
  *
  * @param qrBitmap                二维码 Bitmap，为 null 时不渲染图片区域
@@ -62,6 +62,8 @@ import androidx.compose.ui.unit.dp
  * @param titleContentDescription 标题无障碍描述（null 时读取 title 文本本身）
  * @param subtitle                副标题，超长时自动跑马灯
  * @param subtitleContentDescription 副标题无障碍描述（null 时读取 subtitle 文本本身）
+ * @param titleSubtitleSpacing    标题与副标题之间的间距
+ * @param subtitleQrSpacing       副标题与二维码之间的间距
  * @param qrTestTag               可选测试标签，应用于二维码图片
  */
 @Composable
@@ -74,6 +76,8 @@ fun QrCodePanel(
     modifier: Modifier = Modifier,
     titleContentDescription: String? = null,
     subtitleContentDescription: String? = null,
+    titleSubtitleSpacing: Dp = 8.dp,
+    subtitleQrSpacing: Dp = 16.dp,
     qrTestTag: String? = null,
 ) {
     var qrImageEntered by remember(qrBitmap) { mutableStateOf(false) }
@@ -131,7 +135,7 @@ fun QrCodePanel(
                     }
             )
         }
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(titleSubtitleSpacing))
 
         Box(modifier = Modifier.fillMaxWidth()) {
             Text(
@@ -151,7 +155,7 @@ fun QrCodePanel(
                     }
             )
         }
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(subtitleQrSpacing))
 
         qrBitmap?.let { bitmap ->
             val brightnessMatrix = remember(qrImageBrightnessBias) {

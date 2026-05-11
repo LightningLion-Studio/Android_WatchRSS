@@ -44,17 +44,18 @@ internal const val DOUYIN_PLAYBACK_PREVIEW_ENTRY_LIMIT = 16
 
 private const val DOUYIN_PLAYBACK_SNAPSHOT_COUNT = 6
 internal const val DOUYIN_PLAYBACK_PREFETCH_COUNT = 2
-private const val DOUYIN_PLAYBACK_PREFETCH_CONCURRENCY = DOUYIN_PLAYBACK_PREVIEW_ENTRY_LIMIT
+private const val DOUYIN_PLAYBACK_PREFETCH_CONCURRENCY = 2
 private const val DOUYIN_PLAYBACK_BACKWARD_REGISTRATION_COUNT = 5
 private const val PREVIEW_DURATION_MS = 30_000L
 private const val PREFETCH_DURATION_MS = 16_000L
 private const val MIN_ENTRY_BYTES = 512 * 1024
 private const val PREFETCH_PROGRESS_COMMIT_BYTES = 512 * 1024
 private const val PREFETCH_READ_CHUNK_BYTES = 64 * 1024
-private const val DEFAULT_UNKNOWN_DURATION_BYTES = 8 * 1024 * 1024
-private const val MAX_ENTRY_BYTES = 12 * 1024 * 1024
-private const val MAX_PREFETCH_ENTRY_BYTES = 4 * 1024 * 1024
-private const val MAX_TOTAL_PREVIEW_BYTES = 128L * 1024L * 1024L
+private const val DEFAULT_UNKNOWN_DURATION_BYTES = 4 * 1024 * 1024
+private const val MAX_ENTRY_BYTES = 4 * 1024 * 1024
+private const val MAX_PREFETCH_ENTRY_BYTES = 2 * 1024 * 1024
+private const val MIN_TOTAL_PREVIEW_BYTES = 6L * 1024L * 1024L
+private const val MAX_TOTAL_PREVIEW_BYTES = 16L * 1024L * 1024L
 private const val MAX_TOTAL_POSTER_BYTES = 4L * 1024L * 1024L
 private const val DEFAULT_ESTIMATED_BYTES_PER_SECOND = 256 * 1024L
 private const val FOREGROUND_BANDWIDTH_RESERVE_NUMERATOR = 13L
@@ -183,6 +184,13 @@ internal data class DouyinPlaybackPreviewReadOutcome(
     val error: Throwable?
 )
 
+private sealed class DouyinPlaybackCacheReadResult {
+    data class Bytes(val count: Int) : DouyinPlaybackCacheReadResult()
+    data object EndOfInput : DouyinPlaybackCacheReadResult()
+    data object Pending : DouyinPlaybackCacheReadResult()
+    data class Failure(val error: IOException) : DouyinPlaybackCacheReadResult()
+}
+
 internal fun readDouyinPreviewBytes(
     input: InputStream,
     budgetBytes: Int,
@@ -261,7 +269,8 @@ object DouyinPlaybackPreviewCache {
     ): DataSource.Factory {
         return DataSource.Factory {
             DouyinPlaybackPreviewDataSource(
-                manager = manager
+                manager = manager,
+                upstreamFactory = upstreamFactory
             )
         }
     }
@@ -968,45 +977,6 @@ private class DouyinPlaybackPreviewManager {
         }
     }
 
-    fun captureFromUpstream(
-        mediaUri: String?,
-        absolutePosition: Long,
-        buffer: ByteArray,
-        offset: Int,
-        length: Int
-    ) {
-        val normalizedUri = mediaUri?.trim().orEmpty()
-        if (normalizedUri.isEmpty() || length <= 0 || absolutePosition < 0L) return
-        synchronized(lock) {
-            val registration = registrationsByUri[normalizedUri]
-                ?.takeIf { it.captureEnabled }
-                ?: return
-            val entry = entries[registration.key]
-            val existingBytes = entry?.bytes ?: ByteArray(0)
-            if (absolutePosition != existingBytes.size.toLong()) {
-                return
-            }
-            val budgetBytes = registration.budgetBytes
-            val remainingBytes = budgetBytes - existingBytes.size
-            if (remainingBytes <= 0) return
-            val bytesToCopy = min(length, remainingBytes)
-            val merged = existingBytes.copyOf(existingBytes.size + bytesToCopy)
-            System.arraycopy(buffer, offset, merged, existingBytes.size, bytesToCopy)
-            putPreviewBytesLocked(
-                key = registration.key,
-                mediaUri = normalizedUri,
-                bytes = merged,
-                budgetBytes = budgetBytes
-            )
-            if (existingBytes.isEmpty() || merged.size == budgetBytes) {
-                AppLogger.d(
-                    TAG,
-                    "RAM_CAPTURE awemeId=${registration.key.awemeId} bytes=${merged.size} budget=$budgetBytes"
-                )
-            }
-        }
-    }
-
     private fun buildPlaybackTargets(
         items: List<DouyinStreamItem>,
         anchorIndex: Int?
@@ -1113,15 +1083,11 @@ private class DouyinPlaybackPreviewManager {
             val remoteUri = registration?.remoteUri
                 ?: target.mediaUri.takeIf { it.startsWith("http", ignoreCase = true) }
                 ?: return@mapIndexedNotNull null
-            val requiredBytes = if (index == 0) {
-                MAX_TOTAL_PREVIEW_BYTES.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-            } else {
-                estimatePrefetchBytes(
-                    contentLength = null,
-                    durationMs = target.durationMs,
-                    prefetchOrder = index
-                )
-            }
+            val requiredBytes = estimatePrefetchBytes(
+                contentLength = null,
+                durationMs = target.durationMs,
+                prefetchOrder = index
+            )
             val existingBytes = synchronized(lock) { entries[target.key()]?.bytes?.size ?: 0 }
             if (existingBytes >= requiredBytes) return@mapIndexedNotNull null
             DouyinPlaybackDownloadPlan(
@@ -1131,7 +1097,7 @@ private class DouyinPlaybackPreviewManager {
                 requiredBytes = requiredBytes,
                 initialBytes = existingBytes.coerceAtMost(requiredBytes),
                 prefetchOrder = index,
-                completeOnEnd = index == 0
+                completeOnEnd = false
             )
         }
         val targetKeys = downloadPlans.mapTo(linkedSetOf()) { it.target.key() }
@@ -1291,7 +1257,18 @@ private class DouyinPlaybackPreviewManager {
                     resetPreviewBytes(target)
                     initialBytes = 0
                 }
+                var downloadBuffer = ByteArray(budgetBytes)
+                if (initialBytes > 0) {
+                    synchronized(lock) {
+                        entries[target.key()]?.bytes?.copyInto(
+                            destination = downloadBuffer,
+                            startIndex = 0,
+                            endIndex = initialBytes.coerceAtMost(downloadBuffer.size)
+                        )
+                    }
+                }
                 var downloadedBytes = initialBytes
+                var lastCommittedBytes = initialBytes
                 var lastLoggedBytes = initialBytes
                 var reachedStreamEnd = false
                 val readBuffer = ByteArray(PREFETCH_READ_CHUNK_BYTES)
@@ -1299,6 +1276,9 @@ private class DouyinPlaybackPreviewManager {
                     while (true) {
                         val control = downloadControlFor(target.key()) ?: plan.toDownloadControl(reason)
                         if (downloadedBytes >= control.requiredBytes) break
+                        if (control.requiredBytes > downloadBuffer.size) {
+                            downloadBuffer = downloadBuffer.copyOf(control.requiredBytes)
+                        }
                         val bytesToRead = min(
                             PREFETCH_READ_CHUNK_BYTES,
                             control.requiredBytes - downloadedBytes
@@ -1316,20 +1296,7 @@ private class DouyinPlaybackPreviewManager {
                             reachedStreamEnd = true
                             break
                         }
-                        val appended = appendPreviewBytes(
-                            target = target,
-                            absolutePosition = downloadedBytes,
-                            buffer = readBuffer,
-                            length = read,
-                            budgetBytes = control.requiredBytes
-                        )
-                        if (!appended) {
-                            AppLogger.d(
-                                TAG,
-                                "prefetch append skipped awemeId=${target.awemeId} position=$downloadedBytes reason=$reason"
-                            )
-                            return
-                        }
+                        System.arraycopy(readBuffer, 0, downloadBuffer, downloadedBytes, read)
                         downloadedBytes += read
                         recordNetworkTransferBytes(read)
                         updatePrefetchProgress(
@@ -1341,6 +1308,16 @@ private class DouyinPlaybackPreviewManager {
                             prefetchOrder = control.prefetchOrder,
                             reason = control.reason
                         )
+                        if (
+                            downloadedBytes - lastCommittedBytes >= PREFETCH_PROGRESS_COMMIT_BYTES ||
+                            downloadedBytes >= control.requiredBytes
+                        ) {
+                            putPreviewBytes(
+                                target = target,
+                                bytes = downloadBuffer.copyOf(downloadedBytes)
+                            )
+                            lastCommittedBytes = downloadedBytes
+                        }
                         if (
                             downloadedBytes >= MIN_ENTRY_BYTES &&
                             downloadedBytes - lastLoggedBytes >= PREFETCH_PROGRESS_COMMIT_BYTES
@@ -1354,6 +1331,12 @@ private class DouyinPlaybackPreviewManager {
                     }
                 }
                 val finalControl = downloadControlFor(target.key()) ?: plan.toDownloadControl(reason)
+                if (downloadedBytes > lastCommittedBytes) {
+                    putPreviewBytes(
+                        target = target,
+                        bytes = downloadBuffer.copyOf(downloadedBytes)
+                    )
+                }
                 if (reachedStreamEnd) {
                     markDownloadComplete(target)
                 } else if (finalControl.completeOnEnd && downloadedBytes >= finalControl.requiredBytes) {
@@ -1524,33 +1507,19 @@ private class DouyinPlaybackPreviewManager {
             if (!shouldContinue()) {
                 return C.RESULT_END_OF_INPUT
             }
-            synchronized(lock) {
-                val key = keyByUri[normalizedUri]
-                    ?: registrationsByUri[normalizedUri]?.key
-                    ?: throw IOException("unregistered Douyin playback cache URI: $normalizedUri")
-                val entry = entries[key]
-                if (entry != null) {
-                    entry.failureMessage?.let { message ->
-                        if (absolutePosition >= entry.bytes.size.toLong()) {
-                            throw IOException("Douyin download failed for $normalizedUri: $message")
-                        }
-                    }
-                    val availableBytes = entry.bytes.size.toLong() - absolutePosition
-                    if (availableBytes > 0L) {
-                        val bytesToCopy = min(length.toLong(), availableBytes).toInt()
-                        System.arraycopy(
-                            entry.bytes,
-                            absolutePosition.toInt(),
-                            buffer,
-                            offset,
-                            bytesToCopy
-                        )
-                        return bytesToCopy
-                    }
-                    if (entry.isComplete) {
-                        return C.RESULT_END_OF_INPUT
-                    }
-                }
+            when (
+                val result = readCacheBytes(
+                    mediaUri = normalizedUri,
+                    absolutePosition = absolutePosition,
+                    buffer = buffer,
+                    offset = offset,
+                    length = length
+                )
+            ) {
+                is DouyinPlaybackCacheReadResult.Bytes -> return result.count
+                DouyinPlaybackCacheReadResult.EndOfInput -> return C.RESULT_END_OF_INPUT
+                is DouyinPlaybackCacheReadResult.Failure -> throw result.error
+                DouyinPlaybackCacheReadResult.Pending -> Unit
             }
             if (!loggedWait) {
                 AppLogger.d(
@@ -1568,35 +1537,65 @@ private class DouyinPlaybackPreviewManager {
         }
     }
 
-    private fun appendPreviewBytes(
-        target: DouyinPlaybackPreviewWarmTarget,
-        absolutePosition: Int,
+    fun readCacheBytes(
+        mediaUri: String?,
+        absolutePosition: Long,
         buffer: ByteArray,
-        length: Int,
-        budgetBytes: Int
-    ): Boolean {
-        if (length <= 0 || absolutePosition < 0) return false
+        offset: Int,
+        length: Int
+    ): DouyinPlaybackCacheReadResult {
+        val normalizedUri = mediaUri?.trim().orEmpty()
+        if (normalizedUri.isEmpty()) {
+            return DouyinPlaybackCacheReadResult.Failure(IOException("empty Douyin playback cache URI"))
+        }
+        if (length <= 0) return DouyinPlaybackCacheReadResult.Bytes(0)
         return synchronized(lock) {
-            val key = target.key()
-            val existing = entries[key]
-            val existingBytes = existing?.bytes ?: ByteArray(0)
-            if (absolutePosition != existingBytes.size) {
-                return@synchronized false
+            val key = keyByUri[normalizedUri]
+                ?: registrationsByUri[normalizedUri]?.key
+                ?: return@synchronized DouyinPlaybackCacheReadResult.Failure(
+                    IOException("unregistered Douyin playback cache URI: $normalizedUri")
+                )
+            val entry = entries[key] ?: return@synchronized DouyinPlaybackCacheReadResult.Pending
+            entry.failureMessage?.let { message ->
+                if (absolutePosition >= entry.bytes.size.toLong()) {
+                    return@synchronized DouyinPlaybackCacheReadResult.Failure(
+                        IOException("Douyin download failed for $normalizedUri: $message")
+                    )
+                }
             }
-            val remainingBytes = budgetBytes - existingBytes.size
-            if (remainingBytes <= 0) return@synchronized false
-            val bytesToCopy = min(length, remainingBytes)
-            val merged = existingBytes.copyOf(existingBytes.size + bytesToCopy)
-            System.arraycopy(buffer, 0, merged, existingBytes.size, bytesToCopy)
-            putPreviewBytesLocked(
-                key = key,
-                mediaUri = target.mediaUri,
-                bytes = merged,
-                budgetBytes = max(budgetBytes, existing?.budgetBytes ?: 0),
-                isComplete = false,
-                failureMessage = null
-            )
-            true
+            val availableBytes = entry.bytes.size.toLong() - absolutePosition
+            if (availableBytes > 0L) {
+                val bytesToCopy = min(length.toLong(), availableBytes).toInt()
+                System.arraycopy(
+                    entry.bytes,
+                    absolutePosition.toInt(),
+                    buffer,
+                    offset,
+                    bytesToCopy
+                )
+                return@synchronized DouyinPlaybackCacheReadResult.Bytes(bytesToCopy)
+            }
+            if (entry.isComplete) {
+                DouyinPlaybackCacheReadResult.EndOfInput
+            } else {
+                DouyinPlaybackCacheReadResult.Pending
+            }
+        }
+    }
+
+    fun remoteTargetFor(mediaUri: String?): DouyinPlaybackRemoteTarget? {
+        val normalizedUri = mediaUri?.trim().orEmpty()
+        if (normalizedUri.isEmpty()) return null
+        return synchronized(lock) {
+            remoteTargetsByUri[normalizedUri]
+                ?: registrationsByUri[normalizedUri]?.let { registration ->
+                    registration.remoteUri?.let { remoteUri ->
+                        DouyinPlaybackRemoteTarget(
+                            remoteUri = remoteUri,
+                            headers = registration.headers
+                        )
+                    }
+                }
         }
     }
 
@@ -1736,7 +1735,7 @@ private class DouyinPlaybackPreviewManager {
     private fun trimToBudgetLocked() {
         while (
             entries.size > DOUYIN_PLAYBACK_PREVIEW_ENTRY_LIMIT ||
-            totalBytes > MAX_TOTAL_PREVIEW_BYTES
+            totalBytes > maxTotalPreviewBytes()
         ) {
             val entry = entries.entries.firstOrNull { candidate ->
                 !protectedPreviewKeys.contains(candidate.key)
@@ -1969,6 +1968,11 @@ internal fun estimatePreviewBytes(
     return DEFAULT_UNKNOWN_DURATION_BYTES.coerceAtMost(MAX_ENTRY_BYTES)
 }
 
+private fun maxTotalPreviewBytes(): Long {
+    val heapAwareBudget = Runtime.getRuntime().maxMemory() / 4L
+    return heapAwareBudget.coerceIn(MIN_TOTAL_PREVIEW_BYTES, MAX_TOTAL_PREVIEW_BYTES)
+}
+
 internal fun estimatePrefetchBytes(
     contentLength: Long?,
     durationMs: Long,
@@ -2014,10 +2018,13 @@ private fun formatBandwidthForLog(bytesPerSecond: Long?): String {
 }
 
 private class DouyinPlaybackPreviewDataSource(
-    private val manager: DouyinPlaybackPreviewManager
+    private val manager: DouyinPlaybackPreviewManager,
+    private val upstreamFactory: DataSource.Factory
 ) : BaseDataSource(false) {
     private var currentUriString: String? = null
     private var currentUri: Uri? = null
+    private var currentDataSpec: DataSpec? = null
+    private var upstreamDataSource: DataSource? = null
     private var opened = false
     private var responseHeaders: Map<String, List<String>> = emptyMap()
     private var readPosition = 0L
@@ -2039,6 +2046,7 @@ private class DouyinPlaybackPreviewDataSource(
         transferInitializing(dataSpec)
         currentUri = dataSpec.uri
         currentUriString = dataSpec.uri.toString()
+        currentDataSpec = dataSpec
         responseHeaders = emptyMap()
         readPosition = dataSpec.position.coerceAtLeast(0L)
         bytesRemaining = dataSpec.length
@@ -2047,7 +2055,7 @@ private class DouyinPlaybackPreviewDataSource(
         transferStarted(dataSpec)
         AppLogger.d(
             DATA_SOURCE_TAG,
-            "RAM_ONLY_OPEN uri=${dataSpec.uri} position=$readPosition length=${dataSpec.length}"
+            "CACHE_OPEN uri=${dataSpec.uri} position=$readPosition length=${dataSpec.length}"
         )
         return dataSpec.length
     }
@@ -2062,14 +2070,98 @@ private class DouyinPlaybackPreviewDataSource(
         } else {
             min(length.toLong(), bytesRemaining).toInt()
         }
-        val read = manager.readCacheBytesBlocking(
-            mediaUri = uriString,
-            absolutePosition = readPosition,
-            buffer = buffer,
-            offset = offset,
-            length = readLength,
-            shouldContinue = { !closed }
+        upstreamDataSource?.let { upstream ->
+            return readFromUpstream(upstream, buffer, offset, readLength)
+        }
+        val read = when (
+            val cacheRead = manager.readCacheBytes(
+                mediaUri = uriString,
+                absolutePosition = readPosition,
+                buffer = buffer,
+                offset = offset,
+                length = readLength
+            )
+        ) {
+            is DouyinPlaybackCacheReadResult.Bytes -> cacheRead.count
+            DouyinPlaybackCacheReadResult.EndOfInput -> C.RESULT_END_OF_INPUT
+            DouyinPlaybackCacheReadResult.Pending -> {
+                if (openUpstreamForCurrentPosition(uriString)) {
+                    return readFromUpstream(
+                        upstream = upstreamDataSource ?: return C.RESULT_END_OF_INPUT,
+                        buffer = buffer,
+                        offset = offset,
+                        length = readLength
+                    )
+                }
+                manager.readCacheBytesBlocking(
+                    mediaUri = uriString,
+                    absolutePosition = readPosition,
+                    buffer = buffer,
+                    offset = offset,
+                    length = readLength,
+                    shouldContinue = { !closed }
+                )
+            }
+
+            is DouyinPlaybackCacheReadResult.Failure -> {
+                if (openUpstreamForCurrentPosition(uriString)) {
+                    return readFromUpstream(
+                        upstream = upstreamDataSource ?: return C.RESULT_END_OF_INPUT,
+                        buffer = buffer,
+                        offset = offset,
+                        length = readLength
+                    )
+                }
+                throw cacheRead.error
+            }
+        }
+        if (read == C.RESULT_END_OF_INPUT) return C.RESULT_END_OF_INPUT
+        readPosition += read
+        if (bytesRemaining != C.LENGTH_UNSET.toLong()) {
+            bytesRemaining = (bytesRemaining - read).coerceAtLeast(0L)
+        }
+        bytesTransferred(read)
+        return read
+    }
+
+    private fun openUpstreamForCurrentPosition(cacheUriString: String): Boolean {
+        if (upstreamDataSource != null) return true
+        val dataSpec = currentDataSpec ?: return false
+        val remoteTarget = manager.remoteTargetFor(cacheUriString) ?: return false
+        val remainingLength = if (dataSpec.length == C.LENGTH_UNSET.toLong()) {
+            C.LENGTH_UNSET.toLong()
+        } else {
+            (dataSpec.position + dataSpec.length - readPosition).coerceAtLeast(0L)
+        }
+        val requestHeaders = dataSpec.httpRequestHeaders + remoteTarget.headers
+        val upstreamUri = if (remoteTarget.remoteUri == cacheUriString) {
+            dataSpec.uri
+        } else {
+            Uri.parse(remoteTarget.remoteUri)
+        }
+        val upstreamSpec = dataSpec.buildUpon()
+            .setUri(upstreamUri)
+            .setPosition(readPosition)
+            .setLength(remainingLength)
+            .setHttpRequestHeaders(requestHeaders)
+            .build()
+        val upstream = upstreamFactory.createDataSource()
+        upstreamDataSource = upstream
+        upstream.open(upstreamSpec)
+        AppLogger.d(
+            DATA_SOURCE_TAG,
+            "UPSTREAM_OPEN cacheUri=$cacheUriString remote=${remoteTarget.remoteUri} position=$readPosition length=$remainingLength"
         )
+        return true
+    }
+
+    private fun readFromUpstream(
+        upstream: DataSource,
+        buffer: ByteArray,
+        offset: Int,
+        length: Int
+    ): Int {
+        val read = upstream.read(buffer, offset, length)
         if (read == C.RESULT_END_OF_INPUT) return C.RESULT_END_OF_INPUT
         readPosition += read
         if (bytesRemaining != C.LENGTH_UNSET.toLong()) {
@@ -2087,8 +2179,16 @@ private class DouyinPlaybackPreviewDataSource(
         val wasOpened = opened
         closed = true
         opened = false
+        upstreamDataSource?.let { upstream ->
+            runCatching { upstream.close() }
+                .onFailure { error ->
+                    AppLogger.w(DATA_SOURCE_TAG, "failed to close upstream data source", error)
+                }
+        }
+        upstreamDataSource = null
         currentUriString = null
         currentUri = null
+        currentDataSpec = null
         responseHeaders = emptyMap()
         readPosition = 0L
         bytesRemaining = C.LENGTH_UNSET.toLong()

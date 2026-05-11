@@ -17,6 +17,8 @@ private val READING_THEME_DARK = booleanPreferencesKey("reading_theme_dark")
 private val READING_FONT_SIZE_SP = intPreferencesKey("reading_font_size_sp")
 private val SHARE_USE_SYSTEM = booleanPreferencesKey("share_use_system")
 private val PHONE_CONNECTION_ENABLED = booleanPreferencesKey("phone_connection_enabled")
+private val MEDIA_VOLUME_CONTROL_ENABLED = booleanPreferencesKey("media_volume_control_enabled")
+private val MEDIA_VOLUME_GUARD_ENABLED = booleanPreferencesKey("media_volume_guard_enabled")
 private val RSS_INLINE_IMAGE_PREFETCH_MODE = intPreferencesKey("rss_inline_image_prefetch_mode")
 private val LLM_PROVIDER = stringPreferencesKey("llm_provider")
 private val LLM_MODEL = stringPreferencesKey("llm_model")
@@ -44,6 +46,8 @@ val CACHE_LIMIT_OPTIONS_MB: List<Long> = listOf(512L, 768L, 1024L, 1536L, 2048L,
 const val MB_BYTES: Long = 1024 * 1024
 const val DEFAULT_READING_FONT_SIZE_SP: Int = 14
 const val CURRENT_OOBE_VERSION: Int = 3
+const val DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED: Boolean = true
+const val DEFAULT_MEDIA_VOLUME_GUARD_ENABLED: Boolean = true
 const val TEMP_ORIGINAL_MODE_HINT_WINDOW_MS: Long = 12L * 60L * 60L * 1000L
 const val TEMP_ORIGINAL_MODE_HINT_THRESHOLD: Int = 3
 class SettingsRepository(private val dataStore: DataStore<Preferences>) {
@@ -64,6 +68,12 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     }
     val phoneConnectionEnabled: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[PHONE_CONNECTION_ENABLED] ?: BuildConfig.DEBUG
+    }
+    val mediaVolumeControlEnabled: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[MEDIA_VOLUME_CONTROL_ENABLED] ?: DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED
+    }
+    val mediaVolumeGuardEnabled: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[MEDIA_VOLUME_GUARD_ENABLED] ?: DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
     }
     val rssInlineImagePrefetchMode: Flow<RssInlineImagePrefetchMode> = dataStore.data.map { preferences ->
         RssInlineImagePrefetchMode.fromPersistedValue(
@@ -122,6 +132,18 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     suspend fun setPhoneConnectionEnabled(value: Boolean) {
         dataStore.edit { preferences ->
             preferences[PHONE_CONNECTION_ENABLED] = value
+        }
+    }
+
+    suspend fun setMediaVolumeControlEnabled(value: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[MEDIA_VOLUME_CONTROL_ENABLED] = value
+        }
+    }
+
+    suspend fun setMediaVolumeGuardEnabled(value: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[MEDIA_VOLUME_GUARD_ENABLED] = value
         }
     }
 

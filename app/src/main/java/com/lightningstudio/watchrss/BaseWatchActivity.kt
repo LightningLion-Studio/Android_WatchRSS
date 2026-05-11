@@ -48,7 +48,9 @@ open class BaseWatchActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        PerformanceMonitor.attach(this)
+        if (BuildConfig.ENABLE_RUNTIME_PERF_MONITOR) {
+            PerformanceMonitor.attach(this)
+        }
 
         // 记录Activity启动
         AppLogger.log("Activity", "启动: ${this.javaClass.simpleName}")
@@ -67,7 +69,7 @@ open class BaseWatchActivity : ComponentActivity() {
     }
 
     override fun setContentView(layoutResID: Int) {
-        if (!BuildConfig.DEBUG) {
+        if (!BuildConfig.ENABLE_WATCH_DEBUG_MASK) {
             super.setContentView(layoutResID)
             return
         }
@@ -81,7 +83,7 @@ open class BaseWatchActivity : ComponentActivity() {
             super.setContentView(view)
             return
         }
-        if (!BuildConfig.DEBUG) {
+        if (!BuildConfig.ENABLE_WATCH_DEBUG_MASK) {
             super.setContentView(view)
             return
         }
@@ -101,7 +103,7 @@ open class BaseWatchActivity : ComponentActivity() {
             super.setContentView(view, params)
             return
         }
-        if (!BuildConfig.DEBUG) {
+        if (!BuildConfig.ENABLE_WATCH_DEBUG_MASK) {
             super.setContentView(view, params)
             return
         }

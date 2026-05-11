@@ -109,13 +109,13 @@ fun AddRssScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .verticalScroll(scrollState)
                     .padding(
                         start = horizontalPadding,
                         end = horizontalPadding,
                         top = verticalPadding,
                         bottom = verticalPadding
                     )
-                    .verticalScroll(scrollState)
                     .semantics { contentDescription = "添加RSS订阅页面" },
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center

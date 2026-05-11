@@ -38,6 +38,18 @@ cp gradle.properties.example gradle.properties
 ```
 - 如需配置本机路径（如 `org.gradle.java.home`、临时目录等），请仅修改本地 `gradle.properties`。
 
+## 🧾 日志上传器资源更新
+- 本地日志上传页面来自仓库外的 `../Loger_key/LogUploader/LogUploader`，私钥也保留在 `../Loger_key`，不要放进 Android 仓库。
+- 复用现有私钥并重新构建、同步到 `app/src/main/assets/log_upload/`：
+```bash
+scripts/update_log_upload_assets.sh
+```
+- 如果需要轮换日志加密密钥，执行：
+```bash
+scripts/update_log_upload_assets.sh --rotate-key
+```
+- 脚本会生成/更新 `../Loger_key/rsa_pub_pkcs1.pem`，同步 `private_key.pem` / `rsa_pub_pkcs1.pem` 到 LogUploader 根目录，同步私钥到 `../log-decrypter/public/private_key.pem`，把公钥写进 `src/config/publicKey.js`，运行 `npm run build`，再把 `dist` 产物同步进 Android assets 并修正 Vite 资源路径为相对路径。
+
 ## 📦 Profileable Release 打包
 - 执行 `scripts/build_profileable_release.sh` 可构建 `profileableRelease`，并将 APK、`mapping.txt`、`output-metadata.json` 收集到 `app/build/outputs/dist/profileableRelease/`。
 - 如需自定义输出目录，可执行：

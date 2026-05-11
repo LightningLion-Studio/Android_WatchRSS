@@ -128,6 +128,7 @@ import kotlin.math.abs
 import com.lightningstudio.watchrss.sdk.douyin.DouyinVideoCodec
 import com.lightningstudio.watchrss.sdk.douyin.DouyinVideoVariant
 import java.io.IOException
+import java.security.MessageDigest
 import kotlin.math.min
 import kotlin.math.sqrt
 
@@ -557,6 +558,8 @@ private fun isLikelyDouyinCodecFailure(error: PlaybackException): Boolean {
 internal fun DouyinImmersiveScreen(
     playerSession: DouyinPlayerPoolSession,
     uiState: DouyinFeedUiState,
+    digitalCrownVolumeEnabled: Boolean = true,
+    volumeGuardEnabled: Boolean = true,
     onRefresh: () -> Unit,
     onPageSettled: (Int) -> Unit,
     onEnterFlow: () -> Unit,
@@ -609,7 +612,8 @@ internal fun DouyinImmersiveScreen(
     var autoSkipMessage by remember { mutableStateOf<String?>(null) }
     var controlsVisible by rememberSaveable { mutableStateOf(true) }
     var scaleMode by rememberSaveable { mutableStateOf(DouyinPlayerScaleMode.Standard) }
-    val volumeState = rememberPlayerVolumeState()
+    val effectiveVolumeGuardEnabled = volumeGuardEnabled && digitalCrownVolumeEnabled
+    val volumeState = rememberPlayerVolumeState(guardEnabled = effectiveVolumeGuardEnabled)
     var foregroundSlotKey by rememberSaveable { mutableStateOf(DouyinPlayerSlotKey.Primary) }
     val context = LocalContext.current
     val networkBandwidthEstimateBytesPerSecond by produceState<Long?>(
@@ -1052,6 +1056,7 @@ internal fun DouyinImmersiveScreen(
             slot.boundCodec = codec
             slot.player.playWhenReady = shouldPlay
             if (shouldPlay) {
+                volumeState.enforcePlaybackStartGuard()
                 restoreAudibleSlotVolume(slot)
                 slot.player.play()
                 val loggedPrepareKey = slot.preparedSourceKey ?: prepareKey
@@ -1103,6 +1108,7 @@ internal fun DouyinImmersiveScreen(
         slot.player.setMediaItem(MediaItem.fromUri(targetUri))
         slot.player.prepare()
         if (shouldPlay) {
+            volumeState.enforcePlaybackStartGuard()
             restoreAudibleSlotVolume(slot)
             slot.player.play()
         }
@@ -1294,7 +1300,7 @@ internal fun DouyinImmersiveScreen(
         enabled = pagerState.currentPage == 0 && pageCount > 1
     )
     InstallDigitalCrownVolumeHandler(
-        enabled = pagerState.currentPage > 0,
+        enabled = pagerState.currentPage > 0 && digitalCrownVolumeEnabled,
         showSystemUi = false,
         reverseDirection = true,
         supportsDigitalCrown = true,
@@ -2358,6 +2364,7 @@ internal fun DouyinImmersiveScreen(
             ) &&
             !pagerState.isScrollInProgress
         if (shouldPlay) {
+            volumeState.enforcePlaybackStartGuard()
             restoreAudibleSlotVolume(currentForegroundSlot)
             currentForegroundSlot.player.playWhenReady = true
             currentForegroundSlot.player.play()
@@ -2514,6 +2521,7 @@ internal fun DouyinImmersiveScreen(
                             activePausedByGesture = false
                             activeAutoplayEnabled = true
                             if (activeItem?.awemeId == item.awemeId && !activeHasError) {
+                                volumeState.enforcePlaybackStartGuard()
                                 restoreAudibleSlotVolume(foregroundSlot)
                                 foregroundSlot.player.playWhenReady = true
                                 foregroundSlot.player.play()
@@ -3079,13 +3087,13 @@ private fun buildDouyinExoPlayer(
     val playbackFactory = DouyinPlaybackPreviewCache.buildPlaybackDataSourceFactory(upstreamFactory)
     val loadControl = if (lightweight) {
         DefaultLoadControl.Builder()
-            .setTargetBufferBytes(16 * 1024 * 1024)
-            .setBufferDurationsMs(1_500, 5_000, 100, 250)
+            .setTargetBufferBytes(6 * 1024 * 1024)
+            .setBufferDurationsMs(1_000, 4_000, 100, 250)
             .build()
     } else {
         DefaultLoadControl.Builder()
-            .setTargetBufferBytes(48 * 1024 * 1024)
-            .setBufferDurationsMs(4_000, 18_000, 150, 300)
+            .setTargetBufferBytes(16 * 1024 * 1024)
+            .setBufferDurationsMs(2_000, 8_000, 150, 300)
             .build()
     }
     return ExoPlayer.Builder(context)
@@ -3097,9 +3105,14 @@ private fun buildDouyinExoPlayer(
 }
 
 private fun buildDouyinPlayerHeadersSignature(headers: Map<String, String>): String {
-    return headers.entries
+    val rawSignature = headers.entries
         .sortedBy { it.key }
         .joinToString(";") { (key, value) -> "$key=$value" }
+    val digest = MessageDigest.getInstance("SHA-256")
+        .digest(rawSignature.toByteArray(Charsets.UTF_8))
+        .joinToString(separator = "") { byte -> "%02x".format(byte) }
+    val headerCount = headers.count { (key, value) -> key.isNotBlank() && value.isNotBlank() }
+    return "sha256=${digest.take(16)} headerCount=$headerCount"
 }
 
 private fun resolveDouyinNetworkBandwidthEstimateBytesPerSecond(context: Context): Long? {

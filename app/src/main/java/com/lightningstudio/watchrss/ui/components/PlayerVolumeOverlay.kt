@@ -2,6 +2,7 @@ package com.lightningstudio.watchrss.ui.components
 
 import android.content.Context
 import android.media.AudioManager
+import android.os.SystemClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.padding
@@ -33,12 +34,14 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.floor
 import kotlin.math.roundToInt
 
 @Stable
 class PlayerVolumeState internal constructor(
     private val audioManager: AudioManager,
-    private val scope: CoroutineScope
+    private val scope: CoroutineScope,
+    private val guardEnabled: Boolean
 ) {
     private val minVolume = audioManager.getStreamMinVolume(AudioManager.STREAM_MUSIC)
     // PlayerVolume: getStreamMaxVolume(STREAM_MUSIC)=16
@@ -46,7 +49,19 @@ class PlayerVolumeState internal constructor(
         .also { AppLogger.d(VOLUME_TAG, "getStreamMaxVolume(STREAM_MUSIC)=$it") }
     // 每单位 digitalCrown delta 对应的音量步长（5% 音量范围）
     private val volumeSensitivity = (maxVolume - minVolume) * VOLUME_SENSITIVITY_PERCENT
+    private val playbackStartTargetVolume = nearestPositiveVolumeForPercent(
+        targetPercent = PLAYBACK_START_TARGET_PERCENT,
+        minVolume = minVolume,
+        maxVolume = maxVolume
+    )
+    private val digitalCrownSessionCapVolume = highestSafeVolumeForPercent(
+        maxPercent = DIGITAL_CROWN_SESSION_CAP_PERCENT,
+        minVolume = minVolume,
+        maxVolume = maxVolume
+    )
     private var hideJob: Job? = null
+    private var digitalCrownGuardState by mutableStateOf(DigitalCrownVolumeGuardState())
+    private var playbackStartGuardDismissedByUser by mutableStateOf(false)
     // 浮点虚拟音量，保留 delta 累积精度，仅在提交给 AudioManager 时 roundToInt
     // 用 mutableFloatStateOf 使 UI 直接观察连续值，而非离散的 AudioManager 整数
     private var virtualVolume by mutableFloatStateOf(
@@ -70,10 +85,23 @@ class PlayerVolumeState internal constructor(
     val percentText: String
         get() = "${(progress * 100f).roundToInt()}%"
 
-    fun adjustByDelta(delta: Float) {
+    fun adjustByDelta(delta: Float, eventUptimeMs: Long = SystemClock.elapsedRealtime()) {
+        if (delta == 0f) return
+        playbackStartGuardDismissedByUser = true
+        syncOutOfBandVolumeChange()
         val prevVirtual = virtualVolume
-        virtualVolume = (virtualVolume + delta * volumeSensitivity)
-            .coerceIn(minVolume.toFloat(), maxVolume.toFloat())
+        val guardedTarget = applyDigitalCrownVolumeGuard(
+            currentVolume = virtualVolume,
+            requestedDeltaVolume = delta * volumeSensitivity,
+            minVolume = minVolume,
+            maxVolume = maxVolume,
+            guardEnabled = guardEnabled,
+            sessionCapVolume = digitalCrownSessionCapVolume,
+            previousState = digitalCrownGuardState,
+            eventUptimeMs = eventUptimeMs
+        )
+        digitalCrownGuardState = guardedTarget.nextState
+        virtualVolume = guardedTarget.targetVolume
         val targetInt = virtualVolume.roundToInt()
         AppLogger.d(
             VOLUME_TAG,
@@ -83,11 +111,53 @@ class PlayerVolumeState internal constructor(
         show()
     }
 
+    fun enforcePlaybackStartGuard() {
+        syncOutOfBandVolumeChange()
+        val current = readCurrentVolume()
+        if (!shouldEnforcePlaybackStartGuard(
+                guardEnabled = guardEnabled,
+                dismissedByUser = playbackStartGuardDismissedByUser,
+                currentVolume = current,
+                minVolume = minVolume,
+                maxVolume = maxVolume
+            )
+        ) {
+            AppLogger.d(
+                VOLUME_TAG,
+                "skip playback start guard current=$current dismissed=$playbackStartGuardDismissedByUser"
+            )
+            return
+        }
+        AppLogger.d(
+            VOLUME_TAG,
+            "apply playback start guard current=$current target=$playbackStartTargetVolume"
+        )
+        setVolume(playbackStartTargetVolume, syncVirtual = true)
+        if (currentVolume != current) {
+            show()
+        }
+    }
+
     private fun readCurrentVolume(): Int {
         return audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).coerceIn(minVolume, maxVolume)
     }
 
-    private fun setVolume(target: Int) {
+    private fun syncOutOfBandVolumeChange() {
+        val actual = readCurrentVolume()
+        if (!hasOutOfBandVolumeChange(observedVolume = currentVolume, actualVolume = actual)) {
+            return
+        }
+        AppLogger.d(
+            VOLUME_TAG,
+            "dismiss playback start guard after external volume change observed=$currentVolume actual=$actual"
+        )
+        playbackStartGuardDismissedByUser = true
+        digitalCrownGuardState = DigitalCrownVolumeGuardState()
+        currentVolume = actual
+        virtualVolume = actual.toFloat()
+    }
+
+    private fun setVolume(target: Int, syncVirtual: Boolean = false) {
         val current = readCurrentVolume()
         val clampedTarget = target.coerceIn(minVolume, maxVolume)
         if (!audioManager.isVolumeFixed && clampedTarget != current) {
@@ -97,6 +167,9 @@ class PlayerVolumeState internal constructor(
             AppLogger.d(VOLUME_TAG, "setVolume skipped target=$clampedTarget current=$current fixed=${audioManager.isVolumeFixed}")
         }
         currentVolume = readCurrentVolume()
+        if (syncVirtual) {
+            virtualVolume = currentVolume.toFloat()
+        }
     }
 
     private fun show() {
@@ -110,16 +183,17 @@ class PlayerVolumeState internal constructor(
 }
 
 @Composable
-fun rememberPlayerVolumeState(): PlayerVolumeState {
+fun rememberPlayerVolumeState(guardEnabled: Boolean = true): PlayerVolumeState {
     val context = LocalContext.current
     val audioManager = remember(context) {
         context.applicationContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     }
     val scope = rememberCoroutineScope()
-    return remember(audioManager, scope) {
+    return remember(audioManager, scope, guardEnabled) {
         PlayerVolumeState(
             audioManager = audioManager,
-            scope = scope
+            scope = scope,
+            guardEnabled = guardEnabled
         )
     }
 }
@@ -160,7 +234,126 @@ fun PlayerVolumeOverlay(
 }
 
 private const val VOLUME_OVERLAY_HIDE_DELAY_MS = 1_200L
-// 每单位 scaled delta（已乘以 ROTARY_VOLUME_STEP=0.01）调节的音量百分比
+private const val PLAYBACK_START_THRESHOLD_PERCENT = 0.15f
+private const val PLAYBACK_START_TARGET_PERCENT = 0.07f
+private const val DIGITAL_CROWN_SESSION_CAP_PERCENT = 0.16f
+private const val DIGITAL_CROWN_SESSION_IDLE_TIMEOUT_MS = 600L
+// 每单位 scaled delta（已乘以 DIGITAL_CROWN_VOLUME_STEP=0.01）调节的音量百分比
 // 按实测一圈表冠总 net scaled ≈ 16.5，校准为 1/16.5 ≈ 0.06，使一圈刚好覆盖 0→100% 音量范围
 private const val VOLUME_SENSITIVITY_PERCENT = 0.06f
 private const val VOLUME_TAG = "PlayerVolume"
+
+internal data class DigitalCrownVolumeGuardState(
+    val sessionCapVolume: Int? = null,
+    val lastEventUptimeMs: Long = Long.MIN_VALUE
+)
+
+internal data class DigitalCrownVolumeGuardResult(
+    val targetVolume: Float,
+    val nextState: DigitalCrownVolumeGuardState
+)
+
+internal fun applyDigitalCrownVolumeGuard(
+    currentVolume: Float,
+    requestedDeltaVolume: Float,
+    minVolume: Int,
+    maxVolume: Int,
+    guardEnabled: Boolean,
+    sessionCapVolume: Int,
+    previousState: DigitalCrownVolumeGuardState,
+    eventUptimeMs: Long
+): DigitalCrownVolumeGuardResult {
+    val minVolumeFloat = minVolume.toFloat()
+    val maxVolumeFloat = maxVolume.toFloat()
+    val clampedCurrent = currentVolume.coerceIn(minVolumeFloat, maxVolumeFloat)
+    if (requestedDeltaVolume == 0f) {
+        return DigitalCrownVolumeGuardResult(
+            targetVolume = clampedCurrent,
+            nextState = previousState
+        )
+    }
+
+    val isNewSession = previousState.lastEventUptimeMs == Long.MIN_VALUE ||
+        eventUptimeMs - previousState.lastEventUptimeMs > DIGITAL_CROWN_SESSION_IDLE_TIMEOUT_MS
+    val direction = requestedDeltaVolume.compareTo(0f)
+    var activeCapVolume = if (isNewSession || direction <= 0 || !guardEnabled) {
+        null
+    } else {
+        previousState.sessionCapVolume
+    }
+    var targetVolume = (clampedCurrent + requestedDeltaVolume).coerceIn(minVolumeFloat, maxVolumeFloat)
+
+    if (guardEnabled && direction > 0) {
+        val effectiveCapVolume = activeCapVolume ?: if (clampedCurrent < sessionCapVolume) {
+            sessionCapVolume
+        } else {
+            null
+        }
+        if (effectiveCapVolume != null) {
+            activeCapVolume = effectiveCapVolume
+            targetVolume = targetVolume.coerceAtMost(effectiveCapVolume.toFloat())
+        }
+    }
+
+    return DigitalCrownVolumeGuardResult(
+        targetVolume = targetVolume,
+        nextState = DigitalCrownVolumeGuardState(
+            sessionCapVolume = activeCapVolume,
+            lastEventUptimeMs = eventUptimeMs
+        )
+    )
+}
+
+internal fun shouldEnforcePlaybackStartGuard(
+    guardEnabled: Boolean,
+    dismissedByUser: Boolean,
+    currentVolume: Int,
+    minVolume: Int,
+    maxVolume: Int,
+    thresholdPercent: Float = PLAYBACK_START_THRESHOLD_PERCENT
+): Boolean {
+    if (!guardEnabled || dismissedByUser) return false
+    return volumeProgress(currentVolume, minVolume, maxVolume) > thresholdPercent
+}
+
+internal fun hasOutOfBandVolumeChange(
+    observedVolume: Int,
+    actualVolume: Int
+): Boolean {
+    return observedVolume != actualVolume
+}
+
+internal fun volumeProgress(
+    currentVolume: Int,
+    minVolume: Int,
+    maxVolume: Int
+): Float {
+    if (maxVolume <= minVolume) return 0f
+    val clampedVolume = currentVolume.coerceIn(minVolume, maxVolume)
+    val range = (maxVolume - minVolume).coerceAtLeast(1)
+    return ((clampedVolume - minVolume).toFloat() / range.toFloat()).coerceIn(0f, 1f)
+}
+
+internal fun nearestPositiveVolumeForPercent(
+    targetPercent: Float,
+    minVolume: Int,
+    maxVolume: Int
+): Int {
+    if (maxVolume <= minVolume) return minVolume
+    if (targetPercent <= 0f) return minVolume
+    val range = (maxVolume - minVolume).coerceAtLeast(1)
+    val target = minVolume + (range * targetPercent).roundToInt()
+    return target.coerceIn(minVolume + 1, maxVolume)
+}
+
+internal fun highestSafeVolumeForPercent(
+    maxPercent: Float,
+    minVolume: Int,
+    maxVolume: Int
+): Int {
+    if (maxVolume <= minVolume) return minVolume
+    if (maxPercent <= 0f) return minVolume
+    val range = (maxVolume - minVolume).coerceAtLeast(1)
+    val target = minVolume + floor(range * maxPercent).toInt()
+    return target.coerceIn(minVolume + 1, maxVolume)
+}

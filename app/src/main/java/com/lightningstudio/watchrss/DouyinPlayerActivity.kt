@@ -19,6 +19,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
+import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED
+import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
 import com.lightningstudio.watchrss.ui.screen.PlatformEntryScreen
 import com.lightningstudio.watchrss.ui.screen.bili.BiliPlayerScreen
 import com.lightningstudio.watchrss.ui.viewmodel.BiliPlaybackSource
@@ -46,6 +48,12 @@ class DouyinPlayerActivity : BaseWatchActivity() {
             WatchRSSTheme {
                 val baseDensity = LocalDensity.current
                 CompositionLocalProvider(LocalDensity provides Density(2f, baseDensity.fontScale)) {
+                    val volumeGuardEnabled by settingsRepository.mediaVolumeGuardEnabled.collectAsState(
+                        initial = DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
+                    )
+                    val volumeControlEnabled by settingsRepository.mediaVolumeControlEnabled.collectAsState(
+                        initial = DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED
+                    )
                     if (items.isEmpty()) {
                         PlatformEntryScreen(title = "抖音", message = "暂无可播放内容")
                     } else {
@@ -101,7 +109,8 @@ class DouyinPlayerActivity : BaseWatchActivity() {
                                     onPanStateChange = { _, _ -> },
                                     allowPan = false,
                                     isActive = page == pagerState.currentPage,
-                                    digitalCrownVolumeEnabled = page == pagerState.currentPage
+                                    digitalCrownVolumeEnabled = page == pagerState.currentPage && volumeControlEnabled,
+                                    volumeGuardEnabled = volumeGuardEnabled
                                 )
                             }
                         }

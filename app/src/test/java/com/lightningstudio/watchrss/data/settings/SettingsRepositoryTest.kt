@@ -1,6 +1,7 @@
 package com.lightningstudio.watchrss.data.settings
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
@@ -81,6 +82,60 @@ class SettingsRepositoryTest {
 
             env.repository.setCacheLimitBytes(6L * 1024L * MB_BYTES)
             assertEquals(MAX_CACHE_LIMIT_MB * MB_BYTES, env.repository.cacheLimitBytes.first())
+        } finally {
+            env.scope.cancel()
+        }
+    }
+
+    @Test
+    fun mediaVolumeGuardEnabled_defaultsToEnabled() = runBlocking {
+        val env = createRepository("media-volume-guard-default.preferences_pb")
+        try {
+            assertEquals(DEFAULT_MEDIA_VOLUME_GUARD_ENABLED, env.repository.mediaVolumeGuardEnabled.first())
+        } finally {
+            env.scope.cancel()
+        }
+    }
+
+    @Test
+    fun mediaVolumeControlEnabled_defaultsToEnabled() = runBlocking {
+        val env = createRepository("media-volume-control-default.preferences_pb")
+        try {
+            assertEquals(DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED, env.repository.mediaVolumeControlEnabled.first())
+        } finally {
+            env.scope.cancel()
+        }
+    }
+
+    @Test
+    fun mediaVolumeControlEnabled_persistsUpdates() = runBlocking {
+        val env = createRepository("media-volume-control-updated.preferences_pb")
+        val key = booleanPreferencesKey("media_volume_control_enabled")
+        try {
+            env.repository.setMediaVolumeControlEnabled(false)
+            assertEquals(false, env.repository.mediaVolumeControlEnabled.first())
+
+            env.dataStore.edit { preferences ->
+                preferences[key] = true
+            }
+            assertEquals(true, env.repository.mediaVolumeControlEnabled.first())
+        } finally {
+            env.scope.cancel()
+        }
+    }
+
+    @Test
+    fun mediaVolumeGuardEnabled_persistsUpdates() = runBlocking {
+        val env = createRepository("media-volume-guard-updated.preferences_pb")
+        val key = booleanPreferencesKey("media_volume_guard_enabled")
+        try {
+            env.repository.setMediaVolumeGuardEnabled(false)
+            assertEquals(false, env.repository.mediaVolumeGuardEnabled.first())
+
+            env.dataStore.edit { preferences ->
+                preferences[key] = true
+            }
+            assertEquals(true, env.repository.mediaVolumeGuardEnabled.first())
         } finally {
             env.scope.cancel()
         }

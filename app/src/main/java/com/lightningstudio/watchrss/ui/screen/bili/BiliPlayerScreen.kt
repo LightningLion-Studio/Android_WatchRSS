@@ -147,7 +147,8 @@ fun BiliPlayerScreen(
     playbackDataSourceFactoryProvider: ((Map<String, String>, String?) -> DataSource.Factory)? = null,
     allowPan: Boolean = true,
     isActive: Boolean = true,
-    digitalCrownVolumeEnabled: Boolean = true
+    digitalCrownVolumeEnabled: Boolean = true,
+    volumeGuardEnabled: Boolean = true
 ) {
     val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
     val spacing = watchDimensionResource(R.dimen.hey_distance_6dp)
@@ -190,7 +191,11 @@ fun BiliPlayerScreen(
     val panDecay = remember { exponentialDecay<Float>() }
     val panScope = rememberCoroutineScope()
     val panFlingJob = remember { mutableStateOf<Job?>(null) }
-    val volumeState = rememberPlayerVolumeState()
+    val effectiveVolumeGuardEnabled = volumeGuardEnabled && digitalCrownVolumeEnabled
+    val volumeState = rememberPlayerVolumeState(guardEnabled = effectiveVolumeGuardEnabled)
+    var playbackStartGuardPending by remember(uiState.initialSource) {
+        mutableStateOf(uiState.initialSource != null)
+    }
     val hasConfiguredSource = uiState.initialSource != null
     val shouldKeepScreenOn = isActive &&
         hasConfiguredSource &&
@@ -230,6 +235,12 @@ fun BiliPlayerScreen(
         isBuffering = false
     }
 
+    fun enforcePendingPlaybackStartGuard() {
+        if (!playbackStartGuardPending) return
+        volumeState.enforcePlaybackStartGuard()
+        playbackStartGuardPending = false
+    }
+
     fun togglePlayback() {
         val player = playerRef ?: return
         if (!isPrepared) return
@@ -240,6 +251,7 @@ fun BiliPlayerScreen(
         runCatching {
             playWhenReady = true
             pendingPreparedPlayWhenReady = false
+            enforcePendingPlaybackStartGuard()
             player.playWhenReady = isActive
             if (isActive) {
                 player.play()
@@ -296,6 +308,9 @@ fun BiliPlayerScreen(
         player.setMediaItem(MediaItem.fromUri(source.url))
         if (pendingSeekPositionMs > 0) {
             player.seekTo(pendingSeekPositionMs.toLong())
+        }
+        if (shouldPlay) {
+            enforcePendingPlaybackStartGuard()
         }
         player.playWhenReady = isActive && shouldPlay
         player.prepare()
@@ -449,6 +464,7 @@ fun BiliPlayerScreen(
             val player = playerRef
             if (player != null && isPrepared && playWhenReady && !player.isPlaying) {
                 runCatching {
+                    enforcePendingPlaybackStartGuard()
                     player.playWhenReady = true
                     player.play()
                     isPlaying = true
@@ -498,6 +514,7 @@ fun BiliPlayerScreen(
                         pendingSeekPositionMs = 0
                         isBuffering = false
                         if (isActive && pendingPreparedPlayWhenReady) {
+                            enforcePendingPlaybackStartGuard()
                             player.playWhenReady = true
                             player.play()
                         }
@@ -674,6 +691,7 @@ fun BiliPlayerScreen(
                                 )
                                 if (isActive && isPrepared && playWhenReady) {
                                     runCatching {
+                                        enforcePendingPlaybackStartGuard()
                                         playerRef?.playWhenReady = true
                                         playerRef?.play()
                                     }
