@@ -69,6 +69,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -107,7 +109,6 @@ import com.lightningstudio.watchrss.ui.components.PlayerVolumeOverlay
 import com.lightningstudio.watchrss.ui.components.PullRefreshBox
 import com.lightningstudio.watchrss.ui.components.rememberPullRefreshEnabled
 import com.lightningstudio.watchrss.ui.components.rememberPlayerVolumeState
-import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownPagerHandler
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownVolumeHandler
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import com.lightningstudio.watchrss.ui.util.hasValidatedInternetConnection
@@ -1295,10 +1296,6 @@ internal fun DouyinImmersiveScreen(
             }
     }
 
-    InstallDigitalCrownPagerHandler(
-        pagerState = pagerState,
-        enabled = pagerState.currentPage == 0 && pageCount > 1
-    )
     InstallDigitalCrownVolumeHandler(
         enabled = pagerState.currentPage > 0 && digitalCrownVolumeEnabled,
         showSystemUi = false,
@@ -2421,7 +2418,18 @@ internal fun DouyinImmersiveScreen(
 
         VerticalPager(
             state = pagerState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            if (event.type == PointerEventType.Scroll) {
+                                event.changes.forEach { it.consume() }
+                            }
+                        }
+                    }
+                },
             flingBehavior = pagerFlingBehavior,
             beyondViewportPageCount = 1,
             userScrollEnabled = pagerUserScrollEnabled
