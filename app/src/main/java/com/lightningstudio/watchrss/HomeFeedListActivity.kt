@@ -87,8 +87,6 @@ class HomeFeedListActivity : BaseWatchActivity() {
 
     override fun isSwipeBackEnabled(): Boolean = true
 
-    override fun shouldUsePlatformSwipeDismissFeature(): Boolean = true
-
     override fun shouldAnimateSwipeBackGesture(): Boolean = false
 
     override fun shouldResetViewStateImmediatelyOnTouchEnd(): Boolean = false

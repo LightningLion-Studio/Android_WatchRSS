@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.hardware.input.InputManager
+import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.InputDevice
@@ -331,7 +332,7 @@ open class BaseWatchActivity : ComponentActivity() {
 
     protected open fun isSwipeBackEnabled(): Boolean = true
 
-    protected open fun shouldUsePlatformSwipeDismissFeature(): Boolean = false
+    protected open fun shouldUsePlatformSwipeDismissFeature(): Boolean = true
 
     protected open fun shouldAnimateSwipeBackGesture(): Boolean = true
 
@@ -392,7 +393,13 @@ open class BaseWatchActivity : ComponentActivity() {
 
     @Suppress("DEPRECATION")
     private fun requestPlatformSwipeDismissFeatureIfNeeded(): Boolean {
+        if (!isSwipeBackEnabled()) {
+            return false
+        }
         if (!shouldUsePlatformSwipeDismissFeature()) {
+            return false
+        }
+        if (!isOppoDevice()) {
             return false
         }
         if (!packageManager.hasSystemFeature(PackageManager.FEATURE_WATCH)) {
@@ -406,6 +413,20 @@ open class BaseWatchActivity : ComponentActivity() {
                 "系统右滑退出特性启用失败: ${error.javaClass.simpleName}: ${error.message.orEmpty()}"
             )
             false
+        }
+    }
+
+    private fun isOppoDevice(): Boolean {
+        return listOf(
+            Build.MANUFACTURER,
+            Build.BRAND,
+            Build.PRODUCT,
+            Build.DEVICE,
+            Build.MODEL,
+            Build.FINGERPRINT
+        ).any { marker ->
+            marker.contains("oppo", ignoreCase = true) ||
+                marker.contains("oplus", ignoreCase = true)
         }
     }
 
