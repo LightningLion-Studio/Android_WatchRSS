@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
@@ -73,6 +74,7 @@ class SettingsScreenTest {
         composeRule.onNodeWithTag(SettingsTestTags.FONT_VALUE, useUnmergedTree = true).assertExists()
         composeRule.onNodeWithTag(SettingsTestTags.MEDIA_VOLUME_CONTROL_SWITCH, useUnmergedTree = true).performScrollTo().assertExists()
         composeRule.onNodeWithTag(SettingsTestTags.MEDIA_VOLUME_GUARD_SWITCH, useUnmergedTree = true).performScrollTo().assertExists()
+        composeRule.onNodeWithText("打开视频时调整音量到6%").performScrollTo().assertExists()
         composeRule.onNodeWithTag(SettingsTestTags.ADVANCED_ENTRY, useUnmergedTree = true).assertExists()
         composeRule.onNodeWithTag(SettingsTestTags.OPEN_OOBE_ENTRY, useUnmergedTree = true).performScrollTo().assertExists()
         composeRule.onNodeWithTag(SettingsTestTags.PHONE_CONNECTION_SWITCH, useUnmergedTree = true).performScrollTo().assertExists()

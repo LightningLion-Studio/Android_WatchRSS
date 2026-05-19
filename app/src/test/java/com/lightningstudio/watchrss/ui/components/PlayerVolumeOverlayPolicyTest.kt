@@ -12,7 +12,7 @@ class PlayerVolumeOverlayPolicyTest {
             minVolume = 0,
             maxVolume = 20,
             guardEnabled = true,
-            sessionCapVolume = 3,
+            sessionCapVolume = 3f,
             previousState = DigitalCrownVolumeGuardState(),
             eventUptimeMs = 1_000L
         )
@@ -25,7 +25,7 @@ class PlayerVolumeOverlayPolicyTest {
             minVolume = 0,
             maxVolume = 20,
             guardEnabled = true,
-            sessionCapVolume = 3,
+            sessionCapVolume = 3f,
             previousState = first.nextState,
             eventUptimeMs = 1_200L
         )
@@ -41,7 +41,7 @@ class PlayerVolumeOverlayPolicyTest {
             minVolume = 0,
             maxVolume = 20,
             guardEnabled = true,
-            sessionCapVolume = 3,
+            sessionCapVolume = 3f,
             previousState = DigitalCrownVolumeGuardState(),
             eventUptimeMs = 1_000L
         )
@@ -52,7 +52,7 @@ class PlayerVolumeOverlayPolicyTest {
             minVolume = 0,
             maxVolume = 20,
             guardEnabled = true,
-            sessionCapVolume = 3,
+            sessionCapVolume = 3f,
             previousState = first.nextState,
             eventUptimeMs = 1_700L
         )
@@ -68,7 +68,7 @@ class PlayerVolumeOverlayPolicyTest {
             minVolume = 0,
             maxVolume = 20,
             guardEnabled = false,
-            sessionCapVolume = 3,
+            sessionCapVolume = 3f,
             previousState = DigitalCrownVolumeGuardState(),
             eventUptimeMs = 1_000L
         )
@@ -77,9 +77,30 @@ class PlayerVolumeOverlayPolicyTest {
     }
 
     @Test
+    fun applyDigitalCrownVolumeGuard_capsFirstRaiseAtTwentyOnePercentOnSixteenStepStreams() {
+        val result = applyDigitalCrownVolumeGuard(
+            currentVolume = 1f,
+            requestedDeltaVolume = 10f,
+            minVolume = 0,
+            maxVolume = 16,
+            guardEnabled = true,
+            sessionCapVolume = volumeForPercent(0.21f, minVolume = 0, maxVolume = 16),
+            previousState = DigitalCrownVolumeGuardState(),
+            eventUptimeMs = 1_000L
+        )
+
+        assertEquals(3.36f, result.targetVolume, 0.001f)
+    }
+
+    @Test
     fun percentVolumeHelpers_keepTargetsAboveMuteWhenPossible() {
-        assertEquals(1, nearestPositiveVolumeForPercent(0.07f, minVolume = 0, maxVolume = 10))
-        assertEquals(1, highestSafeVolumeForPercent(0.16f, minVolume = 0, maxVolume = 10))
+        assertEquals(1, nearestPositiveVolumeForPercent(0.06f, minVolume = 0, maxVolume = 10))
+        assertEquals(2.1f, volumeForPercent(0.21f, minVolume = 0, maxVolume = 10), 0.001f)
+    }
+
+    @Test
+    fun volumeForPercent_keepsTwentyOnePercentOnSixteenStepStreams() {
+        assertEquals(3.36f, volumeForPercent(0.21f, minVolume = 0, maxVolume = 16), 0.001f)
     }
 
     @Test

@@ -358,7 +358,13 @@ private fun MainSettingsPage(
                 modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
             )
             Text(
-                text = "滚轮连续上调时会先停在约16%，停一下再滚可继续升高",
+                text = "滚轮连续上调时会先停在约21%，停一下再滚可继续升高",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+            )
+            Text(
+                text = "打开视频时调整音量到6%",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = valueIndent, top = valueSpacing)

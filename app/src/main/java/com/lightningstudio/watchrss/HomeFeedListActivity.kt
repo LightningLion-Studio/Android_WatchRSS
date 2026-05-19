@@ -85,7 +85,9 @@ class HomeFeedListActivity : BaseWatchActivity() {
         return hasOpen
     }
 
-    override fun isSwipeBackEnabled(): Boolean = false
+    override fun isSwipeBackEnabled(): Boolean = true
+
+    override fun shouldUsePlatformSwipeDismissFeature(): Boolean = true
 
     override fun shouldAnimateSwipeBackGesture(): Boolean = false
 

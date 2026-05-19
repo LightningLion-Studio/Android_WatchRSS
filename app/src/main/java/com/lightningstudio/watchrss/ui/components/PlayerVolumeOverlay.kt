@@ -34,7 +34,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.math.floor
 import kotlin.math.roundToInt
 
 @Stable
@@ -54,8 +53,8 @@ class PlayerVolumeState internal constructor(
         minVolume = minVolume,
         maxVolume = maxVolume
     )
-    private val digitalCrownSessionCapVolume = highestSafeVolumeForPercent(
-        maxPercent = DIGITAL_CROWN_SESSION_CAP_PERCENT,
+    private val digitalCrownSessionCapVolume = volumeForPercent(
+        targetPercent = DIGITAL_CROWN_SESSION_CAP_PERCENT,
         minVolume = minVolume,
         maxVolume = maxVolume
     )
@@ -235,8 +234,8 @@ fun PlayerVolumeOverlay(
 
 private const val VOLUME_OVERLAY_HIDE_DELAY_MS = 1_200L
 private const val PLAYBACK_START_THRESHOLD_PERCENT = 0.15f
-private const val PLAYBACK_START_TARGET_PERCENT = 0.07f
-private const val DIGITAL_CROWN_SESSION_CAP_PERCENT = 0.16f
+private const val PLAYBACK_START_TARGET_PERCENT = 0.06f
+private const val DIGITAL_CROWN_SESSION_CAP_PERCENT = 0.21f
 private const val DIGITAL_CROWN_SESSION_IDLE_TIMEOUT_MS = 600L
 // 每单位 scaled delta（已乘以 DIGITAL_CROWN_VOLUME_STEP=0.01）调节的音量百分比
 // 按实测一圈表冠总 net scaled ≈ 16.5，校准为 1/16.5 ≈ 0.06，使一圈刚好覆盖 0→100% 音量范围
@@ -244,7 +243,7 @@ private const val VOLUME_SENSITIVITY_PERCENT = 0.06f
 private const val VOLUME_TAG = "PlayerVolume"
 
 internal data class DigitalCrownVolumeGuardState(
-    val sessionCapVolume: Int? = null,
+    val sessionCapVolume: Float? = null,
     val lastEventUptimeMs: Long = Long.MIN_VALUE
 )
 
@@ -259,7 +258,7 @@ internal fun applyDigitalCrownVolumeGuard(
     minVolume: Int,
     maxVolume: Int,
     guardEnabled: Boolean,
-    sessionCapVolume: Int,
+    sessionCapVolume: Float,
     previousState: DigitalCrownVolumeGuardState,
     eventUptimeMs: Long
 ): DigitalCrownVolumeGuardResult {
@@ -291,7 +290,7 @@ internal fun applyDigitalCrownVolumeGuard(
         }
         if (effectiveCapVolume != null) {
             activeCapVolume = effectiveCapVolume
-            targetVolume = targetVolume.coerceAtMost(effectiveCapVolume.toFloat())
+            targetVolume = targetVolume.coerceAtMost(effectiveCapVolume)
         }
     }
 
@@ -346,14 +345,14 @@ internal fun nearestPositiveVolumeForPercent(
     return target.coerceIn(minVolume + 1, maxVolume)
 }
 
-internal fun highestSafeVolumeForPercent(
-    maxPercent: Float,
+internal fun volumeForPercent(
+    targetPercent: Float,
     minVolume: Int,
     maxVolume: Int
-): Int {
-    if (maxVolume <= minVolume) return minVolume
-    if (maxPercent <= 0f) return minVolume
+): Float {
+    if (maxVolume <= minVolume) return minVolume.toFloat()
+    if (targetPercent <= 0f) return minVolume.toFloat()
     val range = (maxVolume - minVolume).coerceAtLeast(1)
-    val target = minVolume + floor(range * maxPercent).toInt()
-    return target.coerceIn(minVolume + 1, maxVolume)
+    val target = minVolume + (range * targetPercent)
+    return target.coerceIn((minVolume + 1).toFloat(), maxVolume.toFloat())
 }
