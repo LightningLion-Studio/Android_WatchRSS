@@ -23,13 +23,19 @@ object MainSettingsCatalog {
 
     val mediaVolumeGuard = MainSettingInfo(
         title = "音量调节防干扰",
-        description = "播放前会先压低音量，减少外放突然过响"
+        description = "滚轮连续上调时先停一下，减少误触后突然过响"
+    )
+
+    val mediaPlaybackStartVolumeLimit = MainSettingInfo(
+        title = "静音开播",
+        description = "开始播放时仅在当前音量高于上限时压低音量"
     )
 
     val standardEntries: List<MainSettingInfo> = listOf(
         readingTheme,
         fontSize,
         mediaVolumeControl,
-        mediaVolumeGuard
+        mediaVolumeGuard,
+        mediaPlaybackStartVolumeLimit
     )
 }

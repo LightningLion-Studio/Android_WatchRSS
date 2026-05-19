@@ -148,7 +148,8 @@ fun BiliPlayerScreen(
     allowPan: Boolean = true,
     isActive: Boolean = true,
     digitalCrownVolumeEnabled: Boolean = true,
-    volumeGuardEnabled: Boolean = true
+    volumeGuardEnabled: Boolean = true,
+    playbackStartVolumeLimitPercent: Int? = 10
 ) {
     val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
     val spacing = watchDimensionResource(R.dimen.hey_distance_6dp)
@@ -192,7 +193,10 @@ fun BiliPlayerScreen(
     val panScope = rememberCoroutineScope()
     val panFlingJob = remember { mutableStateOf<Job?>(null) }
     val effectiveVolumeGuardEnabled = volumeGuardEnabled && digitalCrownVolumeEnabled
-    val volumeState = rememberPlayerVolumeState(guardEnabled = effectiveVolumeGuardEnabled)
+    val volumeState = rememberPlayerVolumeState(
+        guardEnabled = effectiveVolumeGuardEnabled,
+        playbackStartVolumeLimitPercent = playbackStartVolumeLimitPercent
+    )
     var playbackStartGuardPending by remember(uiState.initialSource) {
         mutableStateOf(uiState.initialSource != null)
     }

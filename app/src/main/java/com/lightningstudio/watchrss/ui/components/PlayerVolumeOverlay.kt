@@ -40,7 +40,8 @@ import kotlin.math.roundToInt
 class PlayerVolumeState internal constructor(
     private val audioManager: AudioManager,
     private val scope: CoroutineScope,
-    private val guardEnabled: Boolean
+    private val guardEnabled: Boolean,
+    private val playbackStartVolumeLimitPercent: Int?
 ) {
     private val minVolume = audioManager.getStreamMinVolume(AudioManager.STREAM_MUSIC)
     // PlayerVolume: getStreamMaxVolume(STREAM_MUSIC)=16
@@ -48,11 +49,6 @@ class PlayerVolumeState internal constructor(
         .also { AppLogger.d(VOLUME_TAG, "getStreamMaxVolume(STREAM_MUSIC)=$it") }
     // 每单位 digitalCrown delta 对应的音量步长（5% 音量范围）
     private val volumeSensitivity = (maxVolume - minVolume) * VOLUME_SENSITIVITY_PERCENT
-    private val playbackStartTargetVolume = nearestPositiveVolumeForPercent(
-        targetPercent = PLAYBACK_START_TARGET_PERCENT,
-        minVolume = minVolume,
-        maxVolume = maxVolume
-    )
     private val digitalCrownSessionCapVolume = volumeForPercent(
         targetPercent = DIGITAL_CROWN_SESSION_CAP_PERCENT,
         minVolume = minVolume,
@@ -113,8 +109,15 @@ class PlayerVolumeState internal constructor(
     fun enforcePlaybackStartGuard() {
         syncOutOfBandVolumeChange()
         val current = readCurrentVolume()
+        val targetVolume = playbackStartVolumeLimitPercent?.let {
+            playbackStartVolumeForPercent(
+                targetPercent = it,
+                minVolume = minVolume,
+                maxVolume = maxVolume
+            )
+        }
         if (!shouldEnforcePlaybackStartGuard(
-                guardEnabled = guardEnabled,
+                playbackStartVolumeLimitPercent = playbackStartVolumeLimitPercent,
                 dismissedByUser = playbackStartGuardDismissedByUser,
                 currentVolume = current,
                 minVolume = minVolume,
@@ -129,10 +132,12 @@ class PlayerVolumeState internal constructor(
         }
         AppLogger.d(
             VOLUME_TAG,
-            "apply playback start guard current=$current target=$playbackStartTargetVolume"
+            "apply playback start guard current=$current target=$targetVolume limitPercent=$playbackStartVolumeLimitPercent"
         )
-        setVolume(playbackStartTargetVolume, syncVirtual = true)
-        if (currentVolume != current) {
+        val previousVirtualVolume = virtualVolume
+        virtualVolume = targetVolume ?: current.toFloat()
+        setVolume(virtualVolume.roundToInt())
+        if (currentVolume != current || virtualVolume != previousVirtualVolume) {
             show()
         }
     }
@@ -182,17 +187,21 @@ class PlayerVolumeState internal constructor(
 }
 
 @Composable
-fun rememberPlayerVolumeState(guardEnabled: Boolean = true): PlayerVolumeState {
+fun rememberPlayerVolumeState(
+    guardEnabled: Boolean = true,
+    playbackStartVolumeLimitPercent: Int? = 10
+): PlayerVolumeState {
     val context = LocalContext.current
     val audioManager = remember(context) {
         context.applicationContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     }
     val scope = rememberCoroutineScope()
-    return remember(audioManager, scope, guardEnabled) {
+    return remember(audioManager, scope, guardEnabled, playbackStartVolumeLimitPercent) {
         PlayerVolumeState(
             audioManager = audioManager,
             scope = scope,
-            guardEnabled = guardEnabled
+            guardEnabled = guardEnabled,
+            playbackStartVolumeLimitPercent = playbackStartVolumeLimitPercent
         )
     }
 }
@@ -233,8 +242,6 @@ fun PlayerVolumeOverlay(
 }
 
 private const val VOLUME_OVERLAY_HIDE_DELAY_MS = 1_200L
-private const val PLAYBACK_START_THRESHOLD_PERCENT = 0.15f
-private const val PLAYBACK_START_TARGET_PERCENT = 0.06f
 private const val DIGITAL_CROWN_SESSION_CAP_PERCENT = 0.21f
 private const val DIGITAL_CROWN_SESSION_IDLE_TIMEOUT_MS = 600L
 // 每单位 scaled delta（已乘以 DIGITAL_CROWN_VOLUME_STEP=0.01）调节的音量百分比
@@ -304,15 +311,19 @@ internal fun applyDigitalCrownVolumeGuard(
 }
 
 internal fun shouldEnforcePlaybackStartGuard(
-    guardEnabled: Boolean,
+    playbackStartVolumeLimitPercent: Int?,
     dismissedByUser: Boolean,
     currentVolume: Int,
     minVolume: Int,
-    maxVolume: Int,
-    thresholdPercent: Float = PLAYBACK_START_THRESHOLD_PERCENT
+    maxVolume: Int
 ): Boolean {
-    if (!guardEnabled || dismissedByUser) return false
-    return volumeProgress(currentVolume, minVolume, maxVolume) > thresholdPercent
+    if (playbackStartVolumeLimitPercent == null || dismissedByUser) return false
+    val targetVolume = playbackStartVolumeForPercent(
+        targetPercent = playbackStartVolumeLimitPercent,
+        minVolume = minVolume,
+        maxVolume = maxVolume
+    )
+    return currentVolume.coerceIn(minVolume, maxVolume).toFloat() > targetVolume
 }
 
 internal fun hasOutOfBandVolumeChange(
@@ -343,6 +354,18 @@ internal fun nearestPositiveVolumeForPercent(
     val range = (maxVolume - minVolume).coerceAtLeast(1)
     val target = minVolume + (range * targetPercent).roundToInt()
     return target.coerceIn(minVolume + 1, maxVolume)
+}
+
+internal fun playbackStartVolumeForPercent(
+    targetPercent: Int,
+    minVolume: Int,
+    maxVolume: Int
+): Float {
+    return volumeForPercent(
+        targetPercent = targetPercent.coerceIn(0, 100) / 100f,
+        minVolume = minVolume,
+        maxVolume = maxVolume
+    )
 }
 
 internal fun volumeForPercent(

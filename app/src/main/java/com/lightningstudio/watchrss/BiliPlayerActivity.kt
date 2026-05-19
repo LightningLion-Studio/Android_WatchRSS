@@ -10,6 +10,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
+import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
 import com.lightningstudio.watchrss.ui.screen.bili.BiliPlayerScreen
@@ -47,6 +48,9 @@ class BiliPlayerActivity : BaseWatchActivity() {
                     val volumeControlEnabled by settingsRepository.mediaVolumeControlEnabled.collectAsState(
                         initial = DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED
                     )
+                    val playbackStartVolumeLimitPercent by settingsRepository.mediaPlaybackStartVolumeLimitPercent.collectAsState(
+                        initial = DEFAULT_MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT
+                    )
                     BiliPlayerScreen(
                         uiState = uiState,
                         onRetry = viewModel::loadPlayUrl,
@@ -70,7 +74,8 @@ class BiliPlayerActivity : BaseWatchActivity() {
                             panRangeX = rangeX
                         },
                         digitalCrownVolumeEnabled = volumeControlEnabled,
-                        volumeGuardEnabled = volumeGuardEnabled
+                        volumeGuardEnabled = volumeGuardEnabled,
+                        playbackStartVolumeLimitPercent = playbackStartVolumeLimitPercent
                     )
                 }
             }

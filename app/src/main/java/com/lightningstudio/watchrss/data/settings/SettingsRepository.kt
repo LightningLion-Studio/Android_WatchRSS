@@ -19,6 +19,8 @@ private val SHARE_USE_SYSTEM = booleanPreferencesKey("share_use_system")
 private val PHONE_CONNECTION_ENABLED = booleanPreferencesKey("phone_connection_enabled")
 private val MEDIA_VOLUME_CONTROL_ENABLED = booleanPreferencesKey("media_volume_control_enabled")
 private val MEDIA_VOLUME_GUARD_ENABLED = booleanPreferencesKey("media_volume_guard_enabled")
+private val MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT =
+    intPreferencesKey("media_playback_start_volume_limit_percent")
 private val RSS_INLINE_IMAGE_PREFETCH_MODE = intPreferencesKey("rss_inline_image_prefetch_mode")
 private val LLM_PROVIDER = stringPreferencesKey("llm_provider")
 private val LLM_MODEL = stringPreferencesKey("llm_model")
@@ -74,6 +76,18 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     }
     val mediaVolumeGuardEnabled: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[MEDIA_VOLUME_GUARD_ENABLED] ?: DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
+    }
+    val mediaPlaybackStartVolumeLimitPercent: Flow<Int?> = dataStore.data.map { preferences ->
+        if (preferences.contains(MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT)) {
+            decodeMediaPlaybackStartVolumeLimitPercent(
+                preferences[MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT]
+                    ?: MEDIA_PLAYBACK_START_VOLUME_UNLIMITED_PERSISTED_VALUE
+            )
+        } else {
+            defaultMediaPlaybackStartVolumeLimitPercentForGuard(
+                preferences[MEDIA_VOLUME_GUARD_ENABLED] ?: DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
+            )
+        }
     }
     val rssInlineImagePrefetchMode: Flow<RssInlineImagePrefetchMode> = dataStore.data.map { preferences ->
         RssInlineImagePrefetchMode.fromPersistedValue(
@@ -143,7 +157,23 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
 
     suspend fun setMediaVolumeGuardEnabled(value: Boolean) {
         dataStore.edit { preferences ->
+            if (!preferences.contains(MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT)) {
+                preferences[MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT] =
+                    encodeMediaPlaybackStartVolumeLimitPercent(
+                        defaultMediaPlaybackStartVolumeLimitPercentForGuard(
+                            preferences[MEDIA_VOLUME_GUARD_ENABLED]
+                                ?: DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
+                        )
+                    )
+            }
             preferences[MEDIA_VOLUME_GUARD_ENABLED] = value
+        }
+    }
+
+    suspend fun setMediaPlaybackStartVolumeLimitPercent(value: Int?) {
+        dataStore.edit { preferences ->
+            preferences[MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT] =
+                encodeMediaPlaybackStartVolumeLimitPercent(value)
         }
     }
 

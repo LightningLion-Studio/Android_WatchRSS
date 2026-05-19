@@ -561,6 +561,7 @@ internal fun DouyinImmersiveScreen(
     uiState: DouyinFeedUiState,
     digitalCrownVolumeEnabled: Boolean = true,
     volumeGuardEnabled: Boolean = true,
+    playbackStartVolumeLimitPercent: Int? = 10,
     onRefresh: () -> Unit,
     onPageSettled: (Int) -> Unit,
     onEnterFlow: () -> Unit,
@@ -614,7 +615,21 @@ internal fun DouyinImmersiveScreen(
     var controlsVisible by rememberSaveable { mutableStateOf(true) }
     var scaleMode by rememberSaveable { mutableStateOf(DouyinPlayerScaleMode.Standard) }
     val effectiveVolumeGuardEnabled = volumeGuardEnabled && digitalCrownVolumeEnabled
-    val volumeState = rememberPlayerVolumeState(guardEnabled = effectiveVolumeGuardEnabled)
+    val volumeState = rememberPlayerVolumeState(
+        guardEnabled = effectiveVolumeGuardEnabled,
+        playbackStartVolumeLimitPercent = playbackStartVolumeLimitPercent
+    )
+    var playbackStartVolumeLimitConsumed by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(uiState.showTitlePage) {
+        if (uiState.showTitlePage) {
+            playbackStartVolumeLimitConsumed = false
+        }
+    }
+    fun enforceEntryPlaybackStartVolumeLimit() {
+        if (uiState.showTitlePage || playbackStartVolumeLimitConsumed) return
+        volumeState.enforcePlaybackStartGuard()
+        playbackStartVolumeLimitConsumed = true
+    }
     var foregroundSlotKey by rememberSaveable { mutableStateOf(DouyinPlayerSlotKey.Primary) }
     val context = LocalContext.current
     val networkBandwidthEstimateBytesPerSecond by produceState<Long?>(
@@ -1057,7 +1072,7 @@ internal fun DouyinImmersiveScreen(
             slot.boundCodec = codec
             slot.player.playWhenReady = shouldPlay
             if (shouldPlay) {
-                volumeState.enforcePlaybackStartGuard()
+                enforceEntryPlaybackStartVolumeLimit()
                 restoreAudibleSlotVolume(slot)
                 slot.player.play()
                 val loggedPrepareKey = slot.preparedSourceKey ?: prepareKey
@@ -1109,7 +1124,7 @@ internal fun DouyinImmersiveScreen(
         slot.player.setMediaItem(MediaItem.fromUri(targetUri))
         slot.player.prepare()
         if (shouldPlay) {
-            volumeState.enforcePlaybackStartGuard()
+            enforceEntryPlaybackStartVolumeLimit()
             restoreAudibleSlotVolume(slot)
             slot.player.play()
         }
@@ -2361,7 +2376,7 @@ internal fun DouyinImmersiveScreen(
             ) &&
             !pagerState.isScrollInProgress
         if (shouldPlay) {
-            volumeState.enforcePlaybackStartGuard()
+            enforceEntryPlaybackStartVolumeLimit()
             restoreAudibleSlotVolume(currentForegroundSlot)
             currentForegroundSlot.player.playWhenReady = true
             currentForegroundSlot.player.play()
@@ -2529,7 +2544,7 @@ internal fun DouyinImmersiveScreen(
                             activePausedByGesture = false
                             activeAutoplayEnabled = true
                             if (activeItem?.awemeId == item.awemeId && !activeHasError) {
-                                volumeState.enforcePlaybackStartGuard()
+                                enforceEntryPlaybackStartVolumeLimit()
                                 restoreAudibleSlotVolume(foregroundSlot)
                                 foregroundSlot.player.playWhenReady = true
                                 foregroundSlot.player.play()

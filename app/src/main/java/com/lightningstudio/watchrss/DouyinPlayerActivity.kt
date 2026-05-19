@@ -19,6 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
+import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
 import com.lightningstudio.watchrss.ui.screen.PlatformEntryScreen
@@ -53,6 +54,9 @@ class DouyinPlayerActivity : BaseWatchActivity() {
                     )
                     val volumeControlEnabled by settingsRepository.mediaVolumeControlEnabled.collectAsState(
                         initial = DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED
+                    )
+                    val playbackStartVolumeLimitPercent by settingsRepository.mediaPlaybackStartVolumeLimitPercent.collectAsState(
+                        initial = DEFAULT_MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT
                     )
                     if (items.isEmpty()) {
                         PlatformEntryScreen(title = "抖音", message = "暂无可播放内容")
@@ -110,7 +114,8 @@ class DouyinPlayerActivity : BaseWatchActivity() {
                                     allowPan = false,
                                     isActive = page == pagerState.currentPage,
                                     digitalCrownVolumeEnabled = page == pagerState.currentPage && volumeControlEnabled,
-                                    volumeGuardEnabled = volumeGuardEnabled
+                                    volumeGuardEnabled = volumeGuardEnabled,
+                                    playbackStartVolumeLimitPercent = playbackStartVolumeLimitPercent
                                 )
                             }
                         }

@@ -54,10 +54,12 @@ import androidx.compose.ui.semantics.semantics
 import androidx.annotation.DrawableRes
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import com.lightningstudio.watchrss.BuildConfig
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.settings.CACHE_LIMIT_OPTIONS_MB
+import com.lightningstudio.watchrss.data.settings.formatMediaPlaybackStartVolumeLimitPercent
+import com.lightningstudio.watchrss.data.settings.nextMediaPlaybackStartVolumeLimitPercent
+import com.lightningstudio.watchrss.data.settings.previousMediaPlaybackStartVolumeLimitPercent
 import com.lightningstudio.watchrss.data.settings.RssInlineImagePrefetchMode
 import com.lightningstudio.watchrss.ui.components.WatchSwitch
 import com.lightningstudio.watchrss.ui.components.WatchSurface
@@ -84,6 +86,7 @@ fun SettingsScreen(
     phoneConnectionEnabled: StateFlow<Boolean>,
     mediaVolumeControlEnabled: StateFlow<Boolean>,
     mediaVolumeGuardEnabled: StateFlow<Boolean>,
+    mediaPlaybackStartVolumeLimitPercent: StateFlow<Int?>,
     rssInlineImagePrefetchMode: StateFlow<RssInlineImagePrefetchMode>,
     llmFeatureEnabled: StateFlow<Boolean>,
     llmAutoSummarize: StateFlow<Boolean>,
@@ -97,6 +100,7 @@ fun SettingsScreen(
     onTogglePhoneConnection: () -> Unit,
     onToggleMediaVolumeControl: () -> Unit,
     onToggleMediaVolumeGuard: () -> Unit,
+    onSelectMediaPlaybackStartVolumeLimit: (Int?) -> Unit,
     onSelectRssInlineImagePrefetchMode: (RssInlineImagePrefetchMode) -> Unit,
     onToggleLlmFeatureEnabled: () -> Unit,
     onToggleLlmAutoSummarize: () -> Unit,
@@ -120,6 +124,7 @@ fun SettingsScreen(
     val phoneConnection by phoneConnectionEnabled.collectAsState()
     val mediaVolumeControl by mediaVolumeControlEnabled.collectAsState()
     val mediaVolumeGuard by mediaVolumeGuardEnabled.collectAsState()
+    val mediaPlaybackStartVolumeLimit by mediaPlaybackStartVolumeLimitPercent.collectAsState()
     val imagePrefetchMode by rssInlineImagePrefetchMode.collectAsState()
     val llmEnabled by llmFeatureEnabled.collectAsState()
     val llmAuto by llmAutoSummarize.collectAsState()
@@ -141,6 +146,7 @@ fun SettingsScreen(
             phoneConnectionEnabled = phoneConnection,
             mediaVolumeControlEnabled = mediaVolumeControl,
             mediaVolumeGuardEnabled = mediaVolumeGuard,
+            mediaPlaybackStartVolumeLimitPercent = mediaPlaybackStartVolumeLimit,
             llmFeatureEnabled = llmEnabled,
             llmAutoSummarize = llmAuto,
             llmShowTokenUsage = llmTokenUsage,
@@ -151,6 +157,7 @@ fun SettingsScreen(
             onTogglePhoneConnection = onTogglePhoneConnection,
             onToggleMediaVolumeControl = onToggleMediaVolumeControl,
             onToggleMediaVolumeGuard = onToggleMediaVolumeGuard,
+            onSelectMediaPlaybackStartVolumeLimit = onSelectMediaPlaybackStartVolumeLimit,
             onToggleLlmFeatureEnabled = onToggleLlmFeatureEnabled,
             onToggleLlmAutoSummarize = onToggleLlmAutoSummarize,
             onToggleLlmShowTokenUsage = onToggleLlmShowTokenUsage,
@@ -185,6 +192,7 @@ private fun MainSettingsPage(
     phoneConnectionEnabled: Boolean,
     mediaVolumeControlEnabled: Boolean,
     mediaVolumeGuardEnabled: Boolean,
+    mediaPlaybackStartVolumeLimitPercent: Int?,
     llmFeatureEnabled: Boolean,
     llmAutoSummarize: Boolean,
     llmShowTokenUsage: Boolean,
@@ -195,6 +203,7 @@ private fun MainSettingsPage(
     onTogglePhoneConnection: () -> Unit,
     onToggleMediaVolumeControl: () -> Unit,
     onToggleMediaVolumeGuard: () -> Unit,
+    onSelectMediaPlaybackStartVolumeLimit: (Int?) -> Unit,
     onToggleLlmFeatureEnabled: () -> Unit,
     onToggleLlmAutoSummarize: () -> Unit,
     onToggleLlmShowTokenUsage: () -> Unit,
@@ -217,7 +226,9 @@ private fun MainSettingsPage(
     val entrySpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_8dp
     val valueSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_4dp
     val stepperSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_6dp
+    val compactStepperSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_4dp
     val stepperValueWidth = watchDimensionResource(R.dimen.watch_action_button_height)
+    val playbackStartVolumeValueWidth = stepperValueWidth + compactStepperSpacing
     val valueIndent = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_10dp
     val pillHeight = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_multiple_item_height
     val scrollState = rememberScrollState()
@@ -226,6 +237,7 @@ private fun MainSettingsPage(
     val fontSizeInfo = remember { MainSettingsCatalog.fontSize }
     val mediaVolumeControlInfo = remember { MainSettingsCatalog.mediaVolumeControl }
     val mediaVolumeGuardInfo = remember { MainSettingsCatalog.mediaVolumeGuard }
+    val mediaPlaybackStartVolumeLimitInfo = remember { MainSettingsCatalog.mediaPlaybackStartVolumeLimit }
     val mediaVolumeGuardUnavailableMessage = "仅在启用滚轮调节音量后可使用音量调节防干扰"
     val showVolumeGuardUnavailableToast = {
         showAppToast(
@@ -363,8 +375,58 @@ private fun MainSettingsPage(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
             )
+
+            Spacer(modifier = Modifier.height(entrySpacing))
+
+            WatchSettingsPillRow(label = mediaPlaybackStartVolumeLimitInfo.title) {
+                RoundIconButtonIcon(
+                    icon = Icons.Outlined.Remove,
+                    contentDescription = "降低静音开播上限",
+                    enabled = true,
+                    testTag = SettingsTestTags.PLAYBACK_START_VOLUME_DECREASE_BUTTON,
+                    onClick = {
+                        onSelectMediaPlaybackStartVolumeLimit(
+                            previousMediaPlaybackStartVolumeLimitPercent(
+                                mediaPlaybackStartVolumeLimitPercent
+                            )
+                        )
+                    }
+                )
+                Spacer(modifier = Modifier.width(compactStepperSpacing))
+                StepperValue(
+                    text = formatMediaPlaybackStartVolumeLimitPercent(
+                        mediaPlaybackStartVolumeLimitPercent
+                    ),
+                    width = playbackStartVolumeValueWidth,
+                    testTag = SettingsTestTags.PLAYBACK_START_VOLUME_VALUE
+                )
+                Spacer(modifier = Modifier.width(compactStepperSpacing))
+                RoundIconButtonIcon(
+                    icon = Icons.Outlined.Add,
+                    contentDescription = "提高静音开播上限",
+                    enabled = true,
+                    testTag = SettingsTestTags.PLAYBACK_START_VOLUME_INCREASE_BUTTON,
+                    onClick = {
+                        onSelectMediaPlaybackStartVolumeLimit(
+                            nextMediaPlaybackStartVolumeLimitPercent(
+                                mediaPlaybackStartVolumeLimitPercent
+                            )
+                        )
+                    }
+                )
+            }
             Text(
-                text = "打开视频时调整音量到6%",
+                text = mediaPlaybackStartVolumeLimitInfo.description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+            )
+            Text(
+                text = if (mediaPlaybackStartVolumeLimitPercent == null) {
+                    "当前不限制开播音量"
+                } else {
+                    "开播时高于 ${mediaPlaybackStartVolumeLimitPercent}% 才压低"
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = valueIndent, top = valueSpacing)

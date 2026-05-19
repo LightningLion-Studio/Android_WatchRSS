@@ -106,7 +106,7 @@ class PlayerVolumeOverlayPolicyTest {
     @Test
     fun shouldEnforcePlaybackStartGuard_returnsFalseAfterUserDismissal() {
         val result = shouldEnforcePlaybackStartGuard(
-            guardEnabled = true,
+            playbackStartVolumeLimitPercent = 10,
             dismissedByUser = true,
             currentVolume = 5,
             minVolume = 0,
@@ -119,7 +119,7 @@ class PlayerVolumeOverlayPolicyTest {
     @Test
     fun shouldEnforcePlaybackStartGuard_returnsTrueForLoudPlaybackWithoutUserOverride() {
         val result = shouldEnforcePlaybackStartGuard(
-            guardEnabled = true,
+            playbackStartVolumeLimitPercent = 10,
             dismissedByUser = false,
             currentVolume = 5,
             minVolume = 0,
@@ -127,6 +127,79 @@ class PlayerVolumeOverlayPolicyTest {
         )
 
         assertEquals(true, result)
+    }
+
+    @Test
+    fun shouldEnforcePlaybackStartGuard_returnsFalseWhenUnlimited() {
+        val result = shouldEnforcePlaybackStartGuard(
+            playbackStartVolumeLimitPercent = null,
+            dismissedByUser = false,
+            currentVolume = 5,
+            minVolume = 0,
+            maxVolume = 10
+        )
+
+        assertEquals(false, result)
+    }
+
+    @Test
+    fun shouldEnforcePlaybackStartGuard_allowsMuteLimit() {
+        val result = shouldEnforcePlaybackStartGuard(
+            playbackStartVolumeLimitPercent = 0,
+            dismissedByUser = false,
+            currentVolume = 1,
+            minVolume = 0,
+            maxVolume = 10
+        )
+
+        assertEquals(true, result)
+        assertEquals(0f, playbackStartVolumeForPercent(0, minVolume = 0, maxVolume = 10), 0.001f)
+    }
+
+    @Test
+    fun shouldEnforcePlaybackStartGuard_returnsFalseWhenCurrentIsNotAboveTargetStep() {
+        val result = shouldEnforcePlaybackStartGuard(
+            playbackStartVolumeLimitPercent = 10,
+            dismissedByUser = false,
+            currentVolume = 1,
+            minVolume = 0,
+            maxVolume = 10
+        )
+
+        assertEquals(false, result)
+    }
+
+    @Test
+    fun playbackStartVolumeForPercent_mapsTenPercentOnSixteenStepStreams() {
+        assertEquals(1.6f, playbackStartVolumeForPercent(10, minVolume = 0, maxVolume = 16), 0.001f)
+    }
+
+    @Test
+    fun shouldEnforcePlaybackStartGuard_comparesAgainstFloatTargetOnSixteenStepStreams() {
+        val belowFloatTarget = shouldEnforcePlaybackStartGuard(
+            playbackStartVolumeLimitPercent = 10,
+            dismissedByUser = false,
+            currentVolume = 1,
+            minVolume = 0,
+            maxVolume = 16
+        )
+        val aboveFloatTarget = shouldEnforcePlaybackStartGuard(
+            playbackStartVolumeLimitPercent = 10,
+            dismissedByUser = false,
+            currentVolume = 2,
+            minVolume = 0,
+            maxVolume = 16
+        )
+
+        assertEquals(false, belowFloatTarget)
+        assertEquals(true, aboveFloatTarget)
+    }
+
+    @Test
+    fun playbackStartVolumeForPercent_usesFloatPercentTargets() {
+        assertEquals(1f, playbackStartVolumeForPercent(5, minVolume = 0, maxVolume = 16), 0.001f)
+        assertEquals(2.4f, playbackStartVolumeForPercent(15, minVolume = 0, maxVolume = 16), 0.001f)
+        assertEquals(16f, playbackStartVolumeForPercent(100, minVolume = 0, maxVolume = 16), 0.001f)
     }
 
     @Test

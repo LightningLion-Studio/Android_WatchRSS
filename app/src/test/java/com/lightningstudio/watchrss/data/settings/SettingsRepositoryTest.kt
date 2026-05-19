@@ -108,6 +108,66 @@ class SettingsRepositoryTest {
     }
 
     @Test
+    fun mediaPlaybackStartVolumeLimit_defaultsToTenWhenLegacyGuardIsEnabled() = runBlocking {
+        val env = createRepository("media-playback-start-volume-default.preferences_pb")
+        try {
+            assertEquals(
+                DEFAULT_MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT,
+                env.repository.mediaPlaybackStartVolumeLimitPercent.first()
+            )
+        } finally {
+            env.scope.cancel()
+        }
+    }
+
+    @Test
+    fun mediaPlaybackStartVolumeLimit_migratesLegacyGuardOffToUnlimited() = runBlocking {
+        val env = createRepository("media-playback-start-volume-legacy-off.preferences_pb")
+        val legacyGuardKey = booleanPreferencesKey("media_volume_guard_enabled")
+        try {
+            env.dataStore.edit { preferences ->
+                preferences[legacyGuardKey] = false
+            }
+
+            assertEquals(null, env.repository.mediaPlaybackStartVolumeLimitPercent.first())
+        } finally {
+            env.scope.cancel()
+        }
+    }
+
+    @Test
+    fun mediaPlaybackStartVolumeLimit_persistsUpdates() = runBlocking {
+        val env = createRepository("media-playback-start-volume-updated.preferences_pb")
+        try {
+            env.repository.setMediaPlaybackStartVolumeLimitPercent(null)
+            assertEquals(null, env.repository.mediaPlaybackStartVolumeLimitPercent.first())
+
+            env.repository.setMediaPlaybackStartVolumeLimitPercent(25)
+            assertEquals(25, env.repository.mediaPlaybackStartVolumeLimitPercent.first())
+        } finally {
+            env.scope.cancel()
+        }
+    }
+
+    @Test
+    fun mediaPlaybackStartVolumeLimit_invalidStoredValueFallsBackToDefault() = runBlocking {
+        val env = createRepository("media-playback-start-volume-invalid.preferences_pb")
+        val key = intPreferencesKey("media_playback_start_volume_limit_percent")
+        try {
+            env.dataStore.edit { preferences ->
+                preferences[key] = 7
+            }
+
+            assertEquals(
+                DEFAULT_MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT,
+                env.repository.mediaPlaybackStartVolumeLimitPercent.first()
+            )
+        } finally {
+            env.scope.cancel()
+        }
+    }
+
+    @Test
     fun mediaVolumeControlEnabled_persistsUpdates() = runBlocking {
         val env = createRepository("media-volume-control-updated.preferences_pb")
         val key = booleanPreferencesKey("media_volume_control_enabled")

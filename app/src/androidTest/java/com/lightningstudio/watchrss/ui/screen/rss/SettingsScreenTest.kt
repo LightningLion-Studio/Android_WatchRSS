@@ -40,6 +40,7 @@ class SettingsScreenTest {
                 phoneConnectionEnabled = MutableStateFlow(true),
                 mediaVolumeControlEnabled = MutableStateFlow(true),
                 mediaVolumeGuardEnabled = MutableStateFlow(true),
+                mediaPlaybackStartVolumeLimitPercent = MutableStateFlow<Int?>(10),
                 rssInlineImagePrefetchMode = MutableStateFlow(DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE),
                 llmFeatureEnabled = MutableStateFlow(false),
                 llmAutoSummarize = MutableStateFlow(false),
@@ -53,6 +54,7 @@ class SettingsScreenTest {
                 onTogglePhoneConnection = {},
                 onToggleMediaVolumeControl = {},
                 onToggleMediaVolumeGuard = {},
+                onSelectMediaPlaybackStartVolumeLimit = {},
                 onSelectRssInlineImagePrefetchMode = {},
                 onToggleLlmFeatureEnabled = {},
                 onToggleLlmAutoSummarize = {},
@@ -74,7 +76,11 @@ class SettingsScreenTest {
         composeRule.onNodeWithTag(SettingsTestTags.FONT_VALUE, useUnmergedTree = true).assertExists()
         composeRule.onNodeWithTag(SettingsTestTags.MEDIA_VOLUME_CONTROL_SWITCH, useUnmergedTree = true).performScrollTo().assertExists()
         composeRule.onNodeWithTag(SettingsTestTags.MEDIA_VOLUME_GUARD_SWITCH, useUnmergedTree = true).performScrollTo().assertExists()
-        composeRule.onNodeWithText("打开视频时调整音量到6%").performScrollTo().assertExists()
+        composeRule.onNodeWithText("静音开播").performScrollTo().assertExists()
+        composeRule.onNodeWithTag(SettingsTestTags.PLAYBACK_START_VOLUME_VALUE, useUnmergedTree = true)
+            .performScrollTo()
+            .assertExists()
+        composeRule.onAllNodesWithText("打开视频时调整音量到6%").assertCountEquals(0)
         composeRule.onNodeWithTag(SettingsTestTags.ADVANCED_ENTRY, useUnmergedTree = true).assertExists()
         composeRule.onNodeWithTag(SettingsTestTags.OPEN_OOBE_ENTRY, useUnmergedTree = true).performScrollTo().assertExists()
         composeRule.onNodeWithTag(SettingsTestTags.PHONE_CONNECTION_SWITCH, useUnmergedTree = true).performScrollTo().assertExists()
@@ -98,6 +104,7 @@ class SettingsScreenTest {
         var themeToggleCount = 0
         var mediaVolumeControlToggleCount = 0
         var mediaVolumeGuardToggleCount = 0
+        val playbackStartVolumeSelections = mutableListOf<Int?>()
 
         composeRule.setWatchContent {
             SettingsScreen(
@@ -109,6 +116,7 @@ class SettingsScreenTest {
                 phoneConnectionEnabled = MutableStateFlow(true),
                 mediaVolumeControlEnabled = MutableStateFlow(true),
                 mediaVolumeGuardEnabled = MutableStateFlow(true),
+                mediaPlaybackStartVolumeLimitPercent = MutableStateFlow<Int?>(10),
                 rssInlineImagePrefetchMode = MutableStateFlow(DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE),
                 llmFeatureEnabled = MutableStateFlow(false),
                 llmAutoSummarize = MutableStateFlow(false),
@@ -122,6 +130,7 @@ class SettingsScreenTest {
                 onTogglePhoneConnection = {},
                 onToggleMediaVolumeControl = { mediaVolumeControlToggleCount += 1 },
                 onToggleMediaVolumeGuard = { mediaVolumeGuardToggleCount += 1 },
+                onSelectMediaPlaybackStartVolumeLimit = { playbackStartVolumeSelections += it },
                 onSelectRssInlineImagePrefetchMode = {},
                 onToggleLlmFeatureEnabled = {},
                 onToggleLlmAutoSummarize = {},
@@ -143,6 +152,8 @@ class SettingsScreenTest {
         composeRule.onNodeWithTag(SettingsTestTags.FONT_INCREASE_BUTTON, useUnmergedTree = true).performScrollTo().performClick()
         composeRule.onNodeWithTag(SettingsTestTags.MEDIA_VOLUME_CONTROL_SWITCH, useUnmergedTree = true).performScrollTo().performClick()
         composeRule.onNodeWithTag(SettingsTestTags.MEDIA_VOLUME_GUARD_SWITCH, useUnmergedTree = true).performScrollTo().performClick()
+        composeRule.onNodeWithTag(SettingsTestTags.PLAYBACK_START_VOLUME_DECREASE_BUTTON, useUnmergedTree = true).performScrollTo().performClick()
+        composeRule.onNodeWithTag(SettingsTestTags.PLAYBACK_START_VOLUME_INCREASE_BUTTON, useUnmergedTree = true).performScrollTo().performClick()
         composeRule.onNodeWithTag(SettingsTestTags.ADVANCED_ENTRY, useUnmergedTree = true).performScrollTo().performClick()
         composeRule.onNodeWithTag(SettingsTestTags.CACHE_DECREASE_BUTTON, useUnmergedTree = true).performClick()
         composeRule.onNodeWithTag(SettingsTestTags.CACHE_INCREASE_BUTTON, useUnmergedTree = true).performClick()
@@ -153,6 +164,7 @@ class SettingsScreenTest {
             assertEquals(1, themeToggleCount)
             assertEquals(1, mediaVolumeControlToggleCount)
             assertEquals(1, mediaVolumeGuardToggleCount)
+            assertEquals(listOf<Int?>(5, 15), playbackStartVolumeSelections)
         }
     }
 
@@ -168,6 +180,7 @@ class SettingsScreenTest {
                 phoneConnectionEnabled = MutableStateFlow(true),
                 mediaVolumeControlEnabled = MutableStateFlow(false),
                 mediaVolumeGuardEnabled = MutableStateFlow(true),
+                mediaPlaybackStartVolumeLimitPercent = MutableStateFlow<Int?>(10),
                 rssInlineImagePrefetchMode = MutableStateFlow(DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE),
                 llmFeatureEnabled = MutableStateFlow(false),
                 llmAutoSummarize = MutableStateFlow(false),
@@ -181,6 +194,7 @@ class SettingsScreenTest {
                 onTogglePhoneConnection = {},
                 onToggleMediaVolumeControl = {},
                 onToggleMediaVolumeGuard = {},
+                onSelectMediaPlaybackStartVolumeLimit = {},
                 onSelectRssInlineImagePrefetchMode = {},
                 onToggleLlmFeatureEnabled = {},
                 onToggleLlmAutoSummarize = {},

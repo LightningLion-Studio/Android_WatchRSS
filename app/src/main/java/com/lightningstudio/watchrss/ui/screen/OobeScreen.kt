@@ -61,9 +61,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.network.InternetAvailabilityStatus
+import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
 import com.lightningstudio.watchrss.data.settings.DEFAULT_READING_FONT_SIZE_SP
+import com.lightningstudio.watchrss.data.settings.formatMediaPlaybackStartVolumeLimitPercent
+import com.lightningstudio.watchrss.data.settings.nextMediaPlaybackStartVolumeLimitPercent
+import com.lightningstudio.watchrss.data.settings.previousMediaPlaybackStartVolumeLimitPercent
 import com.lightningstudio.watchrss.ui.components.WatchCheckbox
 import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.components.WatchSurface
@@ -365,11 +369,14 @@ private fun OobeCustomizationStep(
     val fontSizeInfo = remember { MainSettingsCatalog.fontSize }
     val mediaVolumeControlInfo = remember { MainSettingsCatalog.mediaVolumeControl }
     val mediaVolumeGuardInfo = remember { MainSettingsCatalog.mediaVolumeGuard }
+    val mediaPlaybackStartVolumeLimitInfo = remember { MainSettingsCatalog.mediaPlaybackStartVolumeLimit }
     val fontOptions = remember { (12..32 step 2).toList() }
     val entrySpacing = WatchDimens.hey_distance_8dp
     val pillHeight = WatchDimens.hey_multiple_item_height
     val stepperSpacing = WatchDimens.hey_distance_6dp
+    val compactStepperSpacing = WatchDimens.hey_distance_4dp
     val stepperValueWidth = watchDimensionResource(R.dimen.watch_action_button_height)
+    val playbackStartVolumeValueWidth = stepperValueWidth + compactStepperSpacing
     var previewReadingThemeDark by rememberSaveable { mutableStateOf(true) }
     var previewFontSizeSp by rememberSaveable { mutableStateOf(DEFAULT_READING_FONT_SIZE_SP) }
     var previewMediaVolumeControlEnabled by rememberSaveable {
@@ -377,6 +384,9 @@ private fun OobeCustomizationStep(
     }
     var previewMediaVolumeGuardEnabled by rememberSaveable {
         mutableStateOf(DEFAULT_MEDIA_VOLUME_GUARD_ENABLED)
+    }
+    var previewMediaPlaybackStartVolumeLimitPercent by rememberSaveable {
+        mutableStateOf(DEFAULT_MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT)
     }
     val lowerFont = fontOptions.lastOrNull { it < previewFontSizeSp }
     val higherFont = fontOptions.firstOrNull { it > previewFontSizeSp }
@@ -471,6 +481,42 @@ private fun OobeCustomizationStep(
                     onCheckedChange = { previewMediaVolumeGuardEnabled = it }
                 )
             }
+        }
+
+        Spacer(modifier = Modifier.height(entrySpacing))
+
+        OobeCustomizationSetting(info = mediaPlaybackStartVolumeLimitInfo) {
+            WatchRoundIconButtonIcon(
+                icon = Icons.Outlined.Remove,
+                contentDescription = "降低静音开播上限",
+                enabled = true,
+                onClick = {
+                    previewMediaPlaybackStartVolumeLimitPercent =
+                        previousMediaPlaybackStartVolumeLimitPercent(
+                            previewMediaPlaybackStartVolumeLimitPercent
+                        )
+                }
+            )
+            Spacer(modifier = Modifier.width(compactStepperSpacing))
+            WatchStepperValue(
+                text = formatMediaPlaybackStartVolumeLimitPercent(
+                    previewMediaPlaybackStartVolumeLimitPercent
+                ),
+                width = playbackStartVolumeValueWidth,
+                modifier = Modifier.testTag(OobeTestTags.CUSTOM_PLAYBACK_START_VOLUME_VALUE)
+            )
+            Spacer(modifier = Modifier.width(compactStepperSpacing))
+            WatchRoundIconButtonIcon(
+                icon = Icons.Filled.Add,
+                contentDescription = "提高静音开播上限",
+                enabled = true,
+                onClick = {
+                    previewMediaPlaybackStartVolumeLimitPercent =
+                        nextMediaPlaybackStartVolumeLimitPercent(
+                            previewMediaPlaybackStartVolumeLimitPercent
+                        )
+                }
+            )
         }
 
         Spacer(modifier = Modifier.height(entrySpacing))

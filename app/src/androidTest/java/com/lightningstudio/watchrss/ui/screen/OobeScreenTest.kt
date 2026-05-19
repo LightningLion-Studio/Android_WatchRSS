@@ -97,10 +97,12 @@ class OobeScreenTest {
         composeRule.onNodeWithText("字体大小").assertExists()
         composeRule.onNodeWithText("使用滚轮调节音量").assertExists()
         composeRule.onNodeWithText("音量调节防干扰").assertExists()
+        composeRule.onNodeWithText("静音开播").assertExists()
         composeRule.onNodeWithTag(OobeTestTags.CUSTOM_THEME_TOGGLE, useUnmergedTree = true).assertExists()
         composeRule.onNodeWithTag(OobeTestTags.CUSTOM_FONT_VALUE, useUnmergedTree = true).assertExists()
         composeRule.onNodeWithTag(OobeTestTags.CUSTOM_MEDIA_VOLUME_CONTROL_SWITCH, useUnmergedTree = true).assertExists()
         composeRule.onNodeWithTag(OobeTestTags.CUSTOM_MEDIA_GUARD_SWITCH, useUnmergedTree = true).assertExists()
+        composeRule.onNodeWithTag(OobeTestTags.CUSTOM_PLAYBACK_START_VOLUME_VALUE, useUnmergedTree = true).assertExists()
     }
 
     @Test
@@ -122,5 +124,6 @@ class OobeScreenTest {
         composeRule.onNodeWithText("音量调节防干扰").assertDoesNotExist()
         composeRule.onNodeWithTag(OobeTestTags.CUSTOM_MEDIA_GUARD_SWITCH, useUnmergedTree = true)
             .assertDoesNotExist()
+        composeRule.onNodeWithText("静音开播").assertExists()
     }
 }
