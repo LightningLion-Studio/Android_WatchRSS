@@ -61,10 +61,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.network.InternetAvailabilityStatus
-import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
 import com.lightningstudio.watchrss.data.settings.DEFAULT_READING_FONT_SIZE_SP
+import com.lightningstudio.watchrss.data.settings.defaultMediaPlaybackStartVolumeLimitPercentForGuard
 import com.lightningstudio.watchrss.data.settings.formatMediaPlaybackStartVolumeLimitPercent
 import com.lightningstudio.watchrss.data.settings.nextMediaPlaybackStartVolumeLimitPercent
 import com.lightningstudio.watchrss.data.settings.previousMediaPlaybackStartVolumeLimitPercent
@@ -386,7 +386,11 @@ private fun OobeCustomizationStep(
         mutableStateOf(DEFAULT_MEDIA_VOLUME_GUARD_ENABLED)
     }
     var previewMediaPlaybackStartVolumeLimitPercent by rememberSaveable {
-        mutableStateOf(DEFAULT_MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT)
+        mutableStateOf(
+            defaultMediaPlaybackStartVolumeLimitPercentForGuard(
+                DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
+            )
+        )
     }
     val lowerFont = fontOptions.lastOrNull { it < previewFontSizeSp }
     val higherFont = fontOptions.firstOrNull { it > previewFontSizeSp }

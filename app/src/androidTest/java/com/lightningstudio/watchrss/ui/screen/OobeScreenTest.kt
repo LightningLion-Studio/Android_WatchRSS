@@ -1,6 +1,7 @@
 package com.lightningstudio.watchrss.ui.screen
 
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -101,8 +102,11 @@ class OobeScreenTest {
         composeRule.onNodeWithTag(OobeTestTags.CUSTOM_THEME_TOGGLE, useUnmergedTree = true).assertExists()
         composeRule.onNodeWithTag(OobeTestTags.CUSTOM_FONT_VALUE, useUnmergedTree = true).assertExists()
         composeRule.onNodeWithTag(OobeTestTags.CUSTOM_MEDIA_VOLUME_CONTROL_SWITCH, useUnmergedTree = true).assertExists()
-        composeRule.onNodeWithTag(OobeTestTags.CUSTOM_MEDIA_GUARD_SWITCH, useUnmergedTree = true).assertExists()
+        composeRule.onNodeWithTag(OobeTestTags.CUSTOM_MEDIA_GUARD_SWITCH, useUnmergedTree = true)
+            .assertExists()
+            .assertIsOff()
         composeRule.onNodeWithTag(OobeTestTags.CUSTOM_PLAYBACK_START_VOLUME_VALUE, useUnmergedTree = true).assertExists()
+        composeRule.onNodeWithText("无限制").assertExists()
     }
 
     @Test

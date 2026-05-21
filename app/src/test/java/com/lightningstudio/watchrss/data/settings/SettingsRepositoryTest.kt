@@ -88,7 +88,7 @@ class SettingsRepositoryTest {
     }
 
     @Test
-    fun mediaVolumeGuardEnabled_defaultsToEnabled() = runBlocking {
+    fun mediaVolumeGuardEnabled_defaultsToDisabled() = runBlocking {
         val env = createRepository("media-volume-guard-default.preferences_pb")
         try {
             assertEquals(DEFAULT_MEDIA_VOLUME_GUARD_ENABLED, env.repository.mediaVolumeGuardEnabled.first())
@@ -108,9 +108,24 @@ class SettingsRepositoryTest {
     }
 
     @Test
-    fun mediaPlaybackStartVolumeLimit_defaultsToTenWhenLegacyGuardIsEnabled() = runBlocking {
+    fun mediaPlaybackStartVolumeLimit_defaultsToUnlimitedForNewUsers() = runBlocking {
         val env = createRepository("media-playback-start-volume-default.preferences_pb")
         try {
+            assertEquals(null, env.repository.mediaPlaybackStartVolumeLimitPercent.first())
+        } finally {
+            env.scope.cancel()
+        }
+    }
+
+    @Test
+    fun mediaPlaybackStartVolumeLimit_migratesLegacyGuardOnToTen() = runBlocking {
+        val env = createRepository("media-playback-start-volume-legacy-on.preferences_pb")
+        val legacyGuardKey = booleanPreferencesKey("media_volume_guard_enabled")
+        try {
+            env.dataStore.edit { preferences ->
+                preferences[legacyGuardKey] = true
+            }
+
             assertEquals(
                 DEFAULT_MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT,
                 env.repository.mediaPlaybackStartVolumeLimitPercent.first()

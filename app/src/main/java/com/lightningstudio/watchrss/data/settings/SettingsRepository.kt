@@ -49,7 +49,7 @@ const val MB_BYTES: Long = 1024 * 1024
 const val DEFAULT_READING_FONT_SIZE_SP: Int = 14
 const val CURRENT_OOBE_VERSION: Int = 3
 const val DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED: Boolean = true
-const val DEFAULT_MEDIA_VOLUME_GUARD_ENABLED: Boolean = true
+const val DEFAULT_MEDIA_VOLUME_GUARD_ENABLED: Boolean = false
 const val TEMP_ORIGINAL_MODE_HINT_WINDOW_MS: Long = 12L * 60L * 60L * 1000L
 const val TEMP_ORIGINAL_MODE_HINT_THRESHOLD: Int = 3
 class SettingsRepository(private val dataStore: DataStore<Preferences>) {

@@ -18,6 +18,7 @@ class PlayerVolumeOverlayPolicyTest {
         )
 
         assertEquals(3f, first.targetVolume, 0.001f)
+        assertEquals(true, first.shouldNotifyGuardTriggered)
 
         val second = applyDigitalCrownVolumeGuard(
             currentVolume = first.targetVolume,
@@ -31,6 +32,7 @@ class PlayerVolumeOverlayPolicyTest {
         )
 
         assertEquals(3f, second.targetVolume, 0.001f)
+        assertEquals(false, second.shouldNotifyGuardTriggered)
     }
 
     @Test
@@ -74,6 +76,7 @@ class PlayerVolumeOverlayPolicyTest {
         )
 
         assertEquals(11f, result.targetVolume, 0.001f)
+        assertEquals(false, result.shouldNotifyGuardTriggered)
     }
 
     @Test
@@ -90,6 +93,7 @@ class PlayerVolumeOverlayPolicyTest {
         )
 
         assertEquals(3.36f, result.targetVolume, 0.001f)
+        assertEquals(true, result.shouldNotifyGuardTriggered)
     }
 
     @Test

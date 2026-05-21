@@ -3,6 +3,7 @@ package com.lightningstudio.watchrss.ui.components
 import android.content.Context
 import android.media.AudioManager
 import android.os.SystemClock
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.padding
@@ -29,6 +30,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
+import com.lightningstudio.watchrss.ui.util.showAppToast
 import com.lightningstudio.watchrss.util.AppLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -41,7 +43,8 @@ class PlayerVolumeState internal constructor(
     private val audioManager: AudioManager,
     private val scope: CoroutineScope,
     private val guardEnabled: Boolean,
-    private val playbackStartVolumeLimitPercent: Int?
+    private val playbackStartVolumeLimitPercent: Int?,
+    private val onVolumeGuardTriggered: () -> Unit
 ) {
     private val minVolume = audioManager.getStreamMinVolume(AudioManager.STREAM_MUSIC)
     // PlayerVolume: getStreamMaxVolume(STREAM_MUSIC)=16
@@ -97,6 +100,9 @@ class PlayerVolumeState internal constructor(
         )
         digitalCrownGuardState = guardedTarget.nextState
         virtualVolume = guardedTarget.targetVolume
+        if (guardedTarget.shouldNotifyGuardTriggered) {
+            onVolumeGuardTriggered()
+        }
         val targetInt = virtualVolume.roundToInt()
         AppLogger.d(
             VOLUME_TAG,
@@ -192,16 +198,24 @@ fun rememberPlayerVolumeState(
     playbackStartVolumeLimitPercent: Int? = 10
 ): PlayerVolumeState {
     val context = LocalContext.current
-    val audioManager = remember(context) {
-        context.applicationContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    val appContext = context.applicationContext
+    val audioManager = remember(appContext) {
+        appContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     }
     val scope = rememberCoroutineScope()
-    return remember(audioManager, scope, guardEnabled, playbackStartVolumeLimitPercent) {
+    return remember(audioManager, scope, guardEnabled, playbackStartVolumeLimitPercent, appContext) {
         PlayerVolumeState(
             audioManager = audioManager,
             scope = scope,
             guardEnabled = guardEnabled,
-            playbackStartVolumeLimitPercent = playbackStartVolumeLimitPercent
+            playbackStartVolumeLimitPercent = playbackStartVolumeLimitPercent,
+            onVolumeGuardTriggered = {
+                showAppToast(
+                    appContext,
+                    VOLUME_GUARD_TRIGGERED_TOAST,
+                    Toast.LENGTH_SHORT
+                )
+            }
         )
     }
 }
@@ -244,6 +258,7 @@ fun PlayerVolumeOverlay(
 private const val VOLUME_OVERLAY_HIDE_DELAY_MS = 1_200L
 private const val DIGITAL_CROWN_SESSION_CAP_PERCENT = 0.21f
 private const val DIGITAL_CROWN_SESSION_IDLE_TIMEOUT_MS = 600L
+private const val VOLUME_GUARD_TRIGGERED_TOAST = "音量调节防干扰触发，先停下以继续调整音量"
 // 每单位 scaled delta（已乘以 DIGITAL_CROWN_VOLUME_STEP=0.01）调节的音量百分比
 // 按实测一圈表冠总 net scaled ≈ 16.5，校准为 1/16.5 ≈ 0.06，使一圈刚好覆盖 0→100% 音量范围
 private const val VOLUME_SENSITIVITY_PERCENT = 0.06f
@@ -251,12 +266,14 @@ private const val VOLUME_TAG = "PlayerVolume"
 
 internal data class DigitalCrownVolumeGuardState(
     val sessionCapVolume: Float? = null,
-    val lastEventUptimeMs: Long = Long.MIN_VALUE
+    val lastEventUptimeMs: Long = Long.MIN_VALUE,
+    val guardNotificationShown: Boolean = false
 )
 
 internal data class DigitalCrownVolumeGuardResult(
     val targetVolume: Float,
-    val nextState: DigitalCrownVolumeGuardState
+    val nextState: DigitalCrownVolumeGuardState,
+    val shouldNotifyGuardTriggered: Boolean = false
 )
 
 internal fun applyDigitalCrownVolumeGuard(
@@ -287,7 +304,13 @@ internal fun applyDigitalCrownVolumeGuard(
     } else {
         previousState.sessionCapVolume
     }
+    var guardNotificationShown = if (activeCapVolume == null) {
+        false
+    } else {
+        previousState.guardNotificationShown
+    }
     var targetVolume = (clampedCurrent + requestedDeltaVolume).coerceIn(minVolumeFloat, maxVolumeFloat)
+    var wasLimitedByGuard = false
 
     if (guardEnabled && direction > 0) {
         val effectiveCapVolume = activeCapVolume ?: if (clampedCurrent < sessionCapVolume) {
@@ -297,16 +320,24 @@ internal fun applyDigitalCrownVolumeGuard(
         }
         if (effectiveCapVolume != null) {
             activeCapVolume = effectiveCapVolume
-            targetVolume = targetVolume.coerceAtMost(effectiveCapVolume)
+            val cappedTargetVolume = targetVolume.coerceAtMost(effectiveCapVolume)
+            wasLimitedByGuard = cappedTargetVolume < targetVolume
+            targetVolume = cappedTargetVolume
         }
+    }
+    val shouldNotifyGuardTriggered = wasLimitedByGuard && !guardNotificationShown
+    if (shouldNotifyGuardTriggered) {
+        guardNotificationShown = true
     }
 
     return DigitalCrownVolumeGuardResult(
         targetVolume = targetVolume,
         nextState = DigitalCrownVolumeGuardState(
             sessionCapVolume = activeCapVolume,
-            lastEventUptimeMs = eventUptimeMs
-        )
+            lastEventUptimeMs = eventUptimeMs,
+            guardNotificationShown = guardNotificationShown
+        ),
+        shouldNotifyGuardTriggered = shouldNotifyGuardTriggered
     )
 }
 
