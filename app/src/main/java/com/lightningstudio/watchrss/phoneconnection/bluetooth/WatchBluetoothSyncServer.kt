@@ -20,6 +20,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import java.io.IOException
 
@@ -59,6 +60,7 @@ class WatchBluetoothSyncServer(
                 val request = BluetoothSyncProtocol.readFrame(client.inputStream)
                 val response = handleRequest(request)
                 BluetoothSyncProtocol.writeFrame(client.outputStream, response)
+                waitForResponseAck(client)
                 BluetoothSyncResult(
                     remoteName = remoteName,
                     remoteAddress = remoteAddress,
@@ -66,6 +68,19 @@ class WatchBluetoothSyncServer(
                     response = response
                 )
             }
+        }
+    }
+
+    private suspend fun waitForResponseAck(client: BluetoothSocket) {
+        val ack = withTimeoutOrNull(RESPONSE_ACK_TIMEOUT_MS) {
+            runCatching {
+                BluetoothSyncProtocol.readFrame(client.inputStream)
+            }.getOrNull()
+        }
+        if (ack?.optString("action") == BluetoothSyncProtocol.ACTION_ACK) {
+            Log.i(TAG, "response ack received")
+        } else {
+            Log.w(TAG, "response ack missing before socket close")
         }
     }
 
@@ -196,5 +211,6 @@ class WatchBluetoothSyncServer(
     companion object {
         private const val TAG = "WatchRSS_BtSyncServer"
         private const val DEFAULT_TIMEOUT_MS = 120_000L
+        private const val RESPONSE_ACK_TIMEOUT_MS = 10_000L
     }
 }
