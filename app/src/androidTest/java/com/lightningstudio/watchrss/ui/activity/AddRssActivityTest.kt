@@ -1,6 +1,7 @@
 package com.lightningstudio.watchrss.ui.activity
 
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -38,7 +39,7 @@ class AddRssActivityTest {
     val ruleChain: RuleChain = RuleChain.outerRule(containerRule).around(composeRule)
 
     @Test
-    fun addRssActivity_rendersInputAndRemoteEntry() {
+    fun addRssActivity_rendersInputWithoutRemoteEntry() {
         composeRule.waitUntil(timeoutMillis = 5_000) {
             composeRule
                 .onAllNodesWithTag(AddRssTestTags.ROOT, useUnmergedTree = true)
@@ -46,6 +47,6 @@ class AddRssActivityTest {
         }
         composeRule.onNodeWithTag(AddRssTestTags.ROOT).assertExists()
         composeRule.onNodeWithTag(AddRssTestTags.URL_INPUT).assertExists()
-        composeRule.onNodeWithTag(AddRssTestTags.REMOTE_INPUT_BUTTON).assertExists()
+        composeRule.onAllNodesWithTag(AddRssTestTags.REMOTE_INPUT_BUTTON).assertCountEquals(0)
     }
 }

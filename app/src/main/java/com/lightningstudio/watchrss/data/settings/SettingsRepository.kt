@@ -7,7 +7,6 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
-import com.lightningstudio.watchrss.BuildConfig
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -69,7 +68,7 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         preferences[SHARE_USE_SYSTEM] ?: false
     }
     val phoneConnectionEnabled: Flow<Boolean> = dataStore.data.map { preferences ->
-        preferences[PHONE_CONNECTION_ENABLED] ?: BuildConfig.DEBUG
+        preferences[PHONE_CONNECTION_ENABLED] ?: true
     }
     val mediaVolumeControlEnabled: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[MEDIA_VOLUME_CONTROL_ENABLED] ?: DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED

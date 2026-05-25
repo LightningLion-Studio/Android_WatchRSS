@@ -313,7 +313,12 @@ internal fun applyDigitalCrownVolumeGuard(
     var wasLimitedByGuard = false
 
     if (guardEnabled && direction > 0) {
-        val effectiveCapVolume = activeCapVolume ?: if (clampedCurrent < sessionCapVolume) {
+        val capActivationVolume = volumeGuardActivationVolume(
+            sessionCapVolume = sessionCapVolume,
+            minVolume = minVolume,
+            maxVolume = maxVolume
+        )
+        val effectiveCapVolume = activeCapVolume ?: if (clampedCurrent < capActivationVolume) {
             sessionCapVolume
         } else {
             null
@@ -409,4 +414,16 @@ internal fun volumeForPercent(
     val range = (maxVolume - minVolume).coerceAtLeast(1)
     val target = minVolume + (range * targetPercent)
     return target.coerceIn((minVolume + 1).toFloat(), maxVolume.toFloat())
+}
+
+internal fun volumeGuardActivationVolume(
+    sessionCapVolume: Float,
+    minVolume: Int,
+    maxVolume: Int
+): Float {
+    if (maxVolume <= minVolume) return minVolume.toFloat()
+    return sessionCapVolume
+        .roundToInt()
+        .coerceIn(minVolume, maxVolume)
+        .toFloat()
 }

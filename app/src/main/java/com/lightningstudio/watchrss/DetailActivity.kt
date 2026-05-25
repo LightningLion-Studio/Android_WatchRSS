@@ -10,7 +10,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.lifecycleScope
-import com.lightningstudio.watchrss.phoneconnection.PhoneConnectionAbility
 import com.lightningstudio.watchrss.ui.screen.rss.DetailScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.util.showAppToast
@@ -97,11 +96,7 @@ class DetailActivity : BaseWatchActivity() {
                 if (isConfigured) {
                     LlmSummaryActivity.createIntent(this@DetailActivity, itemId)
                 } else {
-                    PhoneConnectionActivity.createIntent(
-                        context = this@DetailActivity,
-                        preferredAbility = PhoneConnectionAbility.LLM_SUMMARY_CONFIG,
-                        llmSummaryItemId = itemId
-                    )
+                    LlmConnectivityActivity.createIntent(this@DetailActivity, itemId)
                 }
             )
         }

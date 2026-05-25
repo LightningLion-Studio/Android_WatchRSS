@@ -76,9 +76,15 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -2633,7 +2639,10 @@ private fun DouyinTitlePage(
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = "抖音",
+                                text = channelTitleWithStyledHint(
+                                    title = "抖音",
+                                    titleSize = MaterialTheme.typography.titleMedium.fontSize
+                                ),
                                 style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onSurface,
                                 textAlign = TextAlign.Center
@@ -3665,6 +3674,7 @@ private suspend fun awaitDouyinFrames(frameCount: Int) {
 
 private const val TITLE_ORIGINAL_FIRST_LINE_RATIO = 0.68f
 private const val TITLE_ORIGINAL_SECOND_LINE_RATIO = 0.82f
+private const val CHANNEL_TITLE_CLICK_HINT_SYMBOL = "ⓘ"
 private const val DOUYIN_MAX_AUTO_RETRY_COUNT = 1
 private const val DOUYIN_FOREGROUND_FAILURE_BURST_THRESHOLD = 3
 private const val DOUYIN_FOREGROUND_FAILURE_BURST_WINDOW_MS = 2_000L
@@ -3685,3 +3695,22 @@ private const val DOUYIN_INJECTED_FAILURE_URI_PREFIX = "watchrss-debug://douyin/
 private const val DOUYIN_CACHE_PLAYBACK_URI_PREFIX = "watchrss-douyin-cache://"
 private const val DOUYIN_PLAYER_RECENT_HISTORY_SIZE = DOUYIN_PLAYBACK_PREVIEW_ENTRY_LIMIT
 private const val TAG = "DouyinImmersive"
+
+private fun channelTitleWithStyledHint(
+    title: String,
+    titleSize: TextUnit
+): androidx.compose.ui.text.AnnotatedString {
+    val hintSize = (titleSize.value - 2f).coerceAtLeast(8f).sp
+    return buildAnnotatedString {
+        append("$title ")
+        withStyle(
+            SpanStyle(
+                color = Color(0xFFBDBDBD),
+                fontWeight = FontWeight.Bold,
+                fontSize = hintSize
+            )
+        ) {
+            append(CHANNEL_TITLE_CLICK_HINT_SYMBOL)
+        }
+    }
+}

@@ -15,7 +15,6 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -25,7 +24,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListItemInfo
 import androidx.compose.foundation.lazy.LazyListState
@@ -71,13 +69,11 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.lightningstudio.watchrss.R
-import com.lightningstudio.watchrss.ui.components.WatchButton
 import com.lightningstudio.watchrss.ui.components.BlurFadeVisibility
 import com.lightningstudio.watchrss.data.rss.SavedItem
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
 import com.lightningstudio.watchrss.ui.theme.watchColorResource
-import com.lightningstudio.watchrss.ui.theme.watchActionButtonWidthFor
 import com.lightningstudio.watchrss.ui.util.formatTime
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -90,12 +86,10 @@ fun SavedItemsScreen(
     hasLoadedItems: Boolean,
     items: List<SavedItem>,
     undoVisible: Boolean,
-    showSyncButton: Boolean,
     onUndoClick: () -> Unit,
     onItemClick: (SavedItem) -> Unit,
     onItemRemove: (SavedItem) -> Unit,
-    onItemsReordered: (List<Long>) -> Unit,
-    onSyncToPhone: () -> Unit
+    onItemsReordered: (List<Long>) -> Unit
 ) {
     val safePadding = WatchDimens.watch_safe_padding
     val extraBottomPadding = 40.dp
@@ -154,11 +148,6 @@ fun SavedItemsScreen(
         ) {
             item(key = "saved_header") {
                 SavedHeader(title = title, hint = hint)
-            }
-            if (showSyncButton) {
-                item(key = "saved_sync") {
-                    SyncButton(onClick = onSyncToPhone)
-                }
             }
             if (hasLoadedItems && displayItems.isEmpty()) {
                 item(key = "saved_empty") {
@@ -270,11 +259,6 @@ fun SavedItemsScreen(
                 item(key = "saved_loading_header") {
                     SavedHeader(title = title, hint = hint)
                 }
-                if (showSyncButton) {
-                    item(key = "saved_loading_sync") {
-                        SyncButton(onClick = {})
-                    }
-                }
                 item(key = "saved_loading_skeleton") {
                     SavedItemsSkeleton(itemSpacing = itemSpacing)
                 }
@@ -324,42 +308,6 @@ private fun SavedHeader(title: String, hint: String) {
             fontSize = hintSize,
             modifier = Modifier.semantics { contentDescription = "页面说明：$hint" }
         )
-    }
-}
-
-@Composable
-private fun SyncButton(onClick: () -> Unit) {
-    val padding = watchDimensionResource(R.dimen.hey_distance_4dp)
-    val shape = RoundedCornerShape(WatchDimens.hey_button_default_radius)
-
-    BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = padding, vertical = padding)
-            .semantics {
-                contentDescription = "同步到手机按钮"
-                role = Role.Button
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        val buttonWidth = watchActionButtonWidthFor(maxWidth)
-        WatchButton(
-            onClick = onClick,
-            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant
-            ),
-            shape = shape,
-            modifier = Modifier
-                .width(buttonWidth)
-                .height(WatchDimens.watch_action_button_height)
-        ) {
-            Text(
-                text = "同步到手机",
-                color = MaterialTheme.colorScheme.onSurface,
-                fontSize = textSize(R.dimen.hey_s_desription),
-                textAlign = TextAlign.Center
-            )
-        }
     }
 }
 

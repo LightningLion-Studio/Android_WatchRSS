@@ -4,10 +4,18 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission
         android:name="android.permission.NEARBY_WIFI_DEVICES"
         android:usesPermissionFlags="neverForLocation" />
@@ -110,6 +118,10 @@
             android:exported="false"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
+            android:name=".AdvancedSettingsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.WatchRSS.Translucent" />
+        <activity
             android:name=".LlmConnectivityActivity"
             android:exported="false"
             android:theme="@style/Theme.WatchRSS.Translucent" />
@@ -138,8 +150,20 @@
             android:exported="false"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
+            android:name=".BluetoothConnectionActivity"
+            android:exported="false"
+            android:theme="@style/Theme.WatchRSS.Translucent" />
+        <activity
             android:name=".AcousticConnectionActivity"
             android:exported="false"
+            android:theme="@style/Theme.WatchRSS.Translucent" />
+        <activity
+            android:name=".DebugAcousticConnectionActivity"
+            android:exported="true"
+            android:theme="@style/Theme.WatchRSS.Translucent" />
+        <activity
+            android:name=".DebugBluetoothSyncActivity"
+            android:exported="true"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".PhoneConnectionUnavailableActivity"

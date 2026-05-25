@@ -5,6 +5,7 @@ import com.lightningstudio.watchrss.data.AppContainer
 import com.lightningstudio.watchrss.data.DefaultAppContainer
 import com.lightningstudio.watchrss.debug.DebugLogBuffer
 import com.lightningstudio.watchrss.debug.StartupDurationTracker
+import com.lightningstudio.watchrss.phoneconnection.bluetooth.WatchBluetoothForegroundSyncManager
 import com.lightningstudio.watchrss.sdk.bili.BiliDebugLog
 import com.lightningstudio.watchrss.util.AppLogger
 import java.text.SimpleDateFormat
@@ -18,6 +19,9 @@ class WatchRssApplication : Application() {
 
     @Volatile
     private var testContainerOverride: AppContainer? = null
+    private val bluetoothForegroundSyncManager: WatchBluetoothForegroundSyncManager by lazy {
+        WatchBluetoothForegroundSyncManager(this)
+    }
 
     val container: AppContainer
         get() = testContainerOverride ?: defaultContainer
@@ -37,6 +41,7 @@ class WatchRssApplication : Application() {
             BiliDebugLog.setLogger { tag, message -> DebugLogBuffer.log(tag, message) }
         }
 
+        bluetoothForegroundSyncManager.install()
     }
 
     fun setContainerForTesting(container: AppContainer?) {

@@ -17,8 +17,6 @@ import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
 import com.lightningstudio.watchrss.data.rss.SaveType
 import com.lightningstudio.watchrss.data.rss.SavedItem
-import com.lightningstudio.watchrss.phoneconnection.PhoneConnectionAbility
-import com.lightningstudio.watchrss.phoneconnection.PhoneConnectionFeature
 import com.lightningstudio.watchrss.ui.screen.common.ReadAloudBubbleDock
 import com.lightningstudio.watchrss.ui.screen.common.ReadAloudFloatingBubbleOverlay
 import com.lightningstudio.watchrss.ui.screen.rss.SavedItemsScreen
@@ -50,14 +48,10 @@ class SavedItemsActivity : BaseWatchActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setupSystemBars()
-        val settingsRepository = (application as WatchRssApplication).container.settingsRepository
         setContent {
             WatchRSSTheme {
                 val items by viewModel.items.collectAsState()
                 val hasLoadedItems by viewModel.hasLoadedItems.collectAsState()
-                val phoneConnectionEnabled by settingsRepository.phoneConnectionEnabled.collectAsState(
-                    initial = PhoneConnectionFeature.isDebugBuild
-                )
                 val readAloudState by (application as WatchRssApplication)
                     .container
                     .readAloudController
@@ -75,7 +69,6 @@ class SavedItemsActivity : BaseWatchActivity() {
                         hasLoadedItems = hasLoadedItems,
                         items = items,
                         undoVisible = lastRemoved != null,
-                        showSyncButton = PhoneConnectionFeature.isEnabled(phoneConnectionEnabled),
                         onUndoClick = { handleUndo() },
                         onItemClick = { savedItem ->
                             if (!allowNavigation()) return@SavedItemsScreen
@@ -105,8 +98,7 @@ class SavedItemsActivity : BaseWatchActivity() {
                         },
                         onItemsReordered = { orderedItemIds ->
                             viewModel.reorderSavedItems(orderedItemIds)
-                        },
-                        onSyncToPhone = { startSyncToPhone() }
+                        }
                     )
                     ReadAloudFloatingBubbleOverlay(
                         state = readAloudState,
@@ -148,21 +140,6 @@ class SavedItemsActivity : BaseWatchActivity() {
         viewModel.toggleSaved(itemId)
         showUndo(savedItem)
         com.lightningstudio.watchrss.ui.util.showAppToast(this, "已从稍后再看移除", Toast.LENGTH_SHORT)
-    }
-
-    private fun startSyncToPhone() {
-        if (!PhoneConnectionFeature.isDebugBuild) return
-        if (!allowNavigation()) return
-        startActivity(
-            PhoneConnectionActivity.createIntent(
-                context = this,
-                preferredAbility = if (viewModel.saveType == SaveType.FAVORITE) {
-                    PhoneConnectionAbility.SYNC_FAVORITES
-                } else {
-                    PhoneConnectionAbility.SYNC_WATCH_LATER
-                }
-            )
-        )
     }
 
     companion object {

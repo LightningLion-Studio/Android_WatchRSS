@@ -2,6 +2,7 @@ package com.lightningstudio.watchrss.ui.screen.rss
 
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -37,7 +38,6 @@ class SettingsScreenTest {
                 readingThemeDark = MutableStateFlow(true),
                 shareUseSystem = MutableStateFlow(false),
                 readingFontSizeSp = MutableStateFlow(14),
-                phoneConnectionEnabled = MutableStateFlow(true),
                 mediaVolumeControlEnabled = MutableStateFlow(true),
                 mediaVolumeGuardEnabled = MutableStateFlow(true),
                 mediaPlaybackStartVolumeLimitPercent = MutableStateFlow<Int?>(10),
@@ -51,7 +51,6 @@ class SettingsScreenTest {
                 onToggleReadingTheme = {},
                 onToggleShareMode = {},
                 onSelectFontSize = {},
-                onTogglePhoneConnection = {},
                 onToggleMediaVolumeControl = {},
                 onToggleMediaVolumeGuard = {},
                 onSelectMediaPlaybackStartVolumeLimit = {},
@@ -64,7 +63,6 @@ class SettingsScreenTest {
                 onOpenPerfLargeArticle = {},
                 onOpenDouyinCookieInput = {},
                 onOpenLlmConnectivity = {},
-                onOpenLlmPhoneConfig = {},
                 onOpenLlmPromptPreset = {},
                 onOpenReadAloudSettings = {},
                 onBeianClick = {}
@@ -83,7 +81,7 @@ class SettingsScreenTest {
         composeRule.onAllNodesWithText("打开视频时调整音量到6%").assertCountEquals(0)
         composeRule.onNodeWithTag(SettingsTestTags.ADVANCED_ENTRY, useUnmergedTree = true).assertExists()
         composeRule.onNodeWithTag(SettingsTestTags.OPEN_OOBE_ENTRY, useUnmergedTree = true).performScrollTo().assertExists()
-        composeRule.onNodeWithTag(SettingsTestTags.PHONE_CONNECTION_SWITCH, useUnmergedTree = true).performScrollTo().assertExists()
+        composeRule.onAllNodesWithTag(SettingsTestTags.PHONE_CONNECTION_SWITCH, useUnmergedTree = true).assertCountEquals(0)
         composeRule.onNodeWithTag(SettingsTestTags.DOUYIN_COOKIE_ENTRY, useUnmergedTree = true).performScrollTo().assertExists()
         composeRule.onNodeWithTag(SettingsTestTags.BEIAN_ENTRY, useUnmergedTree = true).performScrollTo().assertExists()
 
@@ -113,7 +111,6 @@ class SettingsScreenTest {
                 readingThemeDark = MutableStateFlow(true),
                 shareUseSystem = MutableStateFlow(false),
                 readingFontSizeSp = MutableStateFlow(14),
-                phoneConnectionEnabled = MutableStateFlow(true),
                 mediaVolumeControlEnabled = MutableStateFlow(true),
                 mediaVolumeGuardEnabled = MutableStateFlow(true),
                 mediaPlaybackStartVolumeLimitPercent = MutableStateFlow<Int?>(10),
@@ -127,7 +124,6 @@ class SettingsScreenTest {
                 onToggleReadingTheme = { themeToggleCount += 1 },
                 onToggleShareMode = {},
                 onSelectFontSize = { fontSelections += it },
-                onTogglePhoneConnection = {},
                 onToggleMediaVolumeControl = { mediaVolumeControlToggleCount += 1 },
                 onToggleMediaVolumeGuard = { mediaVolumeGuardToggleCount += 1 },
                 onSelectMediaPlaybackStartVolumeLimit = { playbackStartVolumeSelections += it },
@@ -140,7 +136,6 @@ class SettingsScreenTest {
                 onOpenPerfLargeArticle = {},
                 onOpenDouyinCookieInput = {},
                 onOpenLlmConnectivity = {},
-                onOpenLlmPhoneConfig = {},
                 onOpenLlmPromptPreset = {},
                 onOpenReadAloudSettings = {},
                 onBeianClick = {}
@@ -177,7 +172,6 @@ class SettingsScreenTest {
                 readingThemeDark = MutableStateFlow(true),
                 shareUseSystem = MutableStateFlow(false),
                 readingFontSizeSp = MutableStateFlow(14),
-                phoneConnectionEnabled = MutableStateFlow(true),
                 mediaVolumeControlEnabled = MutableStateFlow(false),
                 mediaVolumeGuardEnabled = MutableStateFlow(true),
                 mediaPlaybackStartVolumeLimitPercent = MutableStateFlow<Int?>(10),
@@ -191,7 +185,6 @@ class SettingsScreenTest {
                 onToggleReadingTheme = {},
                 onToggleShareMode = {},
                 onSelectFontSize = {},
-                onTogglePhoneConnection = {},
                 onToggleMediaVolumeControl = {},
                 onToggleMediaVolumeGuard = {},
                 onSelectMediaPlaybackStartVolumeLimit = {},
@@ -204,7 +197,6 @@ class SettingsScreenTest {
                 onOpenPerfLargeArticle = {},
                 onOpenDouyinCookieInput = {},
                 onOpenLlmConnectivity = {},
-                onOpenLlmPhoneConfig = {},
                 onOpenLlmPromptPreset = {},
                 onOpenReadAloudSettings = {},
                 onBeianClick = {}

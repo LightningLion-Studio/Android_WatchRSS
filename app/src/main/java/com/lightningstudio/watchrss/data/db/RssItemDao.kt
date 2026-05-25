@@ -117,6 +117,36 @@ interface RssItemDao {
         contentSizeBytes: Long
     )
 
+    @Query(
+        """
+        UPDATE rss_items SET
+            title = :title,
+            description = :description,
+            content = :content,
+            originalContent = :originalContent,
+            link = :link,
+            imageUrl = :imageUrl,
+            summary = :summary,
+            previewImageUrl = :previewImageUrl,
+            fetchedAt = :fetchedAt,
+            contentSizeBytes = :contentSizeBytes
+        WHERE id = :id
+        """
+    )
+    suspend fun updateSyncedArticle(
+        id: Long,
+        title: String,
+        description: String?,
+        content: String?,
+        originalContent: String?,
+        link: String?,
+        imageUrl: String?,
+        summary: String?,
+        previewImageUrl: String?,
+        fetchedAt: Long,
+        contentSizeBytes: Long
+    )
+
     @Query("SELECT COUNT(*) FROM rss_items WHERE channelId = :channelId")
     fun observeItemCount(channelId: Long): Flow<Int>
 

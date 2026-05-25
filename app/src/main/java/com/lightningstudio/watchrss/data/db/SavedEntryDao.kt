@@ -54,6 +54,19 @@ interface SavedEntryDao {
         """
     )
     fun observeSavedItems(saveType: String): Flow<List<SavedRssItem>>
+
+    @Query(
+        """
+        SELECT rss_items.*, rss_channels.title AS channelTitle,
+               saved_entries.createdAt AS savedAt, saved_entries.saveType AS saveType
+        FROM saved_entries
+        JOIN rss_items ON rss_items.id = saved_entries.itemId
+        JOIN rss_channels ON rss_channels.id = rss_items.channelId
+        WHERE saved_entries.saveType = :saveType
+        ORDER BY saved_entries.sortOrder DESC, saved_entries.createdAt DESC
+        """
+    )
+    suspend fun getSavedItems(saveType: String): List<SavedRssItem>
 }
 
 data class SavedRssItem(

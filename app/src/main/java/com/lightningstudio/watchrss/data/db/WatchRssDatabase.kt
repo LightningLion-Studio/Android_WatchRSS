@@ -11,9 +11,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         RssChannelEntity::class,
         RssItemEntity::class,
         SavedEntryEntity::class,
+        SavedSyncStateEntity::class,
         OfflineMediaEntity::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = false
 )
 @SkipQueryVerification
@@ -21,6 +22,7 @@ abstract class WatchRssDatabase : RoomDatabase() {
     abstract fun rssChannelDao(): RssChannelDao
     abstract fun rssItemDao(): RssItemDao
     abstract fun savedEntryDao(): SavedEntryDao
+    abstract fun savedSyncStateDao(): SavedSyncStateDao
     abstract fun offlineMediaDao(): OfflineMediaDao
 
     companion object {
@@ -136,6 +138,28 @@ abstract class WatchRssDatabase : RoomDatabase() {
                 database.execSQL(
                     "UPDATE saved_entries SET sortOrder = createdAt"
                 )
+            }
+        }
+
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS saved_sync_states (
+                        articleId TEXT NOT NULL,
+                        saveType TEXT NOT NULL,
+                        itemId INTEGER,
+                        url TEXT NOT NULL,
+                        saved INTEGER NOT NULL,
+                        changedAt INTEGER NOT NULL,
+                        sortOrder INTEGER NOT NULL,
+                        sourceDeviceId TEXT NOT NULL,
+                        PRIMARY KEY(articleId, saveType)
+                    )
+                    """.trimIndent()
+                )
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_saved_sync_states_itemId ON saved_sync_states(itemId)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_saved_sync_states_saveType_saved ON saved_sync_states(saveType, saved)")
             }
         }
     }

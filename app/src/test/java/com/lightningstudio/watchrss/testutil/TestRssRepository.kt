@@ -12,6 +12,8 @@ import com.lightningstudio.watchrss.data.rss.RssRepository
 import com.lightningstudio.watchrss.data.rss.SaveType
 import com.lightningstudio.watchrss.data.rss.SavedItem
 import com.lightningstudio.watchrss.data.rss.SavedState
+import com.lightningstudio.watchrss.data.rss.SyncedSavedArticle
+import com.lightningstudio.watchrss.data.rss.SyncedSavedArticleMergeStats
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -44,6 +46,8 @@ class TestRssRepository(
     val toggledWatchLaterIds = mutableListOf<Long>()
     val reorderedSavedItems = mutableListOf<Pair<SaveType, List<Long>>>()
     val syncedExternalSavedItems = mutableListOf<Triple<ExternalSavedItem, SaveType, Boolean>>()
+    val mergedSyncedSavedArticles = mutableListOf<SyncedSavedArticle>()
+    var exportedSyncedSavedArticles: List<SyncedSavedArticle> = emptyList()
     val retriedOfflineMediaIds = mutableListOf<Long>()
     var retryOfflineMediaBehavior: suspend (Long) -> Unit = {}
     val toggledLikeIds = mutableListOf<Long>()
@@ -222,6 +226,22 @@ class TestRssRepository(
                 isFavorite = saveType == SaveType.FAVORITE && saved,
                 isWatchLater = saveType == SaveType.WATCH_LATER && saved
             )
+        )
+    }
+
+    override suspend fun exportSyncedSavedArticles(deviceId: String): List<SyncedSavedArticle> {
+        return exportedSyncedSavedArticles
+    }
+
+    override suspend fun mergeSyncedSavedArticles(
+        articles: List<SyncedSavedArticle>,
+        remoteDeviceId: String,
+        localDeviceId: String
+    ): SyncedSavedArticleMergeStats {
+        mergedSyncedSavedArticles += articles
+        return SyncedSavedArticleMergeStats(
+            received = articles.size,
+            applied = articles.size
         )
     }
 

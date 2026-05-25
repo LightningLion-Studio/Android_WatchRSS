@@ -97,6 +97,55 @@ class PlayerVolumeOverlayPolicyTest {
     }
 
     @Test
+    fun applyDigitalCrownVolumeGuard_keepsCappingRoundedCapStepDuringSameSession() {
+        val first = applyDigitalCrownVolumeGuard(
+            currentVolume = 1f,
+            requestedDeltaVolume = 10f,
+            minVolume = 0,
+            maxVolume = 16,
+            guardEnabled = true,
+            sessionCapVolume = volumeForPercent(0.21f, minVolume = 0, maxVolume = 16),
+            previousState = DigitalCrownVolumeGuardState(),
+            eventUptimeMs = 1_000L
+        )
+
+        val second = applyDigitalCrownVolumeGuard(
+            currentVolume = 3f,
+            requestedDeltaVolume = 10f,
+            minVolume = 0,
+            maxVolume = 16,
+            guardEnabled = true,
+            sessionCapVolume = volumeForPercent(0.21f, minVolume = 0, maxVolume = 16),
+            previousState = first.nextState,
+            eventUptimeMs = 1_200L
+        )
+
+        assertEquals(3.36f, second.targetVolume, 0.001f)
+        assertEquals(false, second.shouldNotifyGuardTriggered)
+    }
+
+    @Test
+    fun applyDigitalCrownVolumeGuard_allowsRaiseFromRoundedCapStepAfterPause() {
+        val result = applyDigitalCrownVolumeGuard(
+            currentVolume = 3f,
+            requestedDeltaVolume = 1f,
+            minVolume = 0,
+            maxVolume = 16,
+            guardEnabled = true,
+            sessionCapVolume = volumeForPercent(0.21f, minVolume = 0, maxVolume = 16),
+            previousState = DigitalCrownVolumeGuardState(
+                sessionCapVolume = volumeForPercent(0.21f, minVolume = 0, maxVolume = 16),
+                lastEventUptimeMs = 1_000L,
+                guardNotificationShown = true
+            ),
+            eventUptimeMs = 1_700L
+        )
+
+        assertEquals(4f, result.targetVolume, 0.001f)
+        assertEquals(false, result.shouldNotifyGuardTriggered)
+    }
+
+    @Test
     fun percentVolumeHelpers_keepTargetsAboveMuteWhenPossible() {
         assertEquals(1, nearestPositiveVolumeForPercent(0.06f, minVolume = 0, maxVolume = 10))
         assertEquals(2.1f, volumeForPercent(0.21f, minVolume = 0, maxVolume = 10), 0.001f)

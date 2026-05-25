@@ -38,6 +38,7 @@ import com.lightningstudio.watchrss.data.settings.ReadAloudApiKeyStore
 import com.lightningstudio.watchrss.data.settings.SettingsRepository
 import com.lightningstudio.watchrss.data.tts.ReadAloudController
 import com.lightningstudio.watchrss.data.tts.ReadAloudSynthesisService
+import com.lightningstudio.watchrss.phoneconnection.WatchDeviceIdentity
 import com.lightningstudio.watchrss.ui.util.RssImageLoader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -66,6 +67,9 @@ interface AppContainer {
 class DefaultAppContainer(context: Context) : AppContainer {
     private val appContext = context.applicationContext
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val deviceIdentity: WatchDeviceIdentity by lazy {
+        WatchDeviceIdentity(appContext)
+    }
 
     init {
         DouyinPlaybackPreviewCache.configure(appContext)
@@ -84,7 +88,8 @@ class DefaultAppContainer(context: Context) : AppContainer {
             WatchRssDatabase.MIGRATION_5_6,
             WatchRssDatabase.MIGRATION_6_7,
             WatchRssDatabase.MIGRATION_7_8,
-            WatchRssDatabase.MIGRATION_8_9
+            WatchRssDatabase.MIGRATION_8_9,
+            WatchRssDatabase.MIGRATION_9_10
         )
             .addCallback(BuiltinChannelSeed.callback)
             .build()
@@ -186,13 +191,15 @@ class DefaultAppContainer(context: Context) : AppContainer {
             channelDao = database.rssChannelDao(),
             itemDao = database.rssItemDao(),
             savedEntryDao = database.savedEntryDao(),
+            savedSyncStateDao = database.savedSyncStateDao(),
             offlineMediaDao = database.offlineMediaDao(),
             cacheService = managedCacheService,
             appScope = appScope,
             fetchService = fetchService,
             readableService = readableService,
             parseService = parseService,
-            offlineStore = offlineStore
+            offlineStore = offlineStore,
+            deviceId = deviceIdentity.deviceId
         )
     }
 

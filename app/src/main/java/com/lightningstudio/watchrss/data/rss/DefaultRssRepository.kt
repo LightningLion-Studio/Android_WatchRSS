@@ -13,6 +13,8 @@ import com.lightningstudio.watchrss.data.db.RssItemEntity
 import com.lightningstudio.watchrss.data.db.SavedEntryDao
 import com.lightningstudio.watchrss.data.db.SavedEntryEntity
 import com.lightningstudio.watchrss.data.db.SavedRssItem
+import com.lightningstudio.watchrss.data.db.SavedSyncStateDao
+import com.lightningstudio.watchrss.data.db.SavedSyncStateEntity
 import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackPreviewCache
 import com.lightningstudio.watchrss.debug.DebugLogBuffer
 import com.lightningstudio.watchrss.debug.PerfTrace
@@ -26,19 +28,24 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.jsoup.Jsoup
+import java.net.URI
+import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 
 class DefaultRssRepository(
     private val channelDao: RssChannelDao,
     private val itemDao: RssItemDao,
     private val savedEntryDao: SavedEntryDao,
+    private val savedSyncStateDao: SavedSyncStateDao,
     private val offlineMediaDao: OfflineMediaDao,
     private val cacheService: ManagedCacheService,
     private val appScope: CoroutineScope,
     private val fetchService: RssFetchService,
     private val readableService: RssReadableService,
     private val parseService: RssParseService,
-    private val offlineStore: RssOfflineStore
+    private val offlineStore: RssOfflineStore,
+    private val deviceId: String
 ) : RssRepository {
     private val refreshJobs = ConcurrentHashMap<Long, Job>()
     private val originalContentItemJobs = ConcurrentHashMap<Long, Job>()
@@ -517,6 +524,98 @@ class DefaultRssRepository(
         toggleSaved(itemId, saveType)
     }
 
+    override suspend fun exportSyncedSavedArticles(deviceId: String): List<SyncedSavedArticle> =
+        withContext(Dispatchers.IO) {
+            val favorites = savedEntryDao.getSavedItems(SaveType.FAVORITE.name)
+            val watchLater = savedEntryDao.getSavedItems(SaveType.WATCH_LATER.name)
+            val states = savedSyncStateDao.getAll().associateBy { it.articleId to it.saveType }
+            val grouped = (favorites + watchLater).groupBy { saved ->
+                stableArticleId(saved.item.link ?: saved.item.dedupKey)
+            }
+            grouped.map { (articleId, entries) ->
+                val representative = entries.maxByOrNull { it.savedAt } ?: entries.first()
+                val favorite = entries.firstOrNull { it.saveType == SaveType.FAVORITE.name }
+                val later = entries.firstOrNull { it.saveType == SaveType.WATCH_LATER.name }
+                val favoriteState = states[articleId to SaveType.FAVORITE.name]
+                val laterState = states[articleId to SaveType.WATCH_LATER.name]
+                representative.toSyncedArticle(
+                    articleId = articleId,
+                    deviceId = deviceId,
+                    favoriteSaved = favorite != null,
+                    favoriteChangedAt = favoriteState?.changedAt ?: favorite?.savedAt ?: 0L,
+                    favoriteSortOrder = favoriteState?.sortOrder ?: favorite?.savedAt ?: 0L,
+                    watchLaterSaved = later != null,
+                    watchLaterChangedAt = laterState?.changedAt ?: later?.savedAt ?: 0L,
+                    watchLaterSortOrder = laterState?.sortOrder ?: later?.savedAt ?: 0L
+                )
+            } + states.values
+                .filter { !it.saved && it.articleId !in grouped.keys }
+                .groupBy { it.articleId }
+                .mapNotNull { (articleId, tombstones) ->
+                    val url = tombstones.firstOrNull()?.url?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                    SyncedSavedArticle(
+                        articleId = articleId,
+                        sourceDeviceId = tombstones.maxByOrNull { it.changedAt }?.sourceDeviceId ?: deviceId,
+                        url = url,
+                        title = url,
+                        siteName = hostLabel(url),
+                        excerpt = "",
+                        contentHtml = null,
+                        contentText = "",
+                        imageUrl = null,
+                        contentHash = sha256(url),
+                        importedAt = tombstones.minOf { it.changedAt },
+                        updatedAt = tombstones.maxOf { it.changedAt },
+                        favoriteSaved = false,
+                        favoriteChangedAt = tombstones.firstOrNull { it.saveType == SaveType.FAVORITE.name }?.changedAt ?: 0L,
+                        favoriteSortOrder = 0L,
+                        watchLaterSaved = false,
+                        watchLaterChangedAt = tombstones.firstOrNull { it.saveType == SaveType.WATCH_LATER.name }?.changedAt ?: 0L,
+                        watchLaterSortOrder = 0L,
+                        deleted = true,
+                        deletedAt = tombstones.maxOf { it.changedAt }
+                    )
+                }
+        }
+
+    override suspend fun mergeSyncedSavedArticles(
+        articles: List<SyncedSavedArticle>,
+        remoteDeviceId: String,
+        localDeviceId: String
+    ): SyncedSavedArticleMergeStats = withContext(Dispatchers.IO) {
+        var applied = 0
+        articles.forEach { article ->
+            val shouldMaterializeArticle = article.favoriteSaved ||
+                article.watchLaterSaved ||
+                !article.deleted
+            val itemId = if (shouldMaterializeArticle) {
+                val channel = resolvePhoneImportChannel()
+                upsertSyncedArticleItem(channel.id, article)
+            } else {
+                findSyncedArticleItemId(article.articleId)
+            }
+            if (itemId == null) {
+                if (applySyncedTombstoneState(article, SaveType.FAVORITE, remoteDeviceId, localDeviceId)) {
+                    applied += 1
+                }
+                if (applySyncedTombstoneState(article, SaveType.WATCH_LATER, remoteDeviceId, localDeviceId)) {
+                    applied += 1
+                }
+            } else {
+                if (applySyncedState(article, itemId, SaveType.FAVORITE, remoteDeviceId, localDeviceId)) {
+                    applied += 1
+                }
+                if (applySyncedState(article, itemId, SaveType.WATCH_LATER, remoteDeviceId, localDeviceId)) {
+                    applied += 1
+                }
+            }
+        }
+        SyncedSavedArticleMergeStats(
+            received = articles.size,
+            applied = applied
+        )
+    }
+
     override suspend fun retryOfflineMedia(itemId: Long) {
         withContext(Dispatchers.IO) {
             val item = itemDao.getItem(itemId) ?: return@withContext
@@ -752,17 +851,20 @@ class DefaultRssRepository(
                 ?: return@withContext Result.failure(IllegalArgumentException("内容不存在"))
             val existing = savedEntryDao.getByItemId(itemId)
             val hasType = existing.any { it.saveType == saveType.name }
+            val now = System.currentTimeMillis()
             if (hasType) {
                 savedEntryDao.delete(itemId, saveType.name)
+                upsertSavedSyncState(item, saveType, saved = false, changedAt = now, sortOrder = now)
             } else {
                 savedEntryDao.insert(
                     SavedEntryEntity(
                         itemId = itemId,
                         saveType = saveType.name,
-                        createdAt = System.currentTimeMillis(),
-                        sortOrder = System.currentTimeMillis()
+                        createdAt = now,
+                        sortOrder = now
                     )
                 )
+                upsertSavedSyncState(item, saveType, saved = true, changedAt = now, sortOrder = now)
                 runCatching { offlineStore.downloadMediaForItem(item) }
             }
             if (savedEntryDao.countByItemId(itemId) == 0) {
@@ -778,6 +880,253 @@ class DefaultRssRepository(
         if (channel.url != BuiltinChannelType.BILI.url) return
         val ids = extractBiliVideoIds(item) ?: return
         cacheService.clearBiliPreviewsForVideo(ids.aid, ids.bvid)
+    }
+
+    private suspend fun upsertSavedSyncState(
+        item: RssItemEntity,
+        saveType: SaveType,
+        saved: Boolean,
+        changedAt: Long,
+        sortOrder: Long
+    ) {
+        val url = item.link?.trim().orEmpty()
+        val articleId = stableArticleId(url.ifBlank { item.dedupKey })
+        savedSyncStateDao.upsert(
+            SavedSyncStateEntity(
+                articleId = articleId,
+                saveType = saveType.name,
+                itemId = item.id,
+                url = url,
+                saved = saved,
+                changedAt = changedAt,
+                sortOrder = sortOrder,
+                sourceDeviceId = deviceId
+            )
+        )
+    }
+
+    private fun SavedRssItem.toSyncedArticle(
+        articleId: String,
+        deviceId: String,
+        favoriteSaved: Boolean,
+        favoriteChangedAt: Long,
+        favoriteSortOrder: Long,
+        watchLaterSaved: Boolean,
+        watchLaterChangedAt: Long,
+        watchLaterSortOrder: Long
+    ): SyncedSavedArticle {
+        val contentHtml = item.originalContent?.takeIf { it.isNotBlank() }
+            ?: item.content?.takeIf { it.isNotBlank() }
+            ?: item.description?.takeIf { it.isNotBlank() }
+        val contentText = contentHtml?.let { Jsoup.parse(it).text().trim() }.orEmpty()
+        val url = item.link.orEmpty()
+        val updatedAt = maxOf(item.fetchedAt, savedAt)
+        return SyncedSavedArticle(
+            articleId = articleId,
+            sourceDeviceId = deviceId,
+            url = url,
+            title = item.title,
+            siteName = channelTitle,
+            excerpt = item.summary ?: item.description.orEmpty(),
+            contentHtml = contentHtml,
+            contentText = contentText,
+            imageUrl = item.previewImageUrl ?: item.imageUrl,
+            contentHash = sha256(contentHtml ?: contentText.ifBlank { url }),
+            importedAt = savedAt,
+            updatedAt = updatedAt,
+            favoriteSaved = favoriteSaved,
+            favoriteChangedAt = favoriteChangedAt,
+            favoriteSortOrder = favoriteSortOrder,
+            watchLaterSaved = watchLaterSaved,
+            watchLaterChangedAt = watchLaterChangedAt,
+            watchLaterSortOrder = watchLaterSortOrder,
+            deleted = false,
+            deletedAt = 0L
+        )
+    }
+
+    private suspend fun resolvePhoneImportChannel(): RssChannelEntity {
+        channelDao.getChannelByUrl(PHONE_IMPORT_CHANNEL_URL)?.let { return it }
+        val now = System.currentTimeMillis()
+        val entity = RssChannelEntity(
+            url = PHONE_IMPORT_CHANNEL_URL,
+            title = "手机导入",
+            description = "从手机同步来的网页文章",
+            imageUrl = null,
+            lastFetchedAt = now,
+            createdAt = now,
+            sortOrder = now,
+            isPinned = false,
+            useOriginalContent = true
+        )
+        val id = channelDao.insertChannel(entity)
+        return if (id > 0L) {
+            entity.copy(id = id)
+        } else {
+            channelDao.getChannelByUrl(PHONE_IMPORT_CHANNEL_URL) ?: entity
+        }
+    }
+
+    private suspend fun upsertSyncedArticleItem(
+        channelId: Long,
+        article: SyncedSavedArticle
+    ): Long {
+        val now = System.currentTimeMillis()
+        val content = article.contentHtml?.takeIf { it.isNotBlank() }
+            ?: article.contentText.takeIf { it.isNotBlank() }
+            ?: article.excerpt.takeIf { it.isNotBlank() }
+        val title = article.title.ifBlank { article.url }
+        val fetchedAt = maxOf(article.updatedAt, article.importedAt, now)
+        val entity = RssItemEntity(
+            channelId = channelId,
+            title = title,
+            description = article.excerpt.ifBlank { null },
+            content = content,
+            originalContent = content,
+            link = article.url,
+            guid = article.articleId,
+            pubDate = null,
+            imageUrl = article.imageUrl,
+            audioUrl = null,
+            videoUrl = null,
+            summary = article.excerpt.ifBlank { null },
+            previewImageUrl = article.imageUrl,
+            isRead = false,
+            isLiked = false,
+            readingProgress = 0f,
+            dedupKey = article.articleId,
+            fetchedAt = fetchedAt,
+            contentSizeBytes = estimateSyncedContentSize(title, article.excerpt, content, article.url, article.imageUrl)
+        )
+        val existing = itemDao.getItemByDedupKey(channelId, article.articleId)
+        if (existing == null) {
+            val inserted = itemDao.insertItems(listOf(entity)).firstOrNull() ?: -1L
+            if (inserted > 0L) return inserted
+            return itemDao.getItemByDedupKey(channelId, article.articleId)?.id
+                ?: error("同步文章保存失败")
+        }
+        itemDao.updateSyncedArticle(
+            id = existing.id,
+            title = entity.title,
+            description = entity.description,
+            content = entity.content,
+            originalContent = entity.originalContent,
+            link = entity.link,
+            imageUrl = entity.imageUrl,
+            summary = entity.summary,
+            previewImageUrl = entity.previewImageUrl,
+            fetchedAt = entity.fetchedAt,
+            contentSizeBytes = entity.contentSizeBytes
+        )
+        return existing.id
+    }
+
+    private suspend fun findSyncedArticleItemId(articleId: String): Long? {
+        val channel = channelDao.getChannelByUrl(PHONE_IMPORT_CHANNEL_URL) ?: return null
+        return itemDao.getItemByDedupKey(channel.id, articleId)?.id
+    }
+
+    private suspend fun applySyncedState(
+        article: SyncedSavedArticle,
+        itemId: Long,
+        saveType: SaveType,
+        remoteDeviceId: String,
+        localDeviceId: String
+    ): Boolean {
+        val remoteSaved = when (saveType) {
+            SaveType.FAVORITE -> article.favoriteSaved
+            SaveType.WATCH_LATER -> article.watchLaterSaved
+        }
+        val remoteChangedAt = when (saveType) {
+            SaveType.FAVORITE -> article.favoriteChangedAt
+            SaveType.WATCH_LATER -> article.watchLaterChangedAt
+        }
+        val remoteSortOrder = when (saveType) {
+            SaveType.FAVORITE -> article.favoriteSortOrder
+            SaveType.WATCH_LATER -> article.watchLaterSortOrder
+        }
+        if (!remoteSaved && remoteChangedAt <= 0L) return false
+        val current = savedSyncStateDao.get(article.articleId, saveType.name)
+        val currentSource = current?.sourceDeviceId ?: localDeviceId
+        val remoteNewer = current == null ||
+            remoteChangedAt > current.changedAt ||
+            (remoteChangedAt == current.changedAt && remoteDeviceId > currentSource)
+        if (!remoteNewer) return false
+
+        val existing = savedEntryDao.getByItemId(itemId)
+        val hasType = existing.any { it.saveType == saveType.name }
+        if (remoteSaved) {
+            if (hasType) {
+                savedEntryDao.updateSortOrder(itemId, saveType.name, remoteSortOrder)
+            } else {
+                savedEntryDao.insert(
+                    SavedEntryEntity(
+                        itemId = itemId,
+                        saveType = saveType.name,
+                        createdAt = remoteChangedAt,
+                        sortOrder = remoteSortOrder
+                    )
+                )
+            }
+            itemDao.getItem(itemId)?.let { item ->
+                runCatching { offlineStore.downloadMediaForItem(item) }
+            }
+        } else if (hasType) {
+            savedEntryDao.delete(itemId, saveType.name)
+            if (savedEntryDao.countByItemId(itemId) == 0) {
+                offlineStore.deleteMediaForItem(itemId)
+            }
+        }
+        savedSyncStateDao.upsert(
+            SavedSyncStateEntity(
+                articleId = article.articleId,
+                saveType = saveType.name,
+                itemId = itemId,
+                url = article.url,
+                saved = remoteSaved,
+                changedAt = remoteChangedAt,
+                sortOrder = remoteSortOrder,
+                sourceDeviceId = remoteDeviceId
+            )
+        )
+        return true
+    }
+
+    private suspend fun applySyncedTombstoneState(
+        article: SyncedSavedArticle,
+        saveType: SaveType,
+        remoteDeviceId: String,
+        localDeviceId: String
+    ): Boolean {
+        val remoteSaved = when (saveType) {
+            SaveType.FAVORITE -> article.favoriteSaved
+            SaveType.WATCH_LATER -> article.watchLaterSaved
+        }
+        if (remoteSaved) return false
+        val remoteChangedAt = when (saveType) {
+            SaveType.FAVORITE -> article.favoriteChangedAt
+            SaveType.WATCH_LATER -> article.watchLaterChangedAt
+        }
+        if (remoteChangedAt <= 0L) return false
+        val current = savedSyncStateDao.get(article.articleId, saveType.name)
+        val currentSource = current?.sourceDeviceId ?: localDeviceId
+        val remoteNewer = current == null ||
+            remoteChangedAt > current.changedAt ||
+            (remoteChangedAt == current.changedAt && remoteDeviceId > currentSource)
+        if (!remoteNewer) return false
+        savedSyncStateDao.upsert(
+            SavedSyncStateEntity(
+                articleId = article.articleId,
+                saveType = saveType.name,
+                itemId = null,
+                url = article.url,
+                saved = false,
+                changedAt = remoteChangedAt,
+                sortOrder = 0L,
+                sourceDeviceId = remoteDeviceId
+            )
+        )
+        return true
     }
 
     private fun extractBiliVideoIds(item: RssItemEntity): BiliVideoIds? {
@@ -938,6 +1287,49 @@ private data class PendingOriginalUpdate(
     val content: String,
     val contentSizeBytes: Long
 )
+
+private const val PHONE_IMPORT_CHANNEL_URL = "watchrss://phone-imports"
+
+private fun stableArticleId(value: String): String {
+    return sha256(
+        runCatching {
+            val uri = URI(normalizeUrl(value))
+            val scheme = uri.scheme.lowercase()
+            val host = uri.host.orEmpty().lowercase().removePrefix("www.")
+            val path = uri.rawPath.orEmpty().ifBlank { "/" }
+            val query = uri.rawQuery?.takeIf { it.isNotBlank() }?.let { "?$it" }.orEmpty()
+            "$scheme://$host$path$query"
+        }.getOrElse { value.trim() }
+    )
+}
+
+private fun normalizeUrl(value: String): String {
+    val trimmed = value.trim()
+    if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed
+    return "https://$trimmed"
+}
+
+private fun sha256(value: String): String {
+    val bytes = MessageDigest.getInstance("SHA-256")
+        .digest(value.toByteArray(Charsets.UTF_8))
+    return bytes.joinToString("") { "%02x".format(it) }
+}
+
+private fun hostLabel(url: String): String {
+    return runCatching { URI(normalizeUrl(url)).host.orEmpty().removePrefix("www.") }
+        .getOrDefault("")
+        .trim()
+}
+
+private fun estimateSyncedContentSize(vararg parts: String?): Long {
+    var total = 0L
+    for (part in parts) {
+        if (!part.isNullOrBlank()) {
+            total += part.toByteArray(Charsets.UTF_8).size
+        }
+    }
+    return total
+}
 
 private data class BiliVideoIds(
     val aid: Long? = null,

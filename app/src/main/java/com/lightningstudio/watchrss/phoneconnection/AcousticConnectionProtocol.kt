@@ -6,6 +6,7 @@ import org.json.JSONObject
 
 const val ACOUSTIC_KIND_PURE_SOUND = "pure_sound"
 const val ACOUSTIC_KIND_GUIDED_WIFI = "guided_wifi"
+private const val ACOUSTIC_KIND_GUIDED_WIFI_COMPACT = "g"
 
 data class PureSoundEnvelope(
     val ability: PhoneConnectionAbility,
@@ -64,26 +65,35 @@ object AcousticConnectionProtocol {
         token: String
     ): ByteArray {
         return JSONObject().apply {
-            put("kind", ACOUSTIC_KIND_GUIDED_WIFI)
-            put("ability", ability.name)
-            put("ssid", ssid)
-            put("passphrase", passphrase)
-            put("host", host)
-            put("port", port)
-            put("token", token)
+            put("k", ACOUSTIC_KIND_GUIDED_WIFI_COMPACT)
+            put("a", ability.acousticCode)
+            if (ssid.isNotBlank()) {
+                put("s", ssid)
+            }
+            if (passphrase.isNotBlank()) {
+                put("p", passphrase)
+            }
+            put("h", host)
+            put("o", port)
+            put("t", token)
         }.toString().toByteArray(Charsets.UTF_8)
     }
 
     fun parseGuidedWifi(bytes: ByteArray): GuidedWifiEnvelope {
         val json = JSONObject(bytes.toString(Charsets.UTF_8))
-        require(json.optString("kind") == ACOUSTIC_KIND_GUIDED_WIFI) { "不是声波引导 WiFi 数据" }
+        val kind = json.optString("k").ifBlank { json.optString("kind") }
+        require(kind == ACOUSTIC_KIND_GUIDED_WIFI_COMPACT || kind == ACOUSTIC_KIND_GUIDED_WIFI) {
+            "不是声波引导 WiFi 数据"
+        }
         return GuidedWifiEnvelope(
-            ability = PhoneConnectionAbility.valueOf(json.getString("ability")),
-            ssid = json.getString("ssid"),
-            passphrase = json.getString("passphrase"),
-            host = json.getString("host"),
-            port = json.getInt("port"),
-            token = json.getString("token")
+            ability = PhoneConnectionAbility.fromPayloadValue(
+                json.optString("a").ifBlank { json.getString("ability") }
+            ),
+            ssid = json.optString("s").ifBlank { json.optString("ssid") },
+            passphrase = json.optString("p").ifBlank { json.optString("passphrase") },
+            host = json.optString("h").ifBlank { json.getString("host") },
+            port = if (json.has("o")) json.getInt("o") else json.getInt("port"),
+            token = json.optString("t").ifBlank { json.getString("token") }
         )
     }
 }

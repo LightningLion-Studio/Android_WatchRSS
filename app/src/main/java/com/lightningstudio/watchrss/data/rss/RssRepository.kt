@@ -32,6 +32,12 @@ interface RssRepository {
         saveType: SaveType,
         saved: Boolean
     ): Result<SavedState>
+    suspend fun exportSyncedSavedArticles(deviceId: String): List<SyncedSavedArticle>
+    suspend fun mergeSyncedSavedArticles(
+        articles: List<SyncedSavedArticle>,
+        remoteDeviceId: String,
+        localDeviceId: String
+    ): SyncedSavedArticleMergeStats
     suspend fun retryOfflineMedia(itemId: Long)
     suspend fun toggleLike(itemId: Long): Result<Boolean>
     suspend fun markChannelRead(channelId: Long)

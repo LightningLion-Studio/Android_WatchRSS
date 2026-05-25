@@ -8,7 +8,6 @@ import androidx.activity.viewModels
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.lifecycleScope
-import com.lightningstudio.watchrss.phoneconnection.PhoneConnectionAbility
 import com.lightningstudio.watchrss.ui.screen.rss.ReadAloudSettingsScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
@@ -52,15 +51,7 @@ class ReadAloudApiSettingsActivity : BaseWatchActivity() {
                         }
                     },
                     onRunTest = viewModel::runTest,
-                    onOpenPhoneConfig = {
-                        startActivity(
-                            PhoneConnectionActivity.createIntent(
-                                context = this@ReadAloudApiSettingsActivity,
-                                preferredAbility = PhoneConnectionAbility.READ_ALOUD_CONFIG,
-                                readAloudItemId = pendingItemId
-                            )
-                        )
-                    }
+                    onOpenPhoneConfig = null
                 )
             }
         }

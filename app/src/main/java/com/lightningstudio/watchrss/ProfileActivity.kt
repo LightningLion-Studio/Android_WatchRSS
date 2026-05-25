@@ -16,7 +16,7 @@ class ProfileActivity : BaseWatchActivity() {
         setContent {
             WatchRSSTheme {
                 ProfileScreen(
-                    showPhoneConnectionEntry = PhoneConnectionFeature.isDebugBuild,
+                    showPhoneConnectionEntry = PhoneConnectionFeature.isAvailable,
                     onFavoritesClick = {
                         if (!allowNavigation()) return@ProfileScreen
                         val intent = Intent(this, SavedItemsActivity::class.java)
@@ -38,7 +38,7 @@ class ProfileActivity : BaseWatchActivity() {
                     onPhoneConnectionClick = {
                         Toast.makeText(
                             this,
-                            "您可以在App的以下各处使用手机互联功能：添加RSS源、我的收藏、稍后再看",
+                            "请在手表端打开且亮屏的情况下在与手表配对的手机端操作",
                             Toast.LENGTH_LONG
                         ).show()
                     },

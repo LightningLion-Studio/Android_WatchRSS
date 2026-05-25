@@ -57,7 +57,6 @@ import kotlin.math.roundToInt
 @Composable
 fun AddRssScreen(
     uiState: StateFlow<AddRssUiState>,
-    showRemoteInputButton: Boolean,
     onUrlChange: (String) -> Unit,
     onSubmit: () -> Unit,
     onConfirm: () -> Unit,
@@ -66,8 +65,7 @@ fun AddRssScreen(
     onOpenExisting: (RssChannel) -> Unit,
     onChannelAdded: (String?, Long) -> Unit,
     onConsumed: () -> Unit,
-    onClearError: () -> Unit,
-    onRemoteInput: () -> Unit
+    onClearError: () -> Unit
 ) {
     val state by uiState.collectAsState()
 
@@ -260,24 +258,6 @@ fun AddRssScreen(
                                         text = "+",
                                         color = actionTextColor,
                                         style = MaterialTheme.typography.titleMedium
-                                    )
-                                }
-                            } else if (showRemoteInputButton) {
-                                WatchButton(
-                                    onClick = onRemoteInput,
-                                    colors = ButtonDefaults.buttonColors(containerColor = actionColor),
-                                    shape = actionShape,
-                                    modifier = Modifier
-                                        .width(actionWidth)
-                                        .height(actionHeight)
-                                        .testTag(AddRssTestTags.REMOTE_INPUT_BUTTON)
-                                        .semantics { contentDescription = "从手机输入按钮" }
-                                ) {
-                                    Text(
-                                        text = "从手机输入",
-                                        color = actionTextColor,
-                                        style = ActionButtonTextStyle,
-                                        textAlign = TextAlign.Center
                                     )
                                 }
                             }

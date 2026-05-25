@@ -60,6 +60,7 @@ object ProfileTestTags {
 
 object PhoneConnectionTestTags {
     const val ROOT = "phone_connection/root"
+    const val BLUETOOTH_ENTRY = "phone_connection/bluetooth_entry"
     const val PURE_SOUND_ENTRY = "phone_connection/pure_sound_entry"
     const val SOUND_GUIDED_WIFI_ENTRY = "phone_connection/sound_guided_wifi_entry"
     const val MANUAL_WIFI_ENTRY = "phone_connection/manual_wifi_entry"

@@ -6,12 +6,14 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.lightningstudio.watchrss.AdvancedSettingsActivity
 import com.lightningstudio.watchrss.SettingsActivity
 import com.lightningstudio.watchrss.data.settings.CURRENT_OOBE_VERSION
 import com.lightningstudio.watchrss.testutil.FakeRssRepository
 import com.lightningstudio.watchrss.testutil.TestAppContainer
 import com.lightningstudio.watchrss.testutil.TestAppContainerRule
 import com.lightningstudio.watchrss.testutil.createTestSettingsRepository
+import com.lightningstudio.watchrss.testutil.currentResumedActivity
 import com.lightningstudio.watchrss.ui.testing.SettingsTestTags
 import com.lightningstudio.watchrss.ui.util.isSystemShareSettingSupported
 import kotlinx.coroutines.runBlocking
@@ -57,6 +59,9 @@ class SettingsActivityTest {
         composeRule.onNodeWithTag(SettingsTestTags.ADVANCED_ENTRY, useUnmergedTree = true).assertExists()
         composeRule.onNodeWithTag(SettingsTestTags.OPEN_OOBE_ENTRY, useUnmergedTree = true).performScrollTo().assertExists()
         composeRule.onNodeWithTag(SettingsTestTags.ADVANCED_ENTRY, useUnmergedTree = true).performScrollTo().performClick()
+        composeRule.waitUntil(timeoutMillis = 5_000) {
+            currentResumedActivity()?.javaClass == AdvancedSettingsActivity::class.java
+        }
         if (showSystemShareSetting) {
             composeRule.onNodeWithTag(SettingsTestTags.SHARE_SWITCH, useUnmergedTree = true).assertExists()
         }

@@ -83,7 +83,6 @@ fun SettingsScreen(
     readingThemeDark: StateFlow<Boolean>,
     shareUseSystem: StateFlow<Boolean>,
     readingFontSizeSp: StateFlow<Int>,
-    phoneConnectionEnabled: StateFlow<Boolean>,
     mediaVolumeControlEnabled: StateFlow<Boolean>,
     mediaVolumeGuardEnabled: StateFlow<Boolean>,
     mediaPlaybackStartVolumeLimitPercent: StateFlow<Int?>,
@@ -97,7 +96,6 @@ fun SettingsScreen(
     onToggleReadingTheme: () -> Unit,
     onToggleShareMode: () -> Unit,
     onSelectFontSize: (Int) -> Unit,
-    onTogglePhoneConnection: () -> Unit,
     onToggleMediaVolumeControl: () -> Unit,
     onToggleMediaVolumeGuard: () -> Unit,
     onSelectMediaPlaybackStartVolumeLimit: (Int?) -> Unit,
@@ -110,10 +108,10 @@ fun SettingsScreen(
     onOpenPerfLargeArticle: () -> Unit,
     onOpenDouyinCookieInput: () -> Unit,
     onOpenLlmConnectivity: () -> Unit,
-    onOpenLlmPhoneConfig: () -> Unit,
     onOpenLlmPromptPreset: () -> Unit,
     onOpenReadAloudSettings: () -> Unit,
-    onBeianClick: () -> Unit
+    onBeianClick: () -> Unit,
+    onOpenAdvanced: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val cacheLimit by cacheLimitMb.collectAsState()
@@ -121,7 +119,6 @@ fun SettingsScreen(
     val themeDark by readingThemeDark.collectAsState()
     val useSystemShare by shareUseSystem.collectAsState()
     val fontSizeSp by readingFontSizeSp.collectAsState()
-    val phoneConnection by phoneConnectionEnabled.collectAsState()
     val mediaVolumeControl by mediaVolumeControlEnabled.collectAsState()
     val mediaVolumeGuard by mediaVolumeGuardEnabled.collectAsState()
     val mediaPlaybackStartVolumeLimit by mediaPlaybackStartVolumeLimitPercent.collectAsState()
@@ -143,7 +140,6 @@ fun SettingsScreen(
         SettingsPage.Main -> MainSettingsPage(
             readingThemeDark = themeDark,
             readingFontSizeSp = fontSizeSp,
-            phoneConnectionEnabled = phoneConnection,
             mediaVolumeControlEnabled = mediaVolumeControl,
             mediaVolumeGuardEnabled = mediaVolumeGuard,
             mediaPlaybackStartVolumeLimitPercent = mediaPlaybackStartVolumeLimit,
@@ -154,20 +150,24 @@ fun SettingsScreen(
             showPerformanceTools = showPerformanceTools,
             onToggleReadingTheme = onToggleReadingTheme,
             onSelectFontSize = onSelectFontSize,
-            onTogglePhoneConnection = onTogglePhoneConnection,
             onToggleMediaVolumeControl = onToggleMediaVolumeControl,
             onToggleMediaVolumeGuard = onToggleMediaVolumeGuard,
             onSelectMediaPlaybackStartVolumeLimit = onSelectMediaPlaybackStartVolumeLimit,
             onToggleLlmFeatureEnabled = onToggleLlmFeatureEnabled,
             onToggleLlmAutoSummarize = onToggleLlmAutoSummarize,
             onToggleLlmShowTokenUsage = onToggleLlmShowTokenUsage,
-            onOpenAdvanced = { currentPage = SettingsPage.Advanced },
+            onOpenAdvanced = {
+                if (onOpenAdvanced != null) {
+                    onOpenAdvanced()
+                } else {
+                    currentPage = SettingsPage.Advanced
+                }
+            },
             onOpenOobe = onOpenOobe,
             onOpenPerfLargeList = onOpenPerfLargeList,
             onOpenPerfLargeArticle = onOpenPerfLargeArticle,
             onOpenDouyinCookieInput = onOpenDouyinCookieInput,
             onOpenLlmConnectivity = onOpenLlmConnectivity,
-            onOpenLlmPhoneConfig = onOpenLlmPhoneConfig,
             onOpenLlmPromptPreset = onOpenLlmPromptPreset,
             onOpenReadAloudSettings = onOpenReadAloudSettings,
             onBeianClick = onBeianClick
@@ -186,10 +186,40 @@ fun SettingsScreen(
 }
 
 @Composable
+fun AdvancedSettingsScreen(
+    cacheLimitMb: StateFlow<Long>,
+    cacheUsageMb: StateFlow<Long>,
+    shareUseSystem: StateFlow<Boolean>,
+    rssInlineImagePrefetchMode: StateFlow<RssInlineImagePrefetchMode>,
+    onSelectCacheLimit: (Long) -> Unit,
+    onToggleShareMode: () -> Unit,
+    onSelectRssInlineImagePrefetchMode: (RssInlineImagePrefetchMode) -> Unit
+) {
+    val context = LocalContext.current
+    val cacheLimit by cacheLimitMb.collectAsState()
+    val usage by cacheUsageMb.collectAsState()
+    val useSystemShare by shareUseSystem.collectAsState()
+    val imagePrefetchMode by rssInlineImagePrefetchMode.collectAsState()
+    val showSystemShareSetting = remember(context) {
+        isSystemShareSettingSupported(context)
+    }
+
+    AdvancedSettingsPage(
+        cacheLimit = cacheLimit,
+        cacheUsage = usage,
+        shareUseSystem = useSystemShare,
+        rssInlineImagePrefetchMode = imagePrefetchMode,
+        showSystemShareSetting = showSystemShareSetting,
+        onSelectCacheLimit = onSelectCacheLimit,
+        onToggleShareMode = onToggleShareMode,
+        onSelectRssInlineImagePrefetchMode = onSelectRssInlineImagePrefetchMode
+    )
+}
+
+@Composable
 private fun MainSettingsPage(
     readingThemeDark: Boolean,
     readingFontSizeSp: Int,
-    phoneConnectionEnabled: Boolean,
     mediaVolumeControlEnabled: Boolean,
     mediaVolumeGuardEnabled: Boolean,
     mediaPlaybackStartVolumeLimitPercent: Int?,
@@ -200,7 +230,6 @@ private fun MainSettingsPage(
     showPerformanceTools: Boolean,
     onToggleReadingTheme: () -> Unit,
     onSelectFontSize: (Int) -> Unit,
-    onTogglePhoneConnection: () -> Unit,
     onToggleMediaVolumeControl: () -> Unit,
     onToggleMediaVolumeGuard: () -> Unit,
     onSelectMediaPlaybackStartVolumeLimit: (Int?) -> Unit,
@@ -213,7 +242,6 @@ private fun MainSettingsPage(
     onOpenPerfLargeArticle: () -> Unit,
     onOpenDouyinCookieInput: () -> Unit,
     onOpenLlmConnectivity: () -> Unit,
-    onOpenLlmPhoneConfig: () -> Unit,
     onOpenLlmPromptPreset: () -> Unit,
     onOpenReadAloudSettings: () -> Unit,
     onBeianClick: () -> Unit
@@ -473,22 +501,6 @@ private fun MainSettingsPage(
 
                 Spacer(modifier = Modifier.height(entrySpacing))
 
-                WatchSettingsPillRow(label = "手机互联", endPaddingMultiplier = 1.5f) {
-                    WatchSwitch(
-                        checked = phoneConnectionEnabled,
-                        modifier = Modifier.testTag(SettingsTestTags.PHONE_CONNECTION_SWITCH),
-                        onCheckedChange = { onTogglePhoneConnection() }
-                    )
-                }
-                Text(
-                    text = "会在添加RSS页面和收藏及稍后再看页面显示有关手机互联的按钮",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
-                )
-
-                Spacer(modifier = Modifier.height(entrySpacing))
-
                 WatchSettingsPillRow(
                     label = "抖音登录 Cookie",
                     testTag = SettingsTestTags.DOUYIN_COOKIE_ENTRY,
@@ -524,18 +536,6 @@ private fun MainSettingsPage(
                 )
                 Text(
                     text = "配置大模型服务商与 API Key",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
-                )
-
-                Spacer(modifier = Modifier.height(entrySpacing))
-                WatchSettingsPillRow(
-                    label = "手机扫码配置大模型",
-                    onClick = onOpenLlmPhoneConfig
-                )
-                Text(
-                    text = "直接进入手机互联扫码配置，并固定为 LLM 配置能力",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = valueIndent, top = valueSpacing)

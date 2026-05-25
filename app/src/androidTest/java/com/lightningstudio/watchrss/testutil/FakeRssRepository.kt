@@ -10,6 +10,8 @@ import com.lightningstudio.watchrss.data.rss.RssRepository
 import com.lightningstudio.watchrss.data.rss.SaveType
 import com.lightningstudio.watchrss.data.rss.SavedItem
 import com.lightningstudio.watchrss.data.rss.SavedState
+import com.lightningstudio.watchrss.data.rss.SyncedSavedArticle
+import com.lightningstudio.watchrss.data.rss.SyncedSavedArticleMergeStats
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -86,6 +88,19 @@ class FakeRssRepository(
         saved: Boolean
     ): Result<SavedState> {
         return Result.success(SavedState(isFavorite = saveType == SaveType.FAVORITE && saved, isWatchLater = saveType == SaveType.WATCH_LATER && saved))
+    }
+
+    override suspend fun exportSyncedSavedArticles(deviceId: String): List<SyncedSavedArticle> = emptyList()
+
+    override suspend fun mergeSyncedSavedArticles(
+        articles: List<SyncedSavedArticle>,
+        remoteDeviceId: String,
+        localDeviceId: String
+    ): SyncedSavedArticleMergeStats {
+        return SyncedSavedArticleMergeStats(
+            received = articles.size,
+            applied = articles.size
+        )
     }
 
     override suspend fun retryOfflineMedia(itemId: Long) = Unit
