@@ -112,13 +112,21 @@ class MainActivity : BaseWatchActivity() {
             AppResumeStateStore.load(this@MainActivity)
         } ?: return false
         val component = resumeIntent.component ?: return false
-        val targetIntent = if (component.className == MainActivity::class.java.name) {
-            HomeFeedListActivity.createIntent(this@MainActivity)
-        } else {
-            resumeIntent
+        val homeIntent = HomeFeedListActivity.createIntent(
+            context = this@MainActivity,
+            launcherEntry = true
+        )
+        if (component.className == MainActivity::class.java.name ||
+            component.className == HomeFeedListActivity::class.java.name
+        ) {
+            startActivity(homeIntent)
+            return true
         }
-        startActivity(
-            targetIntent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+        startActivities(
+            arrayOf(
+                homeIntent,
+                resumeIntent
+            )
         )
         return true
     }
