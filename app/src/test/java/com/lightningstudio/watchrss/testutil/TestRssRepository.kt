@@ -12,6 +12,9 @@ import com.lightningstudio.watchrss.data.rss.RssRepository
 import com.lightningstudio.watchrss.data.rss.SaveType
 import com.lightningstudio.watchrss.data.rss.SavedItem
 import com.lightningstudio.watchrss.data.rss.SavedState
+import com.lightningstudio.watchrss.data.rss.SyncedArticleBodyRequest
+import com.lightningstudio.watchrss.data.rss.SyncedArticleManifest
+import com.lightningstudio.watchrss.data.rss.SyncedChunkedArticle
 import com.lightningstudio.watchrss.data.rss.SyncedSavedArticle
 import com.lightningstudio.watchrss.data.rss.SyncedSavedArticleMergeStats
 import com.lightningstudio.watchrss.data.rss.SyncedRssSource
@@ -49,7 +52,9 @@ class TestRssRepository(
     val reorderedSavedItems = mutableListOf<Pair<SaveType, List<Long>>>()
     val syncedExternalSavedItems = mutableListOf<Triple<ExternalSavedItem, SaveType, Boolean>>()
     val mergedSyncedSavedArticles = mutableListOf<SyncedSavedArticle>()
+    val mergedSyncedChunkedArticles = mutableListOf<SyncedChunkedArticle>()
     var exportedSyncedSavedArticles: List<SyncedSavedArticle> = emptyList()
+    var exportedSyncedArticleManifests: List<SyncedArticleManifest> = emptyList()
     val mergedSyncedRssSources = mutableListOf<SyncedRssSource>()
     var exportedSyncedRssSources: List<SyncedRssSource> = emptyList()
     val retriedOfflineMediaIds = mutableListOf<Long>()
@@ -61,6 +66,7 @@ class TestRssRepository(
     val setPinnedRequests = mutableListOf<Pair<Long, Boolean>>()
     val setOriginalContentRequests = mutableListOf<Pair<Long, Boolean>>()
     val setContinuePlaybackInBackgroundRequests = mutableListOf<Pair<Long, Boolean>>()
+    val clearedLocalContentChannelIds = mutableListOf<Long>()
     val deletedChannelIds = mutableListOf<Long>()
     var trimCacheCalls = 0
 
@@ -246,12 +252,36 @@ class TestRssRepository(
         return exportedSyncedSavedArticles
     }
 
+    override suspend fun exportSyncedArticleManifests(deviceId: String): List<SyncedArticleManifest> {
+        return exportedSyncedArticleManifests
+    }
+
+    override suspend fun exportSyncedSavedArticlesForRequests(
+        deviceId: String,
+        requests: List<SyncedArticleBodyRequest>
+    ): List<SyncedSavedArticle> {
+        val requestedIds = requests.mapTo(mutableSetOf()) { it.articleId }
+        return exportedSyncedSavedArticles.filter { it.articleId in requestedIds }
+    }
+
     override suspend fun mergeSyncedSavedArticles(
         articles: List<SyncedSavedArticle>,
         remoteDeviceId: String,
         localDeviceId: String
     ): SyncedSavedArticleMergeStats {
         mergedSyncedSavedArticles += articles
+        return SyncedSavedArticleMergeStats(
+            received = articles.size,
+            applied = articles.size
+        )
+    }
+
+    override suspend fun mergeSyncedChunkedArticles(
+        articles: List<SyncedChunkedArticle>,
+        remoteDeviceId: String,
+        localDeviceId: String
+    ): SyncedSavedArticleMergeStats {
+        mergedSyncedChunkedArticles += articles
         return SyncedSavedArticleMergeStats(
             received = articles.size,
             applied = articles.size
@@ -328,6 +358,14 @@ class TestRssRepository(
         val updated = itemsByChannelFlow.value.mapValues { (_, items) ->
             items.filterNot { it.id == itemId }
         }
+        itemsByChannelFlow.value = updated
+        rebuildItemsIndex()
+    }
+
+    override suspend fun clearLocalContentChannel(channelId: Long) {
+        clearedLocalContentChannelIds += channelId
+        val updated = itemsByChannelFlow.value.toMutableMap()
+        updated[channelId] = emptyList()
         itemsByChannelFlow.value = updated
         rebuildItemsIndex()
     }

@@ -1,7 +1,12 @@
 package com.lightningstudio.watchrss.phoneconnection.bluetooth
 
-import com.lightningstudio.watchrss.data.rss.SyncedSavedArticle
+import com.lightningstudio.watchrss.data.rss.ArticleSyncBody
+import com.lightningstudio.watchrss.data.rss.SyncedArticleBodyChunk
+import com.lightningstudio.watchrss.data.rss.SyncedArticleBodyRequest
+import com.lightningstudio.watchrss.data.rss.SyncedArticleManifest
+import com.lightningstudio.watchrss.data.rss.SyncedChunkedArticle
 import com.lightningstudio.watchrss.data.rss.SyncedRssSource
+import com.lightningstudio.watchrss.data.rss.SyncedSavedArticle
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
@@ -12,16 +17,24 @@ import java.util.zip.GZIPOutputStream
 
 data class ArticleSyncManifestEntry(
     val articleId: String,
+    val sourceDeviceId: String = "",
     val contentHash: String,
     val updatedAt: Long,
     val independentChangedAt: Long,
     val favoriteChangedAt: Long,
     val watchLaterChangedAt: Long,
-    val deletedAt: Long
+    val deletedAt: Long,
+    val deleted: Boolean = deletedAt > 0L,
+    val bodyHash: String = contentHash,
+    val bodyByteCount: Long = 0L,
+    val chunkSize: Int = 0,
+    val chunkHashes: List<String> = emptyList(),
+    val metadataHash: String = ""
 )
 
 object LibrarySyncPayload {
-    const val PROTOCOL_VERSION = 4
+    const val PROTOCOL_VERSION = 5
+    const val LEGACY_PROTOCOL_VERSION = 4
 
     fun parseArticles(payload: JSONObject): List<SyncedSavedArticle> {
         return parseArticles(payload.optJSONArray("articles") ?: JSONArray())
@@ -40,12 +53,72 @@ object LibrarySyncPayload {
                 add(
                     ArticleSyncManifestEntry(
                         articleId = articleId,
+                        sourceDeviceId = item.optString("sourceDeviceId").trim(),
                         contentHash = item.optString("contentHash").trim(),
                         updatedAt = item.optLong("updatedAt"),
                         independentChangedAt = item.optLong("independentChangedAt"),
                         favoriteChangedAt = item.optLong("favoriteChangedAt"),
                         watchLaterChangedAt = item.optLong("watchLaterChangedAt"),
-                        deletedAt = item.optLong("deletedAt")
+                        deletedAt = item.optLong("deletedAt"),
+                        deleted = item.optBoolean("deleted", item.optLong("deletedAt") > 0L),
+                        bodyHash = item.optString("bodyHash").trim().ifBlank {
+                            item.optString("contentHash").trim()
+                        },
+                        bodyByteCount = item.optLong("bodyByteCount"),
+                        chunkSize = item.optInt("chunkSize"),
+                        chunkHashes = item.optStringArray("chunkHashes"),
+                        metadataHash = item.optString("metadataHash").trim()
+                    )
+                )
+            }
+        }
+    }
+
+    fun buildBodyRequestsForRemoteArticles(
+        localManifest: List<SyncedArticleManifest>,
+        remoteManifest: List<ArticleSyncManifestEntry>
+    ): List<SyncedArticleBodyRequest> {
+        val localById = localManifest.associateBy { it.articleId }
+        return remoteManifest.mapNotNull { remote ->
+            val local = localById[remote.articleId]
+            val needsMetadata = local == null ||
+                remote.metadataHash != local.metadataHash ||
+                remote.updatedAt > local.updatedAt ||
+                remote.independentChangedAt > local.independentChangedAt ||
+                remote.favoriteChangedAt > local.favoriteChangedAt ||
+                remote.watchLaterChangedAt > local.watchLaterChangedAt ||
+                remote.deletedAt > local.deletedAt ||
+                remote.deleted != local.deleted
+            val needsBody = local == null || remote.bodyHash != local.bodyHash
+            if (!needsMetadata && !needsBody) return@mapNotNull null
+            val localHashes = local?.chunkHashes.orEmpty().toSet()
+            val chunkIndexes = if (needsBody) {
+                remote.chunkHashes.mapIndexedNotNull { index, hash ->
+                    index.takeIf { hash !in localHashes }
+                }
+            } else {
+                emptyList()
+            }
+            SyncedArticleBodyRequest(
+                articleId = remote.articleId,
+                bodyHash = remote.bodyHash,
+                chunkIndexes = chunkIndexes
+            )
+        }
+    }
+
+    fun parseBodyRequests(payload: JSONObject): List<SyncedArticleBodyRequest> {
+        val array = payload.optJSONArray("bodyRequests") ?: JSONArray()
+        return buildList {
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                val articleId = item.optString("articleId").trim()
+                if (articleId.isBlank()) continue
+                add(
+                    SyncedArticleBodyRequest(
+                        articleId = articleId,
+                        bodyHash = item.optString("bodyHash").trim(),
+                        chunkIndexes = item.optIntArray("chunkIndexes")
                     )
                 )
             }
@@ -64,7 +137,8 @@ object LibrarySyncPayload {
                 article.independentChangedAt > remote.independentChangedAt ||
                 article.favoriteChangedAt > remote.favoriteChangedAt ||
                 article.watchLaterChangedAt > remote.watchLaterChangedAt ||
-                article.deletedAt > remote.deletedAt
+                article.deletedAt > remote.deletedAt ||
+                article.deleted != remote.deleted
         }
     }
 
@@ -111,6 +185,43 @@ object LibrarySyncPayload {
                         watchLaterSortOrder = item.optLong("watchLaterSortOrder"),
                         deleted = item.optBoolean("deleted"),
                         deletedAt = item.optLong("deletedAt")
+                    )
+                )
+            }
+        }
+    }
+
+    fun parseChunkedArticles(payload: JSONObject): List<SyncedChunkedArticle> {
+        return parseChunkedArticles(payload.optJSONArray("articles") ?: JSONArray())
+    }
+
+    fun parseChunkedArticles(array: JSONArray): List<SyncedChunkedArticle> {
+        return buildList {
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                val article = parseArticles(JSONArray().put(item)).firstOrNull() ?: continue
+                val body = item.optJSONObject("body") ?: JSONObject()
+                val chunks = body.optJSONArray("chunks") ?: JSONArray()
+                add(
+                    SyncedChunkedArticle(
+                        article = article,
+                        bodyHash = body.optString("bodyHash").trim().ifBlank { article.contentHash },
+                        bodyByteCount = body.optLong("bodyByteCount"),
+                        chunkSize = body.optInt("chunkSize"),
+                        chunkHashes = body.optStringArray("chunkHashes"),
+                        chunks = buildList {
+                            for (chunkIndex in 0 until chunks.length()) {
+                                val chunk = chunks.optJSONObject(chunkIndex) ?: continue
+                                val encoded = chunk.optString("data").takeIf { it.isNotBlank() } ?: continue
+                                add(
+                                    SyncedArticleBodyChunk(
+                                        index = chunk.optInt("index"),
+                                        hash = chunk.optString("hash").trim(),
+                                        bytes = ArticleSyncBody.decodeChunkData(encoded)
+                                    )
+                                )
+                            }
+                        }
                     )
                 )
             }
@@ -195,12 +306,48 @@ object LibrarySyncPayload {
         }
     }
 
+    fun buildChunkedResponseFrames(
+        deviceId: String,
+        articles: List<SyncedSavedArticle>,
+        articleRequests: List<SyncedArticleBodyRequest>,
+        applied: Int,
+        sourcesApplied: Int = 0,
+        useBatches: Boolean
+    ): List<JSONObject> {
+        val requestById = articleRequests.associateBy { it.articleId }
+        val articleItems = articles.map { article ->
+            article.toChunkedJson(requestById[article.articleId])
+        }
+        if (!useBatches) {
+            return listOf(buildChunkedResponse(deviceId, articleItems, applied, sourcesApplied))
+        }
+        return buildArticleFrames(
+            articleItems = articleItems,
+            totalArticles = articles.size
+        ) { array, batchIndex, batchCount, totalArticles ->
+            JSONObject().apply {
+                put("success", true)
+                put("version", PROTOCOL_VERSION)
+                put("action", BluetoothSyncProtocol.ACTION_SYNC_LIBRARY)
+                put("phase", PHASE_COMPLETE)
+                put("deviceId", deviceId)
+                put("sentAt", System.currentTimeMillis())
+                put("articles", array)
+                putBatchFields(batchIndex, batchCount, totalArticles)
+                if (batchIndex == 0) {
+                    putStats(articleCount = articles.size, applied = applied, sourcesApplied = sourcesApplied)
+                }
+            }
+        }
+    }
+
     fun combineArticlePayloads(frames: List<JSONObject>): JSONObject {
         if (frames.isEmpty()) return JSONObject()
         if (frames.size == 1 && !frames.first().optBoolean("success", true)) return frames.first()
         val first = frames.first()
         val articles = JSONArray()
         val sources = JSONArray()
+        val bodyRequests = JSONArray()
         frames.forEach { frame ->
             frame.optJSONArray("articles")?.let { source ->
                 for (index in 0 until source.length()) {
@@ -210,6 +357,11 @@ object LibrarySyncPayload {
             frame.optJSONArray("rssSources")?.let { source ->
                 for (index in 0 until source.length()) {
                     source.optJSONObject(index)?.let(sources::put)
+                }
+            }
+            frame.optJSONArray("bodyRequests")?.let { source ->
+                for (index in 0 until source.length()) {
+                    source.optJSONObject(index)?.let(bodyRequests::put)
                 }
             }
         }
@@ -223,6 +375,9 @@ object LibrarySyncPayload {
             put("articles", articles)
             if (sources.length() > 0) {
                 put("rssSources", sources)
+            }
+            if (bodyRequests.length() > 0) {
+                put("bodyRequests", bodyRequests)
             }
             first.optJSONObject("stats")?.let { put("stats", it) }
             first.optString("message").takeIf { it.isNotBlank() }?.let { put("message", it) }
@@ -295,6 +450,7 @@ object LibrarySyncPayload {
             put("action", BluetoothSyncProtocol.ACTION_SYNC_LIBRARY)
             put("phase", PHASE_MANIFEST)
             put("supportsArticleBatches", true)
+            put("supportsChunkedBodies", true)
             put("deviceId", deviceId)
             put("sentAt", System.currentTimeMillis())
             put("articleManifest", articles.toManifestJsonArray())
@@ -304,6 +460,36 @@ object LibrarySyncPayload {
                 JSONObject().apply {
                     put("sourcesSent", rssSources.size)
                     put("sourcesApplied", sourcesApplied)
+                }
+            )
+        }
+    }
+
+    fun buildManifestResponseFromEntries(
+        deviceId: String,
+        articleManifest: List<SyncedArticleManifest>,
+        bodyRequests: List<SyncedArticleBodyRequest>,
+        rssSources: List<SyncedRssSource> = emptyList(),
+        sourcesApplied: Int = 0
+    ): JSONObject {
+        return JSONObject().apply {
+            put("success", true)
+            put("version", PROTOCOL_VERSION)
+            put("action", BluetoothSyncProtocol.ACTION_SYNC_LIBRARY)
+            put("phase", PHASE_MANIFEST)
+            put("supportsArticleBatches", true)
+            put("supportsChunkedBodies", true)
+            put("deviceId", deviceId)
+            put("sentAt", System.currentTimeMillis())
+            put("articleManifest", articleManifest.toEntryJsonArray())
+            put("bodyRequests", bodyRequests.toBodyRequestJsonArray())
+            put("rssSources", rssSources.toSourceJsonArray())
+            put(
+                "stats",
+                JSONObject().apply {
+                    put("sourcesSent", rssSources.size)
+                    put("sourcesApplied", sourcesApplied)
+                    put("bodyRequests", bodyRequests.size)
                 }
             )
         }
@@ -324,6 +510,12 @@ object LibrarySyncPayload {
     private fun List<SyncedSavedArticle>.toManifestJsonArray(): JSONArray {
         return JSONArray().also { array ->
             forEach { article -> array.put(article.toManifestJson()) }
+        }
+    }
+
+    private fun List<SyncedArticleManifest>.toEntryJsonArray(): JSONArray {
+        return JSONArray().also { array ->
+            forEach { entry -> array.put(entry.toJson()) }
         }
     }
 
@@ -387,12 +579,39 @@ object LibrarySyncPayload {
     private fun SyncedSavedArticle.toManifestJson(): JSONObject {
         return JSONObject().apply {
             put("articleId", articleId)
+            put("sourceDeviceId", sourceDeviceId)
             put("contentHash", contentHash)
             put("updatedAt", updatedAt)
             put("independentChangedAt", independentChangedAt)
             put("favoriteChangedAt", favoriteChangedAt)
             put("watchLaterChangedAt", watchLaterChangedAt)
             put("deletedAt", deletedAt)
+            put("deleted", deleted)
+            val metadata = ArticleSyncBody.metadataFor(this@toManifestJson)
+            put("bodyHash", metadata.bodyHash)
+            put("bodyByteCount", metadata.bodyByteCount)
+            put("chunkSize", metadata.chunkSize)
+            put("chunkHashes", JSONArray(metadata.chunkHashes))
+            put("metadataHash", metadata.metadataHash)
+        }
+    }
+
+    private fun SyncedArticleManifest.toJson(): JSONObject {
+        return JSONObject().apply {
+            put("articleId", articleId)
+            put("sourceDeviceId", sourceDeviceId)
+            put("contentHash", contentHash)
+            put("updatedAt", updatedAt)
+            put("independentChangedAt", independentChangedAt)
+            put("favoriteChangedAt", favoriteChangedAt)
+            put("watchLaterChangedAt", watchLaterChangedAt)
+            put("deletedAt", deletedAt)
+            put("deleted", deleted)
+            put("bodyHash", bodyHash)
+            put("bodyByteCount", bodyByteCount)
+            put("chunkSize", chunkSize)
+            put("chunkHashes", JSONArray(chunkHashes))
+            put("metadataHash", metadataHash)
         }
     }
 
@@ -426,6 +645,88 @@ object LibrarySyncPayload {
         }
     }
 
+    private fun SyncedSavedArticle.toChunkedJson(request: SyncedArticleBodyRequest?): JSONObject {
+        val metadata = ArticleSyncBody.metadataFor(this)
+        return toJson().apply {
+            remove("contentHtmlGzip")
+            remove("contentTextGzip")
+            put(
+                "body",
+                JSONObject().apply {
+                    put("bodyHash", metadata.bodyHash)
+                    put("bodyByteCount", metadata.bodyByteCount)
+                    put("chunkSize", metadata.chunkSize)
+                    put("chunkHashes", JSONArray(metadata.chunkHashes))
+                    put(
+                        "chunks",
+                        JSONArray().also { array ->
+                            ArticleSyncBody.chunksForRequest(
+                                article = this@toChunkedJson,
+                                request = request ?: SyncedArticleBodyRequest(
+                                    articleId = articleId,
+                                    bodyHash = metadata.bodyHash,
+                                    chunkIndexes = metadata.chunkHashes.indices.toList()
+                                )
+                            ).forEach { chunk ->
+                                array.put(
+                                    JSONObject().apply {
+                                        put("index", chunk.index)
+                                        put("hash", chunk.hash)
+                                        put("data", ArticleSyncBody.encodeChunkData(chunk.bytes))
+                                    }
+                                )
+                            }
+                        }
+                    )
+                }
+            )
+        }
+    }
+
+    private fun buildChunkedResponse(
+        deviceId: String,
+        articleItems: List<JSONObject>,
+        applied: Int,
+        sourcesApplied: Int
+    ): JSONObject {
+        return JSONObject().apply {
+            put("success", true)
+            put("version", PROTOCOL_VERSION)
+            put("action", BluetoothSyncProtocol.ACTION_SYNC_LIBRARY)
+            put("phase", PHASE_COMPLETE)
+            put("deviceId", deviceId)
+            put("sentAt", System.currentTimeMillis())
+            put("articles", articleItems.toRawJsonArray())
+            putStats(articleCount = articleItems.size, applied = applied, sourcesApplied = sourcesApplied)
+        }
+    }
+
+    private fun List<SyncedArticleBodyRequest>.toBodyRequestJsonArray(): JSONArray {
+        return JSONArray().also { array ->
+            forEach { request ->
+                array.put(
+                    JSONObject().apply {
+                        put("articleId", request.articleId)
+                        put("bodyHash", request.bodyHash)
+                        put("chunkIndexes", JSONArray(request.chunkIndexes))
+                    }
+                )
+            }
+        }
+    }
+
+    private fun JSONObject.putStats(articleCount: Int, applied: Int, sourcesApplied: Int) {
+        put(
+            "stats",
+            JSONObject().apply {
+                put("sent", articleCount)
+                put("applied", applied)
+                put("sourcesSent", 0)
+                put("sourcesApplied", sourcesApplied)
+            }
+        )
+    }
+
     private fun SyncedRssSource.toJson(): JSONObject {
         return JSONObject().apply {
             put("url", url)
@@ -451,6 +752,24 @@ object LibrarySyncPayload {
     private fun JSONObject.optCompressedString(name: String): String? {
         val encoded = optString(name).takeIf { it.isNotBlank() } ?: return null
         return runCatching { gunzip(Base64.getDecoder().decode(encoded)) }.getOrNull()
+    }
+
+    private fun JSONObject.optStringArray(name: String): List<String> {
+        val array = optJSONArray(name) ?: return emptyList()
+        return buildList {
+            for (index in 0 until array.length()) {
+                array.optString(index).trim().takeIf { it.isNotBlank() }?.let(::add)
+            }
+        }
+    }
+
+    private fun JSONObject.optIntArray(name: String): List<Int> {
+        val array = optJSONArray(name) ?: return emptyList()
+        return buildList {
+            for (index in 0 until array.length()) {
+                add(array.optInt(index))
+            }
+        }
     }
 
     private fun gzip(value: String): ByteArray {

@@ -24,6 +24,8 @@ class FeedViewModel(
     private val repository: RssRepository
 ) : ViewModel() {
     private val channelId: Long = savedStateHandle["channelId"] ?: 0L
+    private val _hasLoadedItems = MutableStateFlow(false)
+    val hasLoadedItems: StateFlow<Boolean> = _hasLoadedItems.asStateFlow()
 
     val channel = repository.observeChannel(channelId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -36,6 +38,7 @@ class FeedViewModel(
             repository.observeItemsPaged(channelId, limit)
         }
         .onEach { currentItems ->
+            _hasLoadedItems.value = true
             val firstId = currentItems.firstOrNull()?.id ?: -1L
             val lastId = currentItems.lastOrNull()?.id ?: -1L
             PerfTrace.log(

@@ -41,6 +41,8 @@ fun ChannelSettingsScreen(
     showContinuePlaybackInBackground: Boolean,
     continuePlaybackInBackgroundEnabled: Boolean,
     onToggleContinuePlaybackInBackground: () -> Unit,
+    clearEnabled: Boolean,
+    onClear: () -> Unit,
     deleteEnabled: Boolean,
     onDelete: () -> Unit
 ) {
@@ -90,6 +92,17 @@ fun ChannelSettingsScreen(
             }
 
             Spacer(modifier = Modifier.height(entrySpacing))
+
+            if (clearEnabled) {
+                SettingsDangerRow(
+                    label = "清空内容",
+                    icon = Icons.Outlined.Delete,
+                    enabled = true,
+                    onClick = onClear
+                )
+
+                Spacer(modifier = Modifier.height(entrySpacing))
+            }
 
             SettingsDangerRow(
                 label = "删除频道",

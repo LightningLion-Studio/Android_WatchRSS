@@ -1,6 +1,9 @@
 package com.lightningstudio.watchrss.phoneconnection.bluetooth
 
 import com.lightningstudio.watchrss.data.rss.SyncedSavedArticle
+import com.lightningstudio.watchrss.data.rss.ArticleSyncBody
+import com.lightningstudio.watchrss.data.rss.SyncedArticleBodyRequest
+import com.lightningstudio.watchrss.data.rss.SyncedArticleManifest
 import com.lightningstudio.watchrss.data.rss.SyncedRssSource
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -144,6 +147,74 @@ class LibrarySyncPayloadTest {
         )
     }
 
+    @Test
+    fun chunkedResponse_sendsOnlyRequestedChunksAndRebuildsBody() {
+        val chunkSize = ArticleSyncBody.CHUNK_SIZE_BYTES
+        val oldArticle = syncedArticle(
+            articleId = "article-large",
+            contentHash = "old",
+            updatedAt = 20L
+        ).copy(contentText = "A".repeat(chunkSize) + "B".repeat(chunkSize) + "C".repeat(64))
+        val newArticle = oldArticle.copy(
+            contentHash = "new",
+            contentText = "A".repeat(chunkSize) + "D".repeat(chunkSize) + "C".repeat(64),
+            updatedAt = 21L
+        )
+        val requests = LibrarySyncPayload.buildBodyRequestsForRemoteArticles(
+            localManifest = listOf(oldArticle.toManifestEntry()),
+            remoteManifest = listOf(newArticle.toRemoteManifestEntry())
+        )
+        val frames = LibrarySyncPayload.buildChunkedResponseFrames(
+            deviceId = "watch",
+            articles = listOf(newArticle),
+            articleRequests = requests,
+            applied = 0,
+            useBatches = true
+        )
+        val parsed = LibrarySyncPayload.parseChunkedArticles(
+            LibrarySyncPayload.combineArticlePayloads(frames)
+        ).single()
+        val rebuilt = ArticleSyncBody.rebuildBody(
+            localArticle = oldArticle,
+            payload = parsed,
+            localBodyHash = oldArticle.toManifestEntry().bodyHash
+        )
+
+        assertTrue(requests.single().chunkIndexes.isNotEmpty())
+        assertTrue(requests.single().chunkIndexes.size < newArticle.toRemoteManifestEntry().chunkHashes.size)
+        assertEquals(requests.single().chunkIndexes, parsed.chunks.map { it.index })
+        assertEquals(newArticle.contentText, rebuilt.second)
+    }
+
+    @Test
+    fun chunkedResponse_withMetadataOnlyRequestSendsNoChunks() {
+        val article = syncedArticle(
+            articleId = "article-1",
+            contentHash = "hash",
+            updatedAt = 20L
+        )
+        val metadata = ArticleSyncBody.metadataFor(article)
+        val frames = LibrarySyncPayload.buildChunkedResponseFrames(
+            deviceId = "watch",
+            articles = listOf(article),
+            articleRequests = listOf(
+                SyncedArticleBodyRequest(
+                    articleId = article.articleId,
+                    bodyHash = metadata.bodyHash,
+                    chunkIndexes = emptyList()
+                )
+            ),
+            applied = 0,
+            useBatches = true
+        )
+
+        val parsed = LibrarySyncPayload.parseChunkedArticles(
+            LibrarySyncPayload.combineArticlePayloads(frames)
+        ).single()
+
+        assertEquals(emptyList<Int>(), parsed.chunks.map { it.index })
+    }
+
     private fun syncedArticle(
         articleId: String,
         contentHash: String,
@@ -176,6 +247,44 @@ class LibrarySyncPayloadTest {
             watchLaterSortOrder = 0L,
             deleted = false,
             deletedAt = 0L
+        )
+    }
+
+    private fun SyncedSavedArticle.toManifestEntry(): SyncedArticleManifest {
+        val metadata = ArticleSyncBody.metadataFor(this)
+        return SyncedArticleManifest(
+            articleId = articleId,
+            sourceDeviceId = sourceDeviceId,
+            contentHash = contentHash,
+            updatedAt = updatedAt,
+            independentChangedAt = independentChangedAt,
+            favoriteChangedAt = favoriteChangedAt,
+            watchLaterChangedAt = watchLaterChangedAt,
+            deletedAt = deletedAt,
+            bodyHash = metadata.bodyHash,
+            bodyByteCount = metadata.bodyByteCount,
+            chunkSize = metadata.chunkSize,
+            chunkHashes = metadata.chunkHashes,
+            metadataHash = metadata.metadataHash
+        )
+    }
+
+    private fun SyncedSavedArticle.toRemoteManifestEntry(): ArticleSyncManifestEntry {
+        val metadata = ArticleSyncBody.metadataFor(this)
+        return ArticleSyncManifestEntry(
+            articleId = articleId,
+            sourceDeviceId = sourceDeviceId,
+            contentHash = contentHash,
+            updatedAt = updatedAt,
+            independentChangedAt = independentChangedAt,
+            favoriteChangedAt = favoriteChangedAt,
+            watchLaterChangedAt = watchLaterChangedAt,
+            deletedAt = deletedAt,
+            bodyHash = metadata.bodyHash,
+            bodyByteCount = metadata.bodyByteCount,
+            chunkSize = metadata.chunkSize,
+            chunkHashes = metadata.chunkHashes,
+            metadataHash = metadata.metadataHash
         )
     }
 }

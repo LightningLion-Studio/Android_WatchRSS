@@ -172,54 +172,107 @@ class WatchBluetoothSyncServer(
                     "sourcesApplied" to sourceStats.applied
                 )
             )
-            val outgoing = app.container.rssRepository.exportSyncedSavedArticles(localDeviceId)
+            val supportsChunkedBodies = request.optBoolean("supportsChunkedBodies", false) &&
+                request.optInt("version") >= LibrarySyncPayload.PROTOCOL_VERSION
+            val outgoingManifest = app.container.rssRepository.exportSyncedArticleManifests(localDeviceId)
             val outgoingSources = app.container.rssRepository.exportSyncedRssSources(localDeviceId)
             WatchBluetoothDebugLog.event(
                 sessionId = sessionId,
                 event = "library.local.exported",
                 fields = mapOf(
-                    "outgoingArticles" to outgoing.size,
-                    "outgoingSources" to outgoingSources.size
+                    "outgoingArticles" to outgoingManifest.size,
+                    "outgoingSources" to outgoingSources.size,
+                    "chunked" to supportsChunkedBodies
                 )
             )
-            val manifestResponse = LibrarySyncPayload.buildManifestResponse(
-                deviceId = localDeviceId,
-                articles = outgoing,
-                rssSources = outgoingSources,
-                sourcesApplied = sourceStats.applied
-            )
+            val manifestResponse = if (supportsChunkedBodies) {
+                val bodyRequests = LibrarySyncPayload.buildBodyRequestsForRemoteArticles(
+                    localManifest = outgoingManifest,
+                    remoteManifest = remoteManifest
+                )
+                LibrarySyncPayload.buildManifestResponseFromEntries(
+                    deviceId = localDeviceId,
+                    articleManifest = outgoingManifest,
+                    bodyRequests = bodyRequests,
+                    rssSources = outgoingSources,
+                    sourcesApplied = sourceStats.applied
+                )
+            } else {
+                val outgoing = app.container.rssRepository.exportSyncedSavedArticles(localDeviceId)
+                LibrarySyncPayload.buildManifestResponse(
+                    deviceId = localDeviceId,
+                    articles = outgoing,
+                    rssSources = outgoingSources,
+                    sourcesApplied = sourceStats.applied
+                )
+            }
             writeFrameLogged(client, sessionId, "manifestResponse", manifestResponse)
 
             val articleRequestFrames = readArticleRequestFrames(client, sessionId)
-            val incoming = articleRequestFrames.flatMap { LibrarySyncPayload.parseArticles(it) }
+            val combinedArticleRequest = LibrarySyncPayload.combineArticlePayloads(articleRequestFrames)
+            val incoming = if (supportsChunkedBodies) {
+                LibrarySyncPayload.parseChunkedArticles(combinedArticleRequest)
+            } else {
+                articleRequestFrames.flatMap { LibrarySyncPayload.parseArticles(it) }
+            }
             WatchBluetoothDebugLog.event(
                 sessionId = sessionId,
                 event = "library.articles.parsed",
                 fields = batchFields("articlesRequest", articleRequestFrames) +
                     mapOf("incomingArticles" to incoming.size)
             )
-            val stats = app.container.rssRepository.mergeSyncedSavedArticles(
-                articles = incoming,
-                remoteDeviceId = remoteDeviceId,
-                localDeviceId = localDeviceId
-            )
-            val outgoingDiff = LibrarySyncPayload.filterArticlesNeedingSync(outgoing, remoteManifest)
+            val stats = if (supportsChunkedBodies) {
+                app.container.rssRepository.mergeSyncedChunkedArticles(
+                    articles = incoming.filterIsInstance<com.lightningstudio.watchrss.data.rss.SyncedChunkedArticle>(),
+                    remoteDeviceId = remoteDeviceId,
+                    localDeviceId = localDeviceId
+                )
+            } else {
+                app.container.rssRepository.mergeSyncedSavedArticles(
+                    articles = incoming.filterIsInstance<com.lightningstudio.watchrss.data.rss.SyncedSavedArticle>(),
+                    remoteDeviceId = remoteDeviceId,
+                    localDeviceId = localDeviceId
+                )
+            }
+            val outgoingDiff = if (supportsChunkedBodies) {
+                emptyList()
+            } else {
+                val outgoing = app.container.rssRepository.exportSyncedSavedArticles(localDeviceId)
+                LibrarySyncPayload.filterArticlesNeedingSync(outgoing, remoteManifest)
+            }
             WatchBluetoothDebugLog.event(
                 sessionId = sessionId,
                 event = "library.articles.merged",
                 fields = mapOf(
                     "incomingArticles" to incoming.size,
                     "articlesApplied" to stats.applied,
-                    "outgoingDiff" to outgoingDiff.size
+                    "outgoingDiff" to outgoingDiff.size,
+                    "chunked" to supportsChunkedBodies
                 )
             )
-            val responseFrames = LibrarySyncPayload.buildResponseFrames(
-                deviceId = localDeviceId,
-                articles = outgoingDiff,
-                applied = stats.applied,
-                sourcesApplied = sourceStats.applied,
-                useBatches = remoteSupportsArticleBatches
-            )
+            val responseFrames = if (supportsChunkedBodies) {
+                val phoneRequests = LibrarySyncPayload.parseBodyRequests(combinedArticleRequest)
+                val outgoingArticles = app.container.rssRepository.exportSyncedSavedArticlesForRequests(
+                    deviceId = localDeviceId,
+                    requests = phoneRequests
+                )
+                LibrarySyncPayload.buildChunkedResponseFrames(
+                    deviceId = localDeviceId,
+                    articles = outgoingArticles,
+                    articleRequests = phoneRequests,
+                    applied = stats.applied,
+                    sourcesApplied = sourceStats.applied,
+                    useBatches = remoteSupportsArticleBatches
+                )
+            } else {
+                LibrarySyncPayload.buildResponseFrames(
+                    deviceId = localDeviceId,
+                    articles = outgoingDiff,
+                    applied = stats.applied,
+                    sourcesApplied = sourceStats.applied,
+                    useBatches = remoteSupportsArticleBatches
+                )
+            }
             responseFrames.forEachIndexed { index, responseFrame ->
                 writeFrameLogged(
                     client = client,
@@ -542,6 +595,7 @@ class WatchBluetoothSyncServer(
             put("${prefix}Message", payload.optString("message").ifBlank { null })
             put("${prefix}ArticleManifestCount", payload.optJSONArray("articleManifest")?.length())
             put("${prefix}ArticleCount", payload.optJSONArray("articles")?.length())
+            put("${prefix}BodyRequestCount", payload.optJSONArray("bodyRequests")?.length())
             put("${prefix}RssSourceCount", payload.optJSONArray("rssSources")?.length())
             put("${prefix}ItemCount", payload.optJSONArray("items")?.length())
             put("${prefix}Count", if (payload.has("count")) payload.optInt("count") else null)
@@ -633,7 +687,7 @@ class WatchBluetoothSyncServer(
 
     private fun JSONObject.isManifestLibrarySync(): Boolean {
         return optString("action") == BluetoothSyncProtocol.ACTION_SYNC_LIBRARY &&
-            optInt("version") >= LibrarySyncPayload.PROTOCOL_VERSION &&
+            optInt("version") >= LibrarySyncPayload.LEGACY_PROTOCOL_VERSION &&
             optString("phase") == "manifest"
     }
 

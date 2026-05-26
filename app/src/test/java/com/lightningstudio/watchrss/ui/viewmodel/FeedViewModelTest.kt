@@ -64,6 +64,19 @@ class FeedViewModelTest {
     }
 
     @Test
+    fun hasLoadedItems_becomesTrueAfterEmptyItemEmission() = runTest {
+        val repo = TestRssRepository(initialChannels = listOf(sampleRssChannel(id = 9L)))
+        val viewModel = FeedViewModel(SavedStateHandle(mapOf("channelId" to 9L)), repo)
+        val itemsCollection = collectFlow(viewModel.items)
+
+        advanceUntilIdle()
+
+        assertEquals(emptyList<Long>(), viewModel.items.value.map { it.id })
+        assertEquals(true, viewModel.hasLoadedItems.value)
+        itemsCollection.cancel()
+    }
+
+    @Test
     fun toggleSavedActions_and_getSavedState_delegateToRepository() = runTest {
         val repo = TestRssRepository(initialChannels = listOf(sampleRssChannel(id = 5L)))
         repo.setSavedState(42L, SavedState(isFavorite = true, isWatchLater = false))

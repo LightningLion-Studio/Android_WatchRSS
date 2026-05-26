@@ -34,8 +34,18 @@ interface RssRepository {
         saved: Boolean
     ): Result<SavedState>
     suspend fun exportSyncedSavedArticles(deviceId: String): List<SyncedSavedArticle>
+    suspend fun exportSyncedArticleManifests(deviceId: String): List<SyncedArticleManifest>
+    suspend fun exportSyncedSavedArticlesForRequests(
+        deviceId: String,
+        requests: List<SyncedArticleBodyRequest>
+    ): List<SyncedSavedArticle>
     suspend fun mergeSyncedSavedArticles(
         articles: List<SyncedSavedArticle>,
+        remoteDeviceId: String,
+        localDeviceId: String
+    ): SyncedSavedArticleMergeStats
+    suspend fun mergeSyncedChunkedArticles(
+        articles: List<SyncedChunkedArticle>,
         remoteDeviceId: String,
         localDeviceId: String
     ): SyncedSavedArticleMergeStats
@@ -54,6 +64,7 @@ interface RssRepository {
     suspend fun setChannelOriginalContent(channelId: Long, enabled: Boolean)
     suspend fun setChannelContinuePlaybackInBackground(channelId: Long, enabled: Boolean)
     suspend fun deleteItem(itemId: Long)
+    suspend fun clearLocalContentChannel(channelId: Long)
     suspend fun deleteChannel(channelId: Long)
     suspend fun trimCacheToLimit()
 }

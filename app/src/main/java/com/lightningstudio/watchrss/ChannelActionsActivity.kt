@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
+import com.lightningstudio.watchrss.data.rss.ImportedContentIds
 import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.screen.ActionDialogScreen
 import com.lightningstudio.watchrss.ui.screen.ActionItem
@@ -53,6 +54,9 @@ class ChannelActionsActivity : BaseWatchActivity() {
                 val pinLabel = if (channel?.isPinned == true) "取消置顶" else "置顶"
                 val isBuiltin = channel?.let { BuiltinChannelType.fromUrl(it.url) != null } ?: false
                 val canMarkRead = channel?.let { it.unreadCount > 0 && !isBuiltin } ?: false
+                val canClear = channel?.url
+                    ?.let(ImportedContentIds::isDeletableLocalContentChannel) == true
+                var showClearConfirm by remember { mutableStateOf(false) }
                 var showDeleteConfirm by remember { mutableStateOf(false) }
 
                 val items = buildList {
@@ -86,6 +90,15 @@ class ChannelActionsActivity : BaseWatchActivity() {
                             }
                         )
                     )
+                    if (canClear) {
+                        add(
+                            ActionItem(
+                                label = "清空",
+                                enabled = isValid,
+                                onClick = { showClearConfirm = true }
+                            )
+                        )
+                    }
                     if (!quick) {
                         add(
                             ActionItem(
@@ -108,6 +121,18 @@ class ChannelActionsActivity : BaseWatchActivity() {
                         items = items,
                         extraTopPadding = 4.dp
                     )
+                    if (showClearConfirm) {
+                        DeleteConfirmDialog(
+                            title = "清空内容",
+                            message = "清空后将移除这个频道内的本地条目",
+                            onConfirm = {
+                                showClearConfirm = false
+                                viewModel.clearLocalContent()
+                                finish()
+                            },
+                            onCancel = { showClearConfirm = false }
+                        )
+                    }
                     if (showDeleteConfirm) {
                         DeleteConfirmDialog(
                             title = "删除频道",

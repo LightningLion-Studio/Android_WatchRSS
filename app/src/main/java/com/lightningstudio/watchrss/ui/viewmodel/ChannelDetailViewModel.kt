@@ -38,6 +38,12 @@ class ChannelDetailViewModel(
         }
     }
 
+    fun clearLocalContent() {
+        viewModelScope.launch {
+            repository.clearLocalContentChannel(channelId)
+        }
+    }
+
     fun setOriginalContentEnabled(enabled: Boolean) {
         viewModelScope.launch {
             repository.setChannelOriginalContent(channelId, enabled)

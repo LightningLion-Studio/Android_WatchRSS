@@ -54,6 +54,7 @@ class FeedActivity : BaseWatchActivity() {
                 val context = LocalContext.current
                 val channel by viewModel.channel.collectAsState()
                 val items by viewModel.items.collectAsState()
+                val hasLoadedItems by viewModel.hasLoadedItems.collectAsState()
                 val isRefreshing by viewModel.isRefreshing.collectAsState()
                 val hasMore by viewModel.hasMore.collectAsState()
                 val message by viewModel.message.collectAsState()
@@ -74,6 +75,7 @@ class FeedActivity : BaseWatchActivity() {
                     FeedScreen(
                         channel = channel,
                         items = items,
+                        hasLoadedItems = hasLoadedItems,
                         isRefreshing = isRefreshing,
                         hasMore = hasMore,
                         openSwipeId = openSwipeKey,

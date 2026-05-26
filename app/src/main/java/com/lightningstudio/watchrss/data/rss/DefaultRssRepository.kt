@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jsoup.Jsoup
+import org.json.JSONArray
 import java.net.URI
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
@@ -566,8 +567,11 @@ class DefaultRssRepository(
                 deviceId = deviceId,
                 excludedArticleIds = savedArticleIds + independentArticles.map { it.articleId }
             )
+            val activeArticleIds = savedArticleIds +
+                independentArticles.map { it.articleId } +
+                importedContentArticles.map { it.articleId }
             savedArticles + independentArticles + importedContentArticles + states.values
-                .filter { !it.saved && it.articleId !in grouped.keys }
+                .filter { !it.saved && it.articleId !in activeArticleIds }
                 .groupBy { it.articleId }
                 .mapNotNull { (articleId, tombstones) ->
                     val url = tombstones.firstOrNull()?.url?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
@@ -604,12 +608,97 @@ class DefaultRssRepository(
                 }
         }
 
+    override suspend fun exportSyncedArticleManifests(deviceId: String): List<SyncedArticleManifest> =
+        withContext(Dispatchers.IO) {
+            val lightweight = exportLightweightSyncedArticleManifests(deviceId)
+            if (lightweight.all { it.bodyHash.isNotBlank() && it.chunkSize == ArticleSyncBody.CHUNK_SIZE_BYTES && it.chunkHashes.isNotEmpty() }) {
+                return@withContext lightweight
+            }
+            exportSyncedSavedArticles(deviceId)
+                .onEach { article -> persistSyncedArticleMetadata(article) }
+                .map { article ->
+                    val metadata = ArticleSyncBody.metadataFor(article)
+                    article.toManifest(metadata)
+                }
+        }
+
+    override suspend fun exportSyncedSavedArticlesForRequests(
+        deviceId: String,
+        requests: List<SyncedArticleBodyRequest>
+    ): List<SyncedSavedArticle> = withContext(Dispatchers.IO) {
+        val requestedIds = requests.mapTo(mutableSetOf()) { it.articleId }
+        if (requestedIds.isEmpty()) return@withContext emptyList()
+        exportSyncedSavedArticles(deviceId)
+            .filter { it.articleId in requestedIds }
+            .onEach { article -> persistSyncedArticleMetadata(article) }
+    }
+
     override suspend fun exportSyncedRssSources(deviceId: String): List<SyncedRssSource> =
         withContext(Dispatchers.IO) {
             channelDao.getAllChannels()
                 .filter { it.isSyncedRssSource() }
                 .map { channel -> channel.toSyncedRssSource(deviceId) }
         }
+
+    private suspend fun exportLightweightSyncedArticleManifests(deviceId: String): List<SyncedArticleManifest> {
+        val favorites = savedEntryDao.getSavedItemsForSyncManifest(SaveType.FAVORITE.name)
+        val watchLater = savedEntryDao.getSavedItemsForSyncManifest(SaveType.WATCH_LATER.name)
+        val states = savedSyncStateDao.getAll().associateBy { it.articleId to it.saveType }
+        val grouped = (favorites + watchLater).groupBy { saved ->
+            stableArticleId(saved.item.link ?: saved.item.dedupKey)
+        }
+        val savedManifests = grouped.map { (articleId, entries) ->
+            val representative = entries.maxByOrNull { it.savedAt } ?: entries.first()
+            val favorite = entries.firstOrNull { it.saveType == SaveType.FAVORITE.name }
+            val later = entries.firstOrNull { it.saveType == SaveType.WATCH_LATER.name }
+            val favoriteState = states[articleId to SaveType.FAVORITE.name]
+            val laterState = states[articleId to SaveType.WATCH_LATER.name]
+            representative.toSyncedArticleManifest(
+                articleId = articleId,
+                deviceId = deviceId,
+                favoriteSaved = favorite != null,
+                favoriteChangedAt = favoriteState?.changedAt ?: favorite?.savedAt ?: 0L,
+                favoriteSortOrder = favoriteState?.sortOrder ?: favorite?.savedAt ?: 0L,
+                watchLaterSaved = later != null,
+                watchLaterChangedAt = laterState?.changedAt ?: later?.savedAt ?: 0L,
+                watchLaterSortOrder = laterState?.sortOrder ?: later?.savedAt ?: 0L
+            )
+        }
+        val savedArticleIds = savedManifests.mapTo(mutableSetOf()) { it.articleId }
+        val independentManifests = exportLightweightIndependentArticleManifests(deviceId, savedArticleIds)
+        val importedContentManifests = exportLightweightImportedContentArticleManifests(
+            deviceId = deviceId,
+            excludedArticleIds = savedArticleIds + independentManifests.map { it.articleId }
+        )
+        val activeArticleIds = savedArticleIds +
+            independentManifests.map { it.articleId } +
+            importedContentManifests.map { it.articleId }
+        val tombstones = states.values
+            .filter { !it.saved && it.articleId !in activeArticleIds }
+            .groupBy { it.articleId }
+            .mapNotNull { (articleId, articleStates) ->
+                val url = articleStates.firstOrNull()?.url?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                val articleDelete = articleStates
+                    .filter { it.saveType == ARTICLE_DELETE_SYNC_TYPE }
+                    .maxByOrNull { it.changedAt }
+                SyncedArticleManifest(
+                    articleId = articleId,
+                    sourceDeviceId = articleStates.maxByOrNull { it.changedAt }?.sourceDeviceId ?: deviceId,
+                    contentHash = sha256(url),
+                    updatedAt = articleStates.maxOf { it.changedAt },
+                    independentChangedAt = articleDelete?.changedAt ?: 0L,
+                    favoriteChangedAt = articleStates.firstOrNull { it.saveType == SaveType.FAVORITE.name }?.changedAt ?: 0L,
+                    watchLaterChangedAt = articleStates.firstOrNull { it.saveType == SaveType.WATCH_LATER.name }?.changedAt ?: 0L,
+                    deletedAt = articleDelete?.changedAt ?: articleStates.maxOf { it.changedAt },
+                    bodyHash = sha256(url),
+                    bodyByteCount = 0L,
+                    chunkSize = 0,
+                    chunkHashes = emptyList(),
+                    metadataHash = sha256(url)
+                )
+            }
+        return savedManifests + independentManifests + importedContentManifests + tombstones
+    }
 
     override suspend fun mergeSyncedRssSources(
         sources: List<SyncedRssSource>,
@@ -722,6 +811,41 @@ class DefaultRssRepository(
         )
     }
 
+    override suspend fun mergeSyncedChunkedArticles(
+        articles: List<SyncedChunkedArticle>,
+        remoteDeviceId: String,
+        localDeviceId: String
+    ): SyncedSavedArticleMergeStats = withContext(Dispatchers.IO) {
+        val rebuilt = articles.map { payload ->
+            val localItemId = findSyncedArticleItemId(payload.article)
+            val localItem = localItemId?.let { itemDao.getItem(it)?.hydrateExternalContent() }
+            val localArticle = localItem?.let { item ->
+                item.toSyncedChannelArticle(
+                    articleId = payload.article.articleId,
+                    channel = resolveSyncedArticleChannel(payload.article),
+                    deviceId = localDeviceId,
+                    independentSaved = payload.article.independentSaved,
+                    rssSourceUrl = payload.article.rssSourceUrl,
+                    rssSourceTitle = payload.article.rssSourceTitle
+                )
+            }
+            val (contentHtml, contentText) = ArticleSyncBody.rebuildBody(
+                localArticle = localArticle,
+                payload = payload,
+                localBodyHash = localItem?.syncBodyHash.orEmpty()
+            )
+            payload.article.copy(
+                contentHtml = contentHtml,
+                contentText = contentText
+            )
+        }
+        mergeSyncedSavedArticles(
+            articles = rebuilt,
+            remoteDeviceId = remoteDeviceId,
+            localDeviceId = localDeviceId
+        )
+    }
+
     override suspend fun retryOfflineMedia(itemId: Long) {
         withContext(Dispatchers.IO) {
             val item = itemDao.getItem(itemId) ?: return@withContext
@@ -817,6 +941,52 @@ class DefaultRssRepository(
             }
             offlineStore.deleteMediaForItem(itemId)
             itemDao.deleteItem(itemId)
+        }
+    }
+
+    override suspend fun clearLocalContentChannel(channelId: Long) {
+        withContext(Dispatchers.IO) {
+            val channel = channelDao.getChannel(channelId) ?: return@withContext
+            if (!ImportedContentIds.isDeletableLocalContentChannel(channel.url)) return@withContext
+            val items = itemDao.getItemsForChannelSync(channelId, Int.MAX_VALUE)
+            if (items.isEmpty()) return@withContext
+            val now = System.currentTimeMillis()
+            val tombstones = items.flatMapIndexed { index, item ->
+                val changedAt = now + index
+                val url = item.link?.takeIf { it.isNotBlank() } ?: item.dedupKey
+                val articleId = stableArticleId(url.ifBlank { item.dedupKey })
+                buildList {
+                    add(
+                        SavedSyncStateEntity(
+                            articleId = articleId,
+                            saveType = ARTICLE_DELETE_SYNC_TYPE,
+                            itemId = null,
+                            url = url,
+                            saved = false,
+                            changedAt = changedAt,
+                            sortOrder = 0L,
+                            sourceDeviceId = deviceId
+                        )
+                    )
+                    savedEntryDao.getByItemId(item.id).forEach { entry ->
+                        add(
+                            SavedSyncStateEntity(
+                                articleId = articleId,
+                                saveType = entry.saveType,
+                                itemId = null,
+                                url = url,
+                                saved = false,
+                                changedAt = changedAt,
+                                sortOrder = 0L,
+                                sourceDeviceId = deviceId
+                            )
+                        )
+                    }
+                }
+            }
+            savedSyncStateDao.upsertAll(tombstones)
+            offlineStore.deleteMediaForChannel(channelId)
+            itemDao.deleteByChannel(channelId)
         }
     }
 
@@ -1107,6 +1277,50 @@ class DefaultRssRepository(
         )
     }
 
+    private fun SavedRssItem.toSyncedArticleManifest(
+        articleId: String,
+        deviceId: String,
+        favoriteSaved: Boolean,
+        favoriteChangedAt: Long,
+        favoriteSortOrder: Long,
+        watchLaterSaved: Boolean,
+        watchLaterChangedAt: Long,
+        watchLaterSortOrder: Long
+    ): SyncedArticleManifest {
+        val url = item.link.orEmpty()
+        val updatedAt = maxOf(item.fetchedAt, savedAt)
+        val rssSourceUrl = channelUrl.takeIf { it.isSyncedRssSourceUrl() }
+        val independentSaved = channelUrl == PHONE_IMPORT_CHANNEL_URL
+        val article = SyncedSavedArticle(
+            articleId = articleId,
+            sourceDeviceId = deviceId,
+            url = url,
+            title = item.title,
+            siteName = channelTitle,
+            excerpt = item.summary ?: item.description.orEmpty(),
+            contentHtml = null,
+            contentText = "",
+            imageUrl = item.previewImageUrl ?: item.imageUrl,
+            contentHash = item.syncBodyHash.ifBlank { sha256(url) },
+            importedAt = savedAt,
+            updatedAt = updatedAt,
+            independentSaved = independentSaved,
+            independentChangedAt = if (independentSaved) savedAt else 0L,
+            independentSortOrder = if (independentSaved) savedAt else 0L,
+            rssSourceUrl = rssSourceUrl,
+            rssSourceTitle = rssSourceUrl?.let { channelTitle },
+            favoriteSaved = favoriteSaved,
+            favoriteChangedAt = favoriteChangedAt,
+            favoriteSortOrder = favoriteSortOrder,
+            watchLaterSaved = watchLaterSaved,
+            watchLaterChangedAt = watchLaterChangedAt,
+            watchLaterSortOrder = watchLaterSortOrder,
+            deleted = false,
+            deletedAt = 0L
+        )
+        return article.toManifestFromItem(item)
+    }
+
     private suspend fun exportSyncedIndependentArticles(
         deviceId: String,
         excludedArticleIds: Set<String>
@@ -1118,6 +1332,28 @@ class DefaultRssRepository(
                 null
             } else {
                 item.toSyncedChannelArticle(
+                    articleId = articleId,
+                    channel = channel,
+                    deviceId = deviceId,
+                    independentSaved = true,
+                    rssSourceUrl = null,
+                    rssSourceTitle = null
+                )
+            }
+        }
+    }
+
+    private suspend fun exportLightweightIndependentArticleManifests(
+        deviceId: String,
+        excludedArticleIds: Set<String>
+    ): List<SyncedArticleManifest> {
+        val channel = channelDao.getChannelByUrl(PHONE_IMPORT_CHANNEL_URL) ?: return emptyList()
+        return itemDao.getItemsForChannelSyncManifest(channel.id, Int.MAX_VALUE).mapNotNull { item ->
+            val articleId = stableArticleId(item.link ?: item.dedupKey)
+            if (articleId in excludedArticleIds) {
+                null
+            } else {
+                item.toSyncedChannelArticleManifest(
                     articleId = articleId,
                     channel = channel,
                     deviceId = deviceId,
@@ -1142,6 +1378,31 @@ class DefaultRssRepository(
                         null
                     } else {
                         item.toSyncedChannelArticle(
+                            articleId = articleId,
+                            channel = channel,
+                            deviceId = deviceId,
+                            independentSaved = false,
+                            rssSourceUrl = channel.url,
+                            rssSourceTitle = channel.title
+                        )
+                    }
+                }
+            }
+    }
+
+    private suspend fun exportLightweightImportedContentArticleManifests(
+        deviceId: String,
+        excludedArticleIds: Set<String>
+    ): List<SyncedArticleManifest> {
+        return channelDao.getAllChannels()
+            .filter { it.isImportedContentChannel() }
+            .flatMap { channel ->
+                itemDao.getItemsForChannelSyncManifest(channel.id, Int.MAX_VALUE).mapNotNull { item ->
+                    val articleId = stableArticleId(item.link ?: item.dedupKey)
+                    if (articleId in excludedArticleIds) {
+                        null
+                    } else {
+                        item.toSyncedChannelArticleManifest(
                             articleId = articleId,
                             channel = channel,
                             deviceId = deviceId,
@@ -1195,6 +1456,45 @@ class DefaultRssRepository(
             deleted = false,
             deletedAt = 0L
         )
+    }
+
+    private fun RssItemEntity.toSyncedChannelArticleManifest(
+        articleId: String,
+        channel: RssChannelEntity,
+        deviceId: String,
+        independentSaved: Boolean,
+        rssSourceUrl: String?,
+        rssSourceTitle: String?
+    ): SyncedArticleManifest {
+        val url = link.orEmpty().ifBlank { dedupKey }
+        val article = SyncedSavedArticle(
+            articleId = articleId,
+            sourceDeviceId = deviceId,
+            url = url,
+            title = title.ifBlank { url },
+            siteName = channel.title,
+            excerpt = summary ?: description.orEmpty(),
+            contentHtml = null,
+            contentText = "",
+            imageUrl = previewImageUrl ?: imageUrl,
+            contentHash = syncBodyHash.ifBlank { sha256(url) },
+            importedAt = fetchedAt,
+            updatedAt = fetchedAt,
+            independentSaved = independentSaved,
+            independentChangedAt = if (independentSaved) fetchedAt else 0L,
+            independentSortOrder = if (independentSaved) fetchedAt else 0L,
+            rssSourceUrl = rssSourceUrl,
+            rssSourceTitle = rssSourceTitle,
+            favoriteSaved = false,
+            favoriteChangedAt = 0L,
+            favoriteSortOrder = 0L,
+            watchLaterSaved = false,
+            watchLaterChangedAt = 0L,
+            watchLaterSortOrder = 0L,
+            deleted = false,
+            deletedAt = 0L
+        )
+        return article.toManifestFromItem(this)
     }
 
     private suspend fun resolveSyncedArticleChannel(article: SyncedSavedArticle): RssChannelEntity {
@@ -1291,12 +1591,12 @@ class DefaultRssRepository(
         channelId: Long,
         article: SyncedSavedArticle
     ): Long {
-        val now = System.currentTimeMillis()
         val content = article.contentHtml?.takeIf { it.isNotBlank() }
             ?: article.contentText.takeIf { it.isNotBlank() }
             ?: article.excerpt.takeIf { it.isNotBlank() }
         val title = article.title.ifBlank { article.url }
-        val fetchedAt = maxOf(article.updatedAt, article.importedAt, now)
+        val fetchedAt = syncedArticleFetchedAt(article, fallbackNow = System.currentTimeMillis())
+        val syncMetadata = ArticleSyncBody.metadataFor(article)
         val entity = RssItemEntity(
             channelId = channelId,
             title = title,
@@ -1316,7 +1616,12 @@ class DefaultRssRepository(
             readingProgress = 0f,
             dedupKey = article.articleId,
             fetchedAt = fetchedAt,
-            contentSizeBytes = estimateSyncedContentSize(title, article.excerpt, content, article.url, article.imageUrl)
+            contentSizeBytes = estimateSyncedContentSize(title, article.excerpt, content, article.url, article.imageUrl),
+            syncBodyHash = syncMetadata.bodyHash,
+            syncBodyByteCount = syncMetadata.bodyByteCount,
+            syncChunkSize = syncMetadata.chunkSize,
+            syncChunkHashesJson = syncMetadata.chunkHashes.toJsonString(),
+            syncMetadataHash = syncMetadata.metadataHash
         ).externalizeLargeContent()
         val existing = itemDao.getItemByDedupKey(channelId, article.articleId)
         if (existing == null) {
@@ -1336,9 +1641,64 @@ class DefaultRssRepository(
             summary = entity.summary,
             previewImageUrl = entity.previewImageUrl,
             fetchedAt = entity.fetchedAt,
-            contentSizeBytes = entity.contentSizeBytes
+            contentSizeBytes = entity.contentSizeBytes,
+            syncBodyHash = entity.syncBodyHash,
+            syncBodyByteCount = entity.syncBodyByteCount,
+            syncChunkSize = entity.syncChunkSize,
+            syncChunkHashesJson = entity.syncChunkHashesJson,
+            syncMetadataHash = entity.syncMetadataHash
         )
         return existing.id
+    }
+
+    private suspend fun persistSyncedArticleMetadata(article: SyncedSavedArticle) {
+        val itemId = findSyncedArticleItemId(article) ?: return
+        val metadata = ArticleSyncBody.metadataFor(article)
+        itemDao.updateSyncMetadata(
+            id = itemId,
+            syncBodyHash = metadata.bodyHash,
+            syncBodyByteCount = metadata.bodyByteCount,
+            syncChunkSize = metadata.chunkSize,
+            syncChunkHashesJson = metadata.chunkHashes.toJsonString(),
+            syncMetadataHash = metadata.metadataHash
+        )
+    }
+
+    private fun SyncedSavedArticle.toManifest(metadata: ArticleBodyMetadata): SyncedArticleManifest {
+        return SyncedArticleManifest(
+            articleId = articleId,
+            sourceDeviceId = sourceDeviceId,
+            contentHash = contentHash,
+            updatedAt = updatedAt,
+            independentChangedAt = independentChangedAt,
+            favoriteChangedAt = favoriteChangedAt,
+            watchLaterChangedAt = watchLaterChangedAt,
+            deletedAt = deletedAt,
+            bodyHash = metadata.bodyHash,
+            bodyByteCount = metadata.bodyByteCount,
+            chunkSize = metadata.chunkSize,
+            chunkHashes = metadata.chunkHashes,
+            metadataHash = metadata.metadataHash
+        )
+    }
+
+    private fun SyncedSavedArticle.toManifestFromItem(item: RssItemEntity): SyncedArticleManifest {
+        val metadataHash = ArticleSyncBody.metadataHashFor(this)
+        return SyncedArticleManifest(
+            articleId = articleId,
+            sourceDeviceId = sourceDeviceId,
+            contentHash = contentHash,
+            updatedAt = updatedAt,
+            independentChangedAt = independentChangedAt,
+            favoriteChangedAt = favoriteChangedAt,
+            watchLaterChangedAt = watchLaterChangedAt,
+            deletedAt = deletedAt,
+            bodyHash = item.syncBodyHash,
+            bodyByteCount = item.syncBodyByteCount,
+            chunkSize = item.syncChunkSize,
+            chunkHashes = item.syncChunkHashesJson.toStringList(),
+            metadataHash = metadataHash
+        )
     }
 
     private suspend fun findSyncedArticleItemId(article: SyncedSavedArticle): Long? {
@@ -1767,6 +2127,12 @@ private fun stableArticleId(value: String): String {
     )
 }
 
+internal fun syncedArticleFetchedAt(article: SyncedSavedArticle, fallbackNow: Long): Long {
+    return maxOf(article.updatedAt, article.importedAt)
+        .takeIf { it > 0L }
+        ?: fallbackNow
+}
+
 private fun normalizeUrl(value: String): String {
     val trimmed = value.trim()
     if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) return trimmed
@@ -1793,6 +2159,22 @@ private fun estimateSyncedContentSize(vararg parts: String?): Long {
         }
     }
     return total
+}
+
+private fun List<String>.toJsonString(): String {
+    return JSONArray().also { array ->
+        forEach(array::put)
+    }.toString()
+}
+
+private fun String.toStringList(): List<String> {
+    if (isBlank()) return emptyList()
+    val array = runCatching { JSONArray(this) }.getOrNull() ?: return emptyList()
+    return buildList {
+        for (index in 0 until array.length()) {
+            array.optString(index).trim().takeIf { it.isNotBlank() }?.let(::add)
+        }
+    }
 }
 
 private data class BiliVideoIds(
