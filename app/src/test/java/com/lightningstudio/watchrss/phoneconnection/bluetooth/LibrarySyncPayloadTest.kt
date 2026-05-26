@@ -215,6 +215,46 @@ class LibrarySyncPayloadTest {
         assertEquals(emptyList<Int>(), parsed.chunks.map { it.index })
     }
 
+    @Test
+    fun chunkedResponse_splitsHugeArticleAcrossFramesAndRebuildsBody() {
+        val article = syncedArticle(
+            articleId = "article-huge",
+            contentHash = "hash",
+            updatedAt = 20L
+        ).copy(
+            contentText = pseudoRandomText(
+                seed = 42,
+                length = BluetoothSyncProtocol.MAX_FRAME_BYTES + ArticleSyncBody.CHUNK_SIZE_BYTES
+            )
+        )
+        val metadata = ArticleSyncBody.metadataFor(article)
+
+        val frames = LibrarySyncPayload.buildChunkedResponseFrames(
+            deviceId = "watch",
+            articles = listOf(article),
+            articleRequests = listOf(
+                SyncedArticleBodyRequest(
+                    articleId = article.articleId,
+                    bodyHash = metadata.bodyHash,
+                    chunkIndexes = metadata.chunkHashes.indices.toList()
+                )
+            ),
+            applied = 0,
+            useBatches = true
+        )
+        val combined = LibrarySyncPayload.combineArticlePayloads(frames)
+        val parsed = LibrarySyncPayload.parseChunkedArticles(combined).single()
+        val rebuilt = ArticleSyncBody.rebuildBody(
+            localArticle = null,
+            payload = parsed,
+            localBodyHash = ""
+        )
+
+        assertTrue(frames.size > 1)
+        assertTrue(frames.all { BluetoothSyncProtocol.encodedSize(it) <= BluetoothSyncProtocol.MAX_FRAME_BYTES })
+        assertEquals(article.contentText, rebuilt.second)
+    }
+
     private fun syncedArticle(
         articleId: String,
         contentHash: String,
@@ -248,6 +288,16 @@ class LibrarySyncPayloadTest {
             deleted = false,
             deletedAt = 0L
         )
+    }
+
+    private fun pseudoRandomText(seed: Int, length: Int): String {
+        var value = seed
+        return buildString(length) {
+            repeat(length) {
+                value = value * 1103515245 + 12345
+                append((33 + ((value ushr 16) % 90)).toChar())
+            }
+        }
     }
 
     private fun SyncedSavedArticle.toManifestEntry(): SyncedArticleManifest {
