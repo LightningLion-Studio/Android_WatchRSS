@@ -610,10 +610,6 @@ class DefaultRssRepository(
 
     override suspend fun exportSyncedArticleManifests(deviceId: String): List<SyncedArticleManifest> =
         withContext(Dispatchers.IO) {
-            val lightweight = exportLightweightSyncedArticleManifests(deviceId)
-            if (lightweight.all { it.bodyHash.isNotBlank() && it.chunkSize == ArticleSyncBody.CHUNK_SIZE_BYTES && it.chunkHashes.isNotEmpty() }) {
-                return@withContext lightweight
-            }
             exportSyncedSavedArticles(deviceId)
                 .onEach { article -> persistSyncedArticleMetadata(article) }
                 .map { article ->
@@ -709,6 +705,7 @@ class DefaultRssRepository(
         sources.forEach { source ->
             val normalizedUrl = normalizeUrl(source.url)
             if (!isValidUrl(normalizedUrl)) return@forEach
+            if (ImportedContentIds.isImportedContentUrl(normalizedUrl)) return@forEach
             val existing = channelDao.getChannelByUrl(normalizedUrl)
             if (source.deleted) {
                 if (existing != null) {
@@ -829,11 +826,15 @@ class DefaultRssRepository(
                     rssSourceTitle = payload.article.rssSourceTitle
                 )
             }
-            val (contentHtml, contentText) = ArticleSyncBody.rebuildBody(
-                localArticle = localArticle,
-                payload = payload,
-                localBodyHash = localItem?.syncBodyHash.orEmpty()
-            )
+            val (contentHtml, contentText) = if (payload.article.deleted) {
+                localArticle?.contentHtml to localArticle?.contentText.orEmpty()
+            } else {
+                ArticleSyncBody.rebuildBody(
+                    localArticle = localArticle,
+                    payload = payload,
+                    localBodyHash = localItem?.syncBodyHash.orEmpty()
+                )
+            }
             payload.article.copy(
                 contentHtml = contentHtml,
                 contentText = contentText
@@ -1245,7 +1246,7 @@ class DefaultRssRepository(
             ?: fullItem.description?.takeIf { it.isNotBlank() }
         val contentText = contentHtml?.let { Jsoup.parse(it).text().trim() }.orEmpty()
         val url = fullItem.link.orEmpty()
-        val updatedAt = maxOf(fullItem.fetchedAt, savedAt)
+        val updatedAt = maxOf(fullItem.fetchedAt, savedAt, favoriteChangedAt, watchLaterChangedAt)
         val rssSourceUrl = channelUrl.takeIf { it.isSyncedRssSourceUrl() }
         val independentSaved = channelUrl == PHONE_IMPORT_CHANNEL_URL
         return SyncedSavedArticle(
@@ -1288,7 +1289,7 @@ class DefaultRssRepository(
         watchLaterSortOrder: Long
     ): SyncedArticleManifest {
         val url = item.link.orEmpty()
-        val updatedAt = maxOf(item.fetchedAt, savedAt)
+        val updatedAt = maxOf(item.fetchedAt, savedAt, favoriteChangedAt, watchLaterChangedAt)
         val rssSourceUrl = channelUrl.takeIf { it.isSyncedRssSourceUrl() }
         val independentSaved = channelUrl == PHONE_IMPORT_CHANNEL_URL
         val article = SyncedSavedArticle(
@@ -2081,7 +2082,7 @@ private const val ARTICLE_DELETE_SYNC_TYPE = "ARTICLE_DELETE"
 private const val MAX_INLINE_CONTENT_CHARS = 100_000
 
 private fun RssChannelEntity.isSyncedRssSource(): Boolean {
-    return url.isSyncedRssSourceUrl()
+    return url.isSyncedRssSourceUrl() && !isImportedContentChannel()
 }
 
 private fun RssChannelEntity.isImportedContentChannel(): Boolean {
