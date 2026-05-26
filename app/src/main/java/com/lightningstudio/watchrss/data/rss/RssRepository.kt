@@ -53,6 +53,7 @@ interface RssRepository {
     suspend fun setChannelPinned(channelId: Long, pinned: Boolean)
     suspend fun setChannelOriginalContent(channelId: Long, enabled: Boolean)
     suspend fun setChannelContinuePlaybackInBackground(channelId: Long, enabled: Boolean)
+    suspend fun deleteItem(itemId: Long)
     suspend fun deleteChannel(channelId: Long)
     suspend fun trimCacheToLimit()
 }

@@ -110,6 +110,9 @@ interface RssItemDao {
     @Query("UPDATE rss_items SET readingProgress = :progress WHERE id = :id")
     suspend fun updateReadingProgress(id: Long, progress: Float)
 
+    @Query("DELETE FROM rss_items WHERE id = :id")
+    suspend fun deleteItem(id: Long)
+
     @Query(
         """
         UPDATE rss_items SET

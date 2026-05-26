@@ -140,6 +140,7 @@ object LibrarySyncPayload {
                         createdAt = item.optLong("createdAt"),
                         updatedAt = item.optLong("updatedAt"),
                         sortOrder = item.optLong("sortOrder"),
+                        isPinned = item.optBoolean("isPinned"),
                         deleted = item.optBoolean("deleted"),
                         deletedAt = item.optLong("deletedAt")
                     )
@@ -436,6 +437,7 @@ object LibrarySyncPayload {
             put("createdAt", createdAt)
             put("updatedAt", updatedAt)
             put("sortOrder", sortOrder)
+            put("isPinned", isPinned)
             put("deleted", deleted)
             put("deletedAt", deletedAt)
         }

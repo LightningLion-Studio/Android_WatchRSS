@@ -324,6 +324,14 @@ class TestRssRepository(
         }
     }
 
+    override suspend fun deleteItem(itemId: Long) {
+        val updated = itemsByChannelFlow.value.mapValues { (_, items) ->
+            items.filterNot { it.id == itemId }
+        }
+        itemsByChannelFlow.value = updated
+        rebuildItemsIndex()
+    }
+
     override suspend fun deleteChannel(channelId: Long) {
         deletedChannelIds += channelId
         channelsFlow.value = channelsFlow.value.filterNot { it.id == channelId }

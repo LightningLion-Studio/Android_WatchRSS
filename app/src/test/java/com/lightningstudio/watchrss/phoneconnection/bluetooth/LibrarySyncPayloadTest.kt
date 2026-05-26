@@ -47,6 +47,7 @@ class LibrarySyncPayloadTest {
             createdAt = 1L,
             updatedAt = 2L,
             sortOrder = 2L,
+            isPinned = true,
             deleted = false,
             deletedAt = 0L
         )
@@ -66,6 +67,7 @@ class LibrarySyncPayloadTest {
         assertTrue(parsed.independentSaved)
         assertEquals(article.rssSourceUrl, parsed.rssSourceUrl)
         assertEquals(source.title, parsedSource.title)
+        assertEquals(source.isPinned, parsedSource.isPinned)
         assertTrue(parsed.watchLaterSaved)
         assertEquals(1, response.getJSONObject("stats").getInt("applied"))
         assertEquals(1, response.getJSONObject("stats").getInt("sourcesApplied"))
@@ -90,6 +92,7 @@ class LibrarySyncPayloadTest {
             createdAt = 1L,
             updatedAt = 2L,
             sortOrder = 2L,
+            isPinned = true,
             deleted = false,
             deletedAt = 0L
         )
@@ -108,6 +111,7 @@ class LibrarySyncPayloadTest {
         assertEquals(article.contentHash, manifest.contentHash)
         assertEquals(article.favoriteChangedAt, manifest.favoriteChangedAt)
         assertEquals(source.title, parsedSource.title)
+        assertEquals(source.isPinned, parsedSource.isPinned)
         assertEquals("manifest", response.getString("phase"))
     }
 

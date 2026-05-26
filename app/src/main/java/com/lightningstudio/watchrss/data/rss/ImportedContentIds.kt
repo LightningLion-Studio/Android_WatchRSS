@@ -2,8 +2,18 @@ package com.lightningstudio.watchrss.data.rss
 
 object ImportedContentIds {
     const val ROOT_SOURCE_URL = "https://watchrss.local/import-content"
+    const val PHONE_IMPORT_CHANNEL_URL = "watchrss://phone-imports"
+    const val PHONE_IMPORT_CHANNEL_TITLE = "独立文章"
 
     fun isImportedContentUrl(url: String?): Boolean {
-        return url?.trim()?.lowercase()?.startsWith(ROOT_SOURCE_URL) == true
+        val normalized = url?.trim()?.lowercase() ?: return false
+        return normalized.startsWith(ROOT_SOURCE_URL) ||
+            normalized == PHONE_IMPORT_CHANNEL_URL
+    }
+
+    fun isDeletableLocalContentChannel(url: String?): Boolean {
+        val normalized = url?.trim()?.lowercase() ?: return false
+        return normalized.startsWith(ROOT_SOURCE_URL) ||
+            normalized == PHONE_IMPORT_CHANNEL_URL
     }
 }

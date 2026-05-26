@@ -43,6 +43,7 @@ data class SyncedRssSource(
     val createdAt: Long,
     val updatedAt: Long,
     val sortOrder: Long,
+    val isPinned: Boolean = false,
     val deleted: Boolean,
     val deletedAt: Long
 )

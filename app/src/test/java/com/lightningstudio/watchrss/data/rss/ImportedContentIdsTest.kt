@@ -9,7 +9,7 @@ class ImportedContentIdsTest {
     fun isImportedContentUrl_matchesOnlyReservedImportPrefix() {
         assertTrue(ImportedContentIds.isImportedContentUrl("https://watchrss.local/import-content"))
         assertTrue(ImportedContentIds.isImportedContentUrl("https://watchrss.local/import-content/epub/book"))
+        assertTrue(ImportedContentIds.isImportedContentUrl("watchrss://phone-imports"))
         assertFalse(ImportedContentIds.isImportedContentUrl("https://example.com/feed.xml"))
-        assertFalse(ImportedContentIds.isImportedContentUrl("watchrss://phone-imports"))
     }
 }

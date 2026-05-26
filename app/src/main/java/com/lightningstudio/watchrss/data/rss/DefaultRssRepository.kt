@@ -571,6 +571,9 @@ class DefaultRssRepository(
                 .groupBy { it.articleId }
                 .mapNotNull { (articleId, tombstones) ->
                     val url = tombstones.firstOrNull()?.url?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                    val articleDelete = tombstones
+                        .filter { it.saveType == ARTICLE_DELETE_SYNC_TYPE }
+                        .maxByOrNull { it.changedAt }
                     SyncedSavedArticle(
                         articleId = articleId,
                         sourceDeviceId = tombstones.maxByOrNull { it.changedAt }?.sourceDeviceId ?: deviceId,
@@ -585,7 +588,7 @@ class DefaultRssRepository(
                         importedAt = tombstones.minOf { it.changedAt },
                         updatedAt = tombstones.maxOf { it.changedAt },
                         independentSaved = false,
-                        independentChangedAt = 0L,
+                        independentChangedAt = articleDelete?.changedAt ?: 0L,
                         independentSortOrder = 0L,
                         rssSourceUrl = null,
                         rssSourceTitle = null,
@@ -595,8 +598,8 @@ class DefaultRssRepository(
                         watchLaterSaved = false,
                         watchLaterChangedAt = tombstones.firstOrNull { it.saveType == SaveType.WATCH_LATER.name }?.changedAt ?: 0L,
                         watchLaterSortOrder = 0L,
-                        deleted = true,
-                        deletedAt = tombstones.maxOf { it.changedAt }
+                        deleted = articleDelete != null,
+                        deletedAt = articleDelete?.changedAt ?: tombstones.maxOf { it.changedAt }
                     )
                 }
         }
@@ -644,7 +647,7 @@ class DefaultRssRepository(
                 lastFetchedAt = existing?.lastFetchedAt,
                 createdAt = existing?.createdAt ?: source.createdAt.takeIf { it > 0L } ?: now,
                 sortOrder = source.sortOrder.takeIf { it > 0L } ?: remoteUpdatedAt.takeIf { it > 0L } ?: now,
-                isPinned = existing?.isPinned ?: false,
+                isPinned = source.isPinned,
                 useOriginalContent = existing?.useOriginalContent ?: false,
                 continuePlaybackInBackground = existing?.continuePlaybackInBackground ?: false
             )
@@ -673,6 +676,20 @@ class DefaultRssRepository(
     ): SyncedSavedArticleMergeStats = withContext(Dispatchers.IO) {
         var applied = 0
         articles.forEach { article ->
+            if (article.deleted) {
+                val itemId = findSyncedArticleItemId(article)
+                var changed = applySyncedArticleDeletion(article, itemId, remoteDeviceId, localDeviceId)
+                if (applySyncedTombstoneState(article, SaveType.FAVORITE, remoteDeviceId, localDeviceId)) {
+                    changed = true
+                }
+                if (applySyncedTombstoneState(article, SaveType.WATCH_LATER, remoteDeviceId, localDeviceId)) {
+                    changed = true
+                }
+                if (changed) {
+                    applied += 1
+                }
+                return@forEach
+            }
             val shouldMaterializeArticle = article.favoriteSaved ||
                 article.watchLaterSaved ||
                 article.independentSaved ||
@@ -760,6 +777,46 @@ class DefaultRssRepository(
             val channel = channelDao.getChannel(channelId) ?: return@withContext
             if (channel.continuePlaybackInBackground == enabled) return@withContext
             channelDao.updateChannel(channel.copy(continuePlaybackInBackground = enabled))
+        }
+    }
+
+    override suspend fun deleteItem(itemId: Long) {
+        withContext(Dispatchers.IO) {
+            val item = itemDao.getItem(itemId) ?: return@withContext
+            val channel = channelDao.getChannel(item.channelId) ?: return@withContext
+            val now = System.currentTimeMillis()
+            val articleId = stableArticleId(item.link ?: item.dedupKey)
+            val url = item.link?.takeIf { it.isNotBlank() } ?: item.dedupKey
+            if (ImportedContentIds.isDeletableLocalContentChannel(channel.url)) {
+                savedSyncStateDao.upsert(
+                    SavedSyncStateEntity(
+                        articleId = articleId,
+                        saveType = ARTICLE_DELETE_SYNC_TYPE,
+                        itemId = null,
+                        url = url,
+                        saved = false,
+                        changedAt = now,
+                        sortOrder = 0L,
+                        sourceDeviceId = deviceId
+                    )
+                )
+            }
+            savedEntryDao.getByItemId(itemId).forEach { entry ->
+                savedSyncStateDao.upsert(
+                    SavedSyncStateEntity(
+                        articleId = articleId,
+                        saveType = entry.saveType,
+                        itemId = null,
+                        url = url,
+                        saved = false,
+                        changedAt = now,
+                        sortOrder = 0L,
+                        sourceDeviceId = deviceId
+                    )
+                )
+            }
+            offlineStore.deleteMediaForItem(itemId)
+            itemDao.deleteItem(itemId)
         }
     }
 
@@ -1397,6 +1454,53 @@ class DefaultRssRepository(
         return true
     }
 
+    private suspend fun applySyncedArticleDeletion(
+        article: SyncedSavedArticle,
+        itemId: Long?,
+        remoteDeviceId: String,
+        localDeviceId: String
+    ): Boolean {
+        if (!article.deleted || article.deletedAt <= 0L) return false
+        val current = savedSyncStateDao.get(article.articleId, ARTICLE_DELETE_SYNC_TYPE)
+        val currentSource = current?.sourceDeviceId ?: localDeviceId
+        val remoteNewer = current == null ||
+            article.deletedAt > current.changedAt ||
+            (article.deletedAt == current.changedAt && remoteDeviceId > currentSource)
+        if (!remoteNewer) return false
+
+        if (itemId != null) {
+            savedEntryDao.getByItemId(itemId).forEach { entry ->
+                savedSyncStateDao.upsert(
+                    SavedSyncStateEntity(
+                        articleId = article.articleId,
+                        saveType = entry.saveType,
+                        itemId = null,
+                        url = article.url,
+                        saved = false,
+                        changedAt = article.deletedAt,
+                        sortOrder = 0L,
+                        sourceDeviceId = remoteDeviceId
+                    )
+                )
+            }
+            offlineStore.deleteMediaForItem(itemId)
+            itemDao.deleteItem(itemId)
+        }
+        savedSyncStateDao.upsert(
+            SavedSyncStateEntity(
+                articleId = article.articleId,
+                saveType = ARTICLE_DELETE_SYNC_TYPE,
+                itemId = null,
+                url = article.url,
+                saved = false,
+                changedAt = article.deletedAt,
+                sortOrder = 0L,
+                sourceDeviceId = remoteDeviceId
+            )
+        )
+        return true
+    }
+
     private fun extractBiliVideoIds(item: RssItemEntity): BiliVideoIds? {
         parseBiliGuid(item.guid)?.let { return it }
         return parseBiliLink(item.link)
@@ -1610,9 +1714,10 @@ private data class PendingOriginalUpdate(
     val contentSizeBytes: Long
 )
 
-private const val PHONE_IMPORT_CHANNEL_URL = "watchrss://phone-imports"
-private const val PHONE_IMPORT_CHANNEL_TITLE = "独立文章"
+private const val PHONE_IMPORT_CHANNEL_URL = ImportedContentIds.PHONE_IMPORT_CHANNEL_URL
+private const val PHONE_IMPORT_CHANNEL_TITLE = ImportedContentIds.PHONE_IMPORT_CHANNEL_TITLE
 private const val PHONE_IMPORT_CHANNEL_DESCRIPTION = "从手机同步来的独立网页文章"
+private const val ARTICLE_DELETE_SYNC_TYPE = "ARTICLE_DELETE"
 private const val MAX_INLINE_CONTENT_CHARS = 100_000
 
 private fun RssChannelEntity.isSyncedRssSource(): Boolean {
@@ -1643,6 +1748,7 @@ private fun RssChannelEntity.toSyncedRssSource(deviceId: String): SyncedRssSourc
         createdAt = createdAt,
         updatedAt = syncUpdatedAt(),
         sortOrder = sortOrder,
+        isPinned = isPinned,
         deleted = false,
         deletedAt = 0L
     )
