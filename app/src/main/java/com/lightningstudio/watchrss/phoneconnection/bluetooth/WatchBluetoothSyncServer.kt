@@ -58,8 +58,13 @@ class WatchBluetoothSyncServer(
                 Log.i(TAG, "accepted from name=$remoteName address=$remoteAddress")
                 onClientAccepted?.invoke()
                 val request = BluetoothSyncProtocol.readFrame(client.inputStream)
-                val response = handleRequest(request)
-                BluetoothSyncProtocol.writeFrame(client.outputStream, response)
+                val response = if (request.isManifestLibrarySync()) {
+                    handleLibraryManifestExchange(client, request)
+                } else {
+                    handleRequest(request).also { response ->
+                        BluetoothSyncProtocol.writeFrame(client.outputStream, response)
+                    }
+                }
                 waitForResponseAck(client)
                 BluetoothSyncResult(
                     remoteName = remoteName,
@@ -67,6 +72,67 @@ class WatchBluetoothSyncServer(
                     request = request,
                     response = response
                 )
+            }
+        }
+    }
+
+    private suspend fun handleLibraryManifestExchange(
+        client: BluetoothSocket,
+        request: JSONObject
+    ): JSONObject {
+        return runCatching {
+            if (allowedActions != null && BluetoothSyncProtocol.ACTION_SYNC_LIBRARY !in allowedActions) {
+                error("当前前台自动同步只支持资料库同步，请在手表上打开对应连接页面")
+            }
+            val app = context.applicationContext as WatchRssApplication
+            val localDeviceId = WatchDeviceIdentity(context).deviceId
+            val remoteDeviceId = request.optString("deviceId").ifBlank { "phone" }
+            val remoteManifest = LibrarySyncPayload.parseArticleManifest(request)
+            val incomingSources = LibrarySyncPayload.parseRssSources(request)
+            val sourceStats = app.container.rssRepository.mergeSyncedRssSources(
+                sources = incomingSources,
+                remoteDeviceId = remoteDeviceId,
+                localDeviceId = localDeviceId
+            )
+            val outgoing = app.container.rssRepository.exportSyncedSavedArticles(localDeviceId)
+            val outgoingSources = app.container.rssRepository.exportSyncedRssSources(localDeviceId)
+            val manifestResponse = LibrarySyncPayload.buildManifestResponse(
+                deviceId = localDeviceId,
+                articles = outgoing,
+                rssSources = outgoingSources,
+                sourcesApplied = sourceStats.applied
+            )
+            BluetoothSyncProtocol.writeFrame(client.outputStream, manifestResponse)
+
+            val articlesRequest = BluetoothSyncProtocol.readFrame(client.inputStream)
+            val incoming = LibrarySyncPayload.parseArticles(articlesRequest)
+            val stats = app.container.rssRepository.mergeSyncedSavedArticles(
+                articles = incoming,
+                remoteDeviceId = remoteDeviceId,
+                localDeviceId = localDeviceId
+            )
+            val outgoingDiff = LibrarySyncPayload.filterArticlesNeedingSync(outgoing, remoteManifest)
+            val response = LibrarySyncPayload.buildResponse(
+                deviceId = localDeviceId,
+                articles = outgoingDiff,
+                applied = stats.applied,
+                sourcesApplied = sourceStats.applied
+            )
+            BluetoothSyncProtocol.writeFrame(client.outputStream, response)
+            Log.i(
+                TAG,
+                "library manifest exchange complete incoming=${incoming.size} outgoing=${outgoingDiff.size} sources=${outgoingSources.size}"
+            )
+            response
+        }.getOrElse { throwable ->
+            Log.e(TAG, "handle manifest library exchange failed request=$request", throwable)
+            JSONObject().apply {
+                put("success", false)
+                put("message", throwable.message.orEmpty())
+            }.also { errorResponse ->
+                runCatching {
+                    BluetoothSyncProtocol.writeFrame(client.outputStream, errorResponse)
+                }
             }
         }
     }
@@ -136,6 +202,12 @@ class WatchBluetoothSyncServer(
                     val app = context.applicationContext as WatchRssApplication
                     val localDeviceId = WatchDeviceIdentity(context).deviceId
                     val remoteDeviceId = request.optString("deviceId").ifBlank { "phone" }
+                    val incomingSources = LibrarySyncPayload.parseRssSources(request)
+                    val sourceStats = app.container.rssRepository.mergeSyncedRssSources(
+                        sources = incomingSources,
+                        remoteDeviceId = remoteDeviceId,
+                        localDeviceId = localDeviceId
+                    )
                     val incoming = LibrarySyncPayload.parseArticles(request)
                     val stats = app.container.rssRepository.mergeSyncedSavedArticles(
                         articles = incoming,
@@ -143,10 +215,13 @@ class WatchBluetoothSyncServer(
                         localDeviceId = localDeviceId
                     )
                     val outgoing = app.container.rssRepository.exportSyncedSavedArticles(localDeviceId)
+                    val outgoingSources = app.container.rssRepository.exportSyncedRssSources(localDeviceId)
                     LibrarySyncPayload.buildResponse(
                         deviceId = localDeviceId,
                         articles = outgoing,
-                        applied = stats.applied
+                        applied = stats.applied,
+                        rssSources = outgoingSources,
+                        sourcesApplied = sourceStats.applied
                     )
                 }
 
@@ -206,6 +281,12 @@ class WatchBluetoothSyncServer(
             Manifest.permission.BLUETOOTH_CONNECT
         ) == PackageManager.PERMISSION_GRANTED
         require(granted) { "缺少 BLUETOOTH_CONNECT 权限" }
+    }
+
+    private fun JSONObject.isManifestLibrarySync(): Boolean {
+        return optString("action") == BluetoothSyncProtocol.ACTION_SYNC_LIBRARY &&
+            optInt("version") >= LibrarySyncPayload.PROTOCOL_VERSION &&
+            optString("phase") == "manifest"
     }
 
     companion object {

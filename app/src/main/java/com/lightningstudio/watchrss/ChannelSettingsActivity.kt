@@ -44,6 +44,10 @@ class ChannelSettingsActivity : BaseWatchActivity() {
                 val isBuiltin = channel?.let { BuiltinChannelType.fromUrl(it.url) != null } ?: false
                 val showOriginalContent = channel != null && !isBuiltin
                 val originalContentEnabled = channel?.useOriginalContent ?: false
+                val hasPlayableMedia by viewModel.hasPlayableMedia.collectAsState()
+                val showContinuePlaybackInBackground = channel != null && !isBuiltin && hasPlayableMedia
+                val continuePlaybackInBackgroundEnabled =
+                    channel?.continuePlaybackInBackground ?: false
                 val deleteEnabled = channel != null
                 var showDeleteConfirm by remember { mutableStateOf(false) }
 
@@ -54,6 +58,15 @@ class ChannelSettingsActivity : BaseWatchActivity() {
                         onToggleOriginalContent = {
                             if (showOriginalContent) {
                                 viewModel.setOriginalContentEnabled(!originalContentEnabled)
+                            }
+                        },
+                        showContinuePlaybackInBackground = showContinuePlaybackInBackground,
+                        continuePlaybackInBackgroundEnabled = continuePlaybackInBackgroundEnabled,
+                        onToggleContinuePlaybackInBackground = {
+                            if (showContinuePlaybackInBackground) {
+                                viewModel.setContinuePlaybackInBackgroundEnabled(
+                                    !continuePlaybackInBackgroundEnabled
+                                )
                             }
                         },
                         deleteEnabled = deleteEnabled,

@@ -187,7 +187,7 @@ internal fun openImagePreview(context: Context, url: String, alt: String?) {
     context.startActivity(ImagePreviewActivity.createIntent(context, trimmed, alt))
 }
 
-internal fun openRssVideo(context: Context, playUrl: String, webUrl: String?) {
+internal fun openRssVideo(context: Context, playUrl: String, webUrl: String?, channelId: Long = 0L) {
     val trimmed = playUrl.trim()
     if (trimmed.isEmpty()) return
     val trimmedWebUrl = webUrl?.trim()?.takeIf { it.isNotEmpty() }
@@ -197,7 +197,8 @@ internal fun openRssVideo(context: Context, playUrl: String, webUrl: String?) {
             context = context,
             playUrl = trimmed,
             webUrl = trimmedWebUrl,
-            awemeId = awemeId
+            awemeId = awemeId,
+            channelId = channelId
         )
     )
 }

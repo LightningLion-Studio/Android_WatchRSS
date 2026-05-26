@@ -1,6 +1,7 @@
 package com.lightningstudio.watchrss.phoneconnection.bluetooth
 
 import com.lightningstudio.watchrss.data.rss.SyncedSavedArticle
+import com.lightningstudio.watchrss.data.rss.SyncedRssSource
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
@@ -9,11 +10,62 @@ import java.util.Base64
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
 
+data class ArticleSyncManifestEntry(
+    val articleId: String,
+    val contentHash: String,
+    val updatedAt: Long,
+    val independentChangedAt: Long,
+    val favoriteChangedAt: Long,
+    val watchLaterChangedAt: Long,
+    val deletedAt: Long
+)
+
 object LibrarySyncPayload {
-    const val PROTOCOL_VERSION = 2
+    const val PROTOCOL_VERSION = 4
 
     fun parseArticles(payload: JSONObject): List<SyncedSavedArticle> {
         return parseArticles(payload.optJSONArray("articles") ?: JSONArray())
+    }
+
+    fun parseArticleManifest(payload: JSONObject): List<ArticleSyncManifestEntry> {
+        return parseArticleManifest(payload.optJSONArray("articleManifest") ?: JSONArray())
+    }
+
+    fun parseArticleManifest(array: JSONArray): List<ArticleSyncManifestEntry> {
+        return buildList {
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                val articleId = item.optString("articleId").trim()
+                if (articleId.isBlank()) continue
+                add(
+                    ArticleSyncManifestEntry(
+                        articleId = articleId,
+                        contentHash = item.optString("contentHash").trim(),
+                        updatedAt = item.optLong("updatedAt"),
+                        independentChangedAt = item.optLong("independentChangedAt"),
+                        favoriteChangedAt = item.optLong("favoriteChangedAt"),
+                        watchLaterChangedAt = item.optLong("watchLaterChangedAt"),
+                        deletedAt = item.optLong("deletedAt")
+                    )
+                )
+            }
+        }
+    }
+
+    fun filterArticlesNeedingSync(
+        localArticles: List<SyncedSavedArticle>,
+        remoteManifest: List<ArticleSyncManifestEntry>
+    ): List<SyncedSavedArticle> {
+        val remoteById = remoteManifest.associateBy { it.articleId }
+        return localArticles.filter { article ->
+            val remote = remoteById[article.articleId] ?: return@filter true
+            article.contentHash != remote.contentHash ||
+                article.updatedAt > remote.updatedAt ||
+                article.independentChangedAt > remote.independentChangedAt ||
+                article.favoriteChangedAt > remote.favoriteChangedAt ||
+                article.watchLaterChangedAt > remote.watchLaterChangedAt ||
+                article.deletedAt > remote.deletedAt
+        }
     }
 
     fun parseArticles(array: JSONArray): List<SyncedSavedArticle> {
@@ -23,6 +75,7 @@ object LibrarySyncPayload {
                 val articleId = item.optString("articleId").trim()
                 val url = item.optString("url").trim()
                 if (articleId.isBlank() || url.isBlank()) continue
+                val rssSourceUrl = item.optString("rssSourceUrl").trim().ifBlank { null }
                 add(
                     SyncedSavedArticle(
                         articleId = articleId,
@@ -39,6 +92,17 @@ object LibrarySyncPayload {
                         contentHash = item.optString("contentHash").trim(),
                         importedAt = item.optLong("importedAt"),
                         updatedAt = item.optLong("updatedAt"),
+                        independentSaved = item.optBoolean(
+                            "independentSaved",
+                            !item.optBoolean("favoriteSaved") &&
+                                !item.optBoolean("watchLaterSaved") &&
+                                !item.optBoolean("deleted") &&
+                                rssSourceUrl.isNullOrBlank()
+                        ),
+                        independentChangedAt = item.optLong("independentChangedAt"),
+                        independentSortOrder = item.optLong("independentSortOrder"),
+                        rssSourceUrl = rssSourceUrl,
+                        rssSourceTitle = item.optString("rssSourceTitle").trim().ifBlank { null },
                         favoriteSaved = item.optBoolean("favoriteSaved"),
                         favoriteChangedAt = item.optLong("favoriteChangedAt"),
                         favoriteSortOrder = item.optLong("favoriteSortOrder"),
@@ -53,31 +117,117 @@ object LibrarySyncPayload {
         }
     }
 
+    fun parseRssSources(payload: JSONObject): List<SyncedRssSource> {
+        return parseRssSources(payload.optJSONArray("rssSources") ?: JSONArray())
+    }
+
+    fun parseRssSources(array: JSONArray): List<SyncedRssSource> {
+        return buildList {
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                val url = item.optString("url").trim()
+                if (url.isBlank()) continue
+                add(
+                    SyncedRssSource(
+                        url = url,
+                        sourceDeviceId = item.optString("sourceDeviceId").ifBlank {
+                            item.optString("deviceId")
+                        },
+                        title = item.optString("title").trim().ifBlank { url },
+                        description = item.optString("description").trim(),
+                        siteUrl = item.optString("siteUrl").trim().ifBlank { null },
+                        imageUrl = item.optString("imageUrl").trim().ifBlank { null },
+                        createdAt = item.optLong("createdAt"),
+                        updatedAt = item.optLong("updatedAt"),
+                        sortOrder = item.optLong("sortOrder"),
+                        deleted = item.optBoolean("deleted"),
+                        deletedAt = item.optLong("deletedAt")
+                    )
+                )
+            }
+        }
+    }
+
     fun buildResponse(
         deviceId: String,
         articles: List<SyncedSavedArticle>,
-        applied: Int
+        applied: Int,
+        rssSources: List<SyncedRssSource> = emptyList(),
+        sourcesApplied: Int = 0
     ): JSONObject {
         return JSONObject().apply {
             put("success", true)
             put("version", PROTOCOL_VERSION)
             put("action", BluetoothSyncProtocol.ACTION_SYNC_LIBRARY)
+            put("phase", PHASE_COMPLETE)
             put("deviceId", deviceId)
             put("sentAt", System.currentTimeMillis())
             put("articles", articles.toJsonArray())
+            put("rssSources", rssSources.toSourceJsonArray())
             put(
                 "stats",
                 JSONObject().apply {
                     put("sent", articles.size)
                     put("applied", applied)
+                    put("sourcesSent", rssSources.size)
+                    put("sourcesApplied", sourcesApplied)
                 }
             )
+        }
+    }
+
+    fun buildManifestResponse(
+        deviceId: String,
+        articles: List<SyncedSavedArticle>,
+        rssSources: List<SyncedRssSource> = emptyList(),
+        sourcesApplied: Int = 0
+    ): JSONObject {
+        return JSONObject().apply {
+            put("success", true)
+            put("version", PROTOCOL_VERSION)
+            put("action", BluetoothSyncProtocol.ACTION_SYNC_LIBRARY)
+            put("phase", PHASE_MANIFEST)
+            put("deviceId", deviceId)
+            put("sentAt", System.currentTimeMillis())
+            put("articleManifest", articles.toManifestJsonArray())
+            put("rssSources", rssSources.toSourceJsonArray())
+            put(
+                "stats",
+                JSONObject().apply {
+                    put("sourcesSent", rssSources.size)
+                    put("sourcesApplied", sourcesApplied)
+                }
+            )
+        }
+    }
+
+    private fun List<SyncedRssSource>.toSourceJsonArray(): JSONArray {
+        return JSONArray().also { array ->
+            forEach { source -> array.put(source.toJson()) }
         }
     }
 
     private fun List<SyncedSavedArticle>.toJsonArray(): JSONArray {
         return JSONArray().also { array ->
             forEach { article -> array.put(article.toJson()) }
+        }
+    }
+
+    private fun List<SyncedSavedArticle>.toManifestJsonArray(): JSONArray {
+        return JSONArray().also { array ->
+            forEach { article -> array.put(article.toManifestJson()) }
+        }
+    }
+
+    private fun SyncedSavedArticle.toManifestJson(): JSONObject {
+        return JSONObject().apply {
+            put("articleId", articleId)
+            put("contentHash", contentHash)
+            put("updatedAt", updatedAt)
+            put("independentChangedAt", independentChangedAt)
+            put("favoriteChangedAt", favoriteChangedAt)
+            put("watchLaterChangedAt", watchLaterChangedAt)
+            put("deletedAt", deletedAt)
         }
     }
 
@@ -95,12 +245,33 @@ object LibrarySyncPayload {
             put("contentHash", contentHash)
             put("importedAt", importedAt)
             put("updatedAt", updatedAt)
+            put("independentSaved", independentSaved)
+            put("independentChangedAt", independentChangedAt)
+            put("independentSortOrder", independentSortOrder)
+            put("rssSourceUrl", rssSourceUrl)
+            put("rssSourceTitle", rssSourceTitle)
             put("favoriteSaved", favoriteSaved)
             put("favoriteChangedAt", favoriteChangedAt)
             put("favoriteSortOrder", favoriteSortOrder)
             put("watchLaterSaved", watchLaterSaved)
             put("watchLaterChangedAt", watchLaterChangedAt)
             put("watchLaterSortOrder", watchLaterSortOrder)
+            put("deleted", deleted)
+            put("deletedAt", deletedAt)
+        }
+    }
+
+    private fun SyncedRssSource.toJson(): JSONObject {
+        return JSONObject().apply {
+            put("url", url)
+            put("sourceDeviceId", sourceDeviceId)
+            put("title", title)
+            put("description", description)
+            put("siteUrl", siteUrl)
+            put("imageUrl", imageUrl)
+            put("createdAt", createdAt)
+            put("updatedAt", updatedAt)
+            put("sortOrder", sortOrder)
             put("deleted", deleted)
             put("deletedAt", deletedAt)
         }
@@ -129,4 +300,7 @@ object LibrarySyncPayload {
             gzip.readBytes().toString(Charsets.UTF_8)
         }
     }
+
+    private const val PHASE_MANIFEST = "manifest"
+    private const val PHASE_COMPLETE = "complete"
 }

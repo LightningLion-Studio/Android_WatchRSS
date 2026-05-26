@@ -13,6 +13,11 @@ data class SyncedSavedArticle(
     val contentHash: String,
     val importedAt: Long,
     val updatedAt: Long,
+    val independentSaved: Boolean = false,
+    val independentChangedAt: Long = 0L,
+    val independentSortOrder: Long = 0L,
+    val rssSourceUrl: String? = null,
+    val rssSourceTitle: String? = null,
     val favoriteSaved: Boolean,
     val favoriteChangedAt: Long,
     val favoriteSortOrder: Long,
@@ -24,6 +29,25 @@ data class SyncedSavedArticle(
 )
 
 data class SyncedSavedArticleMergeStats(
+    val received: Int,
+    val applied: Int
+)
+
+data class SyncedRssSource(
+    val url: String,
+    val sourceDeviceId: String,
+    val title: String,
+    val description: String,
+    val siteUrl: String?,
+    val imageUrl: String?,
+    val createdAt: Long,
+    val updatedAt: Long,
+    val sortOrder: Long,
+    val deleted: Boolean,
+    val deletedAt: Long
+)
+
+data class SyncedRssSourceMergeStats(
     val received: Int,
     val applied: Int
 )

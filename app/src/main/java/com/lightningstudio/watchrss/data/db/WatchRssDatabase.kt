@@ -14,7 +14,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SavedSyncStateEntity::class,
         OfflineMediaEntity::class
     ],
-    version = 10,
+    version = 11,
     exportSchema = false
 )
 @SkipQueryVerification
@@ -160,6 +160,14 @@ abstract class WatchRssDatabase : RoomDatabase() {
                 )
                 database.execSQL("CREATE INDEX IF NOT EXISTS index_saved_sync_states_itemId ON saved_sync_states(itemId)")
                 database.execSQL("CREATE INDEX IF NOT EXISTS index_saved_sync_states_saveType_saved ON saved_sync_states(saveType, saved)")
+            }
+        }
+
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE rss_channels ADD COLUMN continuePlaybackInBackground INTEGER NOT NULL DEFAULT 0"
+                )
             }
         }
     }

@@ -44,7 +44,7 @@ interface SavedEntryDao {
 
     @Query(
         """
-        SELECT rss_items.*, rss_channels.title AS channelTitle,
+        SELECT rss_items.*, rss_channels.title AS channelTitle, rss_channels.url AS channelUrl,
                saved_entries.createdAt AS savedAt, saved_entries.saveType AS saveType
         FROM saved_entries
         JOIN rss_items ON rss_items.id = saved_entries.itemId
@@ -57,7 +57,7 @@ interface SavedEntryDao {
 
     @Query(
         """
-        SELECT rss_items.*, rss_channels.title AS channelTitle,
+        SELECT rss_items.*, rss_channels.title AS channelTitle, rss_channels.url AS channelUrl,
                saved_entries.createdAt AS savedAt, saved_entries.saveType AS saveType
         FROM saved_entries
         JOIN rss_items ON rss_items.id = saved_entries.itemId
@@ -72,6 +72,7 @@ interface SavedEntryDao {
 data class SavedRssItem(
     @Embedded val item: RssItemEntity,
     val channelTitle: String,
+    val channelUrl: String,
     val savedAt: Long,
     val saveType: String
 )

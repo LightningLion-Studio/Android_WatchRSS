@@ -112,12 +112,14 @@ class DouyinEntryActivity : BaseWatchActivity() {
                     val playbackStartVolumeLimitPercent by container.settingsRepository.mediaPlaybackStartVolumeLimitPercent.collectAsState(
                         initial = DEFAULT_MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT
                     )
-                    val originalContentEnabled by remember(rssRepository) {
+                    val douyinChannel by remember(rssRepository) {
                         rssRepository.observeChannels().map { channels ->
-                            channels.firstOrNull { it.url == BuiltinChannelType.DOUYIN.url }?.useOriginalContent
-                                ?: true
+                            channels.firstOrNull { it.url == BuiltinChannelType.DOUYIN.url }
                         }
-                    }.collectAsState(initial = true)
+                    }.collectAsState(initial = null)
+                    val originalContentEnabled = douyinChannel?.useOriginalContent ?: true
+                    val continuePlaybackInBackground =
+                        douyinChannel?.continuePlaybackInBackground ?: false
                     val favoriteItems by remember(rssRepository) {
                         rssRepository.observeSavedItems(SaveType.FAVORITE)
                     }.collectAsState(initial = emptyList())
@@ -191,6 +193,7 @@ class DouyinEntryActivity : BaseWatchActivity() {
                                     digitalCrownVolumeEnabled = volumeControlEnabled,
                                     volumeGuardEnabled = volumeGuardEnabled,
                                     playbackStartVolumeLimitPercent = playbackStartVolumeLimitPercent,
+                                    continuePlaybackInBackground = continuePlaybackInBackground,
                                     onRefresh = {
                                         if (uiState.showTitlePage) {
                                             viewModel.refreshTitlePageFeed()

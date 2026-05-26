@@ -17,6 +17,8 @@ data class BiliSettingsUiState(
     val originalContentEnabled: Boolean = false,
     val deleteEnabled: Boolean = false,
     val showOriginalContent: Boolean = false,
+    val continuePlaybackInBackgroundEnabled: Boolean = false,
+    val showContinuePlaybackInBackground: Boolean = false,
     val shouldExitToFeed: Boolean = false
 )
 
@@ -61,6 +63,15 @@ class BiliSettingsViewModel(
         }
     }
 
+    fun toggleContinuePlaybackInBackground() {
+        val channelId = _uiState.value.channelId ?: return
+        val next = !_uiState.value.continuePlaybackInBackgroundEnabled
+        viewModelScope.launch {
+            rssRepository.setChannelContinuePlaybackInBackground(channelId, next)
+            _uiState.update { it.copy(continuePlaybackInBackgroundEnabled = next) }
+        }
+    }
+
     fun deleteChannel() {
         val channelId = _uiState.value.channelId ?: return
         viewModelScope.launch {
@@ -70,7 +81,9 @@ class BiliSettingsViewModel(
                     channelId = null,
                     originalContentEnabled = false,
                     deleteEnabled = false,
-                    showOriginalContent = false
+                    showOriginalContent = false,
+                    continuePlaybackInBackgroundEnabled = false,
+                    showContinuePlaybackInBackground = false
                 )
             }
         }
@@ -89,7 +102,9 @@ class BiliSettingsViewModel(
                         channelId = channel?.id,
                         originalContentEnabled = channel?.useOriginalContent ?: false,
                         deleteEnabled = channel != null,
-                        showOriginalContent = channel != null
+                        showOriginalContent = channel != null,
+                        continuePlaybackInBackgroundEnabled = channel?.continuePlaybackInBackground ?: false,
+                        showContinuePlaybackInBackground = channel != null
                     )
                 }
             }

@@ -42,6 +42,9 @@ class RssPlayerActivity : BaseWatchActivity() {
                 val playbackStartVolumeLimitPercent by container.settingsRepository.mediaPlaybackStartVolumeLimitPercent.collectAsState(
                     initial = DEFAULT_MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT
                 )
+                val continuePlaybackInBackground by viewModel.continuePlaybackInBackground.collectAsState(
+                    initial = false
+                )
                 BiliPlayerScreen(
                     uiState = uiState,
                     onRetry = viewModel::loadPlayUrl,
@@ -60,7 +63,8 @@ class RssPlayerActivity : BaseWatchActivity() {
                     },
                     digitalCrownVolumeEnabled = volumeControlEnabled,
                     volumeGuardEnabled = volumeGuardEnabled,
-                    playbackStartVolumeLimitPercent = playbackStartVolumeLimitPercent
+                    playbackStartVolumeLimitPercent = playbackStartVolumeLimitPercent,
+                    continuePlaybackInBackground = continuePlaybackInBackground
                 )
             }
         }
@@ -81,7 +85,8 @@ class RssPlayerActivity : BaseWatchActivity() {
             context = this,
             playUrl = playUrl,
             webUrl = webUrl,
-            awemeId = awemeId
+            awemeId = awemeId,
+            channelId = intent.getLongExtra(RssPlayerViewModel.KEY_CHANNEL_ID, 0L)
         )
     }
 
@@ -90,12 +95,14 @@ class RssPlayerActivity : BaseWatchActivity() {
             context: Context,
             playUrl: String,
             webUrl: String? = null,
-            awemeId: String? = null
+            awemeId: String? = null,
+            channelId: Long = 0L
         ): Intent {
             return Intent(context, RssPlayerActivity::class.java).apply {
                 putExtra(RssPlayerViewModel.KEY_PLAY_URL, playUrl)
                 putExtra(RssPlayerViewModel.KEY_WEB_URL, webUrl.orEmpty())
                 putExtra(RssPlayerViewModel.KEY_AWEME_ID, awemeId.orEmpty())
+                putExtra(RssPlayerViewModel.KEY_CHANNEL_ID, channelId)
             }
         }
     }

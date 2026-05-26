@@ -727,11 +727,17 @@ internal fun DetailContent(
                                                 context = context,
                                                 playUrl = resolvedUrl,
                                                 webUrl = targetWebUrl,
-                                                awemeId = douyinAwemeId
+                                                awemeId = douyinAwemeId,
+                                                channelId = item?.channelId ?: 0L
                                             )
                                         )
                                     } else {
-                                        openRssVideo(context, resolvedUrl, targetWebUrl)
+                                        openRssVideo(
+                                            context = context,
+                                            playUrl = resolvedUrl,
+                                            webUrl = targetWebUrl,
+                                            channelId = item?.channelId ?: 0L
+                                        )
                                     }
                                 }
                             )

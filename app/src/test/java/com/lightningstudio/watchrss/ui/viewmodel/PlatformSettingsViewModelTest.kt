@@ -33,11 +33,14 @@ class PlatformSettingsViewModelTest {
         advanceUntilIdle()
         assertEquals(true, viewModel.uiState.value.isLoggedIn)
         assertEquals(77L, viewModel.uiState.value.channelId)
+        assertEquals(true, viewModel.uiState.value.showContinuePlaybackInBackground)
 
         viewModel.toggleOriginalContent()
+        viewModel.toggleContinuePlaybackInBackground()
         advanceUntilIdle()
         assertEquals(listOf(77L to true), rssRepo.setOriginalContentRequests)
         assertEquals(listOf(77L to true), rssRepo.refreshBackgroundRequests)
+        assertEquals(listOf(77L to true), rssRepo.setContinuePlaybackInBackgroundRequests)
 
         viewModel.logout()
         advanceUntilIdle()
@@ -66,11 +69,14 @@ class PlatformSettingsViewModelTest {
         assertEquals(true, viewModel.uiState.value.isLoggedIn)
         assertEquals(88L, viewModel.uiState.value.channelId)
         assertEquals(true, viewModel.uiState.value.originalContentEnabled)
+        assertEquals(true, viewModel.uiState.value.showContinuePlaybackInBackground)
 
         viewModel.toggleOriginalContent()
+        viewModel.toggleContinuePlaybackInBackground()
         advanceUntilIdle()
         assertEquals(listOf(88L to false), rssRepo.setOriginalContentRequests)
         assertEquals(listOf(88L to true), rssRepo.refreshBackgroundRequests)
+        assertEquals(listOf(88L to true), rssRepo.setContinuePlaybackInBackgroundRequests)
 
         viewModel.logout()
         advanceUntilIdle()

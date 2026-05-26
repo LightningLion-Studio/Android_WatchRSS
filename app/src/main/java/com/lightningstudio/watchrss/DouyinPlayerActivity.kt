@@ -19,6 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
+import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
@@ -29,10 +30,12 @@ import com.lightningstudio.watchrss.ui.viewmodel.BiliPlaybackSourceKind
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.BiliPlayerUiState
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.map
 
 class DouyinPlayerActivity : BaseWatchActivity() {
     private val container by lazy { (application as WatchRssApplication).container }
     private val repository by lazy { container.douyinRepository }
+    private val rssRepository by lazy { container.rssRepository }
     private val settingsRepository by lazy { container.settingsRepository }
     private var currentPageIndex: Int = 0
 
@@ -58,6 +61,12 @@ class DouyinPlayerActivity : BaseWatchActivity() {
                     val playbackStartVolumeLimitPercent by settingsRepository.mediaPlaybackStartVolumeLimitPercent.collectAsState(
                         initial = DEFAULT_MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT
                     )
+                    val continuePlaybackInBackground by remember(rssRepository) {
+                        rssRepository.observeChannels().map { channels ->
+                            channels.firstOrNull { it.url == BuiltinChannelType.DOUYIN.url }
+                                ?.continuePlaybackInBackground ?: false
+                        }
+                    }.collectAsState(initial = false)
                     if (items.isEmpty()) {
                         PlatformEntryScreen(title = "抖音", message = "暂无可播放内容")
                     } else {
@@ -115,7 +124,8 @@ class DouyinPlayerActivity : BaseWatchActivity() {
                                     isActive = page == pagerState.currentPage,
                                     digitalCrownVolumeEnabled = page == pagerState.currentPage && volumeControlEnabled,
                                     volumeGuardEnabled = volumeGuardEnabled,
-                                    playbackStartVolumeLimitPercent = playbackStartVolumeLimitPercent
+                                    playbackStartVolumeLimitPercent = playbackStartVolumeLimitPercent,
+                                    continuePlaybackInBackground = continuePlaybackInBackground
                                 )
                             }
                         }

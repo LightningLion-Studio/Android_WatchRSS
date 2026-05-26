@@ -568,6 +568,7 @@ internal fun DouyinImmersiveScreen(
     digitalCrownVolumeEnabled: Boolean = true,
     volumeGuardEnabled: Boolean = true,
     playbackStartVolumeLimitPercent: Int? = 10,
+    continuePlaybackInBackground: Boolean = false,
     onRefresh: () -> Unit,
     onPageSettled: (Int) -> Unit,
     onEnterFlow: () -> Unit,
@@ -2160,6 +2161,7 @@ internal fun DouyinImmersiveScreen(
 
     DisposableEffect(
         lifecycleOwner,
+        continuePlaybackInBackground,
         foregroundSlotKey,
         primarySlot.player,
         secondarySlot.player
@@ -2171,9 +2173,11 @@ internal fun DouyinImmersiveScreen(
                     if (event == Lifecycle.Event.ON_STOP) {
                         persistCurrentPreviewSnapshots(clearAfterPersist = false)
                     }
-                    activePausedByLifecycle = true
-                    activeAutoplayEnabled = false
-                    stopAllPlayback()
+                    if (!continuePlaybackInBackground) {
+                        activePausedByLifecycle = true
+                        activeAutoplayEnabled = false
+                        stopAllPlayback()
+                    }
                 }
 
                 Lifecycle.Event.ON_START,

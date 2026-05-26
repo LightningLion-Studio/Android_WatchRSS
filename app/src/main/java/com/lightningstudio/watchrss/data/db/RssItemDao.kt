@@ -30,6 +30,16 @@ interface RssItemDao {
     @Query(
         """
         SELECT * FROM rss_items
+        WHERE channelId = :channelId
+        ORDER BY fetchedAt DESC, id DESC
+        LIMIT :limit
+        """
+    )
+    suspend fun getItemsForChannelSync(channelId: Long, limit: Int): List<RssItemEntity>
+
+    @Query(
+        """
+        SELECT * FROM rss_items
         WHERE channelId = :channelId AND (
             title LIKE :keyword ESCAPE '\' OR
             description LIKE :keyword ESCAPE '\' OR
@@ -149,6 +159,19 @@ interface RssItemDao {
 
     @Query("SELECT COUNT(*) FROM rss_items WHERE channelId = :channelId")
     fun observeItemCount(channelId: Long): Flow<Int>
+
+    @Query(
+        """
+        SELECT EXISTS(
+            SELECT 1 FROM rss_items
+            WHERE channelId = :channelId AND (
+                (audioUrl IS NOT NULL AND audioUrl != '') OR
+                (videoUrl IS NOT NULL AND videoUrl != '')
+            )
+        )
+        """
+    )
+    fun observeChannelHasPlayableMedia(channelId: Long): Flow<Boolean>
 
     @Query("SELECT channelId, COUNT(*) as unreadCount FROM rss_items WHERE isRead = 0 GROUP BY channelId")
     fun observeUnreadCounts(): Flow<List<RssChannelUnreadCount>>

@@ -84,6 +84,11 @@ class BiliSettingsActivity : BaseWatchActivity() {
                             showOriginalContent = uiState.showOriginalContent,
                             originalContentEnabled = uiState.originalContentEnabled,
                             onToggleOriginalContent = viewModel::toggleOriginalContent,
+                            showContinuePlaybackInBackground = uiState.showContinuePlaybackInBackground,
+                            continuePlaybackInBackgroundEnabled =
+                                uiState.continuePlaybackInBackgroundEnabled,
+                            onToggleContinuePlaybackInBackground =
+                                viewModel::toggleContinuePlaybackInBackground,
                             deleteEnabled = uiState.deleteEnabled,
                             onDelete = {
                                 if (uiState.deleteEnabled) {

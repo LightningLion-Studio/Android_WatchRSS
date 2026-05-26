@@ -14,6 +14,8 @@ import com.lightningstudio.watchrss.data.rss.SavedItem
 import com.lightningstudio.watchrss.data.rss.SavedState
 import com.lightningstudio.watchrss.data.rss.SyncedSavedArticle
 import com.lightningstudio.watchrss.data.rss.SyncedSavedArticleMergeStats
+import com.lightningstudio.watchrss.data.rss.SyncedRssSource
+import com.lightningstudio.watchrss.data.rss.SyncedRssSourceMergeStats
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -48,6 +50,8 @@ class TestRssRepository(
     val syncedExternalSavedItems = mutableListOf<Triple<ExternalSavedItem, SaveType, Boolean>>()
     val mergedSyncedSavedArticles = mutableListOf<SyncedSavedArticle>()
     var exportedSyncedSavedArticles: List<SyncedSavedArticle> = emptyList()
+    val mergedSyncedRssSources = mutableListOf<SyncedRssSource>()
+    var exportedSyncedRssSources: List<SyncedRssSource> = emptyList()
     val retriedOfflineMediaIds = mutableListOf<Long>()
     var retryOfflineMediaBehavior: suspend (Long) -> Unit = {}
     val toggledLikeIds = mutableListOf<Long>()
@@ -56,6 +60,7 @@ class TestRssRepository(
     val movedToTopChannelIds = mutableListOf<Long>()
     val setPinnedRequests = mutableListOf<Pair<Long, Boolean>>()
     val setOriginalContentRequests = mutableListOf<Pair<Long, Boolean>>()
+    val setContinuePlaybackInBackgroundRequests = mutableListOf<Pair<Long, Boolean>>()
     val deletedChannelIds = mutableListOf<Long>()
     var trimCacheCalls = 0
 
@@ -108,6 +113,14 @@ class TestRssRepository(
 
     override fun observeItemCount(channelId: Long): Flow<Int> {
         return itemsByChannelFlow.map { items -> items[channelId].orEmpty().size }
+    }
+
+    override fun observeChannelHasPlayableMedia(channelId: Long): Flow<Boolean> {
+        return itemsByChannelFlow.map { items ->
+            items[channelId].orEmpty().any { item ->
+                !item.audioUrl.isNullOrBlank() || !item.videoUrl.isNullOrBlank()
+            }
+        }
     }
 
     override fun observeItem(itemId: Long): Flow<RssItem?> {
@@ -245,6 +258,22 @@ class TestRssRepository(
         )
     }
 
+    override suspend fun exportSyncedRssSources(deviceId: String): List<SyncedRssSource> {
+        return exportedSyncedRssSources
+    }
+
+    override suspend fun mergeSyncedRssSources(
+        sources: List<SyncedRssSource>,
+        remoteDeviceId: String,
+        localDeviceId: String
+    ): SyncedRssSourceMergeStats {
+        mergedSyncedRssSources += sources
+        return SyncedRssSourceMergeStats(
+            received = sources.size,
+            applied = sources.size
+        )
+    }
+
     override suspend fun retryOfflineMedia(itemId: Long) {
         retriedOfflineMediaIds += itemId
         retryOfflineMediaBehavior(itemId)
@@ -288,6 +317,13 @@ class TestRssRepository(
         }
     }
 
+    override suspend fun setChannelContinuePlaybackInBackground(channelId: Long, enabled: Boolean) {
+        setContinuePlaybackInBackgroundRequests += channelId to enabled
+        channelsFlow.value = channelsFlow.value.map { channel ->
+            if (channel.id == channelId) channel.copy(continuePlaybackInBackground = enabled) else channel
+        }
+    }
+
     override suspend fun deleteChannel(channelId: Long) {
         deletedChannelIds += channelId
         channelsFlow.value = channelsFlow.value.filterNot { it.id == channelId }
@@ -326,7 +362,8 @@ fun sampleRssChannel(
     url: String = "https://example.com/feed.xml",
     unreadCount: Int = 3,
     isPinned: Boolean = false,
-    useOriginalContent: Boolean = false
+    useOriginalContent: Boolean = false,
+    continuePlaybackInBackground: Boolean = false
 ): RssChannel {
     return RssChannel(
         id = id,
@@ -338,7 +375,8 @@ fun sampleRssChannel(
         sortOrder = id,
         isPinned = isPinned,
         useOriginalContent = useOriginalContent,
-        unreadCount = unreadCount
+        unreadCount = unreadCount,
+        continuePlaybackInBackground = continuePlaybackInBackground
     )
 }
 
@@ -350,7 +388,9 @@ fun sampleRssItem(
     content: String? = "正文 $id",
     originalContent: String? = null,
     link: String? = "https://example.com/items/$id",
-    readingProgress: Float = 0f
+    readingProgress: Float = 0f,
+    audioUrl: String? = null,
+    videoUrl: String? = null
 ): RssItem {
     return RssItem(
         id = id,
@@ -362,8 +402,8 @@ fun sampleRssItem(
         link = link,
         pubDate = "2024-01-01",
         imageUrl = null,
-        audioUrl = null,
-        videoUrl = null,
+        audioUrl = audioUrl,
+        videoUrl = videoUrl,
         summary = description,
         previewImageUrl = null,
         isRead = false,

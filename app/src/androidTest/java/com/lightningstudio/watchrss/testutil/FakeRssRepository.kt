@@ -12,6 +12,8 @@ import com.lightningstudio.watchrss.data.rss.SavedItem
 import com.lightningstudio.watchrss.data.rss.SavedState
 import com.lightningstudio.watchrss.data.rss.SyncedSavedArticle
 import com.lightningstudio.watchrss.data.rss.SyncedSavedArticleMergeStats
+import com.lightningstudio.watchrss.data.rss.SyncedRssSource
+import com.lightningstudio.watchrss.data.rss.SyncedRssSourceMergeStats
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -35,6 +37,8 @@ class FakeRssRepository(
     override fun observeItemsPaged(channelId: Long, limit: Int): Flow<List<RssItem>> = flowOf(emptyList())
 
     override fun observeItemCount(channelId: Long): Flow<Int> = flowOf(0)
+
+    override fun observeChannelHasPlayableMedia(channelId: Long): Flow<Boolean> = flowOf(false)
 
     override fun observeItem(itemId: Long): Flow<RssItem?> = flowOf(null)
 
@@ -103,6 +107,19 @@ class FakeRssRepository(
         )
     }
 
+    override suspend fun exportSyncedRssSources(deviceId: String): List<SyncedRssSource> = emptyList()
+
+    override suspend fun mergeSyncedRssSources(
+        sources: List<SyncedRssSource>,
+        remoteDeviceId: String,
+        localDeviceId: String
+    ): SyncedRssSourceMergeStats {
+        return SyncedRssSourceMergeStats(
+            received = sources.size,
+            applied = sources.size
+        )
+    }
+
     override suspend fun retryOfflineMedia(itemId: Long) = Unit
 
     override suspend fun toggleLike(itemId: Long): Result<Boolean> = Result.success(false)
@@ -124,6 +141,16 @@ class FakeRssRepository(
     }
 
     override suspend fun setChannelOriginalContent(channelId: Long, enabled: Boolean) = Unit
+
+    override suspend fun setChannelContinuePlaybackInBackground(channelId: Long, enabled: Boolean) {
+        channelsFlow.value = channelsFlow.value.map { channel ->
+            if (channel.id == channelId) {
+                channel.copy(continuePlaybackInBackground = enabled)
+            } else {
+                channel
+            }
+        }
+    }
 
     override suspend fun deleteChannel(channelId: Long) {
         channelsFlow.value = channelsFlow.value.filterNot { it.id == channelId }

@@ -8,6 +8,7 @@ interface RssRepository {
     fun observeChannel(channelId: Long): Flow<RssChannel?>
     fun observeItemsPaged(channelId: Long, limit: Int): Flow<List<RssItem>>
     fun observeItemCount(channelId: Long): Flow<Int>
+    fun observeChannelHasPlayableMedia(channelId: Long): Flow<Boolean>
     fun observeItem(itemId: Long): Flow<RssItem?>
     fun searchItems(channelId: Long, keyword: String, limit: Int): Flow<List<RssItem>>
     fun observeCacheUsageBytes(): Flow<Long>
@@ -38,6 +39,12 @@ interface RssRepository {
         remoteDeviceId: String,
         localDeviceId: String
     ): SyncedSavedArticleMergeStats
+    suspend fun exportSyncedRssSources(deviceId: String): List<SyncedRssSource>
+    suspend fun mergeSyncedRssSources(
+        sources: List<SyncedRssSource>,
+        remoteDeviceId: String,
+        localDeviceId: String
+    ): SyncedRssSourceMergeStats
     suspend fun retryOfflineMedia(itemId: Long)
     suspend fun toggleLike(itemId: Long): Result<Boolean>
     suspend fun markChannelRead(channelId: Long)
@@ -45,6 +52,7 @@ interface RssRepository {
     suspend fun moveChannelToTop(channelId: Long)
     suspend fun setChannelPinned(channelId: Long, pinned: Boolean)
     suspend fun setChannelOriginalContent(channelId: Long, enabled: Boolean)
+    suspend fun setChannelContinuePlaybackInBackground(channelId: Long, enabled: Boolean)
     suspend fun deleteChannel(channelId: Long)
     suspend fun trimCacheToLimit()
 }

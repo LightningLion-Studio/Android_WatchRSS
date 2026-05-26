@@ -38,6 +38,9 @@ fun ChannelSettingsScreen(
     showOriginalContent: Boolean,
     originalContentEnabled: Boolean,
     onToggleOriginalContent: () -> Unit,
+    showContinuePlaybackInBackground: Boolean,
+    continuePlaybackInBackgroundEnabled: Boolean,
+    onToggleContinuePlaybackInBackground: () -> Unit,
     deleteEnabled: Boolean,
     onDelete: () -> Unit
 ) {
@@ -74,6 +77,16 @@ fun ChannelSettingsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
                 )
+            }
+
+            if (showContinuePlaybackInBackground) {
+                Spacer(modifier = Modifier.height(entrySpacing))
+                SettingsPillRow(label = "在后台继续播放", endPaddingMultiplier = 1.5f) {
+                    WatchSwitch(
+                        checked = continuePlaybackInBackgroundEnabled,
+                        onCheckedChange = { onToggleContinuePlaybackInBackground() }
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(entrySpacing))

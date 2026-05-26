@@ -49,6 +49,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -149,7 +150,8 @@ fun BiliPlayerScreen(
     isActive: Boolean = true,
     digitalCrownVolumeEnabled: Boolean = true,
     volumeGuardEnabled: Boolean = true,
-    playbackStartVolumeLimitPercent: Int? = 10
+    playbackStartVolumeLimitPercent: Int? = 10,
+    continuePlaybackInBackground: Boolean = false
 ) {
     val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
     val spacing = watchDimensionResource(R.dimen.hey_distance_6dp)
@@ -160,6 +162,7 @@ fun BiliPlayerScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val context = LocalContext.current
     val view = LocalView.current
+    val continuePlaybackInBackgroundState = rememberUpdatedState(continuePlaybackInBackground)
     var playerRef by remember { mutableStateOf<ExoPlayer?>(null) }
     var textureViewRef by remember { mutableStateOf<TextureView?>(null) }
     var isTextureAvailable by remember { mutableStateOf(false) }
@@ -452,7 +455,9 @@ fun BiliPlayerScreen(
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_PAUSE) {
-                pausePlayback()
+                if (!continuePlaybackInBackgroundState.value) {
+                    pausePlayback()
+                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -721,7 +726,9 @@ fun BiliPlayerScreen(
 
                             override fun onSurfaceTextureDestroyed(surfaceTexture: SurfaceTexture): Boolean {
                                 isTextureAvailable = false
-                                pausePlayback(clearPlayWhenReady = false)
+                                if (!continuePlaybackInBackgroundState.value) {
+                                    pausePlayback(clearPlayWhenReady = false)
+                                }
                                 runCatching { playerRef?.clearVideoTextureView(this@apply) }
                                 return true
                             }

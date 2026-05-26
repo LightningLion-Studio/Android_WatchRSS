@@ -10,7 +10,8 @@ data class RssChannel(
     val sortOrder: Long,
     val isPinned: Boolean,
     val useOriginalContent: Boolean,
-    val unreadCount: Int
+    val unreadCount: Int,
+    val continuePlaybackInBackground: Boolean = false
 )
 
 data class RssItem(

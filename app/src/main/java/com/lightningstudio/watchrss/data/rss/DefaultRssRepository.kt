@@ -101,6 +101,9 @@ class DefaultRssRepository(
     override fun observeItemCount(channelId: Long): Flow<Int> =
         itemDao.observeItemCount(channelId)
 
+    override fun observeChannelHasPlayableMedia(channelId: Long): Flow<Boolean> =
+        itemDao.observeChannelHasPlayableMedia(channelId)
+
     override fun observeItem(itemId: Long): Flow<RssItem?> =
         itemDao.observeItem(itemId).map { item ->
             if (item != null) {
@@ -532,7 +535,7 @@ class DefaultRssRepository(
             val grouped = (favorites + watchLater).groupBy { saved ->
                 stableArticleId(saved.item.link ?: saved.item.dedupKey)
             }
-            grouped.map { (articleId, entries) ->
+            val savedArticles = grouped.map { (articleId, entries) ->
                 val representative = entries.maxByOrNull { it.savedAt } ?: entries.first()
                 val favorite = entries.firstOrNull { it.saveType == SaveType.FAVORITE.name }
                 val later = entries.firstOrNull { it.saveType == SaveType.WATCH_LATER.name }
@@ -548,7 +551,10 @@ class DefaultRssRepository(
                     watchLaterChangedAt = laterState?.changedAt ?: later?.savedAt ?: 0L,
                     watchLaterSortOrder = laterState?.sortOrder ?: later?.savedAt ?: 0L
                 )
-            } + states.values
+            }
+            val savedArticleIds = savedArticles.mapTo(mutableSetOf()) { it.articleId }
+            val independentArticles = exportSyncedIndependentArticles(deviceId, savedArticleIds)
+            savedArticles + independentArticles + states.values
                 .filter { !it.saved && it.articleId !in grouped.keys }
                 .groupBy { it.articleId }
                 .mapNotNull { (articleId, tombstones) ->
@@ -566,6 +572,11 @@ class DefaultRssRepository(
                         contentHash = sha256(url),
                         importedAt = tombstones.minOf { it.changedAt },
                         updatedAt = tombstones.maxOf { it.changedAt },
+                        independentSaved = false,
+                        independentChangedAt = 0L,
+                        independentSortOrder = 0L,
+                        rssSourceUrl = null,
+                        rssSourceTitle = null,
                         favoriteSaved = false,
                         favoriteChangedAt = tombstones.firstOrNull { it.saveType == SaveType.FAVORITE.name }?.changedAt ?: 0L,
                         favoriteSortOrder = 0L,
@@ -578,6 +589,71 @@ class DefaultRssRepository(
                 }
         }
 
+    override suspend fun exportSyncedRssSources(deviceId: String): List<SyncedRssSource> =
+        withContext(Dispatchers.IO) {
+            channelDao.getAllChannels()
+                .filter { it.isSyncedRssSource() }
+                .map { channel -> channel.toSyncedRssSource(deviceId) }
+        }
+
+    override suspend fun mergeSyncedRssSources(
+        sources: List<SyncedRssSource>,
+        remoteDeviceId: String,
+        localDeviceId: String
+    ): SyncedRssSourceMergeStats = withContext(Dispatchers.IO) {
+        var applied = 0
+        sources.forEach { source ->
+            val normalizedUrl = normalizeUrl(source.url)
+            if (!isValidUrl(normalizedUrl)) return@forEach
+            val existing = channelDao.getChannelByUrl(normalizedUrl)
+            if (source.deleted) {
+                if (existing != null) {
+                    deleteChannel(existing.id)
+                    applied += 1
+                }
+                return@forEach
+            }
+            val remoteUpdatedAt = source.updatedAt.takeIf { it > 0L }
+                ?: source.sortOrder.takeIf { it > 0L }
+                ?: source.createdAt
+            val localUpdatedAt = existing?.syncUpdatedAt() ?: 0L
+            val remoteNewer = existing == null ||
+                remoteUpdatedAt > localUpdatedAt ||
+                (remoteUpdatedAt == localUpdatedAt && remoteDeviceId > localDeviceId)
+            if (!remoteNewer) return@forEach
+
+            val now = System.currentTimeMillis()
+            val entity = RssChannelEntity(
+                id = existing?.id ?: 0L,
+                url = normalizedUrl,
+                title = source.title.ifBlank { hostLabel(normalizedUrl) },
+                description = source.description.takeIf { it.isNotBlank() } ?: source.siteUrl,
+                imageUrl = source.imageUrl,
+                lastFetchedAt = existing?.lastFetchedAt,
+                createdAt = existing?.createdAt ?: source.createdAt.takeIf { it > 0L } ?: now,
+                sortOrder = source.sortOrder.takeIf { it > 0L } ?: remoteUpdatedAt.takeIf { it > 0L } ?: now,
+                isPinned = existing?.isPinned ?: false,
+                useOriginalContent = existing?.useOriginalContent ?: false,
+                continuePlaybackInBackground = existing?.continuePlaybackInBackground ?: false
+            )
+            if (existing == null) {
+                val inserted = channelDao.insertChannel(entity)
+                if (inserted <= 0L) {
+                    channelDao.getChannelByUrl(normalizedUrl)?.let { current ->
+                        channelDao.updateChannel(entity.copy(id = current.id))
+                    }
+                }
+            } else {
+                channelDao.updateChannel(entity)
+            }
+            applied += 1
+        }
+        SyncedRssSourceMergeStats(
+            received = sources.size,
+            applied = applied
+        )
+    }
+
     override suspend fun mergeSyncedSavedArticles(
         articles: List<SyncedSavedArticle>,
         remoteDeviceId: String,
@@ -587,12 +663,13 @@ class DefaultRssRepository(
         articles.forEach { article ->
             val shouldMaterializeArticle = article.favoriteSaved ||
                 article.watchLaterSaved ||
+                article.independentSaved ||
                 !article.deleted
             val itemId = if (shouldMaterializeArticle) {
-                val channel = resolvePhoneImportChannel()
+                val channel = resolveSyncedArticleChannel(article)
                 upsertSyncedArticleItem(channel.id, article)
             } else {
-                findSyncedArticleItemId(article.articleId)
+                findSyncedArticleItemId(article)
             }
             if (itemId == null) {
                 if (applySyncedTombstoneState(article, SaveType.FAVORITE, remoteDeviceId, localDeviceId)) {
@@ -663,6 +740,14 @@ class DefaultRssRepository(
             val channel = channelDao.getChannel(channelId) ?: return@withContext
             if (channel.useOriginalContent == enabled) return@withContext
             channelDao.updateChannel(channel.copy(useOriginalContent = enabled))
+        }
+    }
+
+    override suspend fun setChannelContinuePlaybackInBackground(channelId: Long, enabled: Boolean) {
+        withContext(Dispatchers.IO) {
+            val channel = channelDao.getChannel(channelId) ?: return@withContext
+            if (channel.continuePlaybackInBackground == enabled) return@withContext
+            channelDao.updateChannel(channel.copy(continuePlaybackInBackground = enabled))
         }
     }
 
@@ -921,6 +1006,8 @@ class DefaultRssRepository(
         val contentText = contentHtml?.let { Jsoup.parse(it).text().trim() }.orEmpty()
         val url = item.link.orEmpty()
         val updatedAt = maxOf(item.fetchedAt, savedAt)
+        val rssSourceUrl = channelUrl.takeIf { it.isSyncedRssSourceUrl() }
+        val independentSaved = channelUrl == PHONE_IMPORT_CHANNEL_URL
         return SyncedSavedArticle(
             articleId = articleId,
             sourceDeviceId = deviceId,
@@ -934,6 +1021,11 @@ class DefaultRssRepository(
             contentHash = sha256(contentHtml ?: contentText.ifBlank { url }),
             importedAt = savedAt,
             updatedAt = updatedAt,
+            independentSaved = independentSaved,
+            independentChangedAt = if (independentSaved) savedAt else 0L,
+            independentSortOrder = if (independentSaved) savedAt else 0L,
+            rssSourceUrl = rssSourceUrl,
+            rssSourceTitle = rssSourceUrl?.let { channelTitle },
             favoriteSaved = favoriteSaved,
             favoriteChangedAt = favoriteChangedAt,
             favoriteSortOrder = favoriteSortOrder,
@@ -945,13 +1037,101 @@ class DefaultRssRepository(
         )
     }
 
+    private suspend fun exportSyncedIndependentArticles(
+        deviceId: String,
+        excludedArticleIds: Set<String>
+    ): List<SyncedSavedArticle> {
+        val channel = channelDao.getChannelByUrl(PHONE_IMPORT_CHANNEL_URL) ?: return emptyList()
+        return itemDao.getItemsForChannelSync(channel.id, Int.MAX_VALUE).mapNotNull { item ->
+            val articleId = stableArticleId(item.link ?: item.dedupKey)
+            if (articleId in excludedArticleIds) {
+                null
+            } else {
+                item.toSyncedChannelArticle(
+                    articleId = articleId,
+                    channel = channel,
+                    deviceId = deviceId,
+                    independentSaved = true,
+                    rssSourceUrl = null,
+                    rssSourceTitle = null
+                )
+            }
+        }
+    }
+
+    private fun RssItemEntity.toSyncedChannelArticle(
+        articleId: String,
+        channel: RssChannelEntity,
+        deviceId: String,
+        independentSaved: Boolean,
+        rssSourceUrl: String?,
+        rssSourceTitle: String?
+    ): SyncedSavedArticle {
+        val contentHtml = originalContent?.takeIf { it.isNotBlank() }
+            ?: content?.takeIf { it.isNotBlank() }
+            ?: description?.takeIf { it.isNotBlank() }
+        val contentText = contentHtml?.let { Jsoup.parse(it).text().trim() }.orEmpty()
+        val url = link.orEmpty().ifBlank { dedupKey }
+        return SyncedSavedArticle(
+            articleId = articleId,
+            sourceDeviceId = deviceId,
+            url = url,
+            title = title.ifBlank { url },
+            siteName = channel.title,
+            excerpt = summary ?: description.orEmpty(),
+            contentHtml = contentHtml,
+            contentText = contentText,
+            imageUrl = previewImageUrl ?: imageUrl,
+            contentHash = sha256(contentHtml ?: contentText.ifBlank { url }),
+            importedAt = fetchedAt,
+            updatedAt = fetchedAt,
+            independentSaved = independentSaved,
+            independentChangedAt = if (independentSaved) fetchedAt else 0L,
+            independentSortOrder = if (independentSaved) fetchedAt else 0L,
+            rssSourceUrl = rssSourceUrl,
+            rssSourceTitle = rssSourceTitle,
+            favoriteSaved = false,
+            favoriteChangedAt = 0L,
+            favoriteSortOrder = 0L,
+            watchLaterSaved = false,
+            watchLaterChangedAt = 0L,
+            watchLaterSortOrder = 0L,
+            deleted = false,
+            deletedAt = 0L
+        )
+    }
+
+    private suspend fun resolveSyncedArticleChannel(article: SyncedSavedArticle): RssChannelEntity {
+        val sourceUrl = article.rssSourceUrl?.takeIf { it.isSyncedRssSourceUrl() } ?: return resolvePhoneImportChannel()
+        return resolveSyncedRssSourceChannel(
+            url = sourceUrl,
+            title = article.rssSourceTitle?.takeIf { it.isNotBlank() }
+                ?: article.siteName.takeIf { it.isNotBlank() }
+                ?: hostLabel(sourceUrl),
+            description = null,
+            imageUrl = null,
+            updatedAt = maxOf(article.updatedAt, article.importedAt)
+        )
+    }
+
     private suspend fun resolvePhoneImportChannel(): RssChannelEntity {
-        channelDao.getChannelByUrl(PHONE_IMPORT_CHANNEL_URL)?.let { return it }
+        channelDao.getChannelByUrl(PHONE_IMPORT_CHANNEL_URL)?.let { existing ->
+            if (existing.title != PHONE_IMPORT_CHANNEL_TITLE || existing.description != PHONE_IMPORT_CHANNEL_DESCRIPTION) {
+                val updated = existing.copy(
+                    title = PHONE_IMPORT_CHANNEL_TITLE,
+                    description = PHONE_IMPORT_CHANNEL_DESCRIPTION,
+                    useOriginalContent = true
+                )
+                channelDao.updateChannel(updated)
+                return updated
+            }
+            return existing
+        }
         val now = System.currentTimeMillis()
         val entity = RssChannelEntity(
             url = PHONE_IMPORT_CHANNEL_URL,
-            title = "手机导入",
-            description = "从手机同步来的网页文章",
+            title = PHONE_IMPORT_CHANNEL_TITLE,
+            description = PHONE_IMPORT_CHANNEL_DESCRIPTION,
             imageUrl = null,
             lastFetchedAt = now,
             createdAt = now,
@@ -964,6 +1144,47 @@ class DefaultRssRepository(
             entity.copy(id = id)
         } else {
             channelDao.getChannelByUrl(PHONE_IMPORT_CHANNEL_URL) ?: entity
+        }
+    }
+
+    private suspend fun resolveSyncedRssSourceChannel(
+        url: String,
+        title: String,
+        description: String?,
+        imageUrl: String?,
+        updatedAt: Long
+    ): RssChannelEntity {
+        val existing = channelDao.getChannelByUrl(url)
+        val now = System.currentTimeMillis()
+        if (existing != null) {
+            val next = existing.copy(
+                title = title.ifBlank { existing.title },
+                description = description ?: existing.description,
+                imageUrl = imageUrl ?: existing.imageUrl,
+                sortOrder = maxOf(existing.sortOrder, updatedAt)
+            )
+            if (next != existing) {
+                channelDao.updateChannel(next)
+            }
+            return next
+        }
+        val entity = RssChannelEntity(
+            url = url,
+            title = title.ifBlank { hostLabel(url) },
+            description = description,
+            imageUrl = imageUrl,
+            lastFetchedAt = null,
+            createdAt = now,
+            sortOrder = updatedAt.takeIf { it > 0L } ?: now,
+            isPinned = false,
+            useOriginalContent = false,
+            continuePlaybackInBackground = false
+        )
+        val id = channelDao.insertChannel(entity)
+        return if (id > 0L) {
+            entity.copy(id = id)
+        } else {
+            channelDao.getChannelByUrl(url) ?: entity
         }
     }
 
@@ -1021,9 +1242,14 @@ class DefaultRssRepository(
         return existing.id
     }
 
-    private suspend fun findSyncedArticleItemId(articleId: String): Long? {
-        val channel = channelDao.getChannelByUrl(PHONE_IMPORT_CHANNEL_URL) ?: return null
-        return itemDao.getItemByDedupKey(channel.id, articleId)?.id
+    private suspend fun findSyncedArticleItemId(article: SyncedSavedArticle): Long? {
+        val sourceUrl = article.rssSourceUrl?.takeIf { it.isSyncedRssSourceUrl() }
+        val channel = if (sourceUrl != null) {
+            channelDao.getChannelByUrl(sourceUrl)
+        } else {
+            channelDao.getChannelByUrl(PHONE_IMPORT_CHANNEL_URL)
+        } ?: return null
+        return itemDao.getItemByDedupKey(channel.id, article.articleId)?.id
     }
 
     private suspend fun applySyncedState(
@@ -1258,7 +1484,8 @@ class DefaultRssRepository(
         sortOrder = sortOrder,
         isPinned = isPinned,
         useOriginalContent = useOriginalContent,
-        unreadCount = unreadCount
+        unreadCount = unreadCount,
+        continuePlaybackInBackground = continuePlaybackInBackground
     )
 
     private fun RssItemEntity.toModel(): RssItem = RssItem(
@@ -1289,6 +1516,37 @@ private data class PendingOriginalUpdate(
 )
 
 private const val PHONE_IMPORT_CHANNEL_URL = "watchrss://phone-imports"
+private const val PHONE_IMPORT_CHANNEL_TITLE = "独立文章"
+private const val PHONE_IMPORT_CHANNEL_DESCRIPTION = "从手机同步来的独立网页文章"
+
+private fun RssChannelEntity.isSyncedRssSource(): Boolean {
+    return url.isSyncedRssSourceUrl()
+}
+
+private fun String.isSyncedRssSourceUrl(): Boolean {
+    val lower = trim().lowercase()
+    return lower.startsWith("http://") || lower.startsWith("https://")
+}
+
+private fun RssChannelEntity.syncUpdatedAt(): Long {
+    return maxOf(lastFetchedAt ?: 0L, sortOrder, createdAt)
+}
+
+private fun RssChannelEntity.toSyncedRssSource(deviceId: String): SyncedRssSource {
+    return SyncedRssSource(
+        url = url,
+        sourceDeviceId = deviceId,
+        title = title,
+        description = description.orEmpty(),
+        siteUrl = null,
+        imageUrl = imageUrl,
+        createdAt = createdAt,
+        updatedAt = syncUpdatedAt(),
+        sortOrder = sortOrder,
+        deleted = false,
+        deletedAt = 0L
+    )
+}
 
 private fun stableArticleId(value: String): String {
     return sha256(
