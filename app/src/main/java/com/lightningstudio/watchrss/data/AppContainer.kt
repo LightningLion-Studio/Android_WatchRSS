@@ -28,6 +28,7 @@ import com.lightningstudio.watchrss.data.db.WatchRssDatabase
 import com.lightningstudio.watchrss.data.network.DefaultInternetAvailabilityMonitor
 import com.lightningstudio.watchrss.data.network.InternetAvailabilityMonitor
 import com.lightningstudio.watchrss.data.rss.DefaultRssRepository
+import com.lightningstudio.watchrss.data.rss.FileArticleContentStore
 import com.lightningstudio.watchrss.data.rss.RssReadableService
 import com.lightningstudio.watchrss.data.rss.RssFetchService
 import com.lightningstudio.watchrss.data.rss.RssOfflineStore
@@ -90,7 +91,8 @@ class DefaultAppContainer(context: Context) : AppContainer {
             WatchRssDatabase.MIGRATION_7_8,
             WatchRssDatabase.MIGRATION_8_9,
             WatchRssDatabase.MIGRATION_9_10,
-            WatchRssDatabase.MIGRATION_10_11
+            WatchRssDatabase.MIGRATION_10_11,
+            WatchRssDatabase.MIGRATION_11_12
         )
             .addCallback(BuiltinChannelSeed.callback)
             .build()
@@ -182,6 +184,7 @@ class DefaultAppContainer(context: Context) : AppContainer {
         val fetchService = RssFetchService()
         val readableService = RssReadableService()
         val parseService = RssParseService()
+        val articleContentStore = FileArticleContentStore(appContext)
         val offlineStore = RssOfflineStore(
             appContext,
             database.offlineMediaDao(),
@@ -200,7 +203,8 @@ class DefaultAppContainer(context: Context) : AppContainer {
             readableService = readableService,
             parseService = parseService,
             offlineStore = offlineStore,
-            deviceId = deviceIdentity.deviceId
+            deviceId = deviceIdentity.deviceId,
+            articleContentStore = articleContentStore
         )
     }
 

@@ -14,7 +14,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         SavedSyncStateEntity::class,
         OfflineMediaEntity::class
     ],
-    version = 11,
+    version = 12,
     exportSchema = false
 )
 @SkipQueryVerification
@@ -167,6 +167,34 @@ abstract class WatchRssDatabase : RoomDatabase() {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.execSQL(
                     "ALTER TABLE rss_channels ADD COLUMN continuePlaybackInBackground INTEGER NOT NULL DEFAULT 0"
+                )
+            }
+        }
+
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    UPDATE rss_items
+                    SET
+                        content = CASE
+                            WHEN content IS NOT NULL AND length(content) > 100000 THEN NULL
+                            ELSE content
+                        END,
+                        originalContent = CASE
+                            WHEN originalContent IS NOT NULL AND length(originalContent) > 100000 THEN NULL
+                            ELSE originalContent
+                        END
+                    WHERE channelId IN (
+                        SELECT id FROM rss_channels
+                        WHERE url = 'watchrss://phone-imports'
+                           OR url LIKE 'https://watchrss.local/import-content%'
+                    )
+                    AND (
+                        (content IS NOT NULL AND length(content) > 100000) OR
+                        (originalContent IS NOT NULL AND length(originalContent) > 100000)
+                    )
+                    """.trimIndent()
                 )
             }
         }

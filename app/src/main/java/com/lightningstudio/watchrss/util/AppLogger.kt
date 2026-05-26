@@ -7,6 +7,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 private val SENSITIVE_HEADER_PATTERN =
     Regex("""(?i)\b((?:set-)?cookie|authorization|proxy-authorization)\s*([:=])\s*[^\r\n]*""")
@@ -68,6 +69,7 @@ object AppLogger {
     private const val TAG = "AppLogger"
     private const val LOG_FILE_NAME = "app_log.txt"
     private const val MAX_FILE_SIZE = 5 * 1024 * 1024 // 5MB
+    private const val FLUSH_TIMEOUT_MS = 1500L
 
     private var logFile: File? = null
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault())
@@ -218,6 +220,7 @@ object AppLogger {
     fun readLogs(): String? {
         return try {
             val file = logFile ?: return null
+            flushPendingWrites()
             if (!file.exists() || file.length() == 0L) {
                 return null
             }
@@ -237,6 +240,15 @@ object AppLogger {
             log(TAG, "日志已清空")
         } catch (e: Exception) {
             Log.e(TAG, "清空日志失败", e)
+        }
+    }
+
+    private fun flushPendingWrites() {
+        if (Thread.currentThread().name == "AppLogger-IO") return
+        try {
+            fileIoExecutor.submit {}.get(FLUSH_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+        } catch (e: Exception) {
+            Log.w(TAG, "等待日志写入完成超时或失败", e)
         }
     }
 }

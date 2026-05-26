@@ -10,7 +10,28 @@ import kotlinx.coroutines.flow.Flow
 interface RssItemDao {
     @Query(
         """
-        SELECT * FROM rss_items
+        SELECT
+            id,
+            channelId,
+            title,
+            description,
+            NULL AS content,
+            NULL AS originalContent,
+            link,
+            guid,
+            pubDate,
+            imageUrl,
+            audioUrl,
+            videoUrl,
+            summary,
+            previewImageUrl,
+            isRead,
+            isLiked,
+            readingProgress,
+            dedupKey,
+            fetchedAt,
+            contentSizeBytes
+        FROM rss_items
         WHERE channelId = :channelId
         ORDER BY fetchedAt DESC, id DESC
         LIMIT :limit
@@ -39,7 +60,28 @@ interface RssItemDao {
 
     @Query(
         """
-        SELECT * FROM rss_items
+        SELECT
+            id,
+            channelId,
+            title,
+            description,
+            NULL AS content,
+            NULL AS originalContent,
+            link,
+            guid,
+            pubDate,
+            imageUrl,
+            audioUrl,
+            videoUrl,
+            summary,
+            previewImageUrl,
+            isRead,
+            isLiked,
+            readingProgress,
+            dedupKey,
+            fetchedAt,
+            contentSizeBytes
+        FROM rss_items
         WHERE channelId = :channelId AND (
             title LIKE :keyword ESCAPE '\' OR
             description LIKE :keyword ESCAPE '\' OR

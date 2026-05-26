@@ -45,7 +45,8 @@ class DefaultRssRepository(
     private val readableService: RssReadableService,
     private val parseService: RssParseService,
     private val offlineStore: RssOfflineStore,
-    private val deviceId: String
+    private val deviceId: String,
+    private val articleContentStore: ArticleContentStore? = null
 ) : RssRepository {
     private val refreshJobs = ConcurrentHashMap<Long, Job>()
     private val originalContentItemJobs = ConcurrentHashMap<Long, Job>()
@@ -106,10 +107,13 @@ class DefaultRssRepository(
 
     override fun observeItem(itemId: Long): Flow<RssItem?> =
         itemDao.observeItem(itemId).map { item ->
-            if (item != null) {
-                schedulePreviewUpdate(item)
+            withContext(Dispatchers.IO) {
+                val hydrated = item?.hydrateExternalContent()
+                if (hydrated != null) {
+                    schedulePreviewUpdate(hydrated)
+                }
+                hydrated?.toModel()
             }
-            item?.toModel()
         }
 
     override fun searchItems(channelId: Long, keyword: String, limit: Int): Flow<List<RssItem>> {
@@ -309,10 +313,10 @@ class DefaultRssRepository(
         PerfTrace.log("repo", "refreshChannel start channelId=$channelId refreshAll=$refreshAll")
         val channel = channelDao.getChannel(channelId)
             ?: return@withContext Result.failure(IllegalArgumentException("频道不存在"))
-        if (BuiltinChannelType.fromUrl(channel.url) != null) {
+        if (BuiltinChannelType.fromUrl(channel.url) != null || channel.isImportedContentChannel()) {
             PerfTrace.log(
                 "repo",
-                "refreshChannel skip builtin channelId=$channelId durMs=${PerfTrace.elapsedMs(startNanos)}"
+                "refreshChannel skip local channelId=$channelId durMs=${PerfTrace.elapsedMs(startNanos)}"
             )
             return@withContext Result.success(Unit)
         }
@@ -415,7 +419,11 @@ class DefaultRssRepository(
                     "fallback link=${item.link} size=${contentOverride.length}"
                 )
             }
-            val update = PendingOriginalUpdate(item.dedupKey, contentOverride, contentSizeBytes)
+            val update = PendingOriginalUpdate(
+                dedupKey = item.dedupKey,
+                content = externalizeContentValue("${item.dedupKey}-original", contentOverride) ?: contentOverride,
+                contentSizeBytes = contentSizeBytes
+            )
             if (pausedOriginalChannels.contains(item.channelId)) {
                 PerfTrace.log(
                     "repo",
@@ -554,7 +562,11 @@ class DefaultRssRepository(
             }
             val savedArticleIds = savedArticles.mapTo(mutableSetOf()) { it.articleId }
             val independentArticles = exportSyncedIndependentArticles(deviceId, savedArticleIds)
-            savedArticles + independentArticles + states.values
+            val importedContentArticles = exportSyncedImportedContentArticles(
+                deviceId = deviceId,
+                excludedArticleIds = savedArticleIds + independentArticles.map { it.articleId }
+            )
+            savedArticles + independentArticles + importedContentArticles + states.values
                 .filter { !it.saved && it.articleId !in grouped.keys }
                 .groupBy { it.articleId }
                 .mapNotNull { (articleId, tombstones) ->
@@ -1000,24 +1012,25 @@ class DefaultRssRepository(
         watchLaterChangedAt: Long,
         watchLaterSortOrder: Long
     ): SyncedSavedArticle {
-        val contentHtml = item.originalContent?.takeIf { it.isNotBlank() }
-            ?: item.content?.takeIf { it.isNotBlank() }
-            ?: item.description?.takeIf { it.isNotBlank() }
+        val fullItem = item.hydrateExternalContent()
+        val contentHtml = fullItem.originalContent?.takeIf { it.isNotBlank() }
+            ?: fullItem.content?.takeIf { it.isNotBlank() }
+            ?: fullItem.description?.takeIf { it.isNotBlank() }
         val contentText = contentHtml?.let { Jsoup.parse(it).text().trim() }.orEmpty()
-        val url = item.link.orEmpty()
-        val updatedAt = maxOf(item.fetchedAt, savedAt)
+        val url = fullItem.link.orEmpty()
+        val updatedAt = maxOf(fullItem.fetchedAt, savedAt)
         val rssSourceUrl = channelUrl.takeIf { it.isSyncedRssSourceUrl() }
         val independentSaved = channelUrl == PHONE_IMPORT_CHANNEL_URL
         return SyncedSavedArticle(
             articleId = articleId,
             sourceDeviceId = deviceId,
             url = url,
-            title = item.title,
+            title = fullItem.title,
             siteName = channelTitle,
-            excerpt = item.summary ?: item.description.orEmpty(),
+            excerpt = fullItem.summary ?: fullItem.description.orEmpty(),
             contentHtml = contentHtml,
             contentText = contentText,
-            imageUrl = item.previewImageUrl ?: item.imageUrl,
+            imageUrl = fullItem.previewImageUrl ?: fullItem.imageUrl,
             contentHash = sha256(contentHtml ?: contentText.ifBlank { url }),
             importedAt = savedAt,
             updatedAt = updatedAt,
@@ -1059,6 +1072,31 @@ class DefaultRssRepository(
         }
     }
 
+    private suspend fun exportSyncedImportedContentArticles(
+        deviceId: String,
+        excludedArticleIds: Set<String>
+    ): List<SyncedSavedArticle> {
+        return channelDao.getAllChannels()
+            .filter { it.isImportedContentChannel() }
+            .flatMap { channel ->
+                itemDao.getItemsForChannelSync(channel.id, Int.MAX_VALUE).mapNotNull { item ->
+                    val articleId = stableArticleId(item.link ?: item.dedupKey)
+                    if (articleId in excludedArticleIds) {
+                        null
+                    } else {
+                        item.toSyncedChannelArticle(
+                            articleId = articleId,
+                            channel = channel,
+                            deviceId = deviceId,
+                            independentSaved = false,
+                            rssSourceUrl = channel.url,
+                            rssSourceTitle = channel.title
+                        )
+                    }
+                }
+            }
+    }
+
     private fun RssItemEntity.toSyncedChannelArticle(
         articleId: String,
         channel: RssChannelEntity,
@@ -1067,27 +1105,28 @@ class DefaultRssRepository(
         rssSourceUrl: String?,
         rssSourceTitle: String?
     ): SyncedSavedArticle {
-        val contentHtml = originalContent?.takeIf { it.isNotBlank() }
-            ?: content?.takeIf { it.isNotBlank() }
-            ?: description?.takeIf { it.isNotBlank() }
+        val fullItem = hydrateExternalContent()
+        val contentHtml = fullItem.originalContent?.takeIf { it.isNotBlank() }
+            ?: fullItem.content?.takeIf { it.isNotBlank() }
+            ?: fullItem.description?.takeIf { it.isNotBlank() }
         val contentText = contentHtml?.let { Jsoup.parse(it).text().trim() }.orEmpty()
-        val url = link.orEmpty().ifBlank { dedupKey }
+        val url = fullItem.link.orEmpty().ifBlank { fullItem.dedupKey }
         return SyncedSavedArticle(
             articleId = articleId,
             sourceDeviceId = deviceId,
             url = url,
-            title = title.ifBlank { url },
+            title = fullItem.title.ifBlank { url },
             siteName = channel.title,
-            excerpt = summary ?: description.orEmpty(),
+            excerpt = fullItem.summary ?: fullItem.description.orEmpty(),
             contentHtml = contentHtml,
             contentText = contentText,
-            imageUrl = previewImageUrl ?: imageUrl,
+            imageUrl = fullItem.previewImageUrl ?: fullItem.imageUrl,
             contentHash = sha256(contentHtml ?: contentText.ifBlank { url }),
-            importedAt = fetchedAt,
-            updatedAt = fetchedAt,
+            importedAt = fullItem.fetchedAt,
+            updatedAt = fullItem.fetchedAt,
             independentSaved = independentSaved,
-            independentChangedAt = if (independentSaved) fetchedAt else 0L,
-            independentSortOrder = if (independentSaved) fetchedAt else 0L,
+            independentChangedAt = if (independentSaved) fullItem.fetchedAt else 0L,
+            independentSortOrder = if (independentSaved) fullItem.fetchedAt else 0L,
             rssSourceUrl = rssSourceUrl,
             rssSourceTitle = rssSourceTitle,
             favoriteSaved = false,
@@ -1156,12 +1195,15 @@ class DefaultRssRepository(
     ): RssChannelEntity {
         val existing = channelDao.getChannelByUrl(url)
         val now = System.currentTimeMillis()
+        val importedContent = ImportedContentIds.isImportedContentUrl(url)
         if (existing != null) {
             val next = existing.copy(
                 title = title.ifBlank { existing.title },
                 description = description ?: existing.description,
                 imageUrl = imageUrl ?: existing.imageUrl,
-                sortOrder = maxOf(existing.sortOrder, updatedAt)
+                lastFetchedAt = if (importedContent) maxOf(existing.lastFetchedAt ?: 0L, updatedAt) else existing.lastFetchedAt,
+                sortOrder = maxOf(existing.sortOrder, updatedAt),
+                useOriginalContent = if (importedContent) true else existing.useOriginalContent
             )
             if (next != existing) {
                 channelDao.updateChannel(next)
@@ -1173,11 +1215,11 @@ class DefaultRssRepository(
             title = title.ifBlank { hostLabel(url) },
             description = description,
             imageUrl = imageUrl,
-            lastFetchedAt = null,
+            lastFetchedAt = if (importedContent) updatedAt.takeIf { it > 0L } else null,
             createdAt = now,
             sortOrder = updatedAt.takeIf { it > 0L } ?: now,
             isPinned = false,
-            useOriginalContent = false,
+            useOriginalContent = importedContent,
             continuePlaybackInBackground = false
         )
         val id = channelDao.insertChannel(entity)
@@ -1218,7 +1260,7 @@ class DefaultRssRepository(
             dedupKey = article.articleId,
             fetchedAt = fetchedAt,
             contentSizeBytes = estimateSyncedContentSize(title, article.excerpt, content, article.url, article.imageUrl)
-        )
+        ).externalizeLargeContent()
         val existing = itemDao.getItemByDedupKey(channelId, article.articleId)
         if (existing == null) {
             val inserted = itemDao.insertItems(listOf(entity)).firstOrNull() ?: -1L
@@ -1432,9 +1474,62 @@ class DefaultRssRepository(
         return total
     }
 
+    private fun RssItemEntity.externalizeLargeContent(): RssItemEntity {
+        val store = articleContentStore ?: return this
+        if (!shouldExternalizeContent(store)) return this
+        val storedContent = externalizeContentValue("${dedupKey}-content", content)
+        val storedOriginalContent = if (originalContent == content && storedContent != content) {
+            storedContent
+        } else {
+            externalizeContentValue("${dedupKey}-original", originalContent)
+        }
+        return copy(
+            content = storedContent,
+            originalContent = storedOriginalContent
+        )
+    }
+
+    private fun RssItemEntity.hydrateExternalContent(): RssItemEntity {
+        val store = articleContentStore ?: return this
+        val hydratedContent = content?.let { value ->
+            if (store.isMarker(value)) store.loadText(value) else value
+        }
+        val hydratedOriginalContent = originalContent?.let { value ->
+            if (store.isMarker(value)) store.loadText(value) else value
+        }
+        return copy(
+            content = hydratedContent,
+            originalContent = hydratedOriginalContent
+        )
+    }
+
+    private fun RssItemEntity.shouldExternalizeContent(store: ArticleContentStore): Boolean {
+        val totalChars = inlineContentLength(content, store) + inlineContentLength(originalContent, store)
+        return totalChars > MAX_INLINE_CONTENT_CHARS ||
+            shouldExternalizeField(content, store) ||
+            shouldExternalizeField(originalContent, store)
+    }
+
+    private fun externalizeContentValue(key: String, value: String?): String? {
+        val store = articleContentStore ?: return value
+        if (!shouldExternalizeField(value, store)) return value
+        return store.storeText(key, value.orEmpty())
+    }
+
+    private fun inlineContentLength(value: String?, store: ArticleContentStore): Int {
+        if (value.isNullOrBlank() || store.isMarker(value)) return 0
+        return value.length
+    }
+
+    private fun shouldExternalizeField(value: String?, store: ArticleContentStore): Boolean {
+        if (value.isNullOrBlank() || store.isMarker(value)) return false
+        return value.length > MAX_INLINE_CONTENT_CHARS / 2
+    }
+
     private fun previewSourceContent(item: RssItemEntity): String? {
-        return item.originalContent?.trim()?.ifEmpty { null }
-            ?: item.content?.trim()?.ifEmpty { null }
+        val hydrated = item.hydrateExternalContent()
+        return hydrated.originalContent?.trim()?.ifEmpty { null }
+            ?: hydrated.content?.trim()?.ifEmpty { null }
     }
 
     private fun buildSavedState(entries: List<SavedEntryEntity>): SavedState {
@@ -1446,7 +1541,7 @@ class DefaultRssRepository(
     }
 
     private fun SavedRssItem.toModel(): SavedItem = SavedItem(
-        item = item.toModel(),
+        item = item.hydrateExternalContent().toModel(),
         channelTitle = channelTitle,
         savedAt = savedAt,
         saveType = SaveType.valueOf(saveType)
@@ -1518,9 +1613,14 @@ private data class PendingOriginalUpdate(
 private const val PHONE_IMPORT_CHANNEL_URL = "watchrss://phone-imports"
 private const val PHONE_IMPORT_CHANNEL_TITLE = "独立文章"
 private const val PHONE_IMPORT_CHANNEL_DESCRIPTION = "从手机同步来的独立网页文章"
+private const val MAX_INLINE_CONTENT_CHARS = 100_000
 
 private fun RssChannelEntity.isSyncedRssSource(): Boolean {
     return url.isSyncedRssSourceUrl()
+}
+
+private fun RssChannelEntity.isImportedContentChannel(): Boolean {
+    return ImportedContentIds.isImportedContentUrl(url)
 }
 
 private fun String.isSyncedRssSourceUrl(): Boolean {

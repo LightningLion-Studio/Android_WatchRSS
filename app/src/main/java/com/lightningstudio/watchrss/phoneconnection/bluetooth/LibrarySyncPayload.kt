@@ -154,6 +154,111 @@ object LibrarySyncPayload {
         applied: Int,
         rssSources: List<SyncedRssSource> = emptyList(),
         sourcesApplied: Int = 0
+    ): JSONObject = buildResponseFrame(
+        deviceId = deviceId,
+        articles = articles,
+        applied = applied,
+        rssSources = rssSources,
+        sourcesApplied = sourcesApplied,
+        batchIndex = null,
+        batchCount = null,
+        totalArticles = null
+    )
+
+    fun buildResponseFrames(
+        deviceId: String,
+        articles: List<SyncedSavedArticle>,
+        applied: Int,
+        rssSources: List<SyncedRssSource> = emptyList(),
+        sourcesApplied: Int = 0,
+        useBatches: Boolean
+    ): List<JSONObject> {
+        if (!useBatches) {
+            return listOf(buildResponse(deviceId, articles, applied, rssSources, sourcesApplied))
+        }
+        return buildArticleFrames(
+            articleItems = articles.map { it.toJson() },
+            totalArticles = articles.size
+        ) { array, batchIndex, batchCount, totalArticles ->
+            buildResponseFrame(
+                deviceId = deviceId,
+                articleArray = array,
+                articleCount = articles.size,
+                applied = applied,
+                rssSources = if (batchIndex == 0) rssSources else emptyList(),
+                sourcesApplied = sourcesApplied,
+                batchIndex = batchIndex,
+                batchCount = batchCount,
+                totalArticles = totalArticles
+            )
+        }
+    }
+
+    fun combineArticlePayloads(frames: List<JSONObject>): JSONObject {
+        if (frames.isEmpty()) return JSONObject()
+        if (frames.size == 1 && !frames.first().optBoolean("success", true)) return frames.first()
+        val first = frames.first()
+        val articles = JSONArray()
+        val sources = JSONArray()
+        frames.forEach { frame ->
+            frame.optJSONArray("articles")?.let { source ->
+                for (index in 0 until source.length()) {
+                    source.optJSONObject(index)?.let(articles::put)
+                }
+            }
+            frame.optJSONArray("rssSources")?.let { source ->
+                for (index in 0 until source.length()) {
+                    source.optJSONObject(index)?.let(sources::put)
+                }
+            }
+        }
+        return JSONObject().apply {
+            put("success", frames.all { it.optBoolean("success", true) })
+            put("version", first.optInt("version", PROTOCOL_VERSION))
+            put("action", BluetoothSyncProtocol.ACTION_SYNC_LIBRARY)
+            put("phase", first.optString("phase").ifBlank { PHASE_COMPLETE })
+            put("deviceId", first.optString("deviceId"))
+            put("sentAt", first.optLong("sentAt"))
+            put("articles", articles)
+            if (sources.length() > 0) {
+                put("rssSources", sources)
+            }
+            first.optJSONObject("stats")?.let { put("stats", it) }
+            first.optString("message").takeIf { it.isNotBlank() }?.let { put("message", it) }
+        }
+    }
+
+    private fun buildResponseFrame(
+        deviceId: String,
+        articles: List<SyncedSavedArticle>,
+        applied: Int,
+        rssSources: List<SyncedRssSource> = emptyList(),
+        sourcesApplied: Int = 0,
+        batchIndex: Int?,
+        batchCount: Int?,
+        totalArticles: Int?
+    ): JSONObject = buildResponseFrame(
+        deviceId = deviceId,
+        articleArray = articles.toJsonArray(),
+        articleCount = articles.size,
+        applied = applied,
+        rssSources = rssSources,
+        sourcesApplied = sourcesApplied,
+        batchIndex = batchIndex,
+        batchCount = batchCount,
+        totalArticles = totalArticles
+    )
+
+    private fun buildResponseFrame(
+        deviceId: String,
+        articleArray: JSONArray,
+        articleCount: Int,
+        applied: Int,
+        rssSources: List<SyncedRssSource> = emptyList(),
+        sourcesApplied: Int = 0,
+        batchIndex: Int?,
+        batchCount: Int?,
+        totalArticles: Int?
     ): JSONObject {
         return JSONObject().apply {
             put("success", true)
@@ -162,12 +267,13 @@ object LibrarySyncPayload {
             put("phase", PHASE_COMPLETE)
             put("deviceId", deviceId)
             put("sentAt", System.currentTimeMillis())
-            put("articles", articles.toJsonArray())
+            put("articles", articleArray)
             put("rssSources", rssSources.toSourceJsonArray())
+            putBatchFields(batchIndex, batchCount, totalArticles)
             put(
                 "stats",
                 JSONObject().apply {
-                    put("sent", articles.size)
+                    put("sent", articleCount)
                     put("applied", applied)
                     put("sourcesSent", rssSources.size)
                     put("sourcesApplied", sourcesApplied)
@@ -187,6 +293,7 @@ object LibrarySyncPayload {
             put("version", PROTOCOL_VERSION)
             put("action", BluetoothSyncProtocol.ACTION_SYNC_LIBRARY)
             put("phase", PHASE_MANIFEST)
+            put("supportsArticleBatches", true)
             put("deviceId", deviceId)
             put("sentAt", System.currentTimeMillis())
             put("articleManifest", articles.toManifestJsonArray())
@@ -216,6 +323,63 @@ object LibrarySyncPayload {
     private fun List<SyncedSavedArticle>.toManifestJsonArray(): JSONArray {
         return JSONArray().also { array ->
             forEach { article -> array.put(article.toManifestJson()) }
+        }
+    }
+
+    private fun List<JSONObject>.toRawJsonArray(): JSONArray {
+        return JSONArray().also { array ->
+            forEach(array::put)
+        }
+    }
+
+    private fun buildArticleFrames(
+        articleItems: List<JSONObject>,
+        totalArticles: Int,
+        buildPayload: (JSONArray, Int, Int, Int) -> JSONObject
+    ): List<JSONObject> {
+        if (articleItems.isEmpty()) {
+            return listOf(buildPayload(JSONArray(), 0, 1, totalArticles))
+        }
+
+        val chunks = mutableListOf<List<JSONObject>>()
+        var current = mutableListOf<JSONObject>()
+        articleItems.forEach { article ->
+            val candidate = current + article
+            val candidatePayload = buildPayload(candidate.toRawJsonArray(), 0, MAX_BATCH_COUNT_FOR_SIZING, totalArticles)
+            val candidateSize = BluetoothSyncProtocol.encodedSize(candidatePayload)
+            if (candidateSize > ARTICLE_BATCH_TARGET_BYTES && current.isNotEmpty()) {
+                chunks += current
+                current = mutableListOf(article)
+            } else {
+                current = candidate.toMutableList()
+            }
+            val singlePayload = buildPayload(listOf(article).toRawJsonArray(), 0, MAX_BATCH_COUNT_FOR_SIZING, totalArticles)
+            val singleSize = BluetoothSyncProtocol.encodedSize(singlePayload)
+            require(singleSize <= BluetoothSyncProtocol.MAX_FRAME_BYTES) {
+                "单篇文章蓝牙消息过大：${article.optString("title").ifBlank { article.optString("url") }.take(40)}（$singleSize 字节）"
+            }
+        }
+        if (current.isNotEmpty()) {
+            chunks += current
+        }
+
+        val batchCount = chunks.size.coerceAtLeast(1)
+        return chunks.mapIndexed { index, chunk ->
+            buildPayload(chunk.toRawJsonArray(), index, batchCount, totalArticles)
+        }
+    }
+
+    private fun JSONObject.putBatchFields(
+        batchIndex: Int?,
+        batchCount: Int?,
+        totalArticles: Int?
+    ) {
+        if (batchIndex != null && batchCount != null) {
+            put("batchIndex", batchIndex)
+            put("batchCount", batchCount)
+        }
+        if (totalArticles != null) {
+            put("totalArticles", totalArticles)
         }
     }
 
@@ -303,4 +467,6 @@ object LibrarySyncPayload {
 
     private const val PHASE_MANIFEST = "manifest"
     private const val PHASE_COMPLETE = "complete"
+    private const val ARTICLE_BATCH_TARGET_BYTES = BluetoothSyncProtocol.MAX_FRAME_BYTES - 128 * 1024
+    private const val MAX_BATCH_COUNT_FOR_SIZING = 9999
 }
