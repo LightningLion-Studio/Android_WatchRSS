@@ -705,7 +705,7 @@ class DefaultRssRepository(
         sources.forEach { source ->
             val normalizedUrl = normalizeUrl(source.url)
             if (!isValidUrl(normalizedUrl)) return@forEach
-            if (ImportedContentIds.isImportedContentUrl(normalizedUrl)) return@forEach
+            if (ImportedContentIds.isImportedTextSourceUrl(normalizedUrl)) return@forEach
             val existing = channelDao.getChannelByUrl(normalizedUrl)
             if (source.deleted) {
                 if (existing != null) {
@@ -2082,7 +2082,7 @@ private const val ARTICLE_DELETE_SYNC_TYPE = "ARTICLE_DELETE"
 private const val MAX_INLINE_CONTENT_CHARS = 100_000
 
 private fun RssChannelEntity.isSyncedRssSource(): Boolean {
-    return url.isSyncedRssSourceUrl() && !isImportedContentChannel()
+    return url.isSyncedRssSourceUrl() && !ImportedContentIds.isImportedTextSourceUrl(url)
 }
 
 private fun RssChannelEntity.isImportedContentChannel(): Boolean {

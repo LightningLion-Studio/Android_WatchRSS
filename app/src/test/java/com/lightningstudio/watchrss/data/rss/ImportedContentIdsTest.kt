@@ -16,6 +16,24 @@ class ImportedContentIdsTest {
     }
 
     @Test
+    fun isImportedTextSourceUrl_matchesOnlyTxtRootChannel() {
+        assertTrue(ImportedContentIds.isImportedTextSourceUrl("https://watchrss.local/import-content"))
+        assertFalse(ImportedContentIds.isImportedTextSourceUrl("https://watchrss.local/import-content/txt/article"))
+        assertFalse(ImportedContentIds.isImportedTextSourceUrl("https://watchrss.local/import-content/epub/book"))
+        assertFalse(ImportedContentIds.isImportedTextSourceUrl("https://watchrss.local/import-epub/book"))
+        assertFalse(ImportedContentIds.isImportedTextSourceUrl("watchrss://phone-imports"))
+    }
+
+    @Test
+    fun isDeletableLocalContentChannel_includesEpubChannels() {
+        assertTrue(ImportedContentIds.isDeletableLocalContentChannel("https://watchrss.local/import-content"))
+        assertTrue(ImportedContentIds.isDeletableLocalContentChannel("https://watchrss.local/import-content/epub/book"))
+        assertTrue(ImportedContentIds.isDeletableLocalContentChannel("https://watchrss.local/import-epub/book"))
+        assertTrue(ImportedContentIds.isDeletableLocalContentChannel("watchrss://phone-imports"))
+        assertFalse(ImportedContentIds.isDeletableLocalContentChannel("https://example.com/feed.xml"))
+    }
+
+    @Test
     fun syncedArticleFetchedAt_preservesRemoteChapterOrderTime() {
         val article = syncedArticle(
             importedAt = 100L,
