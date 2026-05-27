@@ -95,7 +95,9 @@ fun BiliSettingsScreen(
                     text = "刷新时抓取原文正文与图片",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = valueIndent, top = valueSpacing)
                 )
                 Spacer(modifier = Modifier.height(entrySpacing))
             } else {

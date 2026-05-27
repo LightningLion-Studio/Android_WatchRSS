@@ -143,12 +143,13 @@ class BiliFeedViewModel(
     }
 
     fun favorite(item: BiliItem) {
-        val aid = item.aid ?: return
         viewModelScope.launch {
-            val result = repository.favorite(aid, add = true, bvid = item.bvid)
+            val targetItem = resolveFavoriteTarget(item) ?: return@launch
+            val aid = targetItem.aid ?: return@launch
+            val result = repository.favorite(aid, add = true, bvid = targetItem.bvid)
             if (result.isSuccess) {
                 _uiState.update { it.copy(message = "已收藏") }
-                syncLocalSaved(item, SaveType.FAVORITE, true)
+                syncLocalSaved(targetItem, SaveType.FAVORITE, true)
             } else {
                 _uiState.update { it.copy(message = formatBiliError(result.code, result.message)) }
             }
@@ -219,5 +220,35 @@ class BiliFeedViewModel(
         } else {
             repository.clearCachedPreview(aid = item.aid, bvid = item.bvid, cid = item.cid)
         }
+    }
+
+    private suspend fun resolveFavoriteTarget(item: BiliItem): BiliItem? {
+        if (item.aid != null) return item
+        val bvid = item.bvid?.trim()?.takeIf { it.isNotEmpty() }
+        if (bvid == null) {
+            _uiState.update { it.copy(message = "当前内容暂不支持收藏") }
+            return null
+        }
+        val result = repository.fetchVideoDetail(aid = null, bvid = bvid)
+        if (!result.isSuccess) {
+            _uiState.update { it.copy(message = formatBiliError(result.code, result.message)) }
+            return null
+        }
+        val resolved = result.data?.item
+        if (resolved?.aid == null) {
+            _uiState.update { it.copy(message = "当前内容暂不支持收藏") }
+            return null
+        }
+        return item.copy(
+            aid = resolved.aid,
+            bvid = item.bvid ?: resolved.bvid,
+            cid = item.cid ?: resolved.cid,
+            title = item.title ?: resolved.title,
+            cover = item.cover ?: resolved.cover,
+            duration = item.duration ?: resolved.duration,
+            pubdate = item.pubdate ?: resolved.pubdate,
+            owner = item.owner ?: resolved.owner,
+            stat = item.stat ?: resolved.stat
+        )
     }
 }

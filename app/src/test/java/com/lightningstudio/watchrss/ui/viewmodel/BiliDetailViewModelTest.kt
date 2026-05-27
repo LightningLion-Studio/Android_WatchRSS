@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import com.lightningstudio.watchrss.data.bili.BiliErrorCodes
 import com.lightningstudio.watchrss.data.bili.BiliInteractionState
 import com.lightningstudio.watchrss.data.bili.BiliPlaybackProgress
+import com.lightningstudio.watchrss.data.rss.SaveType
 import com.lightningstudio.watchrss.sdk.bili.BiliPage
 import com.lightningstudio.watchrss.sdk.bili.BiliResult
 import com.lightningstudio.watchrss.testutil.MainDispatcherRule
@@ -271,6 +272,35 @@ class BiliDetailViewModelTest {
             repo.localInteractionStates["bv:BV41"]
         )
         assertEquals(listOf(41L to "BV41"), repo.remoteInteractionRequests)
+    }
+
+    @Test
+    fun loadDetail_remoteFavorite_syncsAppGlobalFavorite() = runTest {
+        val repo = TestBiliRepository(initialLoggedIn = true).apply {
+            val item = sampleBiliItem(aid = 43L, bvid = "BV43", cid = 503L)
+            videoDetailResult = BiliResult(
+                code = 0,
+                data = sampleBiliVideoDetail(item = item)
+            )
+            remoteInteractionStateResult = BiliResult(
+                code = 0,
+                data = BiliInteractionState(isFavorited = true)
+            )
+        }
+        val rssRepo = TestRssRepository()
+
+        BiliDetailViewModel(
+            savedStateHandle = SavedStateHandle(mapOf("aid" to "43", "bvid" to "BV43")),
+            repository = repo,
+            rssRepository = rssRepo
+        )
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(SaveType.FAVORITE to true),
+            rssRepo.syncedExternalSavedItems.map { it.second to it.third }
+        )
+        assertTrue(repo.cachedPreviewRequests.isEmpty())
     }
 
     @Test

@@ -538,10 +538,11 @@ class DefaultRssRepository(
             isRead = false,
             fetchedAt = item.fetchedAt
         )
-        val insertId = itemDao.insertItems(listOf(entity)).firstOrNull() ?: -1L
-        val itemId = if (insertId > 0) {
-            insertId
-        } else {
+        val existingItem = itemDao.getItemByDedupKey(channel.id, entity.dedupKey)
+        if (!saved && existingItem == null) {
+            return@withContext Result.success(SavedState(isFavorite = false, isWatchLater = false))
+        }
+        val itemId = if (existingItem != null) {
             itemDao.updateContentByDedupKey(
                 channelId = channel.id,
                 dedupKey = entity.dedupKey,
@@ -554,7 +555,26 @@ class DefaultRssRepository(
                 previewImageUrl = entity.previewImageUrl,
                 contentSizeBytes = entity.contentSizeBytes
             )
-            itemDao.getItemByDedupKey(channel.id, entity.dedupKey)?.id
+            existingItem.id
+        } else {
+            val insertId = itemDao.insertItems(listOf(entity)).firstOrNull() ?: -1L
+            if (insertId > 0) {
+                insertId
+            } else {
+                itemDao.updateContentByDedupKey(
+                    channelId = channel.id,
+                    dedupKey = entity.dedupKey,
+                    description = entity.description,
+                    content = entity.content,
+                    imageUrl = entity.imageUrl,
+                    audioUrl = entity.audioUrl,
+                    videoUrl = entity.videoUrl,
+                    summary = entity.summary,
+                    previewImageUrl = entity.previewImageUrl,
+                    contentSizeBytes = entity.contentSizeBytes
+                )
+                itemDao.getItemByDedupKey(channel.id, entity.dedupKey)?.id
+            }
         } ?: return@withContext Result.failure(IllegalStateException("保存失败"))
 
         val existing = savedEntryDao.getByItemId(itemId)
@@ -597,8 +617,9 @@ class DefaultRssRepository(
         val normalizedPeerId = peerDeviceId.ifBlank { DEFAULT_LIBRARY_PEER_ID }
         val peerState = syncPeerStateDao.get(normalizedPeerId)
         val now = System.currentTimeMillis()
-        val maxSeq = syncChangeLogDao.maxSeq()
         val fullArticleManifest = exportSyncedArticleManifests(localDeviceId)
+        repairMissingArticleChangeLogEntries(fullArticleManifest)
+        val maxSeq = syncChangeLogDao.maxSeq()
         val peerAckedSeq = peerState?.lastLocalSeqAckedByPeer ?: 0L
         val fullSnapshotReason = when {
             peerState == null -> "newPeer"
@@ -660,6 +681,38 @@ class DefaultRssRepository(
                 updatedAt = now
             )
         )
+    }
+
+    private suspend fun repairMissingArticleChangeLogEntries(
+        articleManifest: List<SyncedArticleManifest>
+    ) {
+        val candidates = articleManifest
+            .asSequence()
+            .filterNot { it.deleted }
+            .filter { it.latestOperationAt() > 0L }
+            .distinctBy { it.articleId }
+            .toList()
+        if (candidates.isEmpty()) return
+
+        val loggedChangedAt = syncChangeLogDao.maxChangedAtByEntityIds(
+            kind = SYNC_KIND_ARTICLE,
+            entityIds = candidates.map { it.articleId }
+        ).associate { it.entityId to it.changedAt }
+        val now = System.currentTimeMillis()
+        candidates.forEach { article ->
+            val changedAt = article.latestOperationAt()
+            if (changedAt <= (loggedChangedAt[article.articleId] ?: 0L)) return@forEach
+            syncChangeLogDao.insert(
+                SyncChangeLogEntity(
+                    kind = SYNC_KIND_ARTICLE,
+                    entityId = article.articleId,
+                    changedAt = changedAt,
+                    originDeviceId = article.sourceDeviceId.ifBlank { deviceId },
+                    reason = "repairState",
+                    createdAt = now
+                )
+            )
+        }
     }
 
     private suspend fun exportSyncedSavedArticlesInternal(
@@ -1897,6 +1950,12 @@ class DefaultRssRepository(
     }
 
     private suspend fun findSyncedArticleItemId(article: SyncedSavedArticle): Long? {
+        for (saveType in listOf(SaveType.FAVORITE, SaveType.WATCH_LATER)) {
+            val itemId = savedSyncStateDao.get(article.articleId, saveType.name)?.itemId ?: continue
+            if (itemDao.getItem(itemId) != null) {
+                return itemId
+            }
+        }
         val sourceUrl = article.rssSourceUrl?.takeIf { it.isSyncedRssSourceUrl() }
         val channel = if (sourceUrl != null) {
             channelDao.getChannelByUrl(sourceUrl)
@@ -2448,6 +2507,10 @@ internal fun syncedArticleFetchedAt(article: SyncedSavedArticle, fallbackNow: Lo
     return maxOf(article.updatedAt, article.importedAt)
         .takeIf { it > 0L }
         ?: fallbackNow
+}
+
+private fun SyncedArticleManifest.latestOperationAt(): Long {
+    return maxOf(updatedAt, independentChangedAt, favoriteChangedAt, watchLaterChangedAt, deletedAt)
 }
 
 private fun normalizeUrl(value: String): String {
