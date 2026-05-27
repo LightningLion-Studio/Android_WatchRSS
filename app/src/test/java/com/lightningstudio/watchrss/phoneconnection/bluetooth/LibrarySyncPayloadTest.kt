@@ -378,6 +378,21 @@ class LibrarySyncPayloadTest {
     }
 
     @Test
+    fun chunkedResponse_syncLimitRequestsEveryMissingBody() {
+        val remoteManifest = (1..30).map { index ->
+            remoteManifestWithChunks("article-$index", listOf("hash-$index"))
+        }
+
+        val requests = LibrarySyncPayload.buildBodyRequestsForRemoteArticles(
+            localManifest = emptyList(),
+            remoteManifest = remoteManifest,
+            maxBodyRequestChunks = LibrarySyncPayload.MAX_BODY_REQUEST_CHUNKS_PER_SYNC
+        )
+
+        assertEquals(remoteManifest.map { it.articleId }, requests.map { it.articleId })
+    }
+
+    @Test
     fun chunkedResponse_doesNotRequestBodyForDeletedRemoteArticle() {
         val article = syncedArticle(
             articleId = "article-deleted",

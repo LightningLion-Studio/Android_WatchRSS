@@ -13,6 +13,7 @@ import com.lightningstudio.watchrss.phoneconnection.bluetooth.WatchBluetoothSync
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 
 class DebugBluetoothSyncActivity : BaseWatchActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -47,8 +48,8 @@ class DebugBluetoothSyncActivity : BaseWatchActivity() {
                 val message = buildString {
                     appendLine("Bluetooth sync request complete")
                     appendLine("remote=${result.remoteName} ${result.remoteAddress}")
-                    appendLine("request=${result.request}")
-                    appendLine("response=${result.response}")
+                    appendLine(summarizePayload("request", result.request))
+                    appendLine(summarizePayload("response", result.response))
                 }
                 Log.i(TAG, message)
                 statusView.text = message
@@ -56,6 +57,43 @@ class DebugBluetoothSyncActivity : BaseWatchActivity() {
                 val message = "Bluetooth sync request failed: ${throwable.message}"
                 Log.e(TAG, message, throwable)
                 statusView.text = message
+            }
+        }
+    }
+
+    private fun summarizePayload(label: String, payload: JSONObject): String {
+        val batchIndex = payload.optInt("batchIndex", -1)
+        val batchCount = payload.optInt("batchCount", -1)
+        val batch = if (batchIndex >= 0 && batchCount > 0) {
+            "${batchIndex + 1}/$batchCount"
+        } else {
+            "-"
+        }
+        return buildString {
+            append(label)
+            append(": action=")
+            append(payload.optString("action").ifBlank { "-" })
+            append(" phase=")
+            append(payload.optString("phase").ifBlank { "-" })
+            append(" version=")
+            append(payload.optInt("version", 0))
+            append(" success=")
+            append(payload.optBoolean("success", true))
+            append(" articleManifest=")
+            append(payload.optJSONArray("articleManifest")?.length() ?: 0)
+            append(" articles=")
+            append(payload.optJSONArray("articles")?.length() ?: 0)
+            append(" bodyRequests=")
+            append(payload.optJSONArray("bodyRequests")?.length() ?: 0)
+            append(" rssSources=")
+            append(payload.optJSONArray("rssSources")?.length() ?: 0)
+            append(" batch=")
+            append(batch)
+            payload.optJSONObject("changeSeqRange")?.let { range ->
+                append(" seq=")
+                append(range.optLong("fromExclusive"))
+                append("..")
+                append(range.optLong("toInclusive"))
             }
         }
     }

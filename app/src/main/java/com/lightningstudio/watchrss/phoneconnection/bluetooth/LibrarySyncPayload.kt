@@ -42,9 +42,9 @@ data class LibraryChangeSequence(
 )
 
 object LibrarySyncPayload {
-    const val PROTOCOL_VERSION = 6
+    const val PROTOCOL_VERSION = 8
     const val LEGACY_PROTOCOL_VERSION = 4
-    const val MAX_BODY_REQUEST_CHUNKS_PER_SYNC = 24
+    const val MAX_BODY_REQUEST_CHUNKS_PER_SYNC = Int.MAX_VALUE
     const val MAX_ARTICLE_REQUEST_BATCH_COUNT = 256
     const val PHASE_MANIFEST = "manifest"
     const val PHASE_ARTICLES = "articles"
