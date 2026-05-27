@@ -148,7 +148,7 @@ class LibrarySyncPayloadTest {
     }
 
     @Test
-    fun chunkedResponse_sendsOnlyRequestedChunksAndRebuildsBody() {
+    fun chunkedResponse_sendsRequestedChunksAndRebuildsCompressedBody() {
         val chunkSize = ArticleSyncBody.CHUNK_SIZE_BYTES
         val oldArticle = syncedArticle(
             articleId = "article-large",
@@ -181,7 +181,6 @@ class LibrarySyncPayloadTest {
         )
 
         assertTrue(requests.single().chunkIndexes.isNotEmpty())
-        assertTrue(requests.single().chunkIndexes.size < newArticle.toRemoteManifestEntry().chunkHashes.size)
         assertEquals(requests.single().chunkIndexes, parsed.chunks.map { it.index })
         assertEquals(newArticle.contentText, rebuilt.second)
     }
@@ -202,6 +201,25 @@ class LibrarySyncPayloadTest {
         )
 
         assertEquals(remoteManifest.chunkHashes.indices.toList(), requests.single().chunkIndexes)
+    }
+
+    @Test
+    fun chunkedResponse_limitsBodyRequestsByWholeArticles() {
+        val requests = LibrarySyncPayload.buildBodyRequestsForRemoteArticles(
+            localManifest = emptyList(),
+            remoteManifest = listOf(
+                remoteManifestWithChunks("article-1", listOf("a", "b")),
+                remoteManifestWithChunks("article-2", listOf("c", "d")),
+                remoteManifestWithChunks("deleted", emptyList()).copy(deleted = true, deletedAt = 30L),
+                remoteManifestWithChunks("article-3", listOf("e"))
+            ),
+            maxBodyRequestChunks = 3
+        )
+
+        assertEquals(listOf("article-1", "deleted", "article-3"), requests.map { it.articleId })
+        assertEquals(listOf(0, 1), requests[0].chunkIndexes)
+        assertEquals(emptyList<Int>(), requests[1].chunkIndexes)
+        assertEquals(listOf(0), requests[2].chunkIndexes)
     }
 
     @Test
@@ -463,6 +481,24 @@ class LibrarySyncPayloadTest {
             chunkSize = metadata.chunkSize,
             chunkHashes = metadata.chunkHashes,
             metadataHash = metadata.metadataHash
+        )
+    }
+
+    private fun remoteManifestWithChunks(articleId: String, chunkHashes: List<String>): ArticleSyncManifestEntry {
+        return ArticleSyncManifestEntry(
+            articleId = articleId,
+            sourceDeviceId = "phone",
+            contentHash = "content-$articleId",
+            updatedAt = 20L,
+            independentChangedAt = 20L,
+            favoriteChangedAt = 0L,
+            watchLaterChangedAt = 0L,
+            deletedAt = 0L,
+            bodyHash = "body-$articleId",
+            bodyByteCount = chunkHashes.size.toLong(),
+            chunkSize = ArticleSyncBody.CHUNK_SIZE_BYTES,
+            chunkHashes = chunkHashes,
+            metadataHash = "metadata-$articleId"
         )
     }
 }

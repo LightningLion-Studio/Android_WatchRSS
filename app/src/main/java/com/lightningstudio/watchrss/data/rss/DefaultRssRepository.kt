@@ -1728,7 +1728,8 @@ class DefaultRssRepository(
     }
 
     private fun SyncedSavedArticle.toManifestFromItem(item: RssItemEntity): SyncedArticleManifest {
-        val metadataHash = ArticleSyncBody.metadataHashFor(this)
+        val expectedMetadataHash = ArticleSyncBody.metadataHashFor(this)
+        val hasCurrentMetadata = item.syncMetadataHash == expectedMetadataHash
         return SyncedArticleManifest(
             articleId = articleId,
             sourceDeviceId = sourceDeviceId,
@@ -1738,11 +1739,11 @@ class DefaultRssRepository(
             favoriteChangedAt = favoriteChangedAt,
             watchLaterChangedAt = watchLaterChangedAt,
             deletedAt = deletedAt,
-            bodyHash = item.syncBodyHash,
-            bodyByteCount = item.syncBodyByteCount,
-            chunkSize = item.syncChunkSize,
-            chunkHashes = item.syncChunkHashesJson.toStringList(),
-            metadataHash = metadataHash
+            bodyHash = if (hasCurrentMetadata) item.syncBodyHash else "",
+            bodyByteCount = if (hasCurrentMetadata) item.syncBodyByteCount else 0L,
+            chunkSize = if (hasCurrentMetadata) item.syncChunkSize else 0,
+            chunkHashes = if (hasCurrentMetadata) item.syncChunkHashesJson.toStringList() else emptyList(),
+            metadataHash = if (hasCurrentMetadata) item.syncMetadataHash else ""
         )
     }
 

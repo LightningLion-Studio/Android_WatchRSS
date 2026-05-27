@@ -188,7 +188,8 @@ class WatchBluetoothSyncServer(
             val manifestResponse = if (supportsChunkedBodies) {
                 val bodyRequests = LibrarySyncPayload.buildBodyRequestsForRemoteArticles(
                     localManifest = outgoingManifest,
-                    remoteManifest = remoteManifest
+                    remoteManifest = remoteManifest,
+                    maxBodyRequestChunks = LibrarySyncPayload.MAX_BODY_REQUEST_CHUNKS_PER_SYNC
                 )
                 LibrarySyncPayload.buildManifestResponseFromEntries(
                     deviceId = localDeviceId,
