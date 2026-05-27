@@ -30,7 +30,8 @@ data class ArticleSyncManifestEntry(
     val bodyByteCount: Long = 0L,
     val chunkSize: Int = 0,
     val chunkHashes: List<String> = emptyList(),
-    val metadataHash: String = ""
+    val metadataHash: String = "",
+    val bodyAvailable: Boolean = true
 )
 
 data class LibraryChangeSequence(
@@ -44,6 +45,10 @@ object LibrarySyncPayload {
     const val PROTOCOL_VERSION = 6
     const val LEGACY_PROTOCOL_VERSION = 4
     const val MAX_BODY_REQUEST_CHUNKS_PER_SYNC = 24
+    const val MAX_ARTICLE_REQUEST_BATCH_COUNT = 256
+    const val PHASE_MANIFEST = "manifest"
+    const val PHASE_ARTICLES = "articles"
+    const val PHASE_COMPLETE = "complete"
 
     fun parseArticles(payload: JSONObject): List<SyncedSavedArticle> {
         return parseArticles(payload.optJSONArray("articles") ?: JSONArray())
@@ -76,7 +81,8 @@ object LibrarySyncPayload {
                         bodyByteCount = item.optLong("bodyByteCount"),
                         chunkSize = item.optInt("chunkSize"),
                         chunkHashes = item.optStringArray("chunkHashes"),
-                        metadataHash = item.optString("metadataHash").trim()
+                        metadataHash = item.optString("metadataHash").trim(),
+                        bodyAvailable = item.optBoolean("bodyAvailable", true)
                     )
                 )
             }
@@ -111,11 +117,19 @@ object LibrarySyncPayload {
                     remote.deleted != local.deleted
             }
             val hasReusableLocalBody = local != null &&
+                local.bodyAvailable &&
                 remote.bodyHash == local.bodyHash &&
                 local.chunkHashes.isNotEmpty()
-            val needsBody = !remote.deleted && !hasReusableLocalBody
+            if (!remote.deleted && !remote.bodyAvailable && !hasReusableLocalBody) {
+                return@mapNotNull null
+            }
+            val needsBody = !remote.deleted && remote.bodyAvailable && !hasReusableLocalBody
             if (!needsMetadata && !needsBody) return@mapNotNull null
-            val localHashes = local?.chunkHashes.orEmpty().toSet()
+            val localHashes = if (local?.bodyAvailable == true) {
+                local.chunkHashes.toSet()
+            } else {
+                emptySet()
+            }
             val chunkIndexes = if (needsBody) {
                 remote.chunkHashes.mapIndexedNotNull { index, hash ->
                     index.takeIf { hash !in localHashes }
@@ -439,6 +453,51 @@ object LibrarySyncPayload {
         }
     }
 
+    fun validateArticleRequestFrame(
+        frame: JSONObject,
+        expectedBatchIndex: Int,
+        expectedBatchCount: Int? = null
+    ): Int {
+        val action = frame.optString("action")
+        require(action == BluetoothSyncProtocol.ACTION_SYNC_LIBRARY) {
+            "资料库文章请求帧 action 异常：frame=$expectedBatchIndex expected=${BluetoothSyncProtocol.ACTION_SYNC_LIBRARY} actual=$action"
+        }
+        val phase = frame.optString("phase")
+        require(phase == PHASE_ARTICLES) {
+            "资料库文章请求帧 phase 异常：frame=$expectedBatchIndex expected=$PHASE_ARTICLES actual=$phase"
+        }
+
+        val hasBatchIndex = frame.has("batchIndex")
+        val hasBatchCount = frame.has("batchCount")
+        if (!hasBatchIndex && !hasBatchCount && expectedBatchCount == null) {
+            require(expectedBatchIndex == 0) {
+                "资料库文章请求批次索引异常：frame=$expectedBatchIndex expectedBatchIndex=0 actual=missing"
+            }
+            return 1
+        }
+        require(hasBatchIndex && hasBatchCount) {
+            "资料库文章请求批次字段不完整：frame=$expectedBatchIndex batchIndexPresent=$hasBatchIndex batchCountPresent=$hasBatchCount"
+        }
+
+        val batchIndex = frame.optInt("batchIndex", -1)
+        val batchCount = frame.optInt("batchCount", -1)
+        require(batchCount in 1..MAX_ARTICLE_REQUEST_BATCH_COUNT) {
+            "资料库文章请求批次数异常：batchCount=$batchCount max=$MAX_ARTICLE_REQUEST_BATCH_COUNT"
+        }
+        if (expectedBatchCount != null) {
+            require(batchCount == expectedBatchCount) {
+                "资料库文章请求批次数不一致：frame=$expectedBatchIndex expectedBatchCount=$expectedBatchCount actual=$batchCount"
+            }
+        }
+        require(batchIndex in 0 until batchCount) {
+            "资料库文章请求批次索引越界：frame=$expectedBatchIndex batchIndex=$batchIndex batchCount=$batchCount"
+        }
+        require(batchIndex == expectedBatchIndex) {
+            "资料库文章请求批次索引异常：frame=$expectedBatchIndex expectedBatchIndex=$expectedBatchIndex actual=$batchIndex batchCount=$batchCount"
+        }
+        return batchCount
+    }
+
     private fun buildResponseFrame(
         deviceId: String,
         articles: List<SyncedSavedArticle>,
@@ -680,6 +739,7 @@ object LibrarySyncPayload {
             put("chunkSize", metadata.chunkSize)
             put("chunkHashes", JSONArray(metadata.chunkHashes))
             put("metadataHash", metadata.metadataHash)
+            put("bodyAvailable", true)
         }
     }
 
@@ -699,6 +759,7 @@ object LibrarySyncPayload {
             put("chunkSize", chunkSize)
             put("chunkHashes", JSONArray(chunkHashes))
             put("metadataHash", metadataHash)
+            put("bodyAvailable", bodyAvailable)
         }
     }
 
@@ -905,8 +966,6 @@ object LibrarySyncPayload {
         }
     }
 
-    private const val PHASE_MANIFEST = "manifest"
-    private const val PHASE_COMPLETE = "complete"
     private const val ARTICLE_BATCH_TARGET_BYTES = BluetoothSyncProtocol.MAX_FRAME_BYTES - 128 * 1024
     private const val MAX_BATCH_COUNT_FOR_SIZING = 9999
 }

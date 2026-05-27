@@ -7,6 +7,16 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.util.UUID
 
+data class BluetoothSyncAck(
+    val success: Boolean,
+    val phase: String,
+    val applied: Boolean,
+    val message: String
+) {
+    val applicationSucceeded: Boolean
+        get() = success && applied
+}
+
 object BluetoothSyncProtocol {
     const val SERVICE_NAME = "WatchRSS Bluetooth Sync"
     val SERVICE_UUID: UUID = UUID.fromString("bb2f0b7d-8f2f-4a96-95b2-d2c91d58a861")
@@ -16,6 +26,9 @@ object BluetoothSyncProtocol {
     const val ACTION_PULL_SAVED_ITEMS = "pullSavedItems"
     const val ACTION_SYNC_LIBRARY = "syncLibrary"
     const val ACTION_ACK = "ack"
+
+    const val ACK_PHASE_RECEIVED = "received"
+    const val ACK_PHASE_APPLIED = "applied"
 
     const val MAX_FRAME_BYTES = 2 * 1024 * 1024
 
@@ -38,6 +51,26 @@ object BluetoothSyncProtocol {
     }
 
     fun encodedSize(payload: JSONObject): Int = encodeFrame(payload).size
+
+    fun parseAck(payload: JSONObject?): BluetoothSyncAck? {
+        if (payload?.optString("action") != ACTION_ACK) return null
+        val success = payload.optBoolean("success", false)
+        val rawPhase = payload.optString("phase").trim()
+        val applied = when {
+            payload.has("applied") -> payload.optBoolean("applied", false)
+            rawPhase.isBlank() -> success
+            else -> rawPhase == ACK_PHASE_APPLIED
+        }
+        val phase = rawPhase.ifBlank {
+            if (applied) ACK_PHASE_APPLIED else ACK_PHASE_RECEIVED
+        }
+        return BluetoothSyncAck(
+            success = success,
+            phase = phase,
+            applied = applied,
+            message = payload.optString("message").trim()
+        )
+    }
 
     private fun encodeFrame(payload: JSONObject): ByteArray =
         payload.toString().toByteArray(Charsets.UTF_8)

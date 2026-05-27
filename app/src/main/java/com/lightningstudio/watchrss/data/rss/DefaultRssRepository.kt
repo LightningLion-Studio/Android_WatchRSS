@@ -51,6 +51,11 @@ data class WatchLibrarySyncWindow(
     val fallbackReason: String
 )
 
+private data class SyncHydratedRssItem(
+    val item: RssItemEntity,
+    val bodyAvailable: Boolean
+)
+
 class DefaultRssRepository(
     private val channelDao: RssChannelDao,
     private val itemDao: RssItemDao,
@@ -1479,8 +1484,10 @@ class DefaultRssRepository(
         watchLaterSaved: Boolean,
         watchLaterChangedAt: Long,
         watchLaterSortOrder: Long
-    ): SyncedSavedArticle {
-        val fullItem = item.hydrateExternalContent()
+    ): SyncedSavedArticle? {
+        val hydrated = item.hydrateExternalContentForSync()
+        if (!hydrated.bodyAvailable) return null
+        val fullItem = hydrated.item
         val contentHtml = fullItem.originalContent?.takeIf { it.isNotBlank() }
             ?: fullItem.content?.takeIf { it.isNotBlank() }
             ?: fullItem.description?.takeIf { it.isNotBlank() }
@@ -1559,7 +1566,10 @@ class DefaultRssRepository(
             deleted = false,
             deletedAt = 0L
         )
-        return article.toManifestFromItem(item)
+        return article.toManifestFromItem(
+            item = item,
+            bodyAvailable = item.isExternalContentAvailableForSync()
+        )
     }
 
     private suspend fun exportSyncedIndependentArticles(
@@ -1669,8 +1679,10 @@ class DefaultRssRepository(
         independentSaved: Boolean,
         rssSourceUrl: String?,
         rssSourceTitle: String?
-    ): SyncedSavedArticle {
-        val fullItem = hydrateExternalContent()
+    ): SyncedSavedArticle? {
+        val hydrated = hydrateExternalContentForSync()
+        if (!hydrated.bodyAvailable) return null
+        val fullItem = hydrated.item
         val contentHtml = fullItem.originalContent?.takeIf { it.isNotBlank() }
             ?: fullItem.content?.takeIf { it.isNotBlank() }
             ?: fullItem.description?.takeIf { it.isNotBlank() }
@@ -1741,7 +1753,10 @@ class DefaultRssRepository(
             deleted = false,
             deletedAt = 0L
         )
-        return article.toManifestFromItem(this)
+        return article.toManifestFromItem(
+            item = this,
+            bodyAvailable = isExternalContentAvailableForSync()
+        )
     }
 
     private suspend fun resolveSyncedArticleChannel(article: SyncedSavedArticle): RssChannelEntity {
@@ -1925,11 +1940,15 @@ class DefaultRssRepository(
             bodyByteCount = metadata.bodyByteCount,
             chunkSize = metadata.chunkSize,
             chunkHashes = metadata.chunkHashes,
-            metadataHash = metadata.metadataHash
+            metadataHash = metadata.metadataHash,
+            bodyAvailable = true
         )
     }
 
-    private fun SyncedSavedArticle.toManifestFromItem(item: RssItemEntity): SyncedArticleManifest {
+    private fun SyncedSavedArticle.toManifestFromItem(
+        item: RssItemEntity,
+        bodyAvailable: Boolean
+    ): SyncedArticleManifest {
         val expectedMetadataHash = ArticleSyncBody.metadataHashFor(this)
         val hasCurrentMetadata = item.syncMetadataHash == expectedMetadataHash
         return SyncedArticleManifest(
@@ -1945,7 +1964,8 @@ class DefaultRssRepository(
             bodyByteCount = if (hasCurrentMetadata) item.syncBodyByteCount else 0L,
             chunkSize = if (hasCurrentMetadata) item.syncChunkSize else 0,
             chunkHashes = if (hasCurrentMetadata) item.syncChunkHashesJson.toStringList() else emptyList(),
-            metadataHash = if (hasCurrentMetadata) item.syncMetadataHash else ""
+            metadataHash = if (hasCurrentMetadata) item.syncMetadataHash else "",
+            bodyAvailable = bodyAvailable
         )
     }
 
@@ -2255,6 +2275,47 @@ class DefaultRssRepository(
             content = hydratedContent,
             originalContent = hydratedOriginalContent
         )
+    }
+
+    private fun RssItemEntity.hydrateExternalContentForSync(): SyncHydratedRssItem {
+        val store = articleContentStore ?: return SyncHydratedRssItem(this, bodyAvailable = true)
+        var bodyAvailable = true
+        val hydratedContent = content?.let { value ->
+            if (store.isMarker(value)) {
+                store.loadText(value) ?: run {
+                    bodyAvailable = false
+                    value
+                }
+            } else {
+                value
+            }
+        }
+        val hydratedOriginalContent = originalContent?.let { value ->
+            if (store.isMarker(value)) {
+                store.loadText(value) ?: run {
+                    bodyAvailable = false
+                    value
+                }
+            } else {
+                value
+            }
+        }
+        return SyncHydratedRssItem(
+            item = copy(
+                content = hydratedContent,
+                originalContent = hydratedOriginalContent
+            ),
+            bodyAvailable = bodyAvailable
+        )
+    }
+
+    private fun RssItemEntity.isExternalContentAvailableForSync(): Boolean {
+        val store = articleContentStore ?: return true
+        fun isAvailable(value: String?): Boolean {
+            if (value.isNullOrBlank() || !store.isMarker(value)) return true
+            return store.loadText(value) != null
+        }
+        return isAvailable(content) && isAvailable(originalContent)
     }
 
     private fun RssItemEntity.shouldExternalizeContent(store: ArticleContentStore): Boolean {

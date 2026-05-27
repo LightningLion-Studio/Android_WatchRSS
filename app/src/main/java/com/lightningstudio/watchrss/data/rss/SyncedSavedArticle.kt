@@ -47,7 +47,8 @@ data class SyncedArticleManifest(
     val bodyByteCount: Long,
     val chunkSize: Int,
     val chunkHashes: List<String>,
-    val metadataHash: String
+    val metadataHash: String,
+    val bodyAvailable: Boolean = true
 )
 
 data class SyncedArticleBodyRequest(

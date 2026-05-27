@@ -20,7 +20,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import java.io.IOException
 
@@ -29,6 +28,21 @@ data class BluetoothSyncResult(
     val remoteAddress: String,
     val request: JSONObject,
     val response: JSONObject
+)
+
+private data class PendingLibrarySyncSuccess(
+    val remoteDeviceId: String,
+    val localSeqToInclusive: Long,
+    val remoteSeqToInclusive: Long,
+    val remoteProtocolVersion: Int,
+    val fullSnapshot: Boolean,
+    val localArticleCount: Int,
+    val remoteArticleCount: Int
+)
+
+private data class LibraryManifestExchangeResult(
+    val response: JSONObject,
+    val pendingSyncSuccess: PendingLibrarySyncSuccess?
 )
 
 class WatchBluetoothSyncServer(
@@ -93,14 +107,20 @@ class WatchBluetoothSyncServer(
                     )
                     onClientAccepted?.invoke()
                     val request = readFrameLogged(client, sessionId, "initialRequest")
-                    val response = if (request.isManifestLibrarySync()) {
+                    val libraryExchange = if (request.isManifestLibrarySync()) {
                         handleLibraryManifestExchange(client, request, sessionId)
                     } else {
+                        null
+                    }
+                    val response = libraryExchange?.response ?: run {
                         handleRequest(request, sessionId).also { response ->
                             writeFrameLogged(client, sessionId, "response", response)
                         }
                     }
-                    waitForResponseAck(client, sessionId)
+                    val ack = waitForResponseAck(client, sessionId)
+                    libraryExchange?.pendingSyncSuccess?.let { pending ->
+                        markLibrarySyncSuccessAfterAck(pending, ack, sessionId)
+                    }
                     WatchBluetoothDebugLog.event(
                         sessionId = sessionId,
                         event = "server.acceptOnce.complete",
@@ -134,7 +154,7 @@ class WatchBluetoothSyncServer(
         client: BluetoothSocket,
         request: JSONObject,
         sessionId: String
-    ): JSONObject {
+    ): LibraryManifestExchangeResult {
         val startedAt = SystemClock.elapsedRealtime()
         WatchBluetoothDebugLog.event(
             sessionId = sessionId,
@@ -342,13 +362,6 @@ class WatchBluetoothSyncServer(
                     payload = responseFrame
                 )
             }
-            app.container.rssRepository.markLibrarySyncSuccess(
-                peerDeviceId = remoteDeviceId,
-                localSeqToInclusive = outgoingWindow.toSeqInclusive,
-                remoteSeqToInclusive = remoteChangeSequence.toSeqInclusive,
-                remoteProtocolVersion = request.optInt("version"),
-                fullSnapshot = outgoingWindow.fullSnapshot || remoteChangeSequence.fullSnapshot
-            )
             val response = LibrarySyncPayload.combineArticlePayloads(responseFrames)
             Log.i(
                 TAG,
@@ -363,15 +376,27 @@ class WatchBluetoothSyncServer(
                     "outgoingSources" to outgoingWindow.rssSources.size,
                     "localSeqMax" to outgoingWindow.toSeqInclusive,
                     "peerAckedSeq" to outgoingWindow.peerAckedSeq,
-                    "remoteSeqApplied" to remoteChangeSequence.toSeqInclusive,
+                    "remoteSeqPendingAck" to remoteChangeSequence.toSeqInclusive,
                     "deltaArticleCount" to outgoingWindow.articleManifest.size,
                     "deltaSourceCount" to outgoingWindow.rssSources.size,
                     "fullSnapshot" to outgoingWindow.fullSnapshot,
                     "fallbackReason" to outgoingWindow.fallbackReason,
+                    "peerStatePendingAck" to true,
                     "elapsedMs" to elapsedSince(startedAt)
                 )
             )
-            response
+            LibraryManifestExchangeResult(
+                response = response,
+                pendingSyncSuccess = PendingLibrarySyncSuccess(
+                    remoteDeviceId = remoteDeviceId,
+                    localSeqToInclusive = outgoingWindow.toSeqInclusive,
+                    remoteSeqToInclusive = remoteChangeSequence.toSeqInclusive,
+                    remoteProtocolVersion = request.optInt("version"),
+                    fullSnapshot = outgoingWindow.fullSnapshot || remoteChangeSequence.fullSnapshot,
+                    localArticleCount = outgoingWindow.articleManifest.size,
+                    remoteArticleCount = remoteManifest.size
+                )
+            )
         }.getOrElse { throwable ->
             Log.e(TAG, "handle manifest library exchange failed action=${request.optString("action")} phase=${request.optString("phase")}", throwable)
             WatchBluetoothDebugLog.error(
@@ -401,6 +426,11 @@ class WatchBluetoothSyncServer(
                         throwable = writeFailure
                     )
                 }
+            }.let { errorResponse ->
+                LibraryManifestExchangeResult(
+                    response = errorResponse,
+                    pendingSyncSuccess = null
+                )
             }
         }
     }
@@ -410,25 +440,48 @@ class WatchBluetoothSyncServer(
         sessionId: String
     ): List<JSONObject> {
         val first = readFrameLogged(client, sessionId, "articlesRequest")
-        val batchCount = first.optInt("batchCount", 1).coerceAtLeast(1)
+        val batchCount = LibrarySyncPayload.validateArticleRequestFrame(
+            frame = first,
+            expectedBatchIndex = 0
+        )
         val frames = mutableListOf(first)
         while (frames.size < batchCount) {
             val index = frames.size
-            frames += readFrameLogged(client, sessionId, batchLabel("articlesRequest", index, batchCount))
+            val frame = readFrameLogged(client, sessionId, batchLabel("articlesRequest", index, batchCount))
+            LibrarySyncPayload.validateArticleRequestFrame(
+                frame = frame,
+                expectedBatchIndex = index,
+                expectedBatchCount = batchCount
+            )
+            frames += frame
         }
         return frames
     }
 
-    private suspend fun waitForResponseAck(client: BluetoothSocket, sessionId: String) {
+    private suspend fun waitForResponseAck(client: BluetoothSocket, sessionId: String): BluetoothSyncAck? {
         val startedAt = SystemClock.elapsedRealtime()
         WatchBluetoothDebugLog.event(
             sessionId = sessionId,
             event = "ack.read.start",
             fields = mapOf("timeoutMs" to RESPONSE_ACK_TIMEOUT_MS)
         )
-        val ack = withTimeoutOrNull(RESPONSE_ACK_TIMEOUT_MS) {
+        val ack = coroutineScope {
+            val timeoutJob = launch {
+                delay(RESPONSE_ACK_TIMEOUT_MS)
+                runCatching {
+                    client.close()
+                }.onSuccess {
+                    WatchBluetoothDebugLog.warn(
+                        sessionId = sessionId,
+                        event = "ack.read.timeout.closed",
+                        fields = mapOf("elapsedMs" to elapsedSince(startedAt))
+                    )
+                }
+            }
             runCatching {
                 BluetoothSyncProtocol.readFrame(client.inputStream)
+            }.also {
+                timeoutJob.cancel()
             }.onFailure { throwable ->
                 WatchBluetoothDebugLog.warn(
                     sessionId = sessionId,
@@ -442,21 +495,93 @@ class WatchBluetoothSyncServer(
                 )
             }.getOrNull()
         }
-        if (ack?.optString("action") == BluetoothSyncProtocol.ACTION_ACK) {
-            Log.i(TAG, "response ack received")
+        val parsedAck = BluetoothSyncProtocol.parseAck(ack)
+        return if (parsedAck != null) {
+            Log.i(TAG, "response ack received phase=${parsedAck.phase} applied=${parsedAck.applied}")
             WatchBluetoothDebugLog.event(
                 sessionId = sessionId,
                 event = "ack.read.success",
-                fields = payloadFields("ack", ack) + mapOf("elapsedMs" to elapsedSince(startedAt))
+                fields = payloadFields("ack", ack!!) + mapOf(
+                    "ackApplicationSucceeded" to parsedAck.applicationSucceeded,
+                    "elapsedMs" to elapsedSince(startedAt)
+                )
             )
+            parsedAck
         } else {
             Log.w(TAG, "response ack missing before socket close")
             WatchBluetoothDebugLog.warn(
                 sessionId = sessionId,
                 event = "ack.read.missing",
-                fields = mapOf("elapsedMs" to elapsedSince(startedAt))
+                fields = (ack?.let { payloadFields("ack", it) } ?: emptyMap()) +
+                    mapOf("elapsedMs" to elapsedSince(startedAt))
             )
+            null
         }
+    }
+
+    private suspend fun markLibrarySyncSuccessAfterAck(
+        pending: PendingLibrarySyncSuccess,
+        ack: BluetoothSyncAck?,
+        sessionId: String
+    ) {
+        if (ack?.applicationSucceeded != true) {
+            WatchBluetoothDebugLog.warn(
+                sessionId = sessionId,
+                event = "library.peerState.mark.skipped",
+                fields = mapOf(
+                    "reason" to if (ack == null) "missingAck" else "ackNotApplied",
+                    "ackSuccess" to ack?.success,
+                    "ackPhase" to ack?.phase,
+                    "ackApplied" to ack?.applied,
+                    "ackMessage" to ack?.message,
+                    "localSeqMax" to pending.localSeqToInclusive,
+                    "remoteSeqPendingAck" to pending.remoteSeqToInclusive
+                )
+            )
+            return
+        }
+
+        val startedAt = SystemClock.elapsedRealtime()
+        runCatching {
+            val app = context.applicationContext as WatchRssApplication
+            app.container.rssRepository.markLibrarySyncSuccess(
+                peerDeviceId = pending.remoteDeviceId,
+                localSeqToInclusive = pending.localSeqToInclusive,
+                remoteSeqToInclusive = pending.remoteSeqToInclusive,
+                remoteProtocolVersion = pending.remoteProtocolVersion,
+                fullSnapshot = pending.fullSnapshot
+            )
+        }.onSuccess {
+            WatchBluetoothDebugLog.event(
+                sessionId = sessionId,
+                event = "library.peerState.mark.success",
+                fields = mapOf(
+                    "remoteDeviceId" to pending.remoteDeviceId,
+                    "localSeqMax" to pending.localSeqToInclusive,
+                    "remoteSeqApplied" to pending.remoteSeqToInclusive,
+                    "remoteProtocolVersion" to pending.remoteProtocolVersion,
+                    "fullSnapshot" to pending.fullSnapshot,
+                    "localArticleCount" to pending.localArticleCount,
+                    "remoteArticleCount" to pending.remoteArticleCount,
+                    "ackPhase" to ack.phase,
+                    "elapsedMs" to elapsedSince(startedAt)
+                )
+            )
+        }.onFailure { throwable ->
+            WatchBluetoothDebugLog.error(
+                sessionId = sessionId,
+                event = "library.peerState.mark.failed",
+                fields = mapOf(
+                    "remoteDeviceId" to pending.remoteDeviceId,
+                    "localSeqMax" to pending.localSeqToInclusive,
+                    "remoteSeqPendingAck" to pending.remoteSeqToInclusive,
+                    "errorClass" to throwable::class.java.name,
+                    "message" to throwable.message.orEmpty(),
+                    "elapsedMs" to elapsedSince(startedAt)
+                ),
+                throwable = throwable
+            )
+        }.getOrThrow()
     }
 
     private suspend fun handleRequest(request: JSONObject, sessionId: String): JSONObject {
@@ -674,7 +799,7 @@ class WatchBluetoothSyncServer(
             put("${prefix}RssSourceCount", payload.optJSONArray("rssSources")?.length())
             put("${prefix}ItemCount", payload.optJSONArray("items")?.length())
             put("${prefix}Count", if (payload.has("count")) payload.optInt("count") else null)
-            put("${prefix}Applied", if (payload.has("applied")) payload.optInt("applied") else null)
+            put("${prefix}Applied", payload.opt("applied")?.takeUnless { it == JSONObject.NULL })
             put("${prefix}SourcesApplied", if (payload.has("sourcesApplied")) payload.optInt("sourcesApplied") else null)
             put("${prefix}BatchIndex", if (payload.has("batchIndex")) payload.optInt("batchIndex") else null)
             put("${prefix}BatchCount", if (payload.has("batchCount")) payload.optInt("batchCount") else null)
@@ -763,7 +888,7 @@ class WatchBluetoothSyncServer(
     private fun JSONObject.isManifestLibrarySync(): Boolean {
         return optString("action") == BluetoothSyncProtocol.ACTION_SYNC_LIBRARY &&
             optInt("version") >= LibrarySyncPayload.LEGACY_PROTOCOL_VERSION &&
-            optString("phase") == "manifest"
+            optString("phase") == LibrarySyncPayload.PHASE_MANIFEST
     }
 
     companion object {

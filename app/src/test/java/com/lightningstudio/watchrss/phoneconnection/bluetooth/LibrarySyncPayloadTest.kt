@@ -6,8 +6,11 @@ import com.lightningstudio.watchrss.data.rss.SyncedArticleBodyRequest
 import com.lightningstudio.watchrss.data.rss.SyncedArticleManifest
 import com.lightningstudio.watchrss.data.rss.SyncedRssSource
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
+import org.json.JSONObject
 
 class LibrarySyncPayloadTest {
     @Test
@@ -130,6 +133,112 @@ class LibrarySyncPayloadTest {
     }
 
     @Test
+    fun parseAck_treatsLegacySuccessAckAsApplied() {
+        val ack = BluetoothSyncProtocol.parseAck(
+            JSONObject().apply {
+                put("action", BluetoothSyncProtocol.ACTION_ACK)
+                put("success", true)
+            }
+        )
+
+        assertEquals(BluetoothSyncProtocol.ACK_PHASE_APPLIED, ack?.phase)
+        assertTrue(ack?.applied == true)
+        assertTrue(ack?.applicationSucceeded == true)
+    }
+
+    @Test
+    fun parseAck_distinguishesTransportReceiptFromApplicationSuccess() {
+        val received = BluetoothSyncProtocol.parseAck(
+            JSONObject().apply {
+                put("action", BluetoothSyncProtocol.ACTION_ACK)
+                put("success", true)
+                put("phase", BluetoothSyncProtocol.ACK_PHASE_RECEIVED)
+                put("message", "frames received")
+            }
+        )
+        val failedApply = BluetoothSyncProtocol.parseAck(
+            JSONObject().apply {
+                put("action", BluetoothSyncProtocol.ACTION_ACK)
+                put("success", false)
+                put("phase", BluetoothSyncProtocol.ACK_PHASE_APPLIED)
+                put("applied", false)
+                put("message", "merge failed")
+            }
+        )
+
+        assertFalse(received?.applied == true)
+        assertFalse(received?.applicationSucceeded == true)
+        assertEquals("frames received", received?.message)
+        assertFalse(failedApply?.applicationSucceeded == true)
+        assertEquals("merge failed", failedApply?.message)
+    }
+
+    @Test
+    fun validateArticleRequestFrame_acceptsOrderedBatches() {
+        val first = articleRequestFrame(batchIndex = 0, batchCount = 2)
+        val second = articleRequestFrame(batchIndex = 1, batchCount = 2)
+
+        val batchCount = LibrarySyncPayload.validateArticleRequestFrame(
+            frame = first,
+            expectedBatchIndex = 0
+        )
+        LibrarySyncPayload.validateArticleRequestFrame(
+            frame = second,
+            expectedBatchIndex = 1,
+            expectedBatchCount = batchCount
+        )
+
+        assertEquals(2, batchCount)
+    }
+
+    @Test
+    fun validateArticleRequestFrame_rejectsWrongActionAndPhase() {
+        assertIllegalArgumentContains("action 异常") {
+            LibrarySyncPayload.validateArticleRequestFrame(
+                frame = articleRequestFrame(batchIndex = 0, batchCount = 1).apply {
+                    put("action", BluetoothSyncProtocol.ACTION_REMOTE_INPUT)
+                },
+                expectedBatchIndex = 0
+            )
+        }
+        assertIllegalArgumentContains("phase 异常") {
+            LibrarySyncPayload.validateArticleRequestFrame(
+                frame = articleRequestFrame(batchIndex = 0, batchCount = 1).apply {
+                    put("phase", LibrarySyncPayload.PHASE_COMPLETE)
+                },
+                expectedBatchIndex = 0
+            )
+        }
+    }
+
+    @Test
+    fun validateArticleRequestFrame_rejectsUnreasonableOrInconsistentBatchFields() {
+        assertIllegalArgumentContains("批次数异常") {
+            LibrarySyncPayload.validateArticleRequestFrame(
+                frame = articleRequestFrame(
+                    batchIndex = 0,
+                    batchCount = LibrarySyncPayload.MAX_ARTICLE_REQUEST_BATCH_COUNT + 1
+                ),
+                expectedBatchIndex = 0
+            )
+        }
+        assertIllegalArgumentContains("批次索引异常") {
+            LibrarySyncPayload.validateArticleRequestFrame(
+                frame = articleRequestFrame(batchIndex = 0, batchCount = 2),
+                expectedBatchIndex = 1,
+                expectedBatchCount = 2
+            )
+        }
+        assertIllegalArgumentContains("批次数不一致") {
+            LibrarySyncPayload.validateArticleRequestFrame(
+                frame = articleRequestFrame(batchIndex = 1, batchCount = 3),
+                expectedBatchIndex = 1,
+                expectedBatchCount = 2
+            )
+        }
+    }
+
+    @Test
     fun filterArticlesNeedingSync_usesManifestTimestampsAndHash() {
         val article = syncedArticle(
             articleId = "article-1",
@@ -212,6 +321,41 @@ class LibrarySyncPayloadTest {
         )
 
         assertEquals(remoteManifest.chunkHashes.indices.toList(), requests.single().chunkIndexes)
+    }
+
+    @Test
+    fun chunkedResponse_requestsFullBodyWhenLocalBodyIsUnavailable() {
+        val article = syncedArticle(
+            articleId = "article-1",
+            contentHash = "hash",
+            updatedAt = 20L
+        )
+        val remoteManifest = article.toRemoteManifestEntry()
+        val localManifest = article.toManifestEntry().copy(bodyAvailable = false)
+
+        val requests = LibrarySyncPayload.buildBodyRequestsForRemoteArticles(
+            localManifest = listOf(localManifest),
+            remoteManifest = listOf(remoteManifest)
+        )
+
+        assertEquals(remoteManifest.chunkHashes.indices.toList(), requests.single().chunkIndexes)
+    }
+
+    @Test
+    fun chunkedResponse_doesNotRequestUnavailableRemoteBody() {
+        val article = syncedArticle(
+            articleId = "article-1",
+            contentHash = "hash",
+            updatedAt = 20L
+        )
+        val remoteManifest = article.toRemoteManifestEntry().copy(bodyAvailable = false)
+
+        val requests = LibrarySyncPayload.buildBodyRequestsForRemoteArticles(
+            localManifest = emptyList(),
+            remoteManifest = listOf(remoteManifest)
+        )
+
+        assertEquals(emptyList<SyncedArticleBodyRequest>(), requests)
     }
 
     @Test
@@ -454,6 +598,27 @@ class LibrarySyncPayloadTest {
                 value = value * 1103515245 + 12345
                 append((33 + ((value ushr 16) % 90)).toChar())
             }
+        }
+    }
+
+    private fun articleRequestFrame(batchIndex: Int, batchCount: Int): JSONObject {
+        return JSONObject().apply {
+            put("version", LibrarySyncPayload.PROTOCOL_VERSION)
+            put("action", BluetoothSyncProtocol.ACTION_SYNC_LIBRARY)
+            put("phase", LibrarySyncPayload.PHASE_ARTICLES)
+            put("deviceId", "phone")
+            put("articles", org.json.JSONArray())
+            put("batchIndex", batchIndex)
+            put("batchCount", batchCount)
+        }
+    }
+
+    private fun assertIllegalArgumentContains(expected: String, block: () -> Unit) {
+        try {
+            block()
+            fail("Expected IllegalArgumentException containing $expected")
+        } catch (exception: IllegalArgumentException) {
+            assertTrue(exception.message.orEmpty().contains(expected))
         }
     }
 
