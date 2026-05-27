@@ -538,85 +538,121 @@ class DefaultRssRepository(
 
     override suspend fun exportSyncedSavedArticles(deviceId: String): List<SyncedSavedArticle> =
         withContext(Dispatchers.IO) {
-            val favorites = savedEntryDao.getSavedItems(SaveType.FAVORITE.name)
-            val watchLater = savedEntryDao.getSavedItems(SaveType.WATCH_LATER.name)
-            val states = savedSyncStateDao.getAll().associateBy { it.articleId to it.saveType }
-            val grouped = (favorites + watchLater).groupBy { saved ->
-                stableArticleId(saved.item.link ?: saved.item.dedupKey)
-            }
-            val savedArticles = grouped.map { (articleId, entries) ->
-                val representative = entries.maxByOrNull { it.savedAt } ?: entries.first()
-                val favorite = entries.firstOrNull { it.saveType == SaveType.FAVORITE.name }
-                val later = entries.firstOrNull { it.saveType == SaveType.WATCH_LATER.name }
-                val favoriteState = states[articleId to SaveType.FAVORITE.name]
-                val laterState = states[articleId to SaveType.WATCH_LATER.name]
-                representative.toSyncedArticle(
-                    articleId = articleId,
-                    deviceId = deviceId,
-                    favoriteSaved = favorite != null,
-                    favoriteChangedAt = favoriteState?.changedAt ?: favorite?.savedAt ?: 0L,
-                    favoriteSortOrder = favoriteState?.sortOrder ?: favorite?.savedAt ?: 0L,
-                    watchLaterSaved = later != null,
-                    watchLaterChangedAt = laterState?.changedAt ?: later?.savedAt ?: 0L,
-                    watchLaterSortOrder = laterState?.sortOrder ?: later?.savedAt ?: 0L
-                )
-            }
-            val savedArticleIds = savedArticles.mapTo(mutableSetOf()) { it.articleId }
-            val independentArticles = exportSyncedIndependentArticles(deviceId, savedArticleIds)
-            val importedContentArticles = exportSyncedImportedContentArticles(
-                deviceId = deviceId,
-                excludedArticleIds = savedArticleIds + independentArticles.map { it.articleId }
-            )
-            val activeArticleIds = savedArticleIds +
-                independentArticles.map { it.articleId } +
-                importedContentArticles.map { it.articleId }
-            savedArticles + independentArticles + importedContentArticles + states.values
-                .filter { !it.saved && it.articleId !in activeArticleIds }
-                .groupBy { it.articleId }
-                .mapNotNull { (articleId, tombstones) ->
-                    val url = tombstones.firstOrNull()?.url?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                    val articleDelete = tombstones
-                        .filter { it.saveType == ARTICLE_DELETE_SYNC_TYPE }
-                        .maxByOrNull { it.changedAt }
-                    SyncedSavedArticle(
-                        articleId = articleId,
-                        sourceDeviceId = tombstones.maxByOrNull { it.changedAt }?.sourceDeviceId ?: deviceId,
-                        url = url,
-                        title = url,
-                        siteName = hostLabel(url),
-                        excerpt = "",
-                        contentHtml = null,
-                        contentText = "",
-                        imageUrl = null,
-                        contentHash = sha256(url),
-                        importedAt = tombstones.minOf { it.changedAt },
-                        updatedAt = tombstones.maxOf { it.changedAt },
-                        independentSaved = false,
-                        independentChangedAt = articleDelete?.changedAt ?: 0L,
-                        independentSortOrder = 0L,
-                        rssSourceUrl = null,
-                        rssSourceTitle = null,
-                        favoriteSaved = false,
-                        favoriteChangedAt = tombstones.firstOrNull { it.saveType == SaveType.FAVORITE.name }?.changedAt ?: 0L,
-                        favoriteSortOrder = 0L,
-                        watchLaterSaved = false,
-                        watchLaterChangedAt = tombstones.firstOrNull { it.saveType == SaveType.WATCH_LATER.name }?.changedAt ?: 0L,
-                        watchLaterSortOrder = 0L,
-                        deleted = articleDelete != null,
-                        deletedAt = articleDelete?.changedAt ?: tombstones.maxOf { it.changedAt }
-                    )
-                }
+            exportSyncedSavedArticlesInternal(deviceId = deviceId, requestedArticleIds = null)
         }
 
     override suspend fun exportSyncedArticleManifests(deviceId: String): List<SyncedArticleManifest> =
         withContext(Dispatchers.IO) {
-            exportSyncedSavedArticles(deviceId)
-                .onEach { article -> persistSyncedArticleMetadata(article) }
-                .map { article ->
-                    val metadata = ArticleSyncBody.metadataFor(article)
-                    article.toManifest(metadata)
-                }
+            val lightweight = exportLightweightSyncedArticleManifests(deviceId)
+            val missingMetadataIds = lightweight
+                .filter { it.needsBodyMetadataRefresh() }
+                .mapTo(mutableSetOf()) { it.articleId }
+            if (missingMetadataIds.isEmpty()) {
+                return@withContext lightweight
+            }
+            val repaired = exportSyncedSavedArticlesInternal(
+                deviceId = deviceId,
+                requestedArticleIds = missingMetadataIds
+            ).associate { article ->
+                persistSyncedArticleMetadata(article)
+                val metadata = ArticleSyncBody.metadataFor(article)
+                article.articleId to article.toManifest(metadata)
+            }
+            lightweight.map { manifest -> repaired[manifest.articleId] ?: manifest }
         }
+
+    private suspend fun exportSyncedSavedArticlesInternal(
+        deviceId: String,
+        requestedArticleIds: Set<String>?
+    ): List<SyncedSavedArticle> {
+        val favorites = savedEntryDao.getSavedItems(SaveType.FAVORITE.name)
+        val watchLater = savedEntryDao.getSavedItems(SaveType.WATCH_LATER.name)
+        val states = savedSyncStateDao.getAll().associateBy { it.articleId to it.saveType }
+        val grouped = (favorites + watchLater).groupBy { saved ->
+            stableArticleId(saved.item.link ?: saved.item.dedupKey)
+        }
+        val savedArticles = grouped.mapNotNull { (articleId, entries) ->
+            if (requestedArticleIds != null && articleId !in requestedArticleIds) {
+                return@mapNotNull null
+            }
+            val representative = entries.maxByOrNull { it.savedAt } ?: entries.first()
+            val favorite = entries.firstOrNull { it.saveType == SaveType.FAVORITE.name }
+            val later = entries.firstOrNull { it.saveType == SaveType.WATCH_LATER.name }
+            val favoriteState = states[articleId to SaveType.FAVORITE.name]
+            val laterState = states[articleId to SaveType.WATCH_LATER.name]
+            representative.toSyncedArticle(
+                articleId = articleId,
+                deviceId = deviceId,
+                favoriteSaved = favorite != null,
+                favoriteChangedAt = favoriteState?.changedAt ?: favorite?.savedAt ?: 0L,
+                favoriteSortOrder = favoriteState?.sortOrder ?: favorite?.savedAt ?: 0L,
+                watchLaterSaved = later != null,
+                watchLaterChangedAt = laterState?.changedAt ?: later?.savedAt ?: 0L,
+                watchLaterSortOrder = laterState?.sortOrder ?: later?.savedAt ?: 0L
+            )
+        }
+        val savedArticleIds = savedArticles.mapTo(mutableSetOf()) { it.articleId }
+        val independentArticles = exportSyncedIndependentArticles(
+            deviceId = deviceId,
+            excludedArticleIds = savedArticleIds,
+            requestedArticleIds = requestedArticleIds
+        )
+        val importedContentArticles = exportSyncedImportedContentArticles(
+            deviceId = deviceId,
+            excludedArticleIds = savedArticleIds + independentArticles.map { it.articleId },
+            requestedArticleIds = requestedArticleIds
+        )
+        val activeArticleIds = savedArticleIds +
+            independentArticles.map { it.articleId } +
+            importedContentArticles.map { it.articleId }
+        val tombstones = states.values
+            .filter { !it.saved && it.articleId !in activeArticleIds }
+            .filter { requestedArticleIds == null || it.articleId in requestedArticleIds }
+            .groupBy { it.articleId }
+            .mapNotNull { (articleId, articleStates) ->
+                val url = articleStates.firstOrNull()?.url?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                val articleDelete = articleStates
+                    .filter { it.saveType == ARTICLE_DELETE_SYNC_TYPE }
+                    .maxByOrNull { it.changedAt }
+                SyncedSavedArticle(
+                    articleId = articleId,
+                    sourceDeviceId = articleStates.maxByOrNull { it.changedAt }?.sourceDeviceId ?: deviceId,
+                    url = url,
+                    title = url,
+                    siteName = hostLabel(url),
+                    excerpt = "",
+                    contentHtml = null,
+                    contentText = "",
+                    imageUrl = null,
+                    contentHash = sha256(url),
+                    importedAt = articleStates.minOf { it.changedAt },
+                    updatedAt = articleStates.maxOf { it.changedAt },
+                    independentSaved = false,
+                    independentChangedAt = articleDelete?.changedAt ?: 0L,
+                    independentSortOrder = 0L,
+                    rssSourceUrl = null,
+                    rssSourceTitle = null,
+                    favoriteSaved = false,
+                    favoriteChangedAt = articleStates.firstOrNull { it.saveType == SaveType.FAVORITE.name }?.changedAt ?: 0L,
+                    favoriteSortOrder = 0L,
+                    watchLaterSaved = false,
+                    watchLaterChangedAt = articleStates.firstOrNull { it.saveType == SaveType.WATCH_LATER.name }?.changedAt ?: 0L,
+                    watchLaterSortOrder = 0L,
+                    deleted = articleDelete != null,
+                    deletedAt = articleDelete?.changedAt ?: articleStates.maxOf { it.changedAt }
+                )
+            }
+        return savedArticles + independentArticles + importedContentArticles + tombstones
+    }
+
+    private fun SyncedArticleManifest.needsBodyMetadataRefresh(): Boolean {
+        if (deletedAt > 0L) return false
+        return bodyHash.isBlank() ||
+            bodyByteCount <= 0L ||
+            chunkSize <= 0 ||
+            chunkHashes.isEmpty() ||
+            metadataHash.isBlank()
+    }
 
     override suspend fun exportSyncedSavedArticlesForRequests(
         deviceId: String,
@@ -624,8 +660,10 @@ class DefaultRssRepository(
     ): List<SyncedSavedArticle> = withContext(Dispatchers.IO) {
         val requestedIds = requests.mapTo(mutableSetOf()) { it.articleId }
         if (requestedIds.isEmpty()) return@withContext emptyList()
-        exportSyncedSavedArticles(deviceId)
-            .filter { it.articleId in requestedIds }
+        exportSyncedSavedArticlesInternal(
+            deviceId = deviceId,
+            requestedArticleIds = requestedIds
+        )
             .onEach { article -> persistSyncedArticleMetadata(article) }
     }
 
@@ -1324,12 +1362,15 @@ class DefaultRssRepository(
 
     private suspend fun exportSyncedIndependentArticles(
         deviceId: String,
-        excludedArticleIds: Set<String>
+        excludedArticleIds: Set<String>,
+        requestedArticleIds: Set<String>? = null
     ): List<SyncedSavedArticle> {
         val channel = channelDao.getChannelByUrl(PHONE_IMPORT_CHANNEL_URL) ?: return emptyList()
         return itemDao.getItemsForChannelSync(channel.id, Int.MAX_VALUE).mapNotNull { item ->
             val articleId = stableArticleId(item.link ?: item.dedupKey)
-            if (articleId in excludedArticleIds) {
+            if (articleId in excludedArticleIds ||
+                (requestedArticleIds != null && articleId !in requestedArticleIds)
+            ) {
                 null
             } else {
                 item.toSyncedChannelArticle(
@@ -1368,14 +1409,17 @@ class DefaultRssRepository(
 
     private suspend fun exportSyncedImportedContentArticles(
         deviceId: String,
-        excludedArticleIds: Set<String>
+        excludedArticleIds: Set<String>,
+        requestedArticleIds: Set<String>? = null
     ): List<SyncedSavedArticle> {
         return channelDao.getAllChannels()
             .filter { it.isImportedContentChannel() }
             .flatMap { channel ->
                 itemDao.getItemsForChannelSync(channel.id, Int.MAX_VALUE).mapNotNull { item ->
                     val articleId = stableArticleId(item.link ?: item.dedupKey)
-                    if (articleId in excludedArticleIds) {
+                    if (articleId in excludedArticleIds ||
+                        (requestedArticleIds != null && articleId !in requestedArticleIds)
+                    ) {
                         null
                     } else {
                         item.toSyncedChannelArticle(

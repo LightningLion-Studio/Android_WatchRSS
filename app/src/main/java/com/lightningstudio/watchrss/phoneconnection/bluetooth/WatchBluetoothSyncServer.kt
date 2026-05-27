@@ -251,11 +251,23 @@ class WatchBluetoothSyncServer(
                 )
             )
             val responseFrames = if (supportsChunkedBodies) {
+                val exportStartedAt = SystemClock.elapsedRealtime()
                 val phoneRequests = LibrarySyncPayload.parseBodyRequests(combinedArticleRequest)
                 val outgoingArticles = app.container.rssRepository.exportSyncedSavedArticlesForRequests(
                     deviceId = localDeviceId,
                     requests = phoneRequests
                 )
+                WatchBluetoothDebugLog.event(
+                    sessionId = sessionId,
+                    event = "library.response.articles.exported",
+                    fields = mapOf(
+                        "bodyRequests" to phoneRequests.size,
+                        "outgoingArticles" to outgoingArticles.size,
+                        "requestedChunks" to phoneRequests.sumOf { it.chunkIndexes.size },
+                        "elapsedMs" to elapsedSince(exportStartedAt)
+                    )
+                )
+                val framesStartedAt = SystemClock.elapsedRealtime()
                 LibrarySyncPayload.buildChunkedResponseFrames(
                     deviceId = localDeviceId,
                     articles = outgoingArticles,
@@ -263,15 +275,30 @@ class WatchBluetoothSyncServer(
                     applied = stats.applied,
                     sourcesApplied = sourceStats.applied,
                     useBatches = remoteSupportsArticleBatches
-                )
+                ).also { frames ->
+                    WatchBluetoothDebugLog.event(
+                        sessionId = sessionId,
+                        event = "library.response.frames.built",
+                        fields = batchFields("libraryResponse", frames) +
+                            mapOf("elapsedMs" to elapsedSince(framesStartedAt))
+                    )
+                }
             } else {
+                val framesStartedAt = SystemClock.elapsedRealtime()
                 LibrarySyncPayload.buildResponseFrames(
                     deviceId = localDeviceId,
                     articles = outgoingDiff,
                     applied = stats.applied,
                     sourcesApplied = sourceStats.applied,
                     useBatches = remoteSupportsArticleBatches
-                )
+                ).also { frames ->
+                    WatchBluetoothDebugLog.event(
+                        sessionId = sessionId,
+                        event = "library.response.frames.built",
+                        fields = batchFields("libraryResponse", frames) +
+                            mapOf("elapsedMs" to elapsedSince(framesStartedAt))
+                    )
+                }
             }
             responseFrames.forEachIndexed { index, responseFrame ->
                 writeFrameLogged(
