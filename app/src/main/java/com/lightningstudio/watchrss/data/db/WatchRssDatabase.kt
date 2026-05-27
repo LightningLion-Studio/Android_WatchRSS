@@ -12,9 +12,12 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         RssItemEntity::class,
         SavedEntryEntity::class,
         SavedSyncStateEntity::class,
-        OfflineMediaEntity::class
+        OfflineMediaEntity::class,
+        SyncChangeLogEntity::class,
+        SyncPeerStateEntity::class,
+        RssSourceSyncStateEntity::class
     ],
-    version = 13,
+    version = 14,
     exportSchema = false
 )
 @SkipQueryVerification
@@ -24,6 +27,9 @@ abstract class WatchRssDatabase : RoomDatabase() {
     abstract fun savedEntryDao(): SavedEntryDao
     abstract fun savedSyncStateDao(): SavedSyncStateDao
     abstract fun offlineMediaDao(): OfflineMediaDao
+    abstract fun syncChangeLogDao(): SyncChangeLogDao
+    abstract fun syncPeerStateDao(): SyncPeerStateDao
+    abstract fun rssSourceSyncStateDao(): RssSourceSyncStateDao
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -207,6 +213,56 @@ abstract class WatchRssDatabase : RoomDatabase() {
                 database.execSQL("ALTER TABLE rss_items ADD COLUMN syncChunkHashesJson TEXT NOT NULL DEFAULT ''")
                 database.execSQL("ALTER TABLE rss_items ADD COLUMN syncMetadataHash TEXT NOT NULL DEFAULT ''")
                 database.execSQL("CREATE INDEX IF NOT EXISTS index_rss_items_syncBodyHash ON rss_items(syncBodyHash)")
+            }
+        }
+
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS sync_change_log (
+                        seq INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        kind TEXT NOT NULL,
+                        entityId TEXT NOT NULL,
+                        changedAt INTEGER NOT NULL,
+                        originDeviceId TEXT NOT NULL,
+                        reason TEXT NOT NULL,
+                        createdAt INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_sync_change_log_kind_entityId ON sync_change_log(kind, entityId)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_sync_change_log_seq ON sync_change_log(seq)")
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS sync_peer_state (
+                        peerDeviceId TEXT NOT NULL PRIMARY KEY,
+                        lastLocalSeqAckedByPeer INTEGER NOT NULL DEFAULT 0,
+                        lastRemoteSeqApplied INTEGER NOT NULL DEFAULT 0,
+                        lastFullSyncAt INTEGER NOT NULL DEFAULT 0,
+                        lastProtocolVersion INTEGER NOT NULL DEFAULT 0,
+                        updatedAt INTEGER NOT NULL DEFAULT 0
+                    )
+                    """.trimIndent()
+                )
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS rss_source_sync_states (
+                        url TEXT NOT NULL PRIMARY KEY,
+                        sourceDeviceId TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        description TEXT NOT NULL,
+                        siteUrl TEXT,
+                        imageUrl TEXT,
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL,
+                        sortOrder INTEGER NOT NULL,
+                        isPinned INTEGER NOT NULL,
+                        deleted INTEGER NOT NULL,
+                        deletedAt INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
             }
         }
     }

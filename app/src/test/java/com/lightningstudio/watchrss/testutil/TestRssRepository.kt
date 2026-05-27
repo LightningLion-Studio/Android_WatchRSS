@@ -19,6 +19,7 @@ import com.lightningstudio.watchrss.data.rss.SyncedSavedArticle
 import com.lightningstudio.watchrss.data.rss.SyncedSavedArticleMergeStats
 import com.lightningstudio.watchrss.data.rss.SyncedRssSource
 import com.lightningstudio.watchrss.data.rss.SyncedRssSourceMergeStats
+import com.lightningstudio.watchrss.data.rss.WatchLibrarySyncWindow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -255,6 +256,30 @@ class TestRssRepository(
     override suspend fun exportSyncedArticleManifests(deviceId: String): List<SyncedArticleManifest> {
         return exportedSyncedArticleManifests
     }
+
+    override suspend fun prepareLibrarySyncWindow(
+        peerDeviceId: String,
+        localDeviceId: String
+    ): WatchLibrarySyncWindow {
+        return WatchLibrarySyncWindow(
+            articleManifest = exportedSyncedArticleManifests,
+            fullArticleManifest = exportedSyncedArticleManifests,
+            rssSources = exportedSyncedRssSources,
+            fullSnapshot = true,
+            fromSeqExclusive = 0L,
+            toSeqInclusive = 0L,
+            peerAckedSeq = 0L,
+            fallbackReason = "test"
+        )
+    }
+
+    override suspend fun markLibrarySyncSuccess(
+        peerDeviceId: String,
+        localSeqToInclusive: Long,
+        remoteSeqToInclusive: Long,
+        remoteProtocolVersion: Int,
+        fullSnapshot: Boolean
+    ) = Unit
 
     override suspend fun exportSyncedSavedArticlesForRequests(
         deviceId: String,

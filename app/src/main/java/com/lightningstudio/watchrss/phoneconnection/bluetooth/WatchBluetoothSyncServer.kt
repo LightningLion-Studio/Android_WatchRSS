@@ -149,6 +149,7 @@ class WatchBluetoothSyncServer(
             val localDeviceId = WatchDeviceIdentity(context).deviceId
             val remoteDeviceId = request.optString("deviceId").ifBlank { "phone" }
             val remoteSupportsArticleBatches = request.optBoolean("supportsArticleBatches", false)
+            val remoteChangeSequence = LibrarySyncPayload.parseChangeSequence(request)
             val remoteManifest = LibrarySyncPayload.parseArticleManifest(request)
             val incomingSources = LibrarySyncPayload.parseRssSources(request)
             WatchBluetoothDebugLog.event(
@@ -156,7 +157,9 @@ class WatchBluetoothSyncServer(
                 event = "library.manifest.parsed",
                 fields = mapOf(
                     "remoteManifest" to remoteManifest.size,
-                    "incomingSources" to incomingSources.size
+                    "incomingSources" to incomingSources.size,
+                    "remoteSeqToInclusive" to remoteChangeSequence.toSeqInclusive,
+                    "remoteFullSnapshot" to remoteChangeSequence.fullSnapshot
                 )
             )
             val sourceStats = app.container.rssRepository.mergeSyncedRssSources(
@@ -173,38 +176,68 @@ class WatchBluetoothSyncServer(
                 )
             )
             val supportsChunkedBodies = request.optBoolean("supportsChunkedBodies", false) &&
-                request.optInt("version") >= LibrarySyncPayload.PROTOCOL_VERSION
-            val outgoingManifest = app.container.rssRepository.exportSyncedArticleManifests(localDeviceId)
-            val outgoingSources = app.container.rssRepository.exportSyncedRssSources(localDeviceId)
+                request.optInt("version") > LibrarySyncPayload.LEGACY_PROTOCOL_VERSION
+            val preparedWindow = app.container.rssRepository.prepareLibrarySyncWindow(
+                peerDeviceId = remoteDeviceId,
+                localDeviceId = localDeviceId
+            )
+            val outgoingWindow = if (LibrarySyncPayload.supportsChangeSequences(request)) {
+                preparedWindow
+            } else {
+                preparedWindow.copy(
+                    articleManifest = preparedWindow.fullArticleManifest,
+                    rssSources = app.container.rssRepository.exportSyncedRssSources(localDeviceId),
+                    fullSnapshot = true,
+                    fromSeqExclusive = 0L,
+                    fallbackReason = "peerProtocol"
+                )
+            }
             WatchBluetoothDebugLog.event(
                 sessionId = sessionId,
                 event = "library.local.exported",
                 fields = mapOf(
-                    "outgoingArticles" to outgoingManifest.size,
-                    "outgoingSources" to outgoingSources.size,
-                    "chunked" to supportsChunkedBodies
+                    "outgoingArticles" to outgoingWindow.articleManifest.size,
+                    "fullArticles" to outgoingWindow.fullArticleManifest.size,
+                    "outgoingSources" to outgoingWindow.rssSources.size,
+                    "chunked" to supportsChunkedBodies,
+                    "localSeqMax" to outgoingWindow.toSeqInclusive,
+                    "peerAckedSeq" to outgoingWindow.peerAckedSeq,
+                    "fullSnapshot" to outgoingWindow.fullSnapshot,
+                    "fallbackReason" to outgoingWindow.fallbackReason
                 )
             )
             val manifestResponse = if (supportsChunkedBodies) {
                 val bodyRequests = LibrarySyncPayload.buildBodyRequestsForRemoteArticles(
-                    localManifest = outgoingManifest,
+                    localManifest = outgoingWindow.fullArticleManifest,
                     remoteManifest = remoteManifest,
                     maxBodyRequestChunks = LibrarySyncPayload.MAX_BODY_REQUEST_CHUNKS_PER_SYNC
                 )
                 LibrarySyncPayload.buildManifestResponseFromEntries(
                     deviceId = localDeviceId,
-                    articleManifest = outgoingManifest,
+                    articleManifest = outgoingWindow.articleManifest,
                     bodyRequests = bodyRequests,
-                    rssSources = outgoingSources,
-                    sourcesApplied = sourceStats.applied
+                    rssSources = outgoingWindow.rssSources,
+                    sourcesApplied = sourceStats.applied,
+                    changeSequence = LibraryChangeSequence(
+                        fromSeqExclusive = outgoingWindow.fromSeqExclusive,
+                        toSeqInclusive = outgoingWindow.toSeqInclusive,
+                        fullSnapshot = outgoingWindow.fullSnapshot,
+                        fallbackReason = outgoingWindow.fallbackReason
+                    )
                 )
             } else {
                 val outgoing = app.container.rssRepository.exportSyncedSavedArticles(localDeviceId)
                 LibrarySyncPayload.buildManifestResponse(
                     deviceId = localDeviceId,
                     articles = outgoing,
-                    rssSources = outgoingSources,
-                    sourcesApplied = sourceStats.applied
+                    rssSources = outgoingWindow.rssSources,
+                    sourcesApplied = sourceStats.applied,
+                    changeSequence = LibraryChangeSequence(
+                        fromSeqExclusive = outgoingWindow.fromSeqExclusive,
+                        toSeqInclusive = outgoingWindow.toSeqInclusive,
+                        fullSnapshot = outgoingWindow.fullSnapshot,
+                        fallbackReason = outgoingWindow.fallbackReason
+                    )
                 )
             }
             writeFrameLogged(client, sessionId, "manifestResponse", manifestResponse)
@@ -309,10 +342,17 @@ class WatchBluetoothSyncServer(
                     payload = responseFrame
                 )
             }
+            app.container.rssRepository.markLibrarySyncSuccess(
+                peerDeviceId = remoteDeviceId,
+                localSeqToInclusive = outgoingWindow.toSeqInclusive,
+                remoteSeqToInclusive = remoteChangeSequence.toSeqInclusive,
+                remoteProtocolVersion = request.optInt("version"),
+                fullSnapshot = outgoingWindow.fullSnapshot || remoteChangeSequence.fullSnapshot
+            )
             val response = LibrarySyncPayload.combineArticlePayloads(responseFrames)
             Log.i(
                 TAG,
-                "library manifest exchange complete incoming=${incoming.size} outgoing=${outgoingDiff.size} sources=${outgoingSources.size}"
+                "library manifest exchange complete incoming=${incoming.size} outgoing=${outgoingDiff.size} sources=${outgoingWindow.rssSources.size}"
             )
             WatchBluetoothDebugLog.event(
                 sessionId = sessionId,
@@ -320,7 +360,14 @@ class WatchBluetoothSyncServer(
                 fields = batchFields("libraryResponse", responseFrames) + payloadFields("combinedLibraryResponse", response) + mapOf(
                     "incomingArticles" to incoming.size,
                     "outgoingDiff" to outgoingDiff.size,
-                    "outgoingSources" to outgoingSources.size,
+                    "outgoingSources" to outgoingWindow.rssSources.size,
+                    "localSeqMax" to outgoingWindow.toSeqInclusive,
+                    "peerAckedSeq" to outgoingWindow.peerAckedSeq,
+                    "remoteSeqApplied" to remoteChangeSequence.toSeqInclusive,
+                    "deltaArticleCount" to outgoingWindow.articleManifest.size,
+                    "deltaSourceCount" to outgoingWindow.rssSources.size,
+                    "fullSnapshot" to outgoingWindow.fullSnapshot,
+                    "fallbackReason" to outgoingWindow.fallbackReason,
                     "elapsedMs" to elapsedSince(startedAt)
                 )
             )

@@ -8,6 +8,8 @@ import com.lightningstudio.watchrss.data.db.OfflineMediaDao
 import com.lightningstudio.watchrss.data.db.OfflineMediaEntity
 import com.lightningstudio.watchrss.data.db.RssChannelDao
 import com.lightningstudio.watchrss.data.db.RssChannelEntity
+import com.lightningstudio.watchrss.data.db.RssSourceSyncStateDao
+import com.lightningstudio.watchrss.data.db.RssSourceSyncStateEntity
 import com.lightningstudio.watchrss.data.db.RssItemDao
 import com.lightningstudio.watchrss.data.db.RssItemEntity
 import com.lightningstudio.watchrss.data.db.SavedEntryDao
@@ -15,6 +17,10 @@ import com.lightningstudio.watchrss.data.db.SavedEntryEntity
 import com.lightningstudio.watchrss.data.db.SavedRssItem
 import com.lightningstudio.watchrss.data.db.SavedSyncStateDao
 import com.lightningstudio.watchrss.data.db.SavedSyncStateEntity
+import com.lightningstudio.watchrss.data.db.SyncChangeLogDao
+import com.lightningstudio.watchrss.data.db.SyncChangeLogEntity
+import com.lightningstudio.watchrss.data.db.SyncPeerStateDao
+import com.lightningstudio.watchrss.data.db.SyncPeerStateEntity
 import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackPreviewCache
 import com.lightningstudio.watchrss.debug.DebugLogBuffer
 import com.lightningstudio.watchrss.debug.PerfTrace
@@ -34,12 +40,26 @@ import java.net.URI
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 
+data class WatchLibrarySyncWindow(
+    val articleManifest: List<SyncedArticleManifest>,
+    val fullArticleManifest: List<SyncedArticleManifest>,
+    val rssSources: List<SyncedRssSource>,
+    val fullSnapshot: Boolean,
+    val fromSeqExclusive: Long,
+    val toSeqInclusive: Long,
+    val peerAckedSeq: Long,
+    val fallbackReason: String
+)
+
 class DefaultRssRepository(
     private val channelDao: RssChannelDao,
     private val itemDao: RssItemDao,
     private val savedEntryDao: SavedEntryDao,
     private val savedSyncStateDao: SavedSyncStateDao,
     private val offlineMediaDao: OfflineMediaDao,
+    private val syncChangeLogDao: SyncChangeLogDao,
+    private val syncPeerStateDao: SyncPeerStateDao,
+    private val rssSourceSyncStateDao: RssSourceSyncStateDao,
     private val cacheService: ManagedCacheService,
     private val appScope: CoroutineScope,
     private val fetchService: RssFetchService,
@@ -245,6 +265,10 @@ class DefaultRssRepository(
                 } else {
                     channelDao.getChannelByUrl(preview.url) ?: channel
                 }
+                if (storedChannel.isSyncedRssSource()) {
+                    rssSourceSyncStateDao.upsert(storedChannel.toSourceSyncState(deviceId, deleted = false))
+                    recordRssSourceChange(storedChannel.url, "upsert", fetchedAt)
+                }
                 val items = preview.items.map { item ->
                     parseService.toEntityFromPreviewItem(
                         item = item,
@@ -357,12 +381,17 @@ class DefaultRssRepository(
                     }
                 }
             }
-            channelDao.updateChannel(channel.copy(
+            val updatedChannel = channel.copy(
                 title = parseService.channelTitle(parsed, channel.url),
                 description = parsed.description?.trim()?.ifEmpty { null },
                 imageUrl = parsed.image?.url?.trim()?.ifEmpty { null },
                 lastFetchedAt = fetchedAt
-            ))
+            )
+            channelDao.updateChannel(updatedChannel)
+            if (updatedChannel.isSyncedRssSource()) {
+                rssSourceSyncStateDao.upsert(updatedChannel.toSourceSyncState(deviceId, deleted = false))
+                recordRssSourceChange(updatedChannel.url, "metadata", fetchedAt)
+            }
             trimCacheToLimit()
         }.mapError()
         PerfTrace.log(
@@ -561,6 +590,78 @@ class DefaultRssRepository(
             lightweight.map { manifest -> repaired[manifest.articleId] ?: manifest }
         }
 
+    override suspend fun prepareLibrarySyncWindow(
+        peerDeviceId: String,
+        localDeviceId: String
+    ): WatchLibrarySyncWindow = withContext(Dispatchers.IO) {
+        val normalizedPeerId = peerDeviceId.ifBlank { DEFAULT_LIBRARY_PEER_ID }
+        val peerState = syncPeerStateDao.get(normalizedPeerId)
+        val now = System.currentTimeMillis()
+        val maxSeq = syncChangeLogDao.maxSeq()
+        val fullArticleManifest = exportSyncedArticleManifests(localDeviceId)
+        val peerAckedSeq = peerState?.lastLocalSeqAckedByPeer ?: 0L
+        val fullSnapshotReason = when {
+            peerState == null -> "newPeer"
+            peerState.lastProtocolVersion < CHANGE_SEQUENCE_PROTOCOL_VERSION -> "peerProtocol"
+            peerState.lastFullSyncAt <= 0L -> "noFullSnapshot"
+            now - peerState.lastFullSyncAt >= FULL_SNAPSHOT_INTERVAL_MS -> "periodicFull"
+            else -> ""
+        }
+        if (fullSnapshotReason.isNotBlank()) {
+            return@withContext WatchLibrarySyncWindow(
+                articleManifest = fullArticleManifest,
+                fullArticleManifest = fullArticleManifest,
+                rssSources = exportSyncedRssSources(localDeviceId),
+                fullSnapshot = true,
+                fromSeqExclusive = 0L,
+                toSeqInclusive = maxSeq,
+                peerAckedSeq = peerAckedSeq,
+                fallbackReason = fullSnapshotReason
+            )
+        }
+
+        val changedArticleIds = syncChangeLogDao.entityIdsChangedAfter(
+            kind = SYNC_KIND_ARTICLE,
+            afterSeq = peerAckedSeq
+        ).toSet()
+        val changedSourceUrls = syncChangeLogDao.entityIdsChangedAfter(
+            kind = SYNC_KIND_RSS_SOURCE,
+            afterSeq = peerAckedSeq
+        )
+        WatchLibrarySyncWindow(
+            articleManifest = fullArticleManifest.filter { it.articleId in changedArticleIds },
+            fullArticleManifest = fullArticleManifest,
+            rssSources = exportSyncedRssSources(localDeviceId, changedSourceUrls),
+            fullSnapshot = false,
+            fromSeqExclusive = peerAckedSeq,
+            toSeqInclusive = maxSeq,
+            peerAckedSeq = peerAckedSeq,
+            fallbackReason = ""
+        )
+    }
+
+    override suspend fun markLibrarySyncSuccess(
+        peerDeviceId: String,
+        localSeqToInclusive: Long,
+        remoteSeqToInclusive: Long,
+        remoteProtocolVersion: Int,
+        fullSnapshot: Boolean
+    ) = withContext(Dispatchers.IO) {
+        val normalizedPeerId = peerDeviceId.ifBlank { DEFAULT_LIBRARY_PEER_ID }
+        val now = System.currentTimeMillis()
+        val current = syncPeerStateDao.get(normalizedPeerId)
+        syncPeerStateDao.upsert(
+            SyncPeerStateEntity(
+                peerDeviceId = normalizedPeerId,
+                lastLocalSeqAckedByPeer = maxOf(current?.lastLocalSeqAckedByPeer ?: 0L, localSeqToInclusive),
+                lastRemoteSeqApplied = maxOf(current?.lastRemoteSeqApplied ?: 0L, remoteSeqToInclusive),
+                lastFullSyncAt = if (fullSnapshot) now else current?.lastFullSyncAt ?: 0L,
+                lastProtocolVersion = remoteProtocolVersion,
+                updatedAt = now
+            )
+        )
+    }
+
     private suspend fun exportSyncedSavedArticlesInternal(
         deviceId: String,
         requestedArticleIds: Set<String>?
@@ -672,7 +773,22 @@ class DefaultRssRepository(
             channelDao.getAllChannels()
                 .filter { it.isSyncedRssSource() }
                 .map { channel -> channel.toSyncedRssSource(deviceId) }
+                .mergeSourceTombstones(deviceId, rssSourceSyncStateDao.getAll())
         }
+
+    private suspend fun exportSyncedRssSources(
+        deviceId: String,
+        sourceUrls: Collection<String>
+    ): List<SyncedRssSource> {
+        val urlSet = sourceUrls.toSet()
+        if (urlSet.isEmpty()) return emptyList()
+        val activeSources = channelDao.getAllChannels()
+            .filter { it.url in urlSet && it.isSyncedRssSource() }
+            .map { channel -> channel.toSyncedRssSource(deviceId) }
+        val states = rssSourceSyncStateDao.getByUrls(urlSet.toList())
+        return activeSources.mergeSourceTombstones(deviceId, states)
+            .filter { it.url in urlSet }
+    }
 
     private suspend fun exportLightweightSyncedArticleManifests(deviceId: String): List<SyncedArticleManifest> {
         val favorites = savedEntryDao.getSavedItemsForSyncManifest(SaveType.FAVORITE.name)
@@ -746,8 +862,11 @@ class DefaultRssRepository(
             if (ImportedContentIds.isImportedTextSourceUrl(normalizedUrl)) return@forEach
             val existing = channelDao.getChannelByUrl(normalizedUrl)
             if (source.deleted) {
+                rssSourceSyncStateDao.upsert(source.toSourceSyncState(normalizedUrl, remoteDeviceId))
                 if (existing != null) {
-                    deleteChannel(existing.id)
+                    deleteChannelInternal(existing.id, recordSyncChange = false)
+                    applied += 1
+                } else {
                     applied += 1
                 }
                 return@forEach
@@ -785,6 +904,7 @@ class DefaultRssRepository(
             } else {
                 channelDao.updateChannel(entity)
             }
+            rssSourceSyncStateDao.upsert(entity.toSourceSyncState(localDeviceId, deleted = false))
             applied += 1
         }
         SyncedRssSourceMergeStats(
@@ -915,7 +1035,13 @@ class DefaultRssRepository(
     override suspend fun moveChannelToTop(channelId: Long) {
         withContext(Dispatchers.IO) {
             val channel = channelDao.getChannel(channelId) ?: return@withContext
-            channelDao.updateChannel(channel.copy(sortOrder = System.currentTimeMillis()))
+            val now = System.currentTimeMillis()
+            val updated = channel.copy(sortOrder = now)
+            channelDao.updateChannel(updated)
+            if (updated.isSyncedRssSource()) {
+                rssSourceSyncStateDao.upsert(updated.toSourceSyncState(deviceId, deleted = false))
+                recordRssSourceChange(updated.url, "sourceState", now)
+            }
         }
     }
 
@@ -923,7 +1049,12 @@ class DefaultRssRepository(
         withContext(Dispatchers.IO) {
             val channel = channelDao.getChannel(channelId) ?: return@withContext
             val newOrder = if (pinned) System.currentTimeMillis() else channel.sortOrder
-            channelDao.updateChannel(channel.copy(isPinned = pinned, sortOrder = newOrder))
+            val updated = channel.copy(isPinned = pinned, sortOrder = newOrder)
+            channelDao.updateChannel(updated)
+            if (updated.isSyncedRssSource()) {
+                rssSourceSyncStateDao.upsert(updated.toSourceSyncState(deviceId, deleted = false))
+                recordRssSourceChange(updated.url, "sourceState", newOrder)
+            }
         }
     }
 
@@ -980,6 +1111,7 @@ class DefaultRssRepository(
             }
             offlineStore.deleteMediaForItem(itemId)
             itemDao.deleteItem(itemId)
+            recordArticleChange(articleId, "delete", now)
         }
     }
 
@@ -1024,6 +1156,11 @@ class DefaultRssRepository(
                 }
             }
             savedSyncStateDao.upsertAll(tombstones)
+            tombstones
+                .filter { it.saveType == ARTICLE_DELETE_SYNC_TYPE }
+                .forEach { tombstone ->
+                    recordArticleChange(tombstone.articleId, "delete", tombstone.changedAt)
+                }
             offlineStore.deleteMediaForChannel(channelId)
             itemDao.deleteByChannel(channelId)
         }
@@ -1031,17 +1168,26 @@ class DefaultRssRepository(
 
     override suspend fun deleteChannel(channelId: Long) {
         withContext(Dispatchers.IO) {
-            val channel = channelDao.getChannel(channelId) ?: return@withContext
-            offlineStore.deleteMediaForChannel(channelId)
-            when (channel.url) {
-                BuiltinChannelType.BILI.url -> cacheService.clearBucket(ManagedCacheBucket.BILI_PREVIEW)
-                BuiltinChannelType.DOUYIN.url -> {
-                    cacheService.clearBucket(ManagedCacheBucket.DOUYIN_PRELOAD)
-                    DouyinPlaybackPreviewCache.clearAll()
-                }
-            }
-            channelDao.deleteChannel(channelId)
+            deleteChannelInternal(channelId, recordSyncChange = true)
         }
+    }
+
+    private suspend fun deleteChannelInternal(channelId: Long, recordSyncChange: Boolean) {
+        val channel = channelDao.getChannel(channelId) ?: return
+        val now = System.currentTimeMillis()
+        if (recordSyncChange && channel.isSyncedRssSource()) {
+            rssSourceSyncStateDao.upsert(channel.toSourceSyncState(deviceId, deleted = true, deletedAt = now))
+            recordRssSourceChange(channel.url, "delete", now)
+        }
+        offlineStore.deleteMediaForChannel(channelId)
+        when (channel.url) {
+            BuiltinChannelType.BILI.url -> cacheService.clearBucket(ManagedCacheBucket.BILI_PREVIEW)
+            BuiltinChannelType.DOUYIN.url -> {
+                cacheService.clearBucket(ManagedCacheBucket.DOUYIN_PRELOAD)
+                DouyinPlaybackPreviewCache.clearAll()
+            }
+        }
+        channelDao.deleteChannel(channelId)
     }
 
     override suspend fun trimCacheToLimit() {
@@ -1215,9 +1361,10 @@ class DefaultRssRepository(
             val existing = savedEntryDao.getByItemId(itemId)
             val hasType = existing.any { it.saveType == saveType.name }
             val now = System.currentTimeMillis()
+            var changedArticleId = ""
             if (hasType) {
                 savedEntryDao.delete(itemId, saveType.name)
-                upsertSavedSyncState(item, saveType, saved = false, changedAt = now, sortOrder = now)
+                changedArticleId = upsertSavedSyncState(item, saveType, saved = false, changedAt = now, sortOrder = now)
             } else {
                 savedEntryDao.insert(
                     SavedEntryEntity(
@@ -1227,9 +1374,10 @@ class DefaultRssRepository(
                         sortOrder = now
                     )
                 )
-                upsertSavedSyncState(item, saveType, saved = true, changedAt = now, sortOrder = now)
+                changedArticleId = upsertSavedSyncState(item, saveType, saved = true, changedAt = now, sortOrder = now)
                 runCatching { offlineStore.downloadMediaForItem(item) }
             }
+            recordArticleChange(changedArticleId, "sourceState", now)
             if (savedEntryDao.countByItemId(itemId) == 0) {
                 maybeClearBiliPreviewForItem(item)
                 offlineStore.deleteMediaForItem(itemId)
@@ -1251,7 +1399,7 @@ class DefaultRssRepository(
         saved: Boolean,
         changedAt: Long,
         sortOrder: Long
-    ) {
+    ): String {
         val url = item.link?.trim().orEmpty()
         val articleId = stableArticleId(url.ifBlank { item.dedupKey })
         savedSyncStateDao.upsert(
@@ -1266,6 +1414,7 @@ class DefaultRssRepository(
                 sourceDeviceId = deviceId
             )
         )
+        return articleId
     }
 
     private fun SavedRssItem.toSyncedArticle(
@@ -1907,6 +2056,42 @@ class DefaultRssRepository(
         return true
     }
 
+    private suspend fun recordArticleChange(
+        articleId: String,
+        reason: String,
+        changedAt: Long = System.currentTimeMillis()
+    ) {
+        if (articleId.isBlank()) return
+        syncChangeLogDao.insert(
+            SyncChangeLogEntity(
+                kind = SYNC_KIND_ARTICLE,
+                entityId = articleId,
+                changedAt = changedAt,
+                originDeviceId = deviceId,
+                reason = reason,
+                createdAt = System.currentTimeMillis()
+            )
+        )
+    }
+
+    private suspend fun recordRssSourceChange(
+        sourceUrl: String,
+        reason: String,
+        changedAt: Long = System.currentTimeMillis()
+    ) {
+        if (sourceUrl.isBlank() || ImportedContentIds.isImportedTextSourceUrl(sourceUrl)) return
+        syncChangeLogDao.insert(
+            SyncChangeLogEntity(
+                kind = SYNC_KIND_RSS_SOURCE,
+                entityId = sourceUrl,
+                changedAt = changedAt,
+                originDeviceId = deviceId,
+                reason = reason,
+                createdAt = System.currentTimeMillis()
+            )
+        )
+    }
+
     private fun extractBiliVideoIds(item: RssItemEntity): BiliVideoIds? {
         parseBiliGuid(item.guid)?.let { return it }
         return parseBiliLink(item.link)
@@ -2124,6 +2309,11 @@ private const val PHONE_IMPORT_CHANNEL_URL = ImportedContentIds.PHONE_IMPORT_CHA
 private const val PHONE_IMPORT_CHANNEL_TITLE = ImportedContentIds.PHONE_IMPORT_CHANNEL_TITLE
 private const val PHONE_IMPORT_CHANNEL_DESCRIPTION = "从手机同步来的独立网页文章"
 private const val ARTICLE_DELETE_SYNC_TYPE = "ARTICLE_DELETE"
+private const val CHANGE_SEQUENCE_PROTOCOL_VERSION = 6
+private const val DEFAULT_LIBRARY_PEER_ID = "phone"
+private const val FULL_SNAPSHOT_INTERVAL_MS = 7L * 24L * 60L * 60L * 1000L
+private const val SYNC_KIND_ARTICLE = "article"
+private const val SYNC_KIND_RSS_SOURCE = "rssSource"
 private const val MAX_INLINE_CONTENT_CHARS = 100_000
 
 private fun RssChannelEntity.isSyncedRssSource(): Boolean {
@@ -2158,6 +2348,87 @@ private fun RssChannelEntity.toSyncedRssSource(deviceId: String): SyncedRssSourc
         deleted = false,
         deletedAt = 0L
     )
+}
+
+private fun RssChannelEntity.toSourceSyncState(
+    deviceId: String,
+    deleted: Boolean,
+    deletedAt: Long = 0L
+): RssSourceSyncStateEntity {
+    val updatedAt = if (deleted) {
+        deletedAt.takeIf { it > 0L } ?: System.currentTimeMillis()
+    } else {
+        syncUpdatedAt()
+    }
+    return RssSourceSyncStateEntity(
+        url = url,
+        sourceDeviceId = deviceId,
+        title = title,
+        description = description.orEmpty(),
+        siteUrl = null,
+        imageUrl = imageUrl,
+        createdAt = createdAt,
+        updatedAt = updatedAt,
+        sortOrder = sortOrder,
+        isPinned = if (deleted) false else isPinned,
+        deleted = deleted,
+        deletedAt = if (deleted) updatedAt else 0L
+    )
+}
+
+private fun SyncedRssSource.toSourceSyncState(url: String, deviceId: String): RssSourceSyncStateEntity {
+    val updatedAt = updatedAt.takeIf { it > 0L }
+        ?: deletedAt.takeIf { it > 0L }
+        ?: sortOrder.takeIf { it > 0L }
+        ?: createdAt
+    val effectiveDeletedAt = if (deleted) {
+        deletedAt.takeIf { it > 0L } ?: updatedAt
+    } else {
+        0L
+    }
+    return RssSourceSyncStateEntity(
+        url = url,
+        sourceDeviceId = sourceDeviceId.ifBlank { deviceId },
+        title = title.ifBlank { hostLabel(url) },
+        description = description,
+        siteUrl = siteUrl,
+        imageUrl = imageUrl,
+        createdAt = createdAt,
+        updatedAt = updatedAt,
+        sortOrder = sortOrder,
+        isPinned = isPinned,
+        deleted = deleted,
+        deletedAt = effectiveDeletedAt
+    )
+}
+
+private fun RssSourceSyncStateEntity.toSyncedRssSource(deviceId: String): SyncedRssSource {
+    return SyncedRssSource(
+        url = url,
+        sourceDeviceId = sourceDeviceId.ifBlank { deviceId },
+        title = title,
+        description = description,
+        siteUrl = siteUrl,
+        imageUrl = imageUrl,
+        createdAt = createdAt,
+        updatedAt = updatedAt,
+        sortOrder = sortOrder,
+        isPinned = isPinned,
+        deleted = deleted,
+        deletedAt = deletedAt
+    )
+}
+
+private fun List<SyncedRssSource>.mergeSourceTombstones(
+    deviceId: String,
+    states: List<RssSourceSyncStateEntity>
+): List<SyncedRssSource> {
+    if (states.isEmpty()) return this
+    val activeUrls = mapTo(mutableSetOf()) { it.url }
+    val tombstones = states
+        .filter { it.deleted && it.url !in activeUrls }
+        .map { it.toSyncedRssSource(deviceId) }
+    return this + tombstones
 }
 
 private fun stableArticleId(value: String): String {

@@ -93,7 +93,8 @@ class DefaultAppContainer(context: Context) : AppContainer {
             WatchRssDatabase.MIGRATION_9_10,
             WatchRssDatabase.MIGRATION_10_11,
             WatchRssDatabase.MIGRATION_11_12,
-            WatchRssDatabase.MIGRATION_12_13
+            WatchRssDatabase.MIGRATION_12_13,
+            WatchRssDatabase.MIGRATION_13_14
         )
             .addCallback(BuiltinChannelSeed.callback)
             .build()
@@ -198,6 +199,9 @@ class DefaultAppContainer(context: Context) : AppContainer {
             savedEntryDao = database.savedEntryDao(),
             savedSyncStateDao = database.savedSyncStateDao(),
             offlineMediaDao = database.offlineMediaDao(),
+            syncChangeLogDao = database.syncChangeLogDao(),
+            syncPeerStateDao = database.syncPeerStateDao(),
+            rssSourceSyncStateDao = database.rssSourceSyncStateDao(),
             cacheService = managedCacheService,
             appScope = appScope,
             fetchService = fetchService,

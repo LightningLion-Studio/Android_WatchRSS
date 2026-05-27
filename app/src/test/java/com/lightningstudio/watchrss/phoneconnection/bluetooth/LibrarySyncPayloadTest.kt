@@ -104,10 +104,17 @@ class LibrarySyncPayloadTest {
             deviceId = "watch",
             articles = listOf(article),
             rssSources = listOf(source),
-            sourcesApplied = 1
+            sourcesApplied = 1,
+            changeSequence = LibraryChangeSequence(
+                fromSeqExclusive = 4L,
+                toSeqInclusive = 8L,
+                fullSnapshot = false,
+                fallbackReason = ""
+            )
         )
         val manifest = LibrarySyncPayload.parseArticleManifest(response).single()
         val parsedSource = LibrarySyncPayload.parseRssSources(response).single()
+        val changeSequence = LibrarySyncPayload.parseChangeSequence(response)
 
         assertEquals(0, LibrarySyncPayload.parseArticles(response).size)
         assertEquals(article.articleId, manifest.articleId)
@@ -115,6 +122,10 @@ class LibrarySyncPayloadTest {
         assertEquals(article.favoriteChangedAt, manifest.favoriteChangedAt)
         assertEquals(source.title, parsedSource.title)
         assertEquals(source.isPinned, parsedSource.isPinned)
+        assertTrue(LibrarySyncPayload.supportsChangeSequences(response))
+        assertEquals(4L, changeSequence.fromSeqExclusive)
+        assertEquals(8L, changeSequence.toSeqInclusive)
+        assertEquals(false, changeSequence.fullSnapshot)
         assertEquals("manifest", response.getString("phase"))
     }
 
