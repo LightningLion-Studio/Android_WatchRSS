@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.lightningstudio.watchrss.phoneconnection.PhoneConnectionAbility
+import com.lightningstudio.watchrss.phoneconnection.bluetooth.BluetoothTransferScreenOnController
 import com.lightningstudio.watchrss.phoneconnection.bluetooth.BluetoothSyncProtocol
 import com.lightningstudio.watchrss.phoneconnection.bluetooth.WatchBluetoothSyncServer
 import com.lightningstudio.watchrss.ui.components.WatchSurface
@@ -41,6 +42,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class BluetoothConnectionActivity : BaseWatchActivity() {
+    private val screenOnController = BluetoothTransferScreenOnController()
     private var preferredAbility: PhoneConnectionAbility? = null
     private var returnRemoteUrl: Boolean = false
     private var statusMessage by mutableStateOf("等待手机蓝牙连接…")
@@ -81,6 +83,22 @@ class BluetoothConnectionActivity : BaseWatchActivity() {
         startWithPermissionCheck()
     }
 
+    override fun onResume() {
+        super.onResume()
+        screenOnController.setCurrentActivity(this)
+    }
+
+    override fun onPause() {
+        screenOnController.clearActivity(this)
+        super.onPause()
+    }
+
+    override fun onDestroy() {
+        screenOnController.setTransferInProgress(false)
+        screenOnController.clearActivity(this)
+        super.onDestroy()
+    }
+
     private fun startWithPermissionCheck() {
         val missing = bluetoothPermissions().filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
@@ -101,10 +119,14 @@ class BluetoothConnectionActivity : BaseWatchActivity() {
                 withContext(Dispatchers.IO) {
                     WatchBluetoothSyncServer(
                         context = applicationContext,
-                        expectedAbility = preferredAbility
+                        expectedAbility = preferredAbility,
+                        onClientAccepted = {
+                            screenOnController.setTransferInProgress(true)
+                        }
                     ).acceptOnce()
                 }
             }.onSuccess { result ->
+                screenOnController.setTransferInProgress(false)
                 when (result.request.optString("action")) {
                     BluetoothSyncProtocol.ACTION_REMOTE_INPUT -> {
                         val url = result.request.optString("url").trim()
@@ -134,6 +156,7 @@ class BluetoothConnectionActivity : BaseWatchActivity() {
                     }
                 }
             }.onFailure { throwable ->
+                screenOnController.setTransferInProgress(false)
                 statusMessage = "蓝牙同步失败"
                 detailMessage = throwable.message ?: "连接失败"
                 isBusy = false

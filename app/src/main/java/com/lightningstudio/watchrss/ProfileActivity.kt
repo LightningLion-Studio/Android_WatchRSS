@@ -38,7 +38,7 @@ class ProfileActivity : BaseWatchActivity() {
                     onPhoneConnectionClick = {
                         Toast.makeText(
                             this,
-                            "请在手表端打开且亮屏的情况下在与手表配对的手机端操作",
+                            "请在与手表蓝牙配对了的手机上下载并打开腕上RSS手机端后操作",
                             Toast.LENGTH_LONG
                         ).show()
                     },

@@ -9,6 +9,7 @@ import android.util.Log
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import com.lightningstudio.watchrss.phoneconnection.bluetooth.BluetoothTransferScreenOnController
 import com.lightningstudio.watchrss.phoneconnection.bluetooth.WatchBluetoothSyncServer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -16,6 +17,8 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 class DebugBluetoothSyncActivity : BaseWatchActivity() {
+    private val screenOnController = BluetoothTransferScreenOnController()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if ((applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) == 0) {
@@ -42,9 +45,15 @@ class DebugBluetoothSyncActivity : BaseWatchActivity() {
         lifecycleScope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
-                    WatchBluetoothSyncServer(applicationContext).acceptOnce(timeoutMs)
+                    WatchBluetoothSyncServer(
+                        context = applicationContext,
+                        onClientAccepted = {
+                            screenOnController.setTransferInProgress(true)
+                        }
+                    ).acceptOnce(timeoutMs)
                 }
             }.onSuccess { result ->
+                screenOnController.setTransferInProgress(false)
                 val message = buildString {
                     appendLine("Bluetooth sync request complete")
                     appendLine("remote=${result.remoteName} ${result.remoteAddress}")
@@ -54,11 +63,28 @@ class DebugBluetoothSyncActivity : BaseWatchActivity() {
                 Log.i(TAG, message)
                 statusView.text = message
             }.onFailure { throwable ->
+                screenOnController.setTransferInProgress(false)
                 val message = "Bluetooth sync request failed: ${throwable.message}"
                 Log.e(TAG, message, throwable)
                 statusView.text = message
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        screenOnController.setCurrentActivity(this)
+    }
+
+    override fun onPause() {
+        screenOnController.clearActivity(this)
+        super.onPause()
+    }
+
+    override fun onDestroy() {
+        screenOnController.setTransferInProgress(false)
+        screenOnController.clearActivity(this)
+        super.onDestroy()
     }
 
     private fun summarizePayload(label: String, payload: JSONObject): String {

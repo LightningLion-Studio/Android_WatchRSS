@@ -24,7 +24,7 @@ class PhoneConnectionScreenTest {
         }
 
         composeRule.onNodeWithTag(PhoneConnectionTestTags.ROOT).assertExists()
-        composeRule.onNodeWithText("请在手表端打开且亮屏的情况下在与手表配对的手机端操作").assertExists()
+        composeRule.onNodeWithText("请在与手表蓝牙配对了的手机上下载并打开腕上RSS手机端后操作").assertExists()
         composeRule.onAllNodesWithTag(PhoneConnectionTestTags.BLUETOOTH_ENTRY).assertCountEquals(0)
         composeRule.onAllNodesWithTag(PhoneConnectionTestTags.SOUND_GUIDED_WIFI_ENTRY).assertCountEquals(0)
         composeRule.onAllNodesWithTag(PhoneConnectionTestTags.PURE_SOUND_ENTRY).assertCountEquals(0)

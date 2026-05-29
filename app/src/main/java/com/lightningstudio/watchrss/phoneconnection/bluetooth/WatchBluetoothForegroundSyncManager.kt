@@ -30,6 +30,7 @@ class WatchBluetoothForegroundSyncManager(
 ) : Application.ActivityLifecycleCallbacks {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val powerManager = application.getSystemService(PowerManager::class.java)
+    private val screenOnController = BluetoothTransferScreenOnController()
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             when (intent?.action) {
@@ -77,8 +78,11 @@ class WatchBluetoothForegroundSyncManager(
 
     override fun onActivityResumed(activity: Activity) {
         resumedCount += 1
-        if (activity.isExclusiveBluetoothListener()) {
+        val isExclusiveBluetoothListener = activity.isExclusiveBluetoothListener()
+        if (isExclusiveBluetoothListener) {
             excludedResumedCount += 1
+        } else {
+            screenOnController.setCurrentActivity(activity)
         }
         screenInteractive = powerManager?.isInteractive ?: true
         updateListeningState()
@@ -86,8 +90,11 @@ class WatchBluetoothForegroundSyncManager(
 
     override fun onActivityPaused(activity: Activity) {
         resumedCount = (resumedCount - 1).coerceAtLeast(0)
-        if (activity.isExclusiveBluetoothListener()) {
+        val isExclusiveBluetoothListener = activity.isExclusiveBluetoothListener()
+        if (isExclusiveBluetoothListener) {
             excludedResumedCount = (excludedResumedCount - 1).coerceAtLeast(0)
+        } else {
+            screenOnController.clearActivity(activity)
         }
         updateListeningState()
     }
@@ -96,7 +103,9 @@ class WatchBluetoothForegroundSyncManager(
     override fun onActivityStarted(activity: Activity) = Unit
     override fun onActivityStopped(activity: Activity) = Unit
     override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) = Unit
-    override fun onActivityDestroyed(activity: Activity) = Unit
+    override fun onActivityDestroyed(activity: Activity) {
+        screenOnController.clearActivity(activity)
+    }
 
     private fun updateListeningState() {
         val shouldListen = shouldListen()
@@ -136,19 +145,19 @@ class WatchBluetoothForegroundSyncManager(
 
     private suspend fun listenLoop() {
         while (desiredListening) {
-            transferInProgress = false
+            updateTransferInProgress(false)
             val result = runCatching {
                 withContext(Dispatchers.IO) {
                     WatchBluetoothSyncServer(
                         context = application,
                         allowedActions = setOf(BluetoothSyncProtocol.ACTION_SYNC_LIBRARY),
                         onClientAccepted = {
-                            transferInProgress = true
+                            updateTransferInProgress(true)
                         }
                     ).acceptOnce(timeoutMs = FOREGROUND_ACCEPT_TIMEOUT_MS)
                 }
             }
-            transferInProgress = false
+            updateTransferInProgress(false)
             result.onSuccess { syncResult ->
                 Log.i(
                     TAG,
@@ -170,6 +179,11 @@ class WatchBluetoothForegroundSyncManager(
                 listeningJob = null
             }
         }
+    }
+
+    private fun updateTransferInProgress(inProgress: Boolean) {
+        transferInProgress = inProgress
+        screenOnController.setTransferInProgress(inProgress)
     }
 
     private fun hasBluetoothPermission(): Boolean {

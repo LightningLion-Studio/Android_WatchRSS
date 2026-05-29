@@ -52,7 +52,7 @@ fun PhoneConnectionScreen() {
             Spacer(modifier = Modifier.height(sectionSpacing))
 
             Text(
-                text = "请在手表端打开且亮屏的情况下在与手表配对的手机端操作",
+                text = "请在与手表蓝牙配对了的手机上下载并打开腕上RSS手机端后操作",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,

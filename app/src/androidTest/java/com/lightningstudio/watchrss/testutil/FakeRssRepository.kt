@@ -10,10 +10,14 @@ import com.lightningstudio.watchrss.data.rss.RssRepository
 import com.lightningstudio.watchrss.data.rss.SaveType
 import com.lightningstudio.watchrss.data.rss.SavedItem
 import com.lightningstudio.watchrss.data.rss.SavedState
+import com.lightningstudio.watchrss.data.rss.SyncedArticleBodyRequest
+import com.lightningstudio.watchrss.data.rss.SyncedArticleManifest
+import com.lightningstudio.watchrss.data.rss.SyncedChunkedArticle
 import com.lightningstudio.watchrss.data.rss.SyncedSavedArticle
 import com.lightningstudio.watchrss.data.rss.SyncedSavedArticleMergeStats
 import com.lightningstudio.watchrss.data.rss.SyncedRssSource
 import com.lightningstudio.watchrss.data.rss.SyncedRssSourceMergeStats
+import com.lightningstudio.watchrss.data.rss.WatchLibrarySyncWindow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -96,8 +100,50 @@ class FakeRssRepository(
 
     override suspend fun exportSyncedSavedArticles(deviceId: String): List<SyncedSavedArticle> = emptyList()
 
+    override suspend fun exportSyncedArticleManifests(deviceId: String): List<SyncedArticleManifest> = emptyList()
+
+    override suspend fun prepareLibrarySyncWindow(
+        peerDeviceId: String,
+        localDeviceId: String
+    ): WatchLibrarySyncWindow {
+        return WatchLibrarySyncWindow(
+            articleManifest = emptyList(),
+            fullArticleManifest = emptyList(),
+            rssSources = emptyList(),
+            fullSnapshot = true,
+            fromSeqExclusive = 0L,
+            toSeqInclusive = 0L,
+            peerAckedSeq = 0L,
+            fallbackReason = "fake"
+        )
+    }
+
+    override suspend fun markLibrarySyncSuccess(
+        peerDeviceId: String,
+        localSeqToInclusive: Long,
+        remoteSeqToInclusive: Long,
+        remoteProtocolVersion: Int,
+        fullSnapshot: Boolean
+    ) = Unit
+
+    override suspend fun exportSyncedSavedArticlesForRequests(
+        deviceId: String,
+        requests: List<SyncedArticleBodyRequest>
+    ): List<SyncedSavedArticle> = emptyList()
+
     override suspend fun mergeSyncedSavedArticles(
         articles: List<SyncedSavedArticle>,
+        remoteDeviceId: String,
+        localDeviceId: String
+    ): SyncedSavedArticleMergeStats {
+        return SyncedSavedArticleMergeStats(
+            received = articles.size,
+            applied = articles.size
+        )
+    }
+
+    override suspend fun mergeSyncedChunkedArticles(
+        articles: List<SyncedChunkedArticle>,
         remoteDeviceId: String,
         localDeviceId: String
     ): SyncedSavedArticleMergeStats {
@@ -151,6 +197,10 @@ class FakeRssRepository(
             }
         }
     }
+
+    override suspend fun deleteItem(itemId: Long) = Unit
+
+    override suspend fun clearLocalContentChannel(channelId: Long) = Unit
 
     override suspend fun deleteChannel(channelId: Long) {
         channelsFlow.value = channelsFlow.value.filterNot { it.id == channelId }
