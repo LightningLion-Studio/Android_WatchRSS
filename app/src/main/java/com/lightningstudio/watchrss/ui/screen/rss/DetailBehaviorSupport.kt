@@ -25,6 +25,7 @@ import com.lightningstudio.watchrss.ui.util.showAppToast
 import java.io.File
 import kotlin.math.abs
 import kotlin.math.floor
+import kotlin.math.roundToLong
 
 private const val DETAIL_SHARE_QR_WIDTH_RATIO = 0.7f
 
@@ -99,6 +100,12 @@ internal data class ImportedTextRestoreTarget(
     val itemScrollOffsetProgress: Float
 )
 
+internal data class ImportedTextByteRestoreTarget(
+    val itemIndex: Int,
+    val chunkIndex: Int,
+    val byteOffsetInChunk: Int
+)
+
 internal fun importedTextRestoreTarget(
     progress: Float,
     firstChunkItemIndex: Int,
@@ -119,6 +126,37 @@ internal fun importedTextRestoreTarget(
     return ImportedTextRestoreTarget(
         itemIndex = firstChunkItemIndex + chunkIndex,
         itemScrollOffsetProgress = offsetProgress
+    )
+}
+
+internal fun importedTextByteRestoreTarget(
+    progress: Float,
+    firstChunkItemIndex: Int,
+    byteLength: Long,
+    chunkCount: Int,
+    chunkBytes: Int
+): ImportedTextByteRestoreTarget {
+    if (byteLength <= 0L || chunkCount <= 0 || chunkBytes <= 0) {
+        return ImportedTextByteRestoreTarget(
+            itemIndex = firstChunkItemIndex.coerceAtLeast(0),
+            chunkIndex = 0,
+            byteOffsetInChunk = 0
+        )
+    }
+    val maxByte = (byteLength - 1L).coerceAtLeast(0L)
+    val absoluteByte = (byteLength.toDouble() * progress.coerceIn(0f, 1f).toDouble())
+        .roundToLong()
+        .coerceIn(0L, maxByte)
+    val chunkIndex = (absoluteByte / chunkBytes.toLong())
+        .toInt()
+        .coerceIn(0, chunkCount - 1)
+    val byteOffsetInChunk = (absoluteByte - chunkIndex.toLong() * chunkBytes.toLong())
+        .toInt()
+        .coerceAtLeast(0)
+    return ImportedTextByteRestoreTarget(
+        itemIndex = firstChunkItemIndex + chunkIndex,
+        chunkIndex = chunkIndex,
+        byteOffsetInChunk = byteOffsetInChunk
     )
 }
 
@@ -180,14 +218,14 @@ internal fun isReachedBottom(
         bottom >= layoutInfo.viewportEndOffset - thresholdPx
 }
 
-internal fun maybeSaveReadingProgress(
+internal suspend fun maybeSaveReadingProgress(
     readingProgress: Float,
     force: Boolean,
     lastSavedProgress: () -> Float,
     lastProgressSavedAt: () -> Long,
     updateLastSavedProgress: (Float) -> Unit,
     updateLastProgressSavedAt: (Long) -> Unit,
-    onSave: (Float) -> Unit
+    onSave: suspend (Float) -> Unit
 ) {
     val clamped = readingProgress.coerceIn(0f, 1f)
     val now = SystemClock.elapsedRealtime()

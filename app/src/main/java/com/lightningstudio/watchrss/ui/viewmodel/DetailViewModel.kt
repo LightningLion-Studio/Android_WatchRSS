@@ -16,6 +16,7 @@ import com.lightningstudio.watchrss.ui.util.RssContentCache
 import com.lightningstudio.watchrss.ui.util.buildContentBlocks
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
@@ -197,7 +198,14 @@ class DetailViewModel(
 
     fun updateReadingProgress(progress: Float) {
         if (itemId <= 0L) return
-        viewModelScope.launch {
+        viewModelScope.launch(NonCancellable) {
+            saveReadingProgress(progress)
+        }
+    }
+
+    suspend fun saveReadingProgress(progress: Float) {
+        if (itemId <= 0L) return
+        withContext(NonCancellable + Dispatchers.IO) {
             repository.updateItemReadingProgress(itemId, progress)
         }
     }

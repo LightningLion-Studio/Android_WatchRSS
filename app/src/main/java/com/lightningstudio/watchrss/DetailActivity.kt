@@ -77,6 +77,12 @@ class DetailActivity : BaseWatchActivity() {
         finish()
     }
 
+    override fun shouldUsePlatformSwipeDismissFeature(): Boolean {
+        // DetailScreen owns the synchronous reading-progress save in its BackHandler.
+        // Platform swipe dismiss can finish this Activity without passing through it.
+        return false
+    }
+
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) {

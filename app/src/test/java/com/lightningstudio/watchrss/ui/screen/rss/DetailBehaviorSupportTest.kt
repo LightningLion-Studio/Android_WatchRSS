@@ -26,6 +26,46 @@ class DetailBehaviorSupportTest {
     }
 
     @Test
+    fun importedTextByteRestoreTarget_mapsProgressToByteOffset() {
+        val target = importedTextByteRestoreTarget(
+            progress = 0.5f,
+            firstChunkItemIndex = 12,
+            byteLength = 100_000L,
+            chunkCount = 10,
+            chunkBytes = 10_000
+        )
+
+        assertEquals(17, target.itemIndex)
+        assertEquals(5, target.chunkIndex)
+        assertEquals(0, target.byteOffsetInChunk)
+    }
+
+    @Test
+    fun importedTextByteRestoreTarget_clampsToAvailableBytes() {
+        val first = importedTextByteRestoreTarget(
+            progress = -1f,
+            firstChunkItemIndex = 8,
+            byteLength = 35_001L,
+            chunkCount = 4,
+            chunkBytes = 10_000
+        )
+        val last = importedTextByteRestoreTarget(
+            progress = 2f,
+            firstChunkItemIndex = 8,
+            byteLength = 35_001L,
+            chunkCount = 4,
+            chunkBytes = 10_000
+        )
+
+        assertEquals(8, first.itemIndex)
+        assertEquals(0, first.chunkIndex)
+        assertEquals(0, first.byteOffsetInChunk)
+        assertEquals(11, last.itemIndex)
+        assertEquals(3, last.chunkIndex)
+        assertEquals(5_000, last.byteOffsetInChunk)
+    }
+
+    @Test
     fun calculateImportedTextReadingProgressFromPosition_usesChunkRelativePosition() {
         assertEquals(
             0.5f,

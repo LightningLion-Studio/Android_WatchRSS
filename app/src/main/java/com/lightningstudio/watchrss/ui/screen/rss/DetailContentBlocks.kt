@@ -31,6 +31,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -60,7 +61,8 @@ internal fun DetailTextBlock(
     isScrolling: Boolean,
     inlineActionText: String? = null,
     inlineActionColor: Color = Color(0xFF87CEEB),
-    onInlineActionClick: (() -> Unit)? = null
+    onInlineActionClick: (() -> Unit)? = null,
+    onTextLayout: ((TextLayoutResult) -> Unit)? = null
 ) {
     if (isDetailTracingEnabled()) {
         Trace.beginSection("DetailTextBlock:${style.name}")
@@ -82,6 +84,7 @@ internal fun DetailTextBlock(
         fontSize = fontSizeSp,
         lineHeight = lineHeight,
         fontFamily = fontFamily,
+        onTextLayout = { result -> onTextLayout?.invoke(result) },
         style = TextStyle(textAlign = TextAlign.Start),
         modifier = Modifier
             .fillMaxWidth()

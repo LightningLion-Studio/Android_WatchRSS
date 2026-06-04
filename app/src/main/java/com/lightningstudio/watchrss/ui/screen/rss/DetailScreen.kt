@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListItemInfo
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -43,6 +44,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -67,6 +69,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -78,6 +81,7 @@ import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.RssPlayerActivity
 import com.lightningstudio.watchrss.data.douyin.buildDouyinPlaybackWebUrl
 import com.lightningstudio.watchrss.data.douyin.parseDouyinAwemeId
+import com.lightningstudio.watchrss.data.rss.ARTICLE_TEXT_CHUNK_BYTES
 import com.lightningstudio.watchrss.data.rss.ImportedContentIds
 import com.lightningstudio.watchrss.data.rss.ImportedTextReader
 import com.lightningstudio.watchrss.data.rss.OfflineMedia
@@ -100,14 +104,17 @@ import com.lightningstudio.watchrss.ui.util.isSystemShareSettingSupported
 import com.lightningstudio.watchrss.ui.viewmodel.DetailViewModel
 import com.lightningstudio.watchrss.ui.viewmodel.LlmSummaryUiState
 import com.lightningstudio.watchrss.ui.viewmodel.SummaryStatus
+import com.lightningstudio.watchrss.util.AppLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
@@ -166,7 +173,7 @@ fun DetailScreen(
             onToggleFavorite = viewModel::toggleFavorite,
             onToggleOriginalContent = viewModel::toggleOriginalContent,
             onRetryOfflineMedia = viewModel::retryOfflineMedia,
-            onSaveReadingProgress = viewModel::updateReadingProgress,
+            onSaveReadingProgress = viewModel::saveReadingProgress,
             onLoadImportedTextChunk = viewModel::loadImportedTextChunk,
             onOpenAiSummary = onOpenAiSummary,
             onOpenReadAloud = onOpenReadAloud,
@@ -199,7 +206,7 @@ internal fun DetailContent(
     onToggleFavorite: () -> Unit,
     onToggleOriginalContent: () -> Unit,
     onRetryOfflineMedia: () -> Unit,
-    onSaveReadingProgress: (Float) -> Unit,
+    onSaveReadingProgress: suspend (Float) -> Unit,
     onLoadImportedTextChunk: suspend (String, Int) -> String? = { _, _ -> null },
     onOpenAiSummary: () -> Unit = {},
     onOpenReadAloud: () -> Unit = {},
@@ -265,6 +272,16 @@ internal fun DetailContent(
     var lastItemId by remember { mutableStateOf<Long?>(null) }
     var lastSavedProgress by remember { mutableStateOf(-1f) }
     var lastProgressSavedAt by remember { mutableStateOf(0L) }
+    var lastImportedTextAnchoredProgress by remember { mutableStateOf<Float?>(null) }
+    val savedOnBackState = remember { mutableStateOf(false) }
+    var backInProgress by remember { mutableStateOf(false) }
+    var pendingImportedTextOffsetRestore by remember { mutableStateOf<ImportedTextByteRestoreTarget?>(null) }
+    val importedTextChunkLayouts = remember(item?.id, importedTextReader?.marker) {
+        mutableStateMapOf<Int, TextLayoutResult>()
+    }
+    val importedTextChunkTexts = remember(item?.id, importedTextReader?.marker) {
+        mutableStateMapOf<Int, String>()
+    }
 
     val onSaveReadingProgressState = rememberUpdatedState(onSaveReadingProgress)
     val onBackState = rememberUpdatedState(onBack)
@@ -279,6 +296,10 @@ internal fun DetailContent(
             lastItemId = itemId
             pendingRestoreProgress = item?.readingProgress
             hasRestoredPosition = false
+            pendingImportedTextOffsetRestore = null
+            lastImportedTextAnchoredProgress = null
+            savedOnBackState.value = false
+            backInProgress = false
             lastSavedProgress = -1f
             lastProgressSavedAt = 0L
         }
@@ -337,24 +358,86 @@ internal fun DetailContent(
     }
     val importedTextChunkCount = importedTextReader?.chunkCount ?: 0
 
-    fun currentReadingProgress(): Float? {
+    fun freshImportedTextReadingProgress(): Float? {
+        if (!isImportedText || importedTextReader == null || importedTextChunkCount <= 0) {
+            return null
+        }
+        return calculateImportedTextByteReadingProgressFromLayout(
+            listState = listState,
+            marker = importedTextReader.marker,
+            byteLength = importedTextReader.byteLength,
+            chunkCount = importedTextChunkCount,
+            chunkTexts = importedTextChunkTexts,
+            chunkLayouts = importedTextChunkLayouts
+        )
+    }
+
+    fun rememberImportedTextProgress(progress: Float?): Float? {
+        if (progress != null) {
+            lastImportedTextAnchoredProgress = progress
+        }
+        return progress
+    }
+
+    suspend fun awaitImportedTextReadingProgress(): Float? {
+        rememberImportedTextProgress(freshImportedTextReadingProgress())?.let { return it }
+        val progress = withTimeoutOrNull(IMPORTED_TEXT_SAVE_LAYOUT_TIMEOUT_MS) {
+            snapshotFlow { freshImportedTextReadingProgress() }
+                .filterNotNull()
+                .first()
+        }
+        return rememberImportedTextProgress(progress)
+    }
+
+    fun currentReadingProgress(allowCachedImportedTextProgress: Boolean = true): Float? {
         if (isImportedText && (importedTextReader == null || importedTextChunkCount <= 0)) {
             return null
         }
         return if (isImportedText) {
-            calculateImportedTextReadingProgress(
-                listState = listState,
-                firstChunkItemIndex = importedTextFirstItemIndex,
-                chunkCount = importedTextChunkCount
-            )
+            rememberImportedTextProgress(freshImportedTextReadingProgress())
+                ?: lastImportedTextAnchoredProgress.takeIf { allowCachedImportedTextProgress }
         } else {
             calculateReadingProgress(listState)
         }
     }
 
-    fun saveCurrentReadingProgress(force: Boolean) {
-        if (!hasRestoredPositionState.value) return
-        val progress = currentReadingProgress() ?: return
+    suspend fun saveCurrentReadingProgressAfterLayout(force: Boolean): Boolean {
+        val allowImportedTextBeforeRestore = isImportedText && force
+        if (!hasRestoredPositionState.value && !allowImportedTextBeforeRestore) return false
+        val progress = if (isImportedText) {
+            awaitImportedTextReadingProgress()
+        } else {
+            currentReadingProgress()
+        } ?: return false
+        maybeSaveReadingProgress(
+            readingProgress = progress,
+            force = force,
+            lastSavedProgress = { lastSavedProgress },
+            lastProgressSavedAt = { lastProgressSavedAt },
+            updateLastSavedProgress = { lastSavedProgress = it },
+            updateLastProgressSavedAt = { lastProgressSavedAt = it },
+            onSave = onSaveReadingProgressState.value
+        )
+        if (BuildConfig.DEBUG && isImportedText && force && importedTextChunkCount > 0) {
+            val target = importedTextByteRestoreTarget(
+                progress = progress,
+                firstChunkItemIndex = importedTextFirstItemIndex,
+                byteLength = importedTextReader?.byteLength ?: 0L,
+                chunkCount = importedTextChunkCount,
+                chunkBytes = ARTICLE_TEXT_CHUNK_BYTES
+            )
+            AppLogger.d(
+                IMPORTED_TEXT_PROGRESS_LOG_TAG,
+                "save itemId=${item?.id ?: -1L} progress=$progress restored=${hasRestoredPositionState.value} " +
+                    "targetChunk=${target.chunkIndex} " +
+                    "targetByte=${target.byteOffsetInChunk}"
+            )
+        }
+        return true
+    }
+
+    suspend fun saveImportedTextReadingProgress(progress: Float, force: Boolean) {
+        if (!hasRestoredPositionState.value && !force) return
         maybeSaveReadingProgress(
             readingProgress = progress,
             force = force,
@@ -385,41 +468,91 @@ internal fun DetailContent(
             }
             return@LaunchedEffect
         }
-        val target = if (importedTextReader != null && importedTextChunkCount > 0) {
-            val restoreTarget = importedTextRestoreTarget(
+        if (importedTextReader != null && importedTextChunkCount > 0) {
+            val marker = importedTextReader.marker
+            val chunkRestoreTarget = importedTextByteRestoreTarget(
                 progress = progress,
-                firstChunkItemIndex = importedTextFirstItemIndex,
-                chunkCount = importedTextChunkCount
+                firstChunkItemIndex = 0,
+                byteLength = importedTextReader.byteLength,
+                chunkCount = importedTextChunkCount,
+                chunkBytes = ARTICLE_TEXT_CHUNK_BYTES
             )
-            val targetIndex = restoreTarget.itemIndex.coerceIn(0, totalItems - 1)
-            listState.scrollToItem(targetIndex)
-            if (restoreTarget.itemScrollOffsetProgress > 0f) {
-                val measuredSize = withTimeoutOrNull(IMPORTED_TEXT_RESTORE_OFFSET_TIMEOUT_MS) {
-                    snapshotFlow {
-                        listState.layoutInfo.visibleItemsInfo
-                            .firstOrNull { it.index == targetIndex }
-                            ?.size ?: 0
-                    }
-                        .filter { it > IMPORTED_TEXT_RESTORE_MIN_ITEM_SIZE_PX }
-                        .first()
+            val targetChunk = chunkRestoreTarget.chunkIndex
+            val approximateTargetIndex = importedTextFirstItemIndex + targetChunk
+            listState.scrollToItem(approximateTargetIndex.coerceIn(0, totalItems - 1))
+            val actualFirstChunkItemIndex = withTimeoutOrNull(IMPORTED_TEXT_FIRST_INDEX_TIMEOUT_MS) {
+                snapshotFlow {
+                    visibleImportedTextFirstItemIndex(
+                        layoutInfo = listState.layoutInfo,
+                        marker = marker
+                    )
                 }
-                if (measuredSize != null) {
-                    val offsetPx = (measuredSize * restoreTarget.itemScrollOffsetProgress)
-                        .roundToInt()
-                        .coerceAtLeast(0)
-                    listState.scrollToItem(targetIndex, offsetPx)
+                    .filterNotNull()
+                    .first()
+            } ?: importedTextFirstItemIndex
+            val restoreTarget = chunkRestoreTarget.copy(
+                itemIndex = actualFirstChunkItemIndex + targetChunk,
+                chunkIndex = targetChunk
+            )
+            if (BuildConfig.DEBUG) {
+                AppLogger.d(
+                    IMPORTED_TEXT_PROGRESS_LOG_TAG,
+                    "restore itemId=${item?.id ?: -1L} progress=$progress " +
+                        "firstIndex=$actualFirstChunkItemIndex fallbackFirstIndex=$importedTextFirstItemIndex " +
+                        "targetChunk=$targetChunk " +
+                        "targetByte=${restoreTarget.byteOffsetInChunk}"
+                )
+            }
+            val targetIndex = restoreTarget.itemIndex.coerceIn(0, totalItems - 1)
+            if (targetIndex != approximateTargetIndex) {
+                listState.scrollToItem(targetIndex)
+            }
+            pendingImportedTextOffsetRestore = restoreTarget.copy(itemIndex = targetIndex)
+            pendingRestoreProgress = null
+            return@LaunchedEffect
+        }
+        val target = ((totalItems - 1) * progress)
+            .roundToInt()
+            .coerceIn(0, totalItems - 1)
+        listState.scrollToItem(target)
+        pendingRestoreProgress = null
+        hasRestoredPosition = true
+    }
+
+    LaunchedEffect(pendingImportedTextOffsetRestore) {
+        val restoreTarget = pendingImportedTextOffsetRestore ?: return@LaunchedEffect
+        val offsetPx = withTimeoutOrNull(IMPORTED_TEXT_RESTORE_OFFSET_TIMEOUT_MS) {
+            snapshotFlow {
+                val chunkLayout = importedTextChunkLayouts[restoreTarget.chunkIndex]
+                val chunkText = importedTextChunkTexts[restoreTarget.chunkIndex]
+                val itemInfo = listState.layoutInfo.visibleItemsInfo
+                    .firstOrNull { it.index == restoreTarget.itemIndex }
+                if (chunkLayout == null || chunkText == null || itemInfo == null) {
+                    null
+                } else {
+                    importedTextRestoreVisualOffsetPx(
+                        restoreTarget = restoreTarget,
+                        text = chunkText,
+                        layout = chunkLayout,
+                        itemInfo = itemInfo
+                    )
                 }
             }
-            null
-        } else {
-            ((totalItems - 1) * progress)
-                .roundToInt()
-                .coerceIn(0, totalItems - 1)
+                .filterNotNull()
+                .first()
         }
-        if (target != null) {
-            listState.scrollToItem(target)
+        if (offsetPx != null) {
+            if (BuildConfig.DEBUG) {
+                AppLogger.d(
+                    IMPORTED_TEXT_PROGRESS_LOG_TAG,
+                    "restore-offset itemId=${item?.id ?: -1L} " +
+                        "targetChunk=${restoreTarget.chunkIndex} " +
+                        "targetByte=${restoreTarget.byteOffsetInChunk} offsetPx=$offsetPx"
+                )
+            }
+            listState.scrollToItem(restoreTarget.itemIndex, offsetPx)
         }
-        pendingRestoreProgress = null
+        pendingImportedTextOffsetRestore = null
         hasRestoredPosition = true
     }
 
@@ -428,7 +561,20 @@ internal fun DetailContent(
             .distinctUntilChanged()
             .collectLatest { isScrolling ->
                 if (isScrolling || !hasRestoredPositionState.value) return@collectLatest
-                saveCurrentReadingProgress(force = false)
+                saveCurrentReadingProgressAfterLayout(force = isImportedText)
+            }
+    }
+
+    LaunchedEffect(listState, isImportedText, importedTextFirstItemIndex, importedTextChunkCount, importedTextReader?.marker) {
+        if (!isImportedText || importedTextReader == null || importedTextChunkCount <= 0) {
+            return@LaunchedEffect
+        }
+        snapshotFlow { freshImportedTextReadingProgress() }
+            .filterNotNull()
+            .distinctUntilChanged()
+            .sample(IMPORTED_TEXT_SCROLL_SAVE_SAMPLE_MS)
+            .collectLatest { progress ->
+                saveImportedTextReadingProgress(progress, force = true)
             }
     }
 
@@ -436,7 +582,14 @@ internal fun DetailContent(
         val lifecycle = lifecycleOwner.lifecycle
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_PAUSE) {
-                saveCurrentReadingProgress(force = true)
+                if (!savedOnBackState.value) {
+                    val saved = runBlocking {
+                        saveCurrentReadingProgressAfterLayout(force = true)
+                    }
+                    if (saved) {
+                        savedOnBackState.value = true
+                    }
+                }
             }
         }
         lifecycle.addObserver(observer)
@@ -445,8 +598,14 @@ internal fun DetailContent(
         }
     }
 
-    BackHandler {
-        saveCurrentReadingProgress(force = true)
+    BackHandler(enabled = !backInProgress) {
+        backInProgress = true
+        val saved = runBlocking {
+            saveCurrentReadingProgressAfterLayout(force = true)
+        }
+        if (saved) {
+            savedOnBackState.value = true
+        }
         val thresholdPx = with(density) { 8.dp.toPx() }
         val reachedBottom = isReachedBottom(listState, thresholdPx)
         onBackState.value(item?.id ?: 0L, reachedBottom, isWatchLaterState.value)
@@ -730,6 +889,15 @@ internal fun DetailContent(
                         value = onLoadImportedTextChunk(marker, index)
                     }
                     val text = chunk
+                    LaunchedEffect(marker, index, text) {
+                        if (text == null) {
+                            importedTextChunkTexts.remove(index)
+                            importedTextChunkLayouts.remove(index)
+                        } else {
+                            importedTextChunkTexts[index] = text
+                        }
+                    }
+                    val topPadding = if (index == 0) 0.dp else blockSpacing
                     if (text == null) {
                         Spacer(modifier = Modifier.height(if (index == 0) 1.dp else blockSpacing))
                     } else if (text.isNotBlank()) {
@@ -738,8 +906,9 @@ internal fun DetailContent(
                             style = ContentTextStyle.BODY,
                             textColor = textColor,
                             fontSizeSp = bodyFontSize,
-                            topPadding = if (index == 0) 0.dp else blockSpacing,
-                            isScrolling = isScrolling
+                            topPadding = topPadding,
+                            isScrolling = isScrolling,
+                            onTextLayout = { importedTextChunkLayouts[index] = it }
                         )
                     }
                 }
@@ -1217,7 +1386,144 @@ private fun Modifier.detailSkeletonPlaceholder(
         }
 }
 
+private data class VisibleImportedTextChunkWithLayout(
+    val itemInfo: LazyListItemInfo,
+    val chunkIndex: Int,
+    val text: String,
+    val layout: TextLayoutResult
+)
+
+private fun visibleImportedTextFirstItemIndex(
+    layoutInfo: androidx.compose.foundation.lazy.LazyListLayoutInfo,
+    marker: String
+): Int? {
+    return layoutInfo.visibleItemsInfo.firstNotNullOfOrNull { itemInfo ->
+        val chunkIndex = importedTextChunkIndexFromKey(itemInfo.key, marker)
+            ?: return@firstNotNullOfOrNull null
+        itemInfo.index - chunkIndex
+    }
+}
+
+private fun importedTextChunkIndexFromKey(key: Any, marker: String): Int? {
+    val prefix = "$IMPORTED_TEXT_KEY_PREFIX$marker:"
+    val keyText = key as? String ?: return null
+    if (!keyText.startsWith(prefix)) return null
+    return keyText.substring(prefix.length).toIntOrNull()
+}
+
+private fun calculateImportedTextByteReadingProgressFromLayout(
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    marker: String,
+    byteLength: Long,
+    chunkCount: Int,
+    chunkTexts: Map<Int, String>,
+    chunkLayouts: Map<Int, TextLayoutResult>
+): Float? {
+    if (chunkCount <= 0 || byteLength <= 0L) return null
+    val layoutInfo = listState.layoutInfo
+    if (layoutInfo.visibleItemsInfo.isNotEmpty() && !listState.canScrollForward) return 1f
+    val visibleChunk = layoutInfo.visibleItemsInfo.firstNotNullOfOrNull { itemInfo ->
+        val chunkIndex = importedTextChunkIndexFromKey(itemInfo.key, marker)
+            ?: return@firstNotNullOfOrNull null
+        if (chunkIndex !in 0 until chunkCount) {
+            null
+        } else {
+            val text = chunkTexts[chunkIndex] ?: return@firstNotNullOfOrNull null
+            val layout = chunkLayouts[chunkIndex] ?: return@firstNotNullOfOrNull null
+            if (layout.lineCount <= 0) return@firstNotNullOfOrNull null
+            VisibleImportedTextChunkWithLayout(
+                itemInfo = itemInfo,
+                chunkIndex = chunkIndex,
+                text = text,
+                layout = layout
+            )
+        }
+    } ?: return null
+    val scrolledInItemPx = (layoutInfo.viewportStartOffset - visibleChunk.itemInfo.offset)
+        .coerceIn(0, visibleChunk.itemInfo.size.coerceAtLeast(0))
+    val textTopPaddingPx = (visibleChunk.itemInfo.size - visibleChunk.layout.size.height)
+        .coerceAtLeast(0)
+    val textY = (scrolledInItemPx - textTopPaddingPx)
+        .coerceAtLeast(0)
+        .toFloat()
+    val lineIndex = visibleChunk.layout
+        .getLineForVerticalPosition(textY)
+        .coerceIn(0, visibleChunk.layout.lineCount - 1)
+    val charOffset = visibleChunk.layout
+        .getLineStart(lineIndex)
+        .coerceIn(0, visibleChunk.text.length)
+    val byteOffsetInChunk = utf8ByteCountBeforeCharOffset(
+        text = visibleChunk.text,
+        charOffset = charOffset
+    )
+    val absoluteByte = (visibleChunk.chunkIndex.toLong() * ARTICLE_TEXT_CHUNK_BYTES.toLong() + byteOffsetInChunk)
+        .coerceIn(0L, byteLength)
+    return (absoluteByte.toDouble() / byteLength.toDouble())
+        .toFloat()
+        .coerceIn(0f, 1f)
+}
+
+private fun importedTextRestoreVisualOffsetPx(
+    restoreTarget: ImportedTextByteRestoreTarget,
+    text: String,
+    layout: TextLayoutResult,
+    itemInfo: LazyListItemInfo
+): Int {
+    if (layout.lineCount <= 0) return 0
+    val charOffset = utf8CharOffsetForByteOffset(
+        text = text,
+        byteOffset = restoreTarget.byteOffsetInChunk
+    ).coerceIn(0, text.length)
+    val lineIndex = layout
+        .getLineForOffset(charOffset)
+        .coerceIn(0, layout.lineCount - 1)
+    val textTopPaddingPx = (itemInfo.size - layout.size.height)
+        .coerceAtLeast(0)
+    return (textTopPaddingPx + layout.getLineTop(lineIndex))
+        .roundToInt()
+        .coerceAtLeast(0)
+}
+
+private fun utf8ByteCountBeforeCharOffset(text: String, charOffset: Int): Int {
+    val targetCharOffset = charOffset.coerceIn(0, text.length)
+    var byteCount = 0
+    var index = 0
+    while (index < targetCharOffset) {
+        val codePoint = Character.codePointAt(text, index)
+        byteCount += utf8ByteCountForCodePoint(codePoint)
+        index += Character.charCount(codePoint)
+    }
+    return byteCount
+}
+
+private fun utf8CharOffsetForByteOffset(text: String, byteOffset: Int): Int {
+    if (byteOffset <= 0) return 0
+    var byteCount = 0
+    var index = 0
+    while (index < text.length) {
+        val codePoint = Character.codePointAt(text, index)
+        val codePointByteCount = utf8ByteCountForCodePoint(codePoint)
+        if (byteCount + codePointByteCount > byteOffset) return index
+        byteCount += codePointByteCount
+        index += Character.charCount(codePoint)
+    }
+    return text.length
+}
+
+private fun utf8ByteCountForCodePoint(codePoint: Int): Int {
+    return when {
+        codePoint <= 0x7F -> 1
+        codePoint <= 0x7FF -> 2
+        codePoint <= 0xFFFF -> 3
+        else -> 4
+    }
+}
+
 private const val DETAIL_CONTENT_START_ITEM_INDEX = 4
 private const val DETAIL_LOADING_SKELETON_ITEM_COUNT = 1
-private const val IMPORTED_TEXT_RESTORE_MIN_ITEM_SIZE_PX = 8
-private const val IMPORTED_TEXT_RESTORE_OFFSET_TIMEOUT_MS = 700L
+private const val IMPORTED_TEXT_RESTORE_OFFSET_TIMEOUT_MS = 3_000L
+private const val IMPORTED_TEXT_SAVE_LAYOUT_TIMEOUT_MS = 800L
+private const val IMPORTED_TEXT_SCROLL_SAVE_SAMPLE_MS = 500L
+private const val IMPORTED_TEXT_FIRST_INDEX_TIMEOUT_MS = 1_500L
+private const val IMPORTED_TEXT_PROGRESS_LOG_TAG = "ImportedTextProgress"
+private const val IMPORTED_TEXT_KEY_PREFIX = "importedText:"
