@@ -2,6 +2,12 @@ package com.lightningstudio.watchrss.data.rss
 
 import kotlinx.coroutines.flow.Flow
 
+data class ImportedTextReader(
+    val marker: String,
+    val byteLength: Long,
+    val chunkCount: Int
+)
+
 interface RssRepository {
     fun observeHomeChannels(): Flow<List<RssChannel>>
     fun observeChannels(): Flow<List<RssChannel>>
@@ -15,6 +21,8 @@ interface RssRepository {
     fun observeSavedItems(saveType: SaveType): Flow<List<SavedItem>>
     fun observeSavedState(itemId: Long): Flow<SavedState>
     fun observeOfflineMedia(itemId: Long): Flow<List<OfflineMedia>>
+    suspend fun getImportedTextReader(itemId: Long): ImportedTextReader?
+    suspend fun loadImportedTextChunk(marker: String, chunkIndex: Int): String?
 
     suspend fun previewChannel(url: String): Result<AddRssPreview>
     suspend fun confirmAddChannel(preview: RssChannelPreview): Result<RssChannel>

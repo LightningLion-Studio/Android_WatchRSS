@@ -4,7 +4,7 @@ import com.lightningstudio.watchrss.BuildConfig
 
 object PhoneConnectionFeature {
     val isAvailable: Boolean
-        get() = true
+        get() = isDebugBuild
 
     val isDebugBuild: Boolean
         get() = BuildConfig.DEBUG

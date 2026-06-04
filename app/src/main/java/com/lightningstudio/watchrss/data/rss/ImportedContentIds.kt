@@ -18,6 +18,11 @@ object ImportedContentIds {
         return normalized == ROOT_SOURCE_URL
     }
 
+    fun isImportedTextItemUrl(url: String?): Boolean {
+        val normalized = url?.trim()?.lowercase() ?: return false
+        return normalized.startsWith("$ROOT_SOURCE_URL/txt/")
+    }
+
     fun isDeletableLocalContentChannel(url: String?): Boolean {
         val normalized = url?.trim()?.lowercase() ?: return false
         return normalized.startsWith(ROOT_SOURCE_URL) ||

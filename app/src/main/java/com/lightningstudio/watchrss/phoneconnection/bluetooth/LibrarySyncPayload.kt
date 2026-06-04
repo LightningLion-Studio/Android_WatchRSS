@@ -2,6 +2,10 @@ package com.lightningstudio.watchrss.phoneconnection.bluetooth
 
 import com.lightningstudio.watchrss.data.rss.ArticleSyncBody
 import com.lightningstudio.watchrss.data.rss.ArticleBodyMetadata
+import com.lightningstudio.watchrss.data.rss.ArticleBodyPayload
+import com.lightningstudio.watchrss.data.rss.ARTICLE_BODY_SYNC_MODE_FULL
+import com.lightningstudio.watchrss.data.rss.ARTICLE_BODY_SYNC_MODE_SAVED
+import com.lightningstudio.watchrss.data.rss.ImportedContentIds
 import com.lightningstudio.watchrss.data.rss.SyncedArticleBodyChunk
 import com.lightningstudio.watchrss.data.rss.SyncedArticleBodyRequest
 import com.lightningstudio.watchrss.data.rss.SyncedArticleManifest
@@ -31,7 +35,8 @@ data class ArticleSyncManifestEntry(
     val chunkSize: Int = 0,
     val chunkHashes: List<String> = emptyList(),
     val metadataHash: String = "",
-    val bodyAvailable: Boolean = true
+    val bodyAvailable: Boolean = true,
+    val bodySyncMode: String = ARTICLE_BODY_SYNC_MODE_FULL
 )
 
 data class LibraryChangeSequence(
@@ -42,13 +47,26 @@ data class LibraryChangeSequence(
 )
 
 object LibrarySyncPayload {
-    const val PROTOCOL_VERSION = 8
+    const val PROTOCOL_VERSION = 9
     const val LEGACY_PROTOCOL_VERSION = 4
     const val MAX_BODY_REQUEST_CHUNKS_PER_SYNC = Int.MAX_VALUE
+    const val MAX_INLINE_BODY_SYNC_BYTES = 512L * 1024L
     const val MAX_ARTICLE_REQUEST_BATCH_COUNT = 256
     const val PHASE_MANIFEST = "manifest"
+    const val PHASE_PROBE = "probe"
     const val PHASE_ARTICLES = "articles"
     const val PHASE_COMPLETE = "complete"
+
+    fun buildProbeResponse(deviceId: String): JSONObject {
+        return JSONObject().apply {
+            put("success", true)
+            put("version", PROTOCOL_VERSION)
+            put("action", BluetoothSyncProtocol.ACTION_SYNC_LIBRARY)
+            put("phase", PHASE_PROBE)
+            put("deviceId", deviceId)
+            put("sentAt", System.currentTimeMillis())
+        }
+    }
 
     fun parseArticles(payload: JSONObject): List<SyncedSavedArticle> {
         return parseArticles(payload.optJSONArray("articles") ?: JSONArray())
@@ -82,7 +100,10 @@ object LibrarySyncPayload {
                         chunkSize = item.optInt("chunkSize"),
                         chunkHashes = item.optStringArray("chunkHashes"),
                         metadataHash = item.optString("metadataHash").trim(),
-                        bodyAvailable = item.optBoolean("bodyAvailable", true)
+                        bodyAvailable = item.optBoolean("bodyAvailable", true),
+                        bodySyncMode = item.optString("bodySyncMode")
+                            .trim()
+                            .ifBlank { ARTICLE_BODY_SYNC_MODE_FULL }
                     )
                 )
             }
@@ -92,7 +113,8 @@ object LibrarySyncPayload {
     fun buildBodyRequestsForRemoteArticles(
         localManifest: List<SyncedArticleManifest>,
         remoteManifest: List<ArticleSyncManifestEntry>,
-        maxBodyRequestChunks: Int = Int.MAX_VALUE
+        maxBodyRequestChunks: Int = Int.MAX_VALUE,
+        supportsMetadataOnlyArticles: Boolean = false
     ): List<SyncedArticleBodyRequest> {
         val localById = localManifest.associateBy { it.articleId }
         return remoteManifest.mapNotNull { remote ->
@@ -116,14 +138,21 @@ object LibrarySyncPayload {
                     remote.deletedAt > local.deletedAt ||
                     remote.deleted != local.deleted
             }
-            val hasReusableLocalBody = local != null &&
-                local.bodyAvailable &&
-                remote.bodyHash == local.bodyHash &&
+            val localHasBody = local?.bodyAvailable == true
+            val hasReusableLocalBody = localHasBody &&
+                remote.bodyHash == local?.bodyHash &&
                 local.chunkHashes.isNotEmpty()
-            if (!remote.deleted && !remote.bodyAvailable && !hasReusableLocalBody) {
+            val shouldRequestMetadataOnlyBody = remote.shouldRequestMetadataOnlyBody(
+                supportsMetadataOnlyArticles = supportsMetadataOnlyArticles
+            )
+            val metadataOnly = needsMetadata && shouldRequestMetadataOnlyBody
+            if (!remote.deleted && !remote.bodyAvailable) {
                 return@mapNotNull null
             }
-            val needsBody = !remote.deleted && remote.bodyAvailable && !hasReusableLocalBody
+            val needsBody = !remote.deleted &&
+                remote.bodyAvailable &&
+                !hasReusableLocalBody &&
+                !shouldRequestMetadataOnlyBody
             if (!needsMetadata && !needsBody) return@mapNotNull null
             val localHashes = if (local?.bodyAvailable == true) {
                 local.chunkHashes.toSet()
@@ -140,9 +169,18 @@ object LibrarySyncPayload {
             SyncedArticleBodyRequest(
                 articleId = remote.articleId,
                 bodyHash = remote.bodyHash,
-                chunkIndexes = chunkIndexes
+                chunkIndexes = chunkIndexes,
+                metadataOnly = metadataOnly
             )
         }.limitBodyRequestChunks(maxBodyRequestChunks)
+    }
+
+    private fun ArticleSyncManifestEntry.shouldRequestMetadataOnlyBody(
+        supportsMetadataOnlyArticles: Boolean
+    ): Boolean {
+        if (!supportsMetadataOnlyArticles || deleted || !bodyAvailable) return false
+        return bodySyncMode == ARTICLE_BODY_SYNC_MODE_SAVED ||
+            (bodySyncMode == ARTICLE_BODY_SYNC_MODE_FULL && bodyByteCount > MAX_INLINE_BODY_SYNC_BYTES)
     }
 
     fun parseBodyRequests(payload: JSONObject): List<SyncedArticleBodyRequest> {
@@ -156,15 +194,25 @@ object LibrarySyncPayload {
                     SyncedArticleBodyRequest(
                         articleId = articleId,
                         bodyHash = item.optString("bodyHash").trim(),
-                        chunkIndexes = item.optIntArray("chunkIndexes")
+                        chunkIndexes = item.optIntArray("chunkIndexes"),
+                        metadataOnly = item.optBoolean("metadataOnly", false)
                     )
                 )
             }
         }
     }
 
+    fun parseBodyRequests(payloads: Iterable<JSONObject>): List<SyncedArticleBodyRequest> {
+        return payloads.flatMap(::parseBodyRequests)
+    }
+
     fun supportsChangeSequences(payload: JSONObject): Boolean {
         return payload.optBoolean("supportsChangeSequences", false) &&
+            payload.optInt("version") >= PROTOCOL_VERSION
+    }
+
+    fun supportsMetadataOnlyArticles(payload: JSONObject): Boolean {
+        return payload.optBoolean("supportsMetadataOnlyArticles", false) &&
             payload.optInt("version") >= PROTOCOL_VERSION
     }
 
@@ -250,6 +298,22 @@ object LibrarySyncPayload {
 
     fun parseChunkedArticles(array: JSONArray): List<SyncedChunkedArticle> {
         val byArticleId = linkedMapOf<String, SyncedChunkedArticle>()
+        appendChunkedArticles(array, byArticleId)
+        return byArticleId.values.toList()
+    }
+
+    fun parseChunkedArticles(payloads: Iterable<JSONObject>): List<SyncedChunkedArticle> {
+        val byArticleId = linkedMapOf<String, SyncedChunkedArticle>()
+        payloads.forEach { payload ->
+            appendChunkedArticles(payload.optJSONArray("articles") ?: JSONArray(), byArticleId)
+        }
+        return byArticleId.values.toList()
+    }
+
+    private fun appendChunkedArticles(
+        array: JSONArray,
+        byArticleId: MutableMap<String, SyncedChunkedArticle>
+    ) {
         for (index in 0 until array.length()) {
             val item = array.optJSONObject(index) ?: continue
             val article = parseArticles(JSONArray().put(item)).firstOrNull() ?: continue
@@ -273,7 +337,8 @@ object LibrarySyncPayload {
                             )
                         )
                     }
-                }
+                },
+                metadataOnly = body.optBoolean("metadataOnly", false)
             )
             val existing = byArticleId[article.articleId]
             byArticleId[article.articleId] = if (existing == null) {
@@ -282,7 +347,8 @@ object LibrarySyncPayload {
                 require(
                     existing.bodyHash == payload.bodyHash &&
                         existing.chunkSize == payload.chunkSize &&
-                        existing.chunkHashes == payload.chunkHashes
+                        existing.chunkHashes == payload.chunkHashes &&
+                        existing.metadataOnly == payload.metadataOnly
                 ) {
                     "同步正文分块元数据冲突：${article.articleId}"
                 }
@@ -294,7 +360,6 @@ object LibrarySyncPayload {
                 )
             }
         }
-        return byArticleId.values.toList()
     }
 
     fun parseRssSources(payload: JSONObject): List<SyncedRssSource> {
@@ -567,6 +632,7 @@ object LibrarySyncPayload {
             put("supportsArticleBatches", true)
             put("supportsChunkedBodies", true)
             put("supportsChangeSequences", true)
+            put("supportsMetadataOnlyArticles", true)
             put("deviceId", deviceId)
             put("sentAt", System.currentTimeMillis())
             put("articleManifest", articles.toManifestJsonArray())
@@ -598,6 +664,7 @@ object LibrarySyncPayload {
             put("supportsArticleBatches", true)
             put("supportsChunkedBodies", true)
             put("supportsChangeSequences", true)
+            put("supportsMetadataOnlyArticles", true)
             put("deviceId", deviceId)
             put("sentAt", System.currentTimeMillis())
             put("articleManifest", articleManifest.toEntryJsonArray())
@@ -610,6 +677,8 @@ object LibrarySyncPayload {
                     put("sourcesSent", rssSources.size)
                     put("sourcesApplied", sourcesApplied)
                     put("bodyRequests", bodyRequests.size)
+                    put("metadataOnlyRequests", bodyRequests.count { it.metadataOnly })
+                    put("bodyRequestChunks", bodyRequests.sumOf { it.chunkIndexes.size })
                 }
             )
         }
@@ -740,6 +809,7 @@ object LibrarySyncPayload {
             put("chunkHashes", JSONArray(metadata.chunkHashes))
             put("metadataHash", metadata.metadataHash)
             put("bodyAvailable", true)
+            put("bodySyncMode", bodySyncModeForSync())
         }
     }
 
@@ -760,6 +830,7 @@ object LibrarySyncPayload {
             put("chunkHashes", JSONArray(chunkHashes))
             put("metadataHash", metadataHash)
             put("bodyAvailable", bodyAvailable)
+            put("bodySyncMode", bodySyncMode)
         }
     }
 
@@ -795,18 +866,58 @@ object LibrarySyncPayload {
         }
     }
 
+    private fun SyncedSavedArticle.bodySyncModeForSync(): String {
+        return if (
+            independentSaved ||
+            ImportedContentIds.isImportedContentUrl(rssSourceUrl) ||
+            ImportedContentIds.isImportedContentUrl(url)
+        ) {
+            ARTICLE_BODY_SYNC_MODE_FULL
+        } else {
+            ARTICLE_BODY_SYNC_MODE_SAVED
+        }
+    }
+
     private fun SyncedSavedArticle.toChunkedJsonItems(request: SyncedArticleBodyRequest?): List<JSONObject> {
-        val metadata = ArticleSyncBody.metadataFor(this)
-        val bodyRequest = request ?: SyncedArticleBodyRequest(
-            articleId = articleId,
-            bodyHash = metadata.bodyHash,
-            chunkIndexes = metadata.chunkHashes.indices.toList()
-        )
-        val chunks = ArticleSyncBody.chunksForRequest(this, bodyRequest)
+        if (request?.metadataOnly == true) {
+            return listOf(toMetadataOnlyChunkedJson(request))
+        }
+        val payload = if (request != null) {
+            ArticleSyncBody.payloadForRequest(this, request)
+        } else {
+            val metadata = ArticleSyncBody.metadataFor(this)
+            val bodyRequest = SyncedArticleBodyRequest(
+                articleId = articleId,
+                bodyHash = metadata.bodyHash,
+                chunkIndexes = metadata.chunkHashes.indices.toList()
+            )
+            ArticleBodyPayload(
+                metadata = metadata,
+                chunks = ArticleSyncBody.chunksForRequest(this, bodyRequest)
+            )
+        }
+        val metadata = payload.metadata
+        val chunks = payload.chunks
         if (chunks.isEmpty()) {
             return listOf(toChunkedJson(metadata, emptyList()))
         }
         return chunks.map { chunk -> toChunkedJson(metadata, listOf(chunk)) }
+    }
+
+    private fun SyncedSavedArticle.toMetadataOnlyChunkedJson(request: SyncedArticleBodyRequest): JSONObject {
+        return toJson(includeBody = false).apply {
+            put(
+                "body",
+                JSONObject().apply {
+                    put("bodyHash", request.bodyHash)
+                    put("bodyByteCount", 0L)
+                    put("chunkSize", 0)
+                    put("chunkHashes", JSONArray())
+                    put("chunks", JSONArray())
+                    put("metadataOnly", true)
+                }
+            )
+        }
     }
 
     private fun SyncedSavedArticle.toChunkedJson(
@@ -821,6 +932,7 @@ object LibrarySyncPayload {
                     put("bodyByteCount", metadata.bodyByteCount)
                     put("chunkSize", metadata.chunkSize)
                     put("chunkHashes", JSONArray(metadata.chunkHashes))
+                    put("metadataOnly", false)
                     put(
                         "chunks",
                         JSONArray().also { array ->
@@ -866,6 +978,7 @@ object LibrarySyncPayload {
                         put("articleId", request.articleId)
                         put("bodyHash", request.bodyHash)
                         put("chunkIndexes", JSONArray(request.chunkIndexes))
+                        put("metadataOnly", request.metadataOnly)
                     }
                 )
             }
@@ -966,6 +1079,6 @@ object LibrarySyncPayload {
         }
     }
 
-    private const val ARTICLE_BATCH_TARGET_BYTES = BluetoothSyncProtocol.MAX_FRAME_BYTES - 128 * 1024
+    private const val ARTICLE_BATCH_TARGET_BYTES = 384 * 1024
     private const val MAX_BATCH_COUNT_FOR_SIZING = 9999
 }

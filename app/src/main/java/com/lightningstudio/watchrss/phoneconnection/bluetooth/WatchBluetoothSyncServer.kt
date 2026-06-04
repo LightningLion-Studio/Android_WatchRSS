@@ -13,6 +13,8 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import com.lightningstudio.watchrss.WatchRssApplication
 import com.lightningstudio.watchrss.data.rss.SaveType
+import com.lightningstudio.watchrss.data.rss.SyncedArticleBodyRequest
+import com.lightningstudio.watchrss.data.rss.SyncedChunkedArticle
 import com.lightningstudio.watchrss.phoneconnection.PhoneConnectionAbility
 import com.lightningstudio.watchrss.phoneconnection.SavedItemsSyncPayload
 import com.lightningstudio.watchrss.phoneconnection.WatchDeviceIdentity
@@ -43,6 +45,36 @@ private data class PendingLibrarySyncSuccess(
 private data class LibraryManifestExchangeResult(
     val response: JSONObject,
     val pendingSyncSuccess: PendingLibrarySyncSuccess?
+)
+
+private data class ArticleRequestBatchStats(
+    var frameCount: Int = 0,
+    var totalBytes: Int = 0,
+    var maxFrameBytes: Int = 0,
+    var articleCount: Int = 0
+) {
+    fun add(frame: JSONObject) {
+        frameCount += 1
+        val bytes = runCatching { BluetoothSyncProtocol.encodedSize(frame) }.getOrDefault(0)
+        totalBytes += bytes
+        maxFrameBytes = maxOf(maxFrameBytes, bytes)
+        articleCount += frame.optJSONArray("articles")?.length() ?: 0
+    }
+
+    fun fields(prefix: String): Map<String, Any?> {
+        return mapOf(
+            "${prefix}FrameCount" to frameCount,
+            "${prefix}TotalBytes" to totalBytes,
+            "${prefix}MaxFrameBytes" to maxFrameBytes,
+            "${prefix}ArticleCount" to articleCount
+        )
+    }
+}
+
+private data class ChunkedArticleRequestFrames(
+    val articles: List<SyncedChunkedArticle>,
+    val bodyRequests: List<SyncedArticleBodyRequest>,
+    val stats: ArticleRequestBatchStats
 )
 
 class WatchBluetoothSyncServer(
@@ -197,6 +229,7 @@ class WatchBluetoothSyncServer(
             )
             val supportsChunkedBodies = request.optBoolean("supportsChunkedBodies", false) &&
                 request.optInt("version") > LibrarySyncPayload.LEGACY_PROTOCOL_VERSION
+            val supportsMetadataOnlyArticles = LibrarySyncPayload.supportsMetadataOnlyArticles(request)
             val preparedWindow = app.container.rssRepository.prepareLibrarySyncWindow(
                 peerDeviceId = remoteDeviceId,
                 localDeviceId = localDeviceId
@@ -230,7 +263,8 @@ class WatchBluetoothSyncServer(
                 val bodyRequests = LibrarySyncPayload.buildBodyRequestsForRemoteArticles(
                     localManifest = outgoingWindow.fullArticleManifest,
                     remoteManifest = remoteManifest,
-                    maxBodyRequestChunks = LibrarySyncPayload.MAX_BODY_REQUEST_CHUNKS_PER_SYNC
+                    maxBodyRequestChunks = LibrarySyncPayload.MAX_BODY_REQUEST_CHUNKS_PER_SYNC,
+                    supportsMetadataOnlyArticles = supportsMetadataOnlyArticles
                 )
                 LibrarySyncPayload.buildManifestResponseFromEntries(
                     deviceId = localDeviceId,
@@ -262,17 +296,26 @@ class WatchBluetoothSyncServer(
             }
             writeFrameLogged(client, sessionId, "manifestResponse", manifestResponse)
 
-            val articleRequestFrames = readArticleRequestFrames(client, sessionId)
-            val combinedArticleRequest = LibrarySyncPayload.combineArticlePayloads(articleRequestFrames)
+            val chunkedArticleRequests = if (supportsChunkedBodies) {
+                readChunkedArticleRequestFrames(client, sessionId)
+            } else {
+                null
+            }
+            val articleRequestFrames = if (supportsChunkedBodies) {
+                emptyList()
+            } else {
+                readArticleRequestFrames(client, sessionId)
+            }
             val incoming = if (supportsChunkedBodies) {
-                LibrarySyncPayload.parseChunkedArticles(combinedArticleRequest)
+                chunkedArticleRequests?.articles.orEmpty()
             } else {
                 articleRequestFrames.flatMap { LibrarySyncPayload.parseArticles(it) }
             }
             WatchBluetoothDebugLog.event(
                 sessionId = sessionId,
                 event = "library.articles.parsed",
-                fields = batchFields("articlesRequest", articleRequestFrames) +
+                fields = (chunkedArticleRequests?.stats?.fields("articlesRequest")
+                    ?: batchFields("articlesRequest", articleRequestFrames)) +
                     mapOf("incomingArticles" to incoming.size)
             )
             val stats = if (supportsChunkedBodies) {
@@ -306,7 +349,7 @@ class WatchBluetoothSyncServer(
             )
             val responseFrames = if (supportsChunkedBodies) {
                 val exportStartedAt = SystemClock.elapsedRealtime()
-                val phoneRequests = LibrarySyncPayload.parseBodyRequests(combinedArticleRequest)
+                val phoneRequests = chunkedArticleRequests?.bodyRequests.orEmpty()
                 val outgoingArticles = app.container.rssRepository.exportSyncedSavedArticlesForRequests(
                     deviceId = localDeviceId,
                     requests = phoneRequests
@@ -316,6 +359,7 @@ class WatchBluetoothSyncServer(
                     event = "library.response.articles.exported",
                     fields = mapOf(
                         "bodyRequests" to phoneRequests.size,
+                        "metadataOnlyRequests" to phoneRequests.count { it.metadataOnly },
                         "outgoingArticles" to outgoingArticles.size,
                         "requestedChunks" to phoneRequests.sumOf { it.chunkIndexes.size },
                         "elapsedMs" to elapsedSince(exportStartedAt)
@@ -362,7 +406,7 @@ class WatchBluetoothSyncServer(
                     payload = responseFrame
                 )
             }
-            val response = LibrarySyncPayload.combineArticlePayloads(responseFrames)
+            val response = summarizeLibraryResponse(responseFrames)
             Log.i(
                 TAG,
                 "library manifest exchange complete incoming=${incoming.size} outgoing=${outgoingDiff.size} sources=${outgoingWindow.rssSources.size}"
@@ -456,6 +500,92 @@ class WatchBluetoothSyncServer(
             frames += frame
         }
         return frames
+    }
+
+    private fun readChunkedArticleRequestFrames(
+        client: BluetoothSocket,
+        sessionId: String
+    ): ChunkedArticleRequestFrames {
+        val first = readFrameLogged(client, sessionId, "articlesRequest")
+        val batchCount = LibrarySyncPayload.validateArticleRequestFrame(
+            frame = first,
+            expectedBatchIndex = 0
+        )
+        val byArticleId = linkedMapOf<String, SyncedChunkedArticle>()
+        val bodyRequests = mutableListOf<SyncedArticleBodyRequest>()
+        val stats = ArticleRequestBatchStats()
+
+        fun consume(frame: JSONObject) {
+            stats.add(frame)
+            LibrarySyncPayload.parseChunkedArticles(frame).forEach { payload ->
+                byArticleId.mergeChunkedArticle(payload)
+            }
+            bodyRequests += LibrarySyncPayload.parseBodyRequests(frame)
+        }
+
+        consume(first)
+        var frameCount = 1
+        while (frameCount < batchCount) {
+            val frame = readFrameLogged(
+                client,
+                sessionId,
+                batchLabel("articlesRequest", frameCount, batchCount)
+            )
+            LibrarySyncPayload.validateArticleRequestFrame(
+                frame = frame,
+                expectedBatchIndex = frameCount,
+                expectedBatchCount = batchCount
+            )
+            consume(frame)
+            frameCount += 1
+        }
+        return ChunkedArticleRequestFrames(
+            articles = byArticleId.values.toList(),
+            bodyRequests = bodyRequests,
+            stats = stats
+        )
+    }
+
+    private fun MutableMap<String, SyncedChunkedArticle>.mergeChunkedArticle(
+        payload: SyncedChunkedArticle
+    ) {
+        val existing = this[payload.article.articleId]
+        this[payload.article.articleId] = if (existing == null) {
+            payload
+        } else {
+            require(
+                existing.bodyHash == payload.bodyHash &&
+                    existing.chunkSize == payload.chunkSize &&
+                    existing.chunkHashes == payload.chunkHashes &&
+                    existing.metadataOnly == payload.metadataOnly
+            ) {
+                "同步正文分块元数据冲突：${payload.article.articleId}"
+            }
+            existing.copy(
+                article = payload.article,
+                chunks = (existing.chunks + payload.chunks)
+                    .distinctBy { it.index }
+                    .sortedBy { it.index }
+            )
+        }
+    }
+
+    private fun summarizeLibraryResponse(responseFrames: List<JSONObject>): JSONObject {
+        if (responseFrames.isEmpty()) return JSONObject()
+        val first = responseFrames.first()
+        if (!first.optBoolean("success", true)) return first
+        return JSONObject().apply {
+            put("success", true)
+            put("version", first.optInt("version", LibrarySyncPayload.PROTOCOL_VERSION))
+            put("action", BluetoothSyncProtocol.ACTION_SYNC_LIBRARY)
+            put("phase", first.optString("phase").ifBlank { LibrarySyncPayload.PHASE_COMPLETE })
+            put("deviceId", first.optString("deviceId"))
+            put("sentAt", first.optLong("sentAt"))
+            put("batchCount", responseFrames.size)
+            put("totalArticles", responseFrames.sumOf { it.optJSONArray("articles")?.length() ?: 0 })
+            first.optJSONObject("stats")?.let { put("stats", it) }
+            first.optString("message").takeIf { it.isNotBlank() }?.let { put("message", it) }
+        }
     }
 
     private suspend fun waitForResponseAck(client: BluetoothSocket, sessionId: String): BluetoothSyncAck? {
@@ -647,8 +777,16 @@ class WatchBluetoothSyncServer(
                 }
 
                 BluetoothSyncProtocol.ACTION_SYNC_LIBRARY -> {
-                    val app = context.applicationContext as WatchRssApplication
                     val localDeviceId = WatchDeviceIdentity(context).deviceId
+                    if (request.optString("phase") == LibrarySyncPayload.PHASE_PROBE) {
+                        WatchBluetoothDebugLog.event(
+                            sessionId = sessionId,
+                            event = "request.syncLibrary.probe",
+                            fields = mapOf("remoteDeviceId" to request.optString("deviceId"))
+                        )
+                        return@runCatching LibrarySyncPayload.buildProbeResponse(localDeviceId)
+                    }
+                    val app = context.applicationContext as WatchRssApplication
                     val remoteDeviceId = request.optString("deviceId").ifBlank { "phone" }
                     val incomingSources = LibrarySyncPayload.parseRssSources(request)
                     val sourceStats = app.container.rssRepository.mergeSyncedRssSources(
@@ -795,7 +933,10 @@ class WatchBluetoothSyncServer(
             put("${prefix}Message", payload.optString("message").ifBlank { null })
             put("${prefix}ArticleManifestCount", payload.optJSONArray("articleManifest")?.length())
             put("${prefix}ArticleCount", payload.optJSONArray("articles")?.length())
-            put("${prefix}BodyRequestCount", payload.optJSONArray("bodyRequests")?.length())
+            val bodyRequests = payload.optJSONArray("bodyRequests")
+            put("${prefix}BodyRequestCount", bodyRequests?.length())
+            put("${prefix}MetadataOnlyBodyRequestCount", bodyRequests?.metadataOnlyCount())
+            put("${prefix}BodyRequestChunkCount", bodyRequests?.chunkIndexCount())
             put("${prefix}RssSourceCount", payload.optJSONArray("rssSources")?.length())
             put("${prefix}ItemCount", payload.optJSONArray("items")?.length())
             put("${prefix}Count", if (payload.has("count")) payload.optInt("count") else null)
@@ -805,6 +946,22 @@ class WatchBluetoothSyncServer(
             put("${prefix}BatchCount", if (payload.has("batchCount")) payload.optInt("batchCount") else null)
             put("${prefix}TotalArticles", if (payload.has("totalArticles")) payload.optInt("totalArticles") else null)
         }
+    }
+
+    private fun org.json.JSONArray.metadataOnlyCount(): Int {
+        var count = 0
+        for (index in 0 until length()) {
+            if (optJSONObject(index)?.optBoolean("metadataOnly", false) == true) count += 1
+        }
+        return count
+    }
+
+    private fun org.json.JSONArray.chunkIndexCount(): Int {
+        var count = 0
+        for (index in 0 until length()) {
+            count += optJSONObject(index)?.optJSONArray("chunkIndexes")?.length() ?: 0
+        }
+        return count
     }
 
     private fun batchFields(prefix: String, payloads: List<JSONObject>): Map<String, Any?> {

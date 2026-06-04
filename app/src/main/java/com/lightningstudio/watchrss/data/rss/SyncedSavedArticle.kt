@@ -1,5 +1,8 @@
 package com.lightningstudio.watchrss.data.rss
 
+const val ARTICLE_BODY_SYNC_MODE_FULL = "full"
+const val ARTICLE_BODY_SYNC_MODE_SAVED = "saved"
+
 data class SyncedSavedArticle(
     val articleId: String,
     val sourceDeviceId: String,
@@ -48,13 +51,15 @@ data class SyncedArticleManifest(
     val chunkSize: Int,
     val chunkHashes: List<String>,
     val metadataHash: String,
-    val bodyAvailable: Boolean = true
+    val bodyAvailable: Boolean = true,
+    val bodySyncMode: String = ARTICLE_BODY_SYNC_MODE_FULL
 )
 
 data class SyncedArticleBodyRequest(
     val articleId: String,
     val bodyHash: String,
-    val chunkIndexes: List<Int>
+    val chunkIndexes: List<Int>,
+    val metadataOnly: Boolean = false
 )
 
 data class SyncedArticleBodyChunk(
@@ -85,7 +90,8 @@ data class SyncedChunkedArticle(
     val bodyByteCount: Long,
     val chunkSize: Int,
     val chunkHashes: List<String>,
-    val chunks: List<SyncedArticleBodyChunk>
+    val chunks: List<SyncedArticleBodyChunk>,
+    val metadataOnly: Boolean = false
 )
 
 data class SyncedRssSource(

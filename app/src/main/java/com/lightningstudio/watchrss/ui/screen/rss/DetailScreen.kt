@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -43,6 +44,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -76,6 +78,8 @@ import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.RssPlayerActivity
 import com.lightningstudio.watchrss.data.douyin.buildDouyinPlaybackWebUrl
 import com.lightningstudio.watchrss.data.douyin.parseDouyinAwemeId
+import com.lightningstudio.watchrss.data.rss.ImportedContentIds
+import com.lightningstudio.watchrss.data.rss.ImportedTextReader
 import com.lightningstudio.watchrss.data.rss.OfflineMedia
 import com.lightningstudio.watchrss.data.rss.RssItem
 import com.lightningstudio.watchrss.data.settings.RssInlineImagePrefetchMode
@@ -120,6 +124,7 @@ fun DetailScreen(
     val offlineMedia by viewModel.offlineMedia.collectAsState()
     val isRetryingOfflineMedia by viewModel.isRetryingOfflineMedia.collectAsState()
     val contentBlocks by viewModel.contentBlocks.collectAsState()
+    val importedTextReader by viewModel.importedTextReader.collectAsState()
     val readingThemeDark by viewModel.readingThemeDark.collectAsState()
     val readingFontSizeSp by viewModel.readingFontSizeSp.collectAsState()
     val shareUseSystem by viewModel.shareUseSystem.collectAsState(initial = false)
@@ -133,11 +138,14 @@ fun DetailScreen(
 
     val baseDensity = LocalDensity.current
     CompositionLocalProvider(LocalDensity provides Density(2f, baseDensity.fontScale)) {
+        val isImportedText = ImportedContentIds.isImportedTextItemUrl(item?.link)
         DetailContent(
             item = item,
-            showOriginalLoadingNotice = effectiveUseOriginalContent &&
+            showOriginalLoadingNotice = !isImportedText &&
+                effectiveUseOriginalContent &&
                 item?.originalContent.isNullOrBlank(),
             contentBlocks = contentBlocks,
+            importedTextReader = importedTextReader,
             offlineMedia = offlineMap,
             hasOfflineFailures = hasOfflineFailures,
             isRetryingOfflineMedia = isRetryingOfflineMedia,
@@ -156,6 +164,7 @@ fun DetailScreen(
             onToggleOriginalContent = viewModel::toggleOriginalContent,
             onRetryOfflineMedia = viewModel::retryOfflineMedia,
             onSaveReadingProgress = viewModel::updateReadingProgress,
+            onLoadImportedTextChunk = viewModel::loadImportedTextChunk,
             onOpenAiSummary = onOpenAiSummary,
             onOpenReadAloud = onOpenReadAloud,
             onBack = onBack
@@ -169,6 +178,7 @@ internal fun DetailContent(
     item: RssItem?,
     showOriginalLoadingNotice: Boolean,
     contentBlocks: List<ContentBlock>,
+    importedTextReader: ImportedTextReader? = null,
     offlineMedia: Map<String, OfflineMedia>,
     hasOfflineFailures: Boolean,
     isRetryingOfflineMedia: Boolean,
@@ -187,6 +197,7 @@ internal fun DetailContent(
     onToggleOriginalContent: () -> Unit,
     onRetryOfflineMedia: () -> Unit,
     onSaveReadingProgress: (Float) -> Unit,
+    onLoadImportedTextChunk: suspend (String, Int) -> String? = { _, _ -> null },
     onOpenAiSummary: () -> Unit = {},
     onOpenReadAloud: () -> Unit = {},
     onBack: (Long, Boolean, Boolean) -> Unit
@@ -412,9 +423,11 @@ internal fun DetailContent(
             )
         }
         val link = item?.link?.trim().orEmpty()
+        val isImportedText = ImportedContentIds.isImportedTextItemUrl(link)
+        val canToggleOriginalContent = link.isNotEmpty() && !isImportedText
         val baseLink = link.takeIf { it.isNotBlank() }
-        val baseItemCount = remember(link, hasOfflineFailures, isRetryingOfflineMedia) {
-            4 + (if (link.isNotEmpty()) 1 else 0) +
+        val baseItemCount = remember(canToggleOriginalContent, hasOfflineFailures, isRetryingOfflineMedia) {
+            4 + (if (canToggleOriginalContent) 1 else 0) +
                 (if (hasOfflineFailures || isRetryingOfflineMedia) 1 else 0)
         }
         val prefetchedUrls = remember(item?.id) { mutableSetOf<String>() }
@@ -567,7 +580,7 @@ internal fun DetailContent(
                     }
                 }
             }
-            if (link.isNotEmpty()) {
+            if (canToggleOriginalContent) {
                 item(key = "linkAction") {
                     Spacer(modifier = Modifier.height(blockSpacing))
                     DetailActionButton(
@@ -637,7 +650,7 @@ internal fun DetailContent(
             }
             item(key = "loadingSkeleton") {
                 BlurFadeVisibility(
-                    visible = item == null || contentBlocks.isEmpty(),
+                    visible = item == null || (contentBlocks.isEmpty() && importedTextReader == null),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     DetailContentSkeleton(
@@ -647,6 +660,31 @@ internal fun DetailContent(
                         borderColor = actionBorderColor,
                         blockSpacing = blockSpacing
                     )
+                }
+            }
+            if (item != null && importedTextReader != null) {
+                items(
+                    count = importedTextReader.chunkCount,
+                    key = { index -> "importedText:${importedTextReader.marker}:$index" },
+                    contentType = { "imported_text" }
+                ) { index ->
+                    val marker = importedTextReader.marker
+                    val chunk by produceState<String?>(initialValue = null, marker, index) {
+                        value = onLoadImportedTextChunk(marker, index)
+                    }
+                    val text = chunk
+                    if (text == null) {
+                        Spacer(modifier = Modifier.height(if (index == 0) 1.dp else blockSpacing))
+                    } else if (text.isNotBlank()) {
+                        DetailTextBlock(
+                            text = text,
+                            style = ContentTextStyle.BODY,
+                            textColor = textColor,
+                            fontSizeSp = bodyFontSize,
+                            topPadding = if (index == 0) 0.dp else blockSpacing,
+                            isScrolling = isScrolling
+                        )
+                    }
                 }
             }
             if (item != null && contentBlocks.isNotEmpty()) {

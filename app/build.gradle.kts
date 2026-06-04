@@ -34,8 +34,8 @@ android {
         applicationId = "com.lightningstudio.watchrss"
         minSdk = 30
         targetSdk = 34
-        versionCode = 10
-        versionName = "1.2.0-3"
+        versionCode = 12
+        versionName = "1.2.0-5"
         buildConfigField("boolean", "ENABLE_RUNTIME_PERF_MONITOR", "false")
         buildConfigField("boolean", "ENABLE_WATCH_DEBUG_MASK", "false")
 

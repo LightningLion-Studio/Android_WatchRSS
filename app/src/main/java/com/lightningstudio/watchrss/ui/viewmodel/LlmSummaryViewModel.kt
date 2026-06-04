@@ -3,6 +3,7 @@ package com.lightningstudio.watchrss.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lightningstudio.watchrss.data.llm.LlmProviderCatalog
+import com.lightningstudio.watchrss.data.rss.ImportedContentIds
 import com.lightningstudio.watchrss.data.rss.RssRepository
 import com.lightningstudio.watchrss.data.rss.effectiveContent
 import com.lightningstudio.watchrss.data.rss.isOriginalContentMissing
@@ -28,7 +29,6 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
-import org.jsoup.Jsoup
 import java.util.concurrent.TimeUnit
 
 private const val TAG = "LlmSummaryVM"
@@ -140,7 +140,9 @@ class LlmSummaryViewModel(
                     useOriginalContent = channel?.useOriginalContent == true || !item.isOriginalContentMissing()
                 ).orEmpty()
 
-                val waitingForOriginalContent = item.isOriginalContentMissing() &&
+                val isImportedText = ImportedContentIds.isImportedTextItemUrl(item.link)
+                val waitingForOriginalContent = !isImportedText &&
+                    item.isOriginalContentMissing() &&
                     channel?.useOriginalContent == true &&
                     rawHtml.isBlank()
                 if (waitingForOriginalContent) {
@@ -153,9 +155,14 @@ class LlmSummaryViewModel(
                     return@collect
                 }
 
-                pendingContent = if (rawHtml.isNotBlank()) {
+                pendingContent = if (isImportedText) {
+                    val reader = rssRepository.getImportedTextReader(item.id)
+                    reader?.let { rssRepository.loadImportedTextChunk(it.marker, 0) }
+                        ?.toSummarySourceText(isPlainText = true)
+                        ?: item.description.orEmpty().take(MAX_CONTENT_CHARS)
+                } else if (rawHtml.isNotBlank()) {
                     withContext(Dispatchers.Default) {
-                        Jsoup.parse(rawHtml).text().take(MAX_CONTENT_CHARS)
+                        rawHtml.toSummarySourceText(isPlainText = false)
                     }
                 } else {
                     ""
@@ -333,3 +340,133 @@ class LlmSummaryViewModel(
     }
 
 }
+
+private fun String.toSummarySourceText(isPlainText: Boolean): String {
+    return if (isPlainText || !mayContainSummaryHtml()) {
+        toPlainSummaryPreview(MAX_PLAIN_SUMMARY_SCAN_CHARS)
+    } else {
+        toHtmlSummaryPreview()
+    }
+}
+
+private fun String.mayContainSummaryHtml(): Boolean {
+    val sampleEnd = length.coerceAtMost(HTML_DETECTION_SAMPLE_CHARS)
+    var index = 0
+    while (index < sampleEnd) {
+        if (this[index] == '<') return true
+        index += 1
+    }
+    return false
+}
+
+private fun String.toPlainSummaryPreview(scanLimit: Int): String {
+    val builder = StringBuilder(MAX_CONTENT_CHARS)
+    var pendingSpace = false
+    val end = length.coerceAtMost(scanLimit)
+    var index = 0
+    while (index < end && builder.length < MAX_CONTENT_CHARS) {
+        val char = this[index]
+        if (char.isWhitespace()) {
+            if (builder.isNotEmpty()) pendingSpace = true
+        } else {
+            if (pendingSpace && builder.isNotEmpty() && builder.length < MAX_CONTENT_CHARS) {
+                builder.append(' ')
+            }
+            builder.append(char)
+            pendingSpace = false
+        }
+        index += 1
+    }
+    return builder.toString()
+}
+
+private fun String.toHtmlSummaryPreview(): String {
+    val builder = StringBuilder(MAX_CONTENT_CHARS)
+    var pendingSpace = false
+    var inTag = false
+    val end = length.coerceAtMost(MAX_HTML_SUMMARY_SCAN_CHARS)
+    var index = 0
+
+    fun appendWhitespace() {
+        if (builder.isNotEmpty()) pendingSpace = true
+    }
+
+    fun appendTextChar(char: Char) {
+        if (char.isWhitespace()) {
+            appendWhitespace()
+            return
+        }
+        if (pendingSpace && builder.isNotEmpty() && builder.length < MAX_CONTENT_CHARS) {
+            builder.append(' ')
+        }
+        builder.append(char)
+        pendingSpace = false
+    }
+
+    while (index < end && builder.length < MAX_CONTENT_CHARS) {
+        val char = this[index]
+        when {
+            inTag -> {
+                if (char == '>') {
+                    inTag = false
+                    appendWhitespace()
+                }
+            }
+            char == '<' -> {
+                inTag = true
+                appendWhitespace()
+            }
+            char == '&' -> {
+                val entityEnd = findSummaryEntityEnd(index + 1, end)
+                if (entityEnd > index) {
+                    decodeSummaryEntity(substring(index + 1, entityEnd))?.let(::appendTextChar)
+                        ?: appendWhitespace()
+                    index = entityEnd
+                } else {
+                    appendTextChar(char)
+                }
+            }
+            else -> appendTextChar(char)
+        }
+        index += 1
+    }
+    return builder.toString()
+}
+
+private fun String.findSummaryEntityEnd(start: Int, end: Int): Int {
+    val limit = (start + MAX_ENTITY_CHARS).coerceAtMost(end)
+    var index = start
+    while (index < limit) {
+        if (this[index] == ';') return index
+        if (this[index].isWhitespace() || this[index] == '<' || this[index] == '&') return -1
+        index += 1
+    }
+    return -1
+}
+
+private fun decodeSummaryEntity(entity: String): Char? {
+    return when (entity.lowercase()) {
+        "nbsp" -> ' '
+        "amp" -> '&'
+        "lt" -> '<'
+        "gt" -> '>'
+        "quot" -> '"'
+        "apos" -> '\''
+        else -> decodeNumericSummaryEntity(entity)
+    }
+}
+
+private fun decodeNumericSummaryEntity(entity: String): Char? {
+    if (!entity.startsWith("#")) return null
+    val codePoint = if (entity.startsWith("#x", ignoreCase = true)) {
+        entity.drop(2).toIntOrNull(16)
+    } else {
+        entity.drop(1).toIntOrNull()
+    } ?: return null
+    return runCatching { codePoint.toChar() }.getOrNull()
+}
+
+private const val HTML_DETECTION_SAMPLE_CHARS = 4096
+private const val MAX_PLAIN_SUMMARY_SCAN_CHARS = 64_000
+private const val MAX_HTML_SUMMARY_SCAN_CHARS = 64_000
+private const val MAX_ENTITY_CHARS = 12

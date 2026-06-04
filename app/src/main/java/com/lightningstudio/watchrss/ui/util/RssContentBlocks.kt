@@ -2,6 +2,7 @@ package com.lightningstudio.watchrss.ui.util
 
 import com.lightningstudio.watchrss.data.douyin.buildDouyinPlaybackWebUrl
 import com.lightningstudio.watchrss.data.douyin.parseDouyinAwemeId
+import com.lightningstudio.watchrss.data.rss.ImportedContentIds
 import com.lightningstudio.watchrss.data.rss.RssItem
 import com.lightningstudio.watchrss.data.rss.effectiveContent
 
@@ -9,6 +10,8 @@ fun buildContentBlocks(item: RssItem, useOriginalContent: Boolean): List<Content
     val raw = item.effectiveContent(useOriginalContent)
     val blocks = if (raw.isNullOrBlank()) {
         mutableListOf()
+    } else if (ImportedContentIds.isImportedTextItemUrl(item.link)) {
+        RssContentParser.parsePlainText(raw).toMutableList()
     } else {
         RssContentParser.parse(raw).toMutableList()
     }

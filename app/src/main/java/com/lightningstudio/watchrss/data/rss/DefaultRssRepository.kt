@@ -56,6 +56,11 @@ private data class SyncHydratedRssItem(
     val bodyAvailable: Boolean
 )
 
+private data class SyncBodyContent(
+    val contentHtml: String?,
+    val contentText: String
+)
+
 class DefaultRssRepository(
     private val channelDao: RssChannelDao,
     private val itemDao: RssItemDao,
@@ -134,9 +139,15 @@ class DefaultRssRepository(
     override fun observeItem(itemId: Long): Flow<RssItem?> =
         itemDao.observeItem(itemId).map { item ->
             withContext(Dispatchers.IO) {
-                val hydrated = item?.hydrateExternalContent()
-                if (hydrated != null) {
-                    schedulePreviewUpdate(hydrated)
+                if (item != null) {
+                    schedulePreviewUpdate(item)
+                }
+                val hydrated = item?.let { entity ->
+                    if (entity.isFileBackedImportedText()) {
+                        entity
+                    } else {
+                        entity.hydrateExternalContent()
+                    }
                 }
                 hydrated?.toModel()
             }
@@ -171,6 +182,27 @@ class DefaultRssRepository(
     override fun observeOfflineMedia(itemId: Long): Flow<List<OfflineMedia>> =
         offlineMediaDao.observeByItemId(itemId).map { list ->
             list.map { it.toModel() }
+        }
+
+    override suspend fun getImportedTextReader(itemId: Long): ImportedTextReader? =
+        withContext(Dispatchers.IO) {
+            val store = articleContentStore ?: return@withContext null
+            val item = itemDao.getItem(itemId) ?: return@withContext null
+            if (!ImportedContentIds.isImportedTextItemUrl(item.link)) return@withContext null
+            val marker = item.originalContent?.takeIf(store::isMarker)
+                ?: item.content?.takeIf(store::isMarker)
+                ?: return@withContext null
+            val handle = store.textChunkHandle(marker) ?: return@withContext null
+            ImportedTextReader(
+                marker = handle.marker,
+                byteLength = handle.byteLength,
+                chunkCount = handle.chunkCount
+            )
+        }
+
+    override suspend fun loadImportedTextChunk(marker: String, chunkIndex: Int): String? =
+        withContext(Dispatchers.IO) {
+            articleContentStore?.loadTextChunk(marker, chunkIndex)
         }
 
     override suspend fun previewChannel(url: String): Result<AddRssPreview> = withContext(Dispatchers.IO) {
@@ -902,7 +934,8 @@ class DefaultRssRepository(
                     bodyByteCount = 0L,
                     chunkSize = 0,
                     chunkHashes = emptyList(),
-                    metadataHash = sha256(url)
+                    metadataHash = sha256(url),
+                    bodySyncMode = ARTICLE_BODY_SYNC_MODE_SAVED
                 )
             }
         return savedManifests + independentManifests + importedContentManifests + tombstones
@@ -1043,6 +1076,8 @@ class DefaultRssRepository(
                 )
             }
             val (contentHtml, contentText) = if (payload.article.deleted) {
+                localArticle?.contentHtml to localArticle?.contentText.orEmpty()
+            } else if (payload.metadataOnly) {
                 localArticle?.contentHtml to localArticle?.contentText.orEmpty()
             } else {
                 ArticleSyncBody.rebuildBody(
@@ -1488,10 +1523,7 @@ class DefaultRssRepository(
         val hydrated = item.hydrateExternalContentForSync()
         if (!hydrated.bodyAvailable) return null
         val fullItem = hydrated.item
-        val contentHtml = fullItem.originalContent?.takeIf { it.isNotBlank() }
-            ?: fullItem.content?.takeIf { it.isNotBlank() }
-            ?: fullItem.description?.takeIf { it.isNotBlank() }
-        val contentText = contentHtml?.let { Jsoup.parse(it).text().trim() }.orEmpty()
+        val bodyContent = fullItem.toSyncBodyContent()
         val url = fullItem.link.orEmpty()
         val updatedAt = maxOf(fullItem.fetchedAt, savedAt, favoriteChangedAt, watchLaterChangedAt)
         val rssSourceUrl = channelUrl.takeIf { it.isSyncedRssSourceUrl() }
@@ -1503,10 +1535,12 @@ class DefaultRssRepository(
             title = fullItem.title,
             siteName = channelTitle,
             excerpt = fullItem.summary ?: fullItem.description.orEmpty(),
-            contentHtml = contentHtml,
-            contentText = contentText,
+            contentHtml = bodyContent.contentHtml,
+            contentText = bodyContent.contentText,
             imageUrl = fullItem.previewImageUrl ?: fullItem.imageUrl,
-            contentHash = sha256(contentHtml ?: contentText.ifBlank { url }),
+            contentHash = fullItem.syncBodyHash.ifBlank {
+                sha256(bodyContent.contentHtml ?: bodyContent.contentText.ifBlank { url })
+            },
             importedAt = savedAt,
             updatedAt = updatedAt,
             independentSaved = independentSaved,
@@ -1683,10 +1717,7 @@ class DefaultRssRepository(
         val hydrated = hydrateExternalContentForSync()
         if (!hydrated.bodyAvailable) return null
         val fullItem = hydrated.item
-        val contentHtml = fullItem.originalContent?.takeIf { it.isNotBlank() }
-            ?: fullItem.content?.takeIf { it.isNotBlank() }
-            ?: fullItem.description?.takeIf { it.isNotBlank() }
-        val contentText = contentHtml?.let { Jsoup.parse(it).text().trim() }.orEmpty()
+        val bodyContent = fullItem.toSyncBodyContent()
         val url = fullItem.link.orEmpty().ifBlank { fullItem.dedupKey }
         return SyncedSavedArticle(
             articleId = articleId,
@@ -1695,10 +1726,12 @@ class DefaultRssRepository(
             title = fullItem.title.ifBlank { url },
             siteName = channel.title,
             excerpt = fullItem.summary ?: fullItem.description.orEmpty(),
-            contentHtml = contentHtml,
-            contentText = contentText,
+            contentHtml = bodyContent.contentHtml,
+            contentText = bodyContent.contentText,
             imageUrl = fullItem.previewImageUrl ?: fullItem.imageUrl,
-            contentHash = sha256(contentHtml ?: contentText.ifBlank { url }),
+            contentHash = fullItem.syncBodyHash.ifBlank {
+                sha256(bodyContent.contentHtml ?: bodyContent.contentText.ifBlank { url })
+            },
             importedAt = fullItem.fetchedAt,
             updatedAt = fullItem.fetchedAt,
             independentSaved = independentSaved,
@@ -1941,7 +1974,8 @@ class DefaultRssRepository(
             chunkSize = metadata.chunkSize,
             chunkHashes = metadata.chunkHashes,
             metadataHash = metadata.metadataHash,
-            bodyAvailable = true
+            bodyAvailable = true,
+            bodySyncMode = bodySyncModeForSync()
         )
     }
 
@@ -1965,7 +1999,8 @@ class DefaultRssRepository(
             chunkSize = if (hasCurrentMetadata) item.syncChunkSize else 0,
             chunkHashes = if (hasCurrentMetadata) item.syncChunkHashesJson.toStringList() else emptyList(),
             metadataHash = if (hasCurrentMetadata) item.syncMetadataHash else "",
-            bodyAvailable = bodyAvailable
+            bodyAvailable = bodyAvailable,
+            bodySyncMode = bodySyncModeForSync()
         )
     }
 
@@ -2265,6 +2300,13 @@ class DefaultRssRepository(
 
     private fun RssItemEntity.hydrateExternalContent(): RssItemEntity {
         val store = articleContentStore ?: return this
+        if (content != null && content == originalContent && store.isMarker(content)) {
+            val hydrated = store.loadText(content)
+            return copy(
+                content = hydrated,
+                originalContent = hydrated
+            )
+        }
         val hydratedContent = content?.let { value ->
             if (store.isMarker(value)) store.loadText(value) else value
         }
@@ -2277,9 +2319,28 @@ class DefaultRssRepository(
         )
     }
 
+    private fun RssItemEntity.isFileBackedImportedText(): Boolean {
+        val store = articleContentStore ?: return false
+        if (!ImportedContentIds.isImportedTextItemUrl(link)) return false
+        return content?.let(store::isMarker) == true || originalContent?.let(store::isMarker) == true
+    }
+
     private fun RssItemEntity.hydrateExternalContentForSync(): SyncHydratedRssItem {
         val store = articleContentStore ?: return SyncHydratedRssItem(this, bodyAvailable = true)
         var bodyAvailable = true
+        if (content != null && content == originalContent && store.isMarker(content)) {
+            val hydrated = store.loadText(content) ?: run {
+                bodyAvailable = false
+                content
+            }
+            return SyncHydratedRssItem(
+                item = copy(
+                    content = hydrated,
+                    originalContent = hydrated
+                ),
+                bodyAvailable = bodyAvailable
+            )
+        }
         val hydratedContent = content?.let { value ->
             if (store.isMarker(value)) {
                 store.loadText(value) ?: run {
@@ -2313,9 +2374,32 @@ class DefaultRssRepository(
         val store = articleContentStore ?: return true
         fun isAvailable(value: String?): Boolean {
             if (value.isNullOrBlank() || !store.isMarker(value)) return true
-            return store.loadText(value) != null
+            return store.hasText(value)
         }
         return isAvailable(content) && isAvailable(originalContent)
+    }
+
+    private fun RssItemEntity.toSyncBodyContent(): SyncBodyContent {
+        val body = originalContent?.takeIf { it.isNotBlank() }
+            ?: content?.takeIf { it.isNotBlank() }
+            ?: description?.takeIf { it.isNotBlank() }
+            ?: return SyncBodyContent(contentHtml = null, contentText = "")
+        return if (body.looksLikeHtmlContent()) {
+            SyncBodyContent(
+                contentHtml = body,
+                contentText = Jsoup.parse(body).text().trim()
+            )
+        } else {
+            SyncBodyContent(
+                contentHtml = null,
+                contentText = body
+            )
+        }
+    }
+
+    private fun String.looksLikeHtmlContent(): Boolean {
+        val sample = take(HTML_DETECTION_SAMPLE_CHARS)
+        return HTML_TAG_PATTERN.containsMatchIn(sample)
     }
 
     private fun RssItemEntity.shouldExternalizeContent(store: ArticleContentStore): Boolean {
@@ -2342,9 +2426,19 @@ class DefaultRssRepository(
     }
 
     private fun previewSourceContent(item: RssItemEntity): String? {
-        val hydrated = item.hydrateExternalContent()
-        return hydrated.originalContent?.trim()?.ifEmpty { null }
-            ?: hydrated.content?.trim()?.ifEmpty { null }
+        return item.originalContent.previewSnippet()
+            ?: item.content.previewSnippet()
+    }
+
+    private fun String?.previewSnippet(): String? {
+        val value = this ?: return null
+        if (value.isBlank()) return null
+        val store = articleContentStore
+        if (store != null && store.isMarker(value)) return null
+        val start = value.indexOfFirst { !it.isWhitespace() }.takeIf { it >= 0 } ?: return null
+        val rawEndExclusive = value.indexOfLast { !it.isWhitespace() } + 1
+        val endExclusive = (start + PREVIEW_SOURCE_MAX_CHARS).coerceAtMost(rawEndExclusive)
+        return value.substring(start, endExclusive).ifEmpty { null }
     }
 
     private fun buildSavedState(entries: List<SavedEntryEntity>): SavedState {
@@ -2435,6 +2529,13 @@ private const val FULL_SNAPSHOT_INTERVAL_MS = 7L * 24L * 60L * 60L * 1000L
 private const val SYNC_KIND_ARTICLE = "article"
 private const val SYNC_KIND_RSS_SOURCE = "rssSource"
 private const val MAX_INLINE_CONTENT_CHARS = 100_000
+private const val PREVIEW_SOURCE_MAX_CHARS = 16_384
+private const val HASH_CHUNK_CHARS = 8 * 1024
+private const val HTML_DETECTION_SAMPLE_CHARS = 4096
+private val HTML_TAG_PATTERN = Regex(
+    """<\s*/?\s*(html|head|body|article|section|main|div|p|br|h[1-6]|ul|ol|li|span|table|blockquote|pre|code)\b""",
+    RegexOption.IGNORE_CASE
+)
 
 private fun RssChannelEntity.isSyncedRssSource(): Boolean {
     return url.isSyncedRssSourceUrl() && !ImportedContentIds.isImportedTextSourceUrl(url)
@@ -2447,6 +2548,18 @@ private fun RssChannelEntity.isImportedContentChannel(): Boolean {
 private fun String.isSyncedRssSourceUrl(): Boolean {
     val lower = trim().lowercase()
     return lower.startsWith("http://") || lower.startsWith("https://")
+}
+
+private fun SyncedSavedArticle.bodySyncModeForSync(): String {
+    return if (
+        independentSaved ||
+        ImportedContentIds.isImportedContentUrl(rssSourceUrl) ||
+        ImportedContentIds.isImportedContentUrl(url)
+    ) {
+        ARTICLE_BODY_SYNC_MODE_FULL
+    } else {
+        ARTICLE_BODY_SYNC_MODE_SAVED
+    }
 }
 
 private fun RssChannelEntity.syncUpdatedAt(): Long {
@@ -2581,8 +2694,17 @@ private fun normalizeUrl(value: String): String {
 }
 
 private fun sha256(value: String): String {
-    val bytes = MessageDigest.getInstance("SHA-256")
-        .digest(value.toByteArray(Charsets.UTF_8))
+    val digest = MessageDigest.getInstance("SHA-256")
+    var start = 0
+    while (start < value.length) {
+        var end = (start + HASH_CHUNK_CHARS).coerceAtMost(value.length)
+        if (end < value.length && Character.isHighSurrogate(value[end - 1])) {
+            end -= 1
+        }
+        digest.update(value.substring(start, end).toByteArray(Charsets.UTF_8))
+        start = end
+    }
+    val bytes = digest.digest()
     return bytes.joinToString("") { "%02x".format(it) }
 }
 

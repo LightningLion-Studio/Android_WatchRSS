@@ -2,6 +2,7 @@ package com.lightningstudio.watchrss.testutil
 
 import com.lightningstudio.watchrss.data.rss.AddRssPreview
 import com.lightningstudio.watchrss.data.rss.ExternalSavedItem
+import com.lightningstudio.watchrss.data.rss.ImportedTextReader
 import com.lightningstudio.watchrss.data.rss.OfflineMedia
 import com.lightningstudio.watchrss.data.rss.OfflineMediaType
 import com.lightningstudio.watchrss.data.rss.RssChannel
@@ -168,6 +169,10 @@ class TestRssRepository(
     override fun observeOfflineMedia(itemId: Long): Flow<List<OfflineMedia>> {
         return offlineMediaFlow.map { media -> media[itemId].orEmpty() }
     }
+
+    override suspend fun getImportedTextReader(itemId: Long): ImportedTextReader? = null
+
+    override suspend fun loadImportedTextChunk(marker: String, chunkIndex: Int): String? = null
 
     override suspend fun previewChannel(url: String): Result<AddRssPreview> = previewChannelResult
 
