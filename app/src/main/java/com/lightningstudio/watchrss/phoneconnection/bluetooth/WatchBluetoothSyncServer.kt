@@ -372,7 +372,8 @@ class WatchBluetoothSyncServer(
                     articleRequests = phoneRequests,
                     applied = stats.applied,
                     sourcesApplied = sourceStats.applied,
-                    useBatches = remoteSupportsArticleBatches
+                    useBatches = remoteSupportsArticleBatches,
+                    allowMetadataOnlyArticles = supportsMetadataOnlyArticles
                 ).also { frames ->
                     WatchBluetoothDebugLog.event(
                         sessionId = sessionId,

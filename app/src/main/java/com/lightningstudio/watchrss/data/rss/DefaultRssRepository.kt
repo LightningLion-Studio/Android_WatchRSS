@@ -640,9 +640,10 @@ class DefaultRssRepository(
                 deviceId = deviceId,
                 requestedArticleIds = missingMetadataIds
             ).associate { article ->
-                persistSyncedArticleMetadata(article)
-                val metadata = ArticleSyncBody.metadataFor(article)
-                article.articleId to article.toManifest(metadata)
+                val cachedArticle = ensureSyncedArticleMetadata(article)
+                val metadata = cachedArticle.cachedBodyMetadata
+                    ?: ArticleSyncBody.metadataFor(cachedArticle)
+                cachedArticle.articleId to cachedArticle.toManifest(metadata)
             }
             lightweight.map { manifest -> repaired[manifest.articleId] ?: manifest }
         }
@@ -855,7 +856,7 @@ class DefaultRssRepository(
             deviceId = deviceId,
             requestedArticleIds = requestedIds
         )
-            .onEach { article -> persistSyncedArticleMetadata(article) }
+            .map { article -> ensureSyncedArticleMetadata(article) }
     }
 
     override suspend fun exportSyncedRssSources(deviceId: String): List<SyncedRssSource> =
@@ -1528,7 +1529,7 @@ class DefaultRssRepository(
         val updatedAt = maxOf(fullItem.fetchedAt, savedAt, favoriteChangedAt, watchLaterChangedAt)
         val rssSourceUrl = channelUrl.takeIf { it.isSyncedRssSourceUrl() }
         val independentSaved = channelUrl == PHONE_IMPORT_CHANNEL_URL
-        return SyncedSavedArticle(
+        val article = SyncedSavedArticle(
             articleId = articleId,
             sourceDeviceId = deviceId,
             url = url,
@@ -1557,6 +1558,7 @@ class DefaultRssRepository(
             deleted = false,
             deletedAt = 0L
         )
+        return article.copy(cachedBodyMetadata = fullItem.currentSyncMetadataFor(article))
     }
 
     private fun SavedRssItem.toSyncedArticleManifest(
@@ -1719,7 +1721,7 @@ class DefaultRssRepository(
         val fullItem = hydrated.item
         val bodyContent = fullItem.toSyncBodyContent()
         val url = fullItem.link.orEmpty().ifBlank { fullItem.dedupKey }
-        return SyncedSavedArticle(
+        val article = SyncedSavedArticle(
             articleId = articleId,
             sourceDeviceId = deviceId,
             url = url,
@@ -1748,6 +1750,7 @@ class DefaultRssRepository(
             deleted = false,
             deletedAt = 0L
         )
+        return article.copy(cachedBodyMetadata = fullItem.currentSyncMetadataFor(article))
     }
 
     private fun RssItemEntity.toSyncedChannelArticleManifest(
@@ -1946,8 +1949,27 @@ class DefaultRssRepository(
         return existing.id
     }
 
-    private suspend fun persistSyncedArticleMetadata(article: SyncedSavedArticle) {
-        val itemId = findSyncedArticleItemId(article) ?: return
+    private suspend fun ensureSyncedArticleMetadata(article: SyncedSavedArticle): SyncedSavedArticle {
+        val articleMetadata = article.cachedBodyMetadata?.takeIf { it.isCurrentFor(article) }
+        val itemId = findSyncedArticleItemId(article) ?: return articleMetadata
+            ?.let { article.copy(cachedBodyMetadata = it) }
+            ?: article
+        val item = itemDao.getItem(itemId)
+        val itemMetadata = item?.currentSyncMetadataFor(article)
+        if (itemMetadata != null) {
+            return article.copy(cachedBodyMetadata = itemMetadata)
+        }
+        if (articleMetadata != null) {
+            itemDao.updateSyncMetadata(
+                id = itemId,
+                syncBodyHash = articleMetadata.bodyHash,
+                syncBodyByteCount = articleMetadata.bodyByteCount,
+                syncChunkSize = articleMetadata.chunkSize,
+                syncChunkHashesJson = articleMetadata.chunkHashes.toJsonString(),
+                syncMetadataHash = articleMetadata.metadataHash
+            )
+            return article.copy(cachedBodyMetadata = articleMetadata)
+        }
         val metadata = ArticleSyncBody.metadataFor(article)
         itemDao.updateSyncMetadata(
             id = itemId,
@@ -1957,6 +1979,7 @@ class DefaultRssRepository(
             syncChunkHashesJson = metadata.chunkHashes.toJsonString(),
             syncMetadataHash = metadata.metadataHash
         )
+        return article.copy(cachedBodyMetadata = metadata)
     }
 
     private fun SyncedSavedArticle.toManifest(metadata: ArticleBodyMetadata): SyncedArticleManifest {
@@ -1983,8 +2006,7 @@ class DefaultRssRepository(
         item: RssItemEntity,
         bodyAvailable: Boolean
     ): SyncedArticleManifest {
-        val expectedMetadataHash = ArticleSyncBody.metadataHashFor(this)
-        val hasCurrentMetadata = item.syncMetadataHash == expectedMetadataHash
+        val metadata = item.currentSyncMetadataFor(this)
         return SyncedArticleManifest(
             articleId = articleId,
             sourceDeviceId = sourceDeviceId,
@@ -1994,11 +2016,11 @@ class DefaultRssRepository(
             favoriteChangedAt = favoriteChangedAt,
             watchLaterChangedAt = watchLaterChangedAt,
             deletedAt = deletedAt,
-            bodyHash = if (hasCurrentMetadata) item.syncBodyHash else "",
-            bodyByteCount = if (hasCurrentMetadata) item.syncBodyByteCount else 0L,
-            chunkSize = if (hasCurrentMetadata) item.syncChunkSize else 0,
-            chunkHashes = if (hasCurrentMetadata) item.syncChunkHashesJson.toStringList() else emptyList(),
-            metadataHash = if (hasCurrentMetadata) item.syncMetadataHash else "",
+            bodyHash = metadata?.bodyHash.orEmpty(),
+            bodyByteCount = metadata?.bodyByteCount ?: 0L,
+            chunkSize = metadata?.chunkSize ?: 0,
+            chunkHashes = metadata?.chunkHashes.orEmpty(),
+            metadataHash = metadata?.metadataHash.orEmpty(),
             bodyAvailable = bodyAvailable,
             bodySyncMode = bodySyncModeForSync()
         )
@@ -2728,6 +2750,28 @@ private fun List<String>.toJsonString(): String {
     return JSONArray().also { array ->
         forEach(array::put)
     }.toString()
+}
+
+private fun RssItemEntity.currentSyncMetadataFor(article: SyncedSavedArticle): ArticleBodyMetadata? {
+    val expectedMetadataHash = ArticleSyncBody.metadataHashFor(article)
+    if (syncMetadataHash != expectedMetadataHash) return null
+    val chunkHashes = syncChunkHashesJson.toStringList()
+    val metadata = ArticleBodyMetadata(
+        bodyHash = syncBodyHash,
+        bodyByteCount = syncBodyByteCount,
+        chunkSize = syncChunkSize,
+        chunkHashes = chunkHashes,
+        metadataHash = syncMetadataHash
+    )
+    return metadata.takeIf { it.isCurrentFor(article) }
+}
+
+private fun ArticleBodyMetadata.isCurrentFor(article: SyncedSavedArticle): Boolean {
+    return metadataHash == ArticleSyncBody.metadataHashFor(article) &&
+        bodyHash.isNotBlank() &&
+        bodyByteCount > 0L &&
+        chunkSize > 0 &&
+        chunkHashes.isNotEmpty()
 }
 
 private fun String.toStringList(): List<String> {

@@ -65,14 +65,28 @@ object ArticleSyncBody {
 
     fun chunksForRequest(
         article: SyncedSavedArticle,
-        request: SyncedArticleBodyRequest
+        request: SyncedArticleBodyRequest,
+        cachedMetadata: ArticleBodyMetadata? = article.cachedBodyMetadata
     ): List<SyncedArticleBodyChunk> =
-        payloadForRequest(article, request).chunks
+        payloadForRequest(article, request, cachedMetadata).chunks
 
     fun payloadForRequest(
         article: SyncedSavedArticle,
-        request: SyncedArticleBodyRequest
+        request: SyncedArticleBodyRequest,
+        cachedMetadata: ArticleBodyMetadata? = article.cachedBodyMetadata
     ): ArticleBodyPayload {
+        cachedMetadata
+            ?.takeIf { request.bodyHash.isBlank() || request.bodyHash == it.bodyHash }
+            ?.let { metadata ->
+                runCatching {
+                    ArticleBodyPayload(
+                        metadata = metadata,
+                        chunks = chunksForRequestWithCachedMetadata(article, request, metadata)
+                    )
+                }.getOrNull()
+            }
+            ?.let { return it }
+
         val output = BodyChunkOutputStream(request.chunkIndexes.toSet())
         writeEncodedBody(article.contentHtml, article.contentText, output)
         val metadata = output.metadata(metadataHashFor(article))
@@ -146,6 +160,19 @@ object ArticleSyncBody {
                 writer.append('}')
             }
         }
+    }
+
+    private fun chunksForRequestWithCachedMetadata(
+        article: SyncedSavedArticle,
+        request: SyncedArticleBodyRequest,
+        metadata: ArticleBodyMetadata
+    ): List<SyncedArticleBodyChunk> {
+        val output = CachedBodyChunkOutputStream(
+            metadata = metadata,
+            captureIndexes = request.chunkIndexes.toSet()
+        )
+        writeEncodedBody(article.contentHtml, article.contentText, output)
+        return output.chunks()
     }
 
     private fun writeJsonStringField(writer: Writer, name: String, value: String) {
@@ -287,8 +314,84 @@ object ArticleSyncBody {
             chunkBuffer.reset()
             chunkDigest = MessageDigest.getInstance("SHA-256")
         }
-
-        private fun ByteArray.toHexString(): String =
-            joinToString("") { "%02x".format(it) }
     }
+
+    private class CachedBodyChunkOutputStream(
+        private val metadata: ArticleBodyMetadata,
+        private val captureIndexes: Set<Int>
+    ) : OutputStream() {
+        private var chunkBuffer: ByteArrayOutputStream? = newChunkBuffer(0)
+        private val chunks = mutableListOf<SyncedArticleBodyChunk>()
+        private var chunkIndex = 0
+        private var chunkByteCount = 0
+        private var bodyByteCount = 0L
+        private var finished = false
+
+        override fun write(b: Int) {
+            write(byteArrayOf(b.toByte()), 0, 1)
+        }
+
+        override fun write(b: ByteArray, off: Int, len: Int) {
+            if (len <= 0) return
+            var offset = off
+            var remaining = len
+            while (remaining > 0) {
+                val count = minOf(remaining, CHUNK_SIZE_BYTES - chunkByteCount)
+                chunkBuffer?.write(b, offset, count)
+                chunkByteCount += count
+                bodyByteCount += count
+                offset += count
+                remaining -= count
+                if (chunkByteCount == CHUNK_SIZE_BYTES) {
+                    finishChunk()
+                }
+            }
+        }
+
+        fun chunks(): List<SyncedArticleBodyChunk> {
+            finish()
+            return chunks.toList()
+        }
+
+        private fun finish() {
+            if (finished) return
+            if (chunkByteCount > 0) {
+                finishChunk()
+            }
+            require(bodyByteCount == metadata.bodyByteCount) {
+                "同步正文缓存大小不匹配：expected=${metadata.bodyByteCount} actual=$bodyByteCount"
+            }
+            require(chunkIndex == metadata.chunkHashes.size) {
+                "同步正文缓存分块数不匹配：expected=${metadata.chunkHashes.size} actual=$chunkIndex"
+            }
+            finished = true
+        }
+
+        private fun finishChunk() {
+            val bytes = chunkBuffer?.toByteArray()
+            if (bytes != null) {
+                val hash = metadata.chunkHashes.getOrNull(chunkIndex)
+                    ?: error("同步正文缓存缺少分块哈希：$chunkIndex")
+                chunks += SyncedArticleBodyChunk(
+                    index = chunkIndex,
+                    hash = hash,
+                    bytes = bytes
+                )
+            }
+            chunkIndex += 1
+            chunkByteCount = 0
+            chunkBuffer = newChunkBuffer(chunkIndex)
+        }
+
+        private fun newChunkBuffer(index: Int): ByteArrayOutputStream? {
+            return if (index in captureIndexes) {
+                ByteArrayOutputStream(CHUNK_SIZE_BYTES)
+            } else {
+                null
+            }
+        }
+    }
+
+    private fun ByteArray.toHexString(): String =
+        joinToString("") { "%02x".format(it) }
 }

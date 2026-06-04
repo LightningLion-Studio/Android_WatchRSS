@@ -104,8 +104,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
@@ -281,15 +284,100 @@ internal fun DetailContent(
         }
     }
 
+    val link = item?.link?.trim().orEmpty()
+    val isImportedText = ImportedContentIds.isImportedTextItemUrl(link)
+    val canToggleOriginalContent = link.isNotEmpty() && !isImportedText
+    val baseLink = link.takeIf { it.isNotBlank() }
+    val bodyFontSize = remember(readingFontSizeSp, density, context) {
+        adjustedTextSizeSp(
+            context = context,
+            density = density,
+            baseDimenRes = R.dimen.detail_body_text_size,
+            currentFontSizeSp = readingFontSizeSp
+        )
+    }
+    val titleBlockFontSize = remember(readingFontSizeSp, density, context) {
+        adjustedTextSizeSp(
+            context = context,
+            density = density,
+            baseDimenRes = R.dimen.detail_title_text_size,
+            currentFontSizeSp = readingFontSizeSp
+        )
+    }
+    val subtitleBlockFontSize = remember(readingFontSizeSp, density, context) {
+        adjustedTextSizeSp(
+            context = context,
+            density = density,
+            baseDimenRes = R.dimen.detail_subtitle_text_size,
+            currentFontSizeSp = readingFontSizeSp
+        )
+    }
+    val showAiBanner = llmFeatureEnabled && llmAutoSummarize &&
+        (llmSummaryState.status == SummaryStatus.WaitingForContent ||
+            llmSummaryState.status == SummaryStatus.Generating ||
+            llmSummaryState.text.isNotBlank() ||
+            llmSummaryState.status is SummaryStatus.Error)
+    val showAiButton = llmFeatureEnabled && !llmAutoSummarize
+    val showReadAloudAction = BuildConfig.DEBUG && item != null
+    val importedTextFirstItemIndex = remember(
+        canToggleOriginalContent,
+        showReadAloudAction,
+        hasOfflineFailures,
+        isRetryingOfflineMedia,
+        showAiBanner,
+        showOriginalLoadingNotice
+    ) {
+        DETAIL_CONTENT_START_ITEM_INDEX +
+            (if (canToggleOriginalContent) 1 else 0) +
+            (if (showReadAloudAction) 1 else 0) +
+            (if (hasOfflineFailures || isRetryingOfflineMedia) 1 else 0) +
+            (if (showAiBanner) 1 else 0) +
+            (if (showOriginalLoadingNotice) 1 else 0) +
+            DETAIL_LOADING_SKELETON_ITEM_COUNT
+    }
+    val importedTextChunkCount = importedTextReader?.chunkCount ?: 0
+
+    fun currentReadingProgress(): Float? {
+        if (isImportedText && (importedTextReader == null || importedTextChunkCount <= 0)) {
+            return null
+        }
+        return if (isImportedText) {
+            calculateImportedTextReadingProgress(
+                listState = listState,
+                firstChunkItemIndex = importedTextFirstItemIndex,
+                chunkCount = importedTextChunkCount
+            )
+        } else {
+            calculateReadingProgress(listState)
+        }
+    }
+
+    fun saveCurrentReadingProgress(force: Boolean) {
+        if (!hasRestoredPositionState.value) return
+        val progress = currentReadingProgress() ?: return
+        maybeSaveReadingProgress(
+            readingProgress = progress,
+            force = force,
+            lastSavedProgress = { lastSavedProgress },
+            lastProgressSavedAt = { lastProgressSavedAt },
+            updateLastSavedProgress = { lastSavedProgress = it },
+            updateLastProgressSavedAt = { lastProgressSavedAt = it },
+            onSave = onSaveReadingProgressState.value
+        )
+    }
+
     LaunchedEffect(readingFontSizeSp, readingThemeDark) {
         if (item == null || !hasRestoredPosition) return@LaunchedEffect
-        pendingRestoreProgress = calculateReadingProgress(listState)
+        pendingRestoreProgress = currentReadingProgress() ?: return@LaunchedEffect
         hasRestoredPosition = false
     }
 
-    LaunchedEffect(pendingRestoreProgress, listState.layoutInfo.totalItemsCount) {
+    LaunchedEffect(pendingRestoreProgress, listState.layoutInfo.totalItemsCount, importedTextFirstItemIndex, importedTextChunkCount) {
         val progress = pendingRestoreProgress ?: return@LaunchedEffect
         val totalItems = listState.layoutInfo.totalItemsCount
+        if (isImportedText && (importedTextReader == null || importedTextChunkCount <= 0)) {
+            return@LaunchedEffect
+        }
         if (totalItems == 0) {
             if (progress <= 0f) {
                 pendingRestoreProgress = null
@@ -297,10 +385,40 @@ internal fun DetailContent(
             }
             return@LaunchedEffect
         }
-        val target = ((totalItems - 1) * progress)
-            .roundToInt()
-            .coerceIn(0, totalItems - 1)
-        listState.scrollToItem(target)
+        val target = if (importedTextReader != null && importedTextChunkCount > 0) {
+            val restoreTarget = importedTextRestoreTarget(
+                progress = progress,
+                firstChunkItemIndex = importedTextFirstItemIndex,
+                chunkCount = importedTextChunkCount
+            )
+            val targetIndex = restoreTarget.itemIndex.coerceIn(0, totalItems - 1)
+            listState.scrollToItem(targetIndex)
+            if (restoreTarget.itemScrollOffsetProgress > 0f) {
+                val measuredSize = withTimeoutOrNull(IMPORTED_TEXT_RESTORE_OFFSET_TIMEOUT_MS) {
+                    snapshotFlow {
+                        listState.layoutInfo.visibleItemsInfo
+                            .firstOrNull { it.index == targetIndex }
+                            ?.size ?: 0
+                    }
+                        .filter { it > IMPORTED_TEXT_RESTORE_MIN_ITEM_SIZE_PX }
+                        .first()
+                }
+                if (measuredSize != null) {
+                    val offsetPx = (measuredSize * restoreTarget.itemScrollOffsetProgress)
+                        .roundToInt()
+                        .coerceAtLeast(0)
+                    listState.scrollToItem(targetIndex, offsetPx)
+                }
+            }
+            null
+        } else {
+            ((totalItems - 1) * progress)
+                .roundToInt()
+                .coerceIn(0, totalItems - 1)
+        }
+        if (target != null) {
+            listState.scrollToItem(target)
+        }
         pendingRestoreProgress = null
         hasRestoredPosition = true
     }
@@ -310,15 +428,7 @@ internal fun DetailContent(
             .distinctUntilChanged()
             .collectLatest { isScrolling ->
                 if (isScrolling || !hasRestoredPositionState.value) return@collectLatest
-                maybeSaveReadingProgress(
-                    readingProgress = calculateReadingProgress(listState),
-                    force = false,
-                    lastSavedProgress = { lastSavedProgress },
-                    lastProgressSavedAt = { lastProgressSavedAt },
-                    updateLastSavedProgress = { lastSavedProgress = it },
-                    updateLastProgressSavedAt = { lastProgressSavedAt = it },
-                    onSave = onSaveReadingProgressState.value
-                )
+                saveCurrentReadingProgress(force = false)
             }
     }
 
@@ -326,15 +436,7 @@ internal fun DetailContent(
         val lifecycle = lifecycleOwner.lifecycle
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_PAUSE) {
-                maybeSaveReadingProgress(
-                    readingProgress = calculateReadingProgress(listState),
-                    force = true,
-                    lastSavedProgress = { lastSavedProgress },
-                    lastProgressSavedAt = { lastProgressSavedAt },
-                    updateLastSavedProgress = { lastSavedProgress = it },
-                    updateLastProgressSavedAt = { lastProgressSavedAt = it },
-                    onSave = onSaveReadingProgressState.value
-                )
+                saveCurrentReadingProgress(force = true)
             }
         }
         lifecycle.addObserver(observer)
@@ -344,16 +446,7 @@ internal fun DetailContent(
     }
 
     BackHandler {
-        val progress = calculateReadingProgress(listState)
-        maybeSaveReadingProgress(
-            readingProgress = progress,
-            force = true,
-            lastSavedProgress = { lastSavedProgress },
-            lastProgressSavedAt = { lastProgressSavedAt },
-            updateLastSavedProgress = { lastSavedProgress = it },
-            updateLastProgressSavedAt = { lastProgressSavedAt = it },
-            onSave = onSaveReadingProgressState.value
-        )
+        saveCurrentReadingProgress(force = true)
         val thresholdPx = with(density) { 8.dp.toPx() }
         val reachedBottom = isReachedBottom(listState, thresholdPx)
         onBackState.value(item?.id ?: 0L, reachedBottom, isWatchLaterState.value)
@@ -398,34 +491,6 @@ internal fun DetailContent(
             }
         }
 
-        val bodyFontSize = remember(readingFontSizeSp, density, context) {
-            adjustedTextSizeSp(
-                context = context,
-                density = density,
-                baseDimenRes = R.dimen.detail_body_text_size,
-                currentFontSizeSp = readingFontSizeSp
-            )
-        }
-        val titleBlockFontSize = remember(readingFontSizeSp, density, context) {
-            adjustedTextSizeSp(
-                context = context,
-                density = density,
-                baseDimenRes = R.dimen.detail_title_text_size,
-                currentFontSizeSp = readingFontSizeSp
-            )
-        }
-        val subtitleBlockFontSize = remember(readingFontSizeSp, density, context) {
-            adjustedTextSizeSp(
-                context = context,
-                density = density,
-                baseDimenRes = R.dimen.detail_subtitle_text_size,
-                currentFontSizeSp = readingFontSizeSp
-            )
-        }
-        val link = item?.link?.trim().orEmpty()
-        val isImportedText = ImportedContentIds.isImportedTextItemUrl(link)
-        val canToggleOriginalContent = link.isNotEmpty() && !isImportedText
-        val baseLink = link.takeIf { it.isNotBlank() }
         val baseItemCount = remember(canToggleOriginalContent, hasOfflineFailures, isRetryingOfflineMedia) {
             4 + (if (canToggleOriginalContent) 1 else 0) +
                 (if (hasOfflineFailures || isRetryingOfflineMedia) 1 else 0)
@@ -538,14 +603,6 @@ internal fun DetailContent(
         }
 
         val listSemanticsModifier = Modifier.clearAndSetSemantics { }
-        val showAiBanner = llmFeatureEnabled && llmAutoSummarize &&
-            (llmSummaryState.status == SummaryStatus.WaitingForContent ||
-                llmSummaryState.status == SummaryStatus.Generating ||
-                llmSummaryState.text.isNotBlank() ||
-                llmSummaryState.status is SummaryStatus.Error)
-        val showAiButton = llmFeatureEnabled && !llmAutoSummarize
-        val showReadAloudAction = BuildConfig.DEBUG && item != null
-
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -1159,3 +1216,8 @@ private fun Modifier.detailSkeletonPlaceholder(
             }
         }
 }
+
+private const val DETAIL_CONTENT_START_ITEM_INDEX = 4
+private const val DETAIL_LOADING_SKELETON_ITEM_COUNT = 1
+private const val IMPORTED_TEXT_RESTORE_MIN_ITEM_SIZE_PX = 8
+private const val IMPORTED_TEXT_RESTORE_OFFSET_TIMEOUT_MS = 700L

@@ -28,7 +28,8 @@ data class SyncedSavedArticle(
     val watchLaterChangedAt: Long,
     val watchLaterSortOrder: Long,
     val deleted: Boolean,
-    val deletedAt: Long
+    val deletedAt: Long,
+    val cachedBodyMetadata: ArticleBodyMetadata? = null
 )
 
 data class SyncedSavedArticleMergeStats(

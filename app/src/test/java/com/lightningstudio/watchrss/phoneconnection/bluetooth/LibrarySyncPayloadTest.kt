@@ -135,6 +135,18 @@ class LibrarySyncPayloadTest {
     }
 
     @Test
+    fun protocolFeatureChecks_acceptVersion8Peers() {
+        val payload = JSONObject().apply {
+            put("version", 8)
+            put("supportsChangeSequences", true)
+            put("supportsMetadataOnlyArticles", true)
+        }
+
+        assertTrue(LibrarySyncPayload.supportsChangeSequences(payload))
+        assertTrue(LibrarySyncPayload.supportsMetadataOnlyArticles(payload))
+    }
+
+    @Test
     fun parseAck_treatsLegacySuccessAckAsApplied() {
         val ack = BluetoothSyncProtocol.parseAck(
             JSONObject().apply {
@@ -419,10 +431,9 @@ class LibrarySyncPayloadTest {
     }
 
     @Test
-    fun chunkedResponse_usesMetadataOnlyForOversizedFullArticle() {
-        val remoteManifest = remoteManifestWithChunks("oversized-full", listOf("a", "b")).copy(
+    fun chunkedResponse_usesMetadataOnlyForFullArticle() {
+        val remoteManifest = remoteManifestWithChunks("full-article", listOf("a", "b")).copy(
             bodySyncMode = ARTICLE_BODY_SYNC_MODE_FULL,
-            bodyByteCount = LibrarySyncPayload.MAX_INLINE_BODY_SYNC_BYTES + 1L,
             updatedAt = 30L,
             metadataHash = "remote-metadata"
         )
@@ -444,16 +455,15 @@ class LibrarySyncPayloadTest {
     }
 
     @Test
-    fun chunkedResponse_requestsBodyForSmallFullArticle() {
+    fun chunkedResponse_requestsBodyForFullArticleWhenPeerDoesNotSupportMetadataOnly() {
         val remoteManifest = remoteManifestWithChunks("small-full", listOf("a", "b")).copy(
-            bodySyncMode = ARTICLE_BODY_SYNC_MODE_FULL,
-            bodyByteCount = LibrarySyncPayload.MAX_INLINE_BODY_SYNC_BYTES
+            bodySyncMode = ARTICLE_BODY_SYNC_MODE_FULL
         )
 
         val requests = LibrarySyncPayload.buildBodyRequestsForRemoteArticles(
             localManifest = emptyList(),
             remoteManifest = listOf(remoteManifest),
-            supportsMetadataOnlyArticles = true
+            supportsMetadataOnlyArticles = false
         )
 
         assertFalse(requests.single().metadataOnly)
@@ -650,6 +660,39 @@ class LibrarySyncPayloadTest {
 
         assertEquals(emptyList<Int>(), parsed.chunks.map { it.index })
         assertTrue(parsed.metadataOnly)
+    }
+
+    @Test
+    fun chunkedResponse_respondsMetadataOnlyForSavedArticleWhenPeerSupportsIt() {
+        val article = syncedArticle(
+            articleId = "saved-article",
+            contentHash = "hash",
+            updatedAt = 20L,
+            favoriteChangedAt = 30L
+        ).copy(contentText = "正文".repeat(4096))
+        val metadata = ArticleSyncBody.metadataFor(article)
+        val frames = LibrarySyncPayload.buildChunkedResponseFrames(
+            deviceId = "watch",
+            articles = listOf(article),
+            articleRequests = listOf(
+                SyncedArticleBodyRequest(
+                    articleId = article.articleId,
+                    bodyHash = metadata.bodyHash,
+                    chunkIndexes = metadata.chunkHashes.indices.toList(),
+                    metadataOnly = false
+                )
+            ),
+            applied = 0,
+            useBatches = true,
+            allowMetadataOnlyArticles = true
+        )
+
+        val parsed = LibrarySyncPayload.parseChunkedArticles(
+            LibrarySyncPayload.combineArticlePayloads(frames)
+        ).single()
+
+        assertTrue(parsed.metadataOnly)
+        assertEquals(emptyList<Int>(), parsed.chunks.map { it.index })
     }
 
     @Test
