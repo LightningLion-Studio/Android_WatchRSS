@@ -1556,7 +1556,8 @@ class DefaultRssRepository(
             watchLaterChangedAt = watchLaterChangedAt,
             watchLaterSortOrder = watchLaterSortOrder,
             deleted = false,
-            deletedAt = 0L
+            deletedAt = 0L,
+            readingProgress = fullItem.readingProgress
         )
         return article.copy(cachedBodyMetadata = fullItem.currentSyncMetadataFor(article))
     }
@@ -1600,7 +1601,8 @@ class DefaultRssRepository(
             watchLaterChangedAt = watchLaterChangedAt,
             watchLaterSortOrder = watchLaterSortOrder,
             deleted = false,
-            deletedAt = 0L
+            deletedAt = 0L,
+            readingProgress = item.readingProgress
         )
         return article.toManifestFromItem(
             item = item,
@@ -1748,7 +1750,8 @@ class DefaultRssRepository(
             watchLaterChangedAt = 0L,
             watchLaterSortOrder = 0L,
             deleted = false,
-            deletedAt = 0L
+            deletedAt = 0L,
+            readingProgress = fullItem.readingProgress
         )
         return article.copy(cachedBodyMetadata = fullItem.currentSyncMetadataFor(article))
     }
@@ -1787,7 +1790,8 @@ class DefaultRssRepository(
             watchLaterChangedAt = 0L,
             watchLaterSortOrder = 0L,
             deleted = false,
-            deletedAt = 0L
+            deletedAt = 0L,
+            readingProgress = readingProgress
         )
         return article.toManifestFromItem(
             item = this,
@@ -1895,6 +1899,7 @@ class DefaultRssRepository(
         val title = article.title.ifBlank { article.url }
         val fetchedAt = syncedArticleFetchedAt(article, fallbackNow = System.currentTimeMillis())
         val syncMetadata = ArticleSyncBody.metadataFor(article)
+        val incomingReadingProgress = article.readingProgress.coerceIn(0f, 1f)
         val entity = RssItemEntity(
             channelId = channelId,
             title = title,
@@ -1911,7 +1916,7 @@ class DefaultRssRepository(
             previewImageUrl = article.imageUrl,
             isRead = false,
             isLiked = false,
-            readingProgress = 0f,
+            readingProgress = incomingReadingProgress,
             dedupKey = article.articleId,
             fetchedAt = fetchedAt,
             contentSizeBytes = estimateSyncedContentSize(title, article.excerpt, content, article.url, article.imageUrl),
@@ -1944,7 +1949,8 @@ class DefaultRssRepository(
             syncBodyByteCount = entity.syncBodyByteCount,
             syncChunkSize = entity.syncChunkSize,
             syncChunkHashesJson = entity.syncChunkHashesJson,
-            syncMetadataHash = entity.syncMetadataHash
+            syncMetadataHash = entity.syncMetadataHash,
+            readingProgress = maxOf(existing.readingProgress, incomingReadingProgress)
         )
         return existing.id
     }
@@ -1998,7 +2004,8 @@ class DefaultRssRepository(
             chunkHashes = metadata.chunkHashes,
             metadataHash = metadata.metadataHash,
             bodyAvailable = true,
-            bodySyncMode = bodySyncModeForSync()
+            bodySyncMode = bodySyncModeForSync(),
+            readingProgress = readingProgress
         )
     }
 
@@ -2022,7 +2029,8 @@ class DefaultRssRepository(
             chunkHashes = metadata?.chunkHashes.orEmpty(),
             metadataHash = metadata?.metadataHash.orEmpty(),
             bodyAvailable = bodyAvailable,
-            bodySyncMode = bodySyncModeForSync()
+            bodySyncMode = bodySyncModeForSync(),
+            readingProgress = readingProgress
         )
     }
 

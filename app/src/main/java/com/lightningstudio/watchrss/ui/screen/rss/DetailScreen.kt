@@ -273,14 +273,19 @@ internal fun DetailContent(
     var lastSavedProgress by remember { mutableStateOf(-1f) }
     var lastProgressSavedAt by remember { mutableStateOf(0L) }
     var lastImportedTextAnchoredProgress by remember { mutableStateOf<Float?>(null) }
+    var lastContentTextAnchoredProgress by remember { mutableStateOf<Float?>(null) }
     val savedOnBackState = remember { mutableStateOf(false) }
     var backInProgress by remember { mutableStateOf(false) }
     var pendingImportedTextOffsetRestore by remember { mutableStateOf<ImportedTextByteRestoreTarget?>(null) }
+    var pendingContentTextOffsetRestore by remember { mutableStateOf<ContentTextRestoreTarget?>(null) }
     val importedTextChunkLayouts = remember(item?.id, importedTextReader?.marker) {
         mutableStateMapOf<Int, TextLayoutResult>()
     }
     val importedTextChunkTexts = remember(item?.id, importedTextReader?.marker) {
         mutableStateMapOf<Int, String>()
+    }
+    val contentTextBlockLayouts = remember(item?.id, contentBlocks) {
+        mutableStateMapOf<Int, TextLayoutResult>()
     }
 
     val onSaveReadingProgressState = rememberUpdatedState(onSaveReadingProgress)
@@ -297,7 +302,9 @@ internal fun DetailContent(
             pendingRestoreProgress = item?.readingProgress
             hasRestoredPosition = false
             pendingImportedTextOffsetRestore = null
+            pendingContentTextOffsetRestore = null
             lastImportedTextAnchoredProgress = null
+            lastContentTextAnchoredProgress = null
             savedOnBackState.value = false
             backInProgress = false
             lastSavedProgress = -1f
@@ -357,6 +364,8 @@ internal fun DetailContent(
             DETAIL_LOADING_SKELETON_ITEM_COUNT
     }
     val importedTextChunkCount = importedTextReader?.chunkCount ?: 0
+    val contentBlockFirstItemIndex = importedTextFirstItemIndex +
+        if (item != null && importedTextReader != null) importedTextChunkCount else 0
 
     fun freshImportedTextReadingProgress(): Float? {
         if (!isImportedText || importedTextReader == null || importedTextChunkCount <= 0) {
@@ -372,9 +381,28 @@ internal fun DetailContent(
         )
     }
 
+    fun freshContentTextReadingProgress(): Float? {
+        if (isImportedText || contentBlocks.isEmpty()) {
+            return null
+        }
+        return calculateContentTextReadingProgressFromLayout(
+            listState = listState,
+            firstContentItemIndex = contentBlockFirstItemIndex,
+            contentBlocks = contentBlocks,
+            textLayouts = contentTextBlockLayouts
+        )
+    }
+
     fun rememberImportedTextProgress(progress: Float?): Float? {
         if (progress != null) {
             lastImportedTextAnchoredProgress = progress
+        }
+        return progress
+    }
+
+    fun rememberContentTextProgress(progress: Float?): Float? {
+        if (progress != null) {
+            lastContentTextAnchoredProgress = progress
         }
         return progress
     }
@@ -389,6 +417,16 @@ internal fun DetailContent(
         return rememberImportedTextProgress(progress)
     }
 
+    suspend fun awaitContentTextReadingProgress(): Float? {
+        rememberContentTextProgress(freshContentTextReadingProgress())?.let { return it }
+        val progress = withTimeoutOrNull(CONTENT_TEXT_SAVE_LAYOUT_TIMEOUT_MS) {
+            snapshotFlow { freshContentTextReadingProgress() }
+                .filterNotNull()
+                .first()
+        }
+        return rememberContentTextProgress(progress)
+    }
+
     fun currentReadingProgress(allowCachedImportedTextProgress: Boolean = true): Float? {
         if (isImportedText && (importedTextReader == null || importedTextChunkCount <= 0)) {
             return null
@@ -397,17 +435,19 @@ internal fun DetailContent(
             rememberImportedTextProgress(freshImportedTextReadingProgress())
                 ?: lastImportedTextAnchoredProgress.takeIf { allowCachedImportedTextProgress }
         } else {
-            calculateReadingProgress(listState)
+            rememberContentTextProgress(freshContentTextReadingProgress())
+                ?: lastContentTextAnchoredProgress
+                ?: calculateReadingProgress(listState)
         }
     }
 
     suspend fun saveCurrentReadingProgressAfterLayout(force: Boolean): Boolean {
         val allowImportedTextBeforeRestore = isImportedText && force
         if (!hasRestoredPositionState.value && !allowImportedTextBeforeRestore) return false
-        val progress = if (isImportedText) {
-            awaitImportedTextReadingProgress()
-        } else {
-            currentReadingProgress()
+        val progress = when {
+            isImportedText -> awaitImportedTextReadingProgress()
+            force -> awaitContentTextReadingProgress() ?: currentReadingProgress()
+            else -> currentReadingProgress()
         } ?: return false
         maybeSaveReadingProgress(
             readingProgress = progress,
@@ -455,10 +495,24 @@ internal fun DetailContent(
         hasRestoredPosition = false
     }
 
-    LaunchedEffect(pendingRestoreProgress, listState.layoutInfo.totalItemsCount, importedTextFirstItemIndex, importedTextChunkCount) {
+    LaunchedEffect(
+        pendingRestoreProgress,
+        listState.layoutInfo.totalItemsCount,
+        importedTextFirstItemIndex,
+        importedTextChunkCount,
+        contentBlockFirstItemIndex,
+        contentBlocks
+    ) {
         val progress = pendingRestoreProgress ?: return@LaunchedEffect
         val totalItems = listState.layoutInfo.totalItemsCount
         if (isImportedText && (importedTextReader == null || importedTextChunkCount <= 0)) {
+            return@LaunchedEffect
+        }
+        if (!isImportedText && item != null && contentBlocks.isEmpty()) {
+            if (progress <= 0f) {
+                pendingRestoreProgress = null
+                hasRestoredPosition = true
+            }
             return@LaunchedEffect
         }
         if (totalItems == 0) {
@@ -511,6 +565,17 @@ internal fun DetailContent(
             pendingRestoreProgress = null
             return@LaunchedEffect
         }
+        contentTextRestoreTarget(
+            progress = progress,
+            firstContentItemIndex = contentBlockFirstItemIndex,
+            contentBlocks = contentBlocks
+        )?.let { restoreTarget ->
+            val targetIndex = restoreTarget.itemIndex.coerceIn(0, totalItems - 1)
+            listState.scrollToItem(targetIndex)
+            pendingContentTextOffsetRestore = restoreTarget.copy(itemIndex = targetIndex)
+            pendingRestoreProgress = null
+            return@LaunchedEffect
+        }
         val target = ((totalItems - 1) * progress)
             .roundToInt()
             .coerceIn(0, totalItems - 1)
@@ -553,6 +618,35 @@ internal fun DetailContent(
             listState.scrollToItem(restoreTarget.itemIndex, offsetPx)
         }
         pendingImportedTextOffsetRestore = null
+        hasRestoredPosition = true
+    }
+
+    LaunchedEffect(pendingContentTextOffsetRestore) {
+        val restoreTarget = pendingContentTextOffsetRestore ?: return@LaunchedEffect
+        val offsetPx = withTimeoutOrNull(CONTENT_TEXT_RESTORE_OFFSET_TIMEOUT_MS) {
+            snapshotFlow {
+                val block = contentBlocks.getOrNull(restoreTarget.blockIndex) as? ContentBlock.Text
+                val layout = contentTextBlockLayouts[restoreTarget.blockIndex]
+                val itemInfo = listState.layoutInfo.visibleItemsInfo
+                    .firstOrNull { it.index == restoreTarget.itemIndex }
+                if (block == null || layout == null || itemInfo == null) {
+                    null
+                } else {
+                    contentTextRestoreVisualOffsetPx(
+                        restoreTarget = restoreTarget,
+                        text = block.text,
+                        layout = layout,
+                        itemInfo = itemInfo
+                    )
+                }
+            }
+                .filterNotNull()
+                .first()
+        }
+        if (offsetPx != null) {
+            listState.scrollToItem(restoreTarget.itemIndex, offsetPx)
+        }
+        pendingContentTextOffsetRestore = null
         hasRestoredPosition = true
     }
 
@@ -950,7 +1044,8 @@ internal fun DetailContent(
                                 isScrolling = isScrolling,
                                 // “少数派”返回的 RSS 就是这样的，只有摘要，在摘要结尾说“查看全文”。
                                 inlineActionText = "查看全文",
-                                onInlineActionClick = onToggleOriginalContent
+                                onInlineActionClick = onToggleOriginalContent,
+                                onTextLayout = { contentTextBlockLayouts[index] = it }
                             )
                         }
                         is ContentBlock.Image -> {
@@ -1393,6 +1488,19 @@ private data class VisibleImportedTextChunkWithLayout(
     val layout: TextLayoutResult
 )
 
+private data class VisibleContentTextBlockWithLayout(
+    val itemInfo: LazyListItemInfo,
+    val blockIndex: Int,
+    val text: String,
+    val layout: TextLayoutResult
+)
+
+private data class ContentTextRestoreTarget(
+    val itemIndex: Int,
+    val blockIndex: Int,
+    val byteOffsetInBlock: Int
+)
+
 private fun visibleImportedTextFirstItemIndex(
     layoutInfo: androidx.compose.foundation.lazy.LazyListLayoutInfo,
     marker: String
@@ -1463,6 +1571,94 @@ private fun calculateImportedTextByteReadingProgressFromLayout(
         .coerceIn(0f, 1f)
 }
 
+private fun calculateContentTextReadingProgressFromLayout(
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    firstContentItemIndex: Int,
+    contentBlocks: List<ContentBlock>,
+    textLayouts: Map<Int, TextLayoutResult>
+): Float? {
+    val totalTextBytes = contentBlocks.sumOf { block ->
+        (block as? ContentBlock.Text)?.text?.let(::utf8ByteCount) ?: 0
+    }
+    if (totalTextBytes <= 0) return null
+    val layoutInfo = listState.layoutInfo
+    if (layoutInfo.visibleItemsInfo.isNotEmpty() && !listState.canScrollForward) return 1f
+    val visibleBlock = layoutInfo.visibleItemsInfo.firstNotNullOfOrNull { itemInfo ->
+        val blockIndex = itemInfo.index - firstContentItemIndex
+        val block = contentBlocks.getOrNull(blockIndex) as? ContentBlock.Text
+            ?: return@firstNotNullOfOrNull null
+        val layout = textLayouts[blockIndex] ?: return@firstNotNullOfOrNull null
+        if (layout.lineCount <= 0) return@firstNotNullOfOrNull null
+        VisibleContentTextBlockWithLayout(
+            itemInfo = itemInfo,
+            blockIndex = blockIndex,
+            text = block.text,
+            layout = layout
+        )
+    } ?: return null
+
+    val bytesBeforeBlock = contentBlocks.asSequence()
+        .take(visibleBlock.blockIndex)
+        .sumOf { block -> (block as? ContentBlock.Text)?.text?.let(::utf8ByteCount) ?: 0 }
+    val scrolledInItemPx = (layoutInfo.viewportStartOffset - visibleBlock.itemInfo.offset)
+        .coerceIn(0, visibleBlock.itemInfo.size.coerceAtLeast(0))
+    val textTopPaddingPx = (visibleBlock.itemInfo.size - visibleBlock.layout.size.height)
+        .coerceAtLeast(0)
+    val textY = (scrolledInItemPx - textTopPaddingPx)
+        .coerceAtLeast(0)
+        .toFloat()
+    val lineIndex = visibleBlock.layout
+        .getLineForVerticalPosition(textY)
+        .coerceIn(0, visibleBlock.layout.lineCount - 1)
+    val charOffset = visibleBlock.layout
+        .getLineStart(lineIndex)
+        .coerceIn(0, visibleBlock.text.length)
+    val byteOffsetInBlock = utf8ByteCountBeforeCharOffset(
+        text = visibleBlock.text,
+        charOffset = charOffset
+    )
+    val absoluteByte = (bytesBeforeBlock + byteOffsetInBlock)
+        .coerceIn(0, totalTextBytes)
+    return (absoluteByte.toDouble() / totalTextBytes.toDouble())
+        .toFloat()
+        .coerceIn(0f, 1f)
+}
+
+private fun contentTextRestoreTarget(
+    progress: Float,
+    firstContentItemIndex: Int,
+    contentBlocks: List<ContentBlock>
+): ContentTextRestoreTarget? {
+    val textByteCounts = contentBlocks.map { block ->
+        (block as? ContentBlock.Text)?.text?.let(::utf8ByteCount) ?: 0
+    }
+    val totalTextBytes = textByteCounts.sum()
+    if (totalTextBytes <= 0) return null
+    val targetByte = (totalTextBytes.toDouble() * progress.coerceIn(0f, 1f).toDouble())
+        .roundToInt()
+        .coerceIn(0, (totalTextBytes - 1).coerceAtLeast(0))
+    var consumed = 0
+    textByteCounts.forEachIndexed { index, byteCount ->
+        if (byteCount <= 0) return@forEachIndexed
+        val next = consumed + byteCount
+        if (targetByte < next) {
+            return ContentTextRestoreTarget(
+                itemIndex = firstContentItemIndex + index,
+                blockIndex = index,
+                byteOffsetInBlock = (targetByte - consumed).coerceAtLeast(0)
+            )
+        }
+        consumed = next
+    }
+    val lastTextIndex = textByteCounts.indexOfLast { it > 0 }
+    if (lastTextIndex < 0) return null
+    return ContentTextRestoreTarget(
+        itemIndex = firstContentItemIndex + lastTextIndex,
+        blockIndex = lastTextIndex,
+        byteOffsetInBlock = (textByteCounts[lastTextIndex] - 1).coerceAtLeast(0)
+    )
+}
+
 private fun importedTextRestoreVisualOffsetPx(
     restoreTarget: ImportedTextByteRestoreTarget,
     text: String,
@@ -1482,6 +1678,31 @@ private fun importedTextRestoreVisualOffsetPx(
     return (textTopPaddingPx + layout.getLineTop(lineIndex))
         .roundToInt()
         .coerceAtLeast(0)
+}
+
+private fun contentTextRestoreVisualOffsetPx(
+    restoreTarget: ContentTextRestoreTarget,
+    text: String,
+    layout: TextLayoutResult,
+    itemInfo: LazyListItemInfo
+): Int {
+    if (layout.lineCount <= 0) return 0
+    val charOffset = utf8CharOffsetForByteOffset(
+        text = text,
+        byteOffset = restoreTarget.byteOffsetInBlock
+    ).coerceIn(0, text.length)
+    val lineIndex = layout
+        .getLineForOffset(charOffset)
+        .coerceIn(0, layout.lineCount - 1)
+    val textTopPaddingPx = (itemInfo.size - layout.size.height)
+        .coerceAtLeast(0)
+    return (textTopPaddingPx + layout.getLineTop(lineIndex))
+        .roundToInt()
+        .coerceAtLeast(0)
+}
+
+private fun utf8ByteCount(text: String): Int {
+    return utf8ByteCountBeforeCharOffset(text, text.length)
 }
 
 private fun utf8ByteCountBeforeCharOffset(text: String, charOffset: Int): Int {
@@ -1525,5 +1746,7 @@ private const val IMPORTED_TEXT_RESTORE_OFFSET_TIMEOUT_MS = 3_000L
 private const val IMPORTED_TEXT_SAVE_LAYOUT_TIMEOUT_MS = 800L
 private const val IMPORTED_TEXT_SCROLL_SAVE_SAMPLE_MS = 500L
 private const val IMPORTED_TEXT_FIRST_INDEX_TIMEOUT_MS = 1_500L
+private const val CONTENT_TEXT_RESTORE_OFFSET_TIMEOUT_MS = 3_000L
+private const val CONTENT_TEXT_SAVE_LAYOUT_TIMEOUT_MS = 800L
 private const val IMPORTED_TEXT_PROGRESS_LOG_TAG = "ImportedTextProgress"
 private const val IMPORTED_TEXT_KEY_PREFIX = "importedText:"

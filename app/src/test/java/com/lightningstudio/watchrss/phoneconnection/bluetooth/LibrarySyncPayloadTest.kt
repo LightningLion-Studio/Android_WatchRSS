@@ -42,7 +42,8 @@ class LibrarySyncPayloadTest {
             watchLaterChangedAt = 3L,
             watchLaterSortOrder = 3L,
             deleted = false,
-            deletedAt = 0L
+            deletedAt = 0L,
+            readingProgress = 0.42f
         )
 
         val source = SyncedRssSource(
@@ -77,6 +78,7 @@ class LibrarySyncPayloadTest {
         assertEquals(source.title, parsedSource.title)
         assertEquals(source.isPinned, parsedSource.isPinned)
         assertTrue(parsed.watchLaterSaved)
+        assertEquals(article.readingProgress, parsed.readingProgress, 0.0001f)
         assertEquals(1, response.getJSONObject("stats").getInt("applied"))
         assertEquals(1, response.getJSONObject("stats").getInt("sourcesApplied"))
         assertEquals("complete", response.getString("phase"))
@@ -88,7 +90,8 @@ class LibrarySyncPayloadTest {
             articleId = "article-1",
             contentHash = "hash",
             updatedAt = 20L,
-            favoriteChangedAt = 30L
+            favoriteChangedAt = 30L,
+            readingProgress = 0.37f
         )
         val source = SyncedRssSource(
             url = "https://example.com/feed.xml",
@@ -125,6 +128,7 @@ class LibrarySyncPayloadTest {
         assertEquals(article.articleId, manifest.articleId)
         assertEquals(article.contentHash, manifest.contentHash)
         assertEquals(article.favoriteChangedAt, manifest.favoriteChangedAt)
+        assertEquals(article.readingProgress, manifest.readingProgress, 0.0001f)
         assertEquals(source.title, parsedSource.title)
         assertEquals(source.isPinned, parsedSource.isPinned)
         assertTrue(LibrarySyncPayload.supportsChangeSequences(response))
@@ -258,7 +262,8 @@ class LibrarySyncPayloadTest {
             articleId = "article-1",
             contentHash = "hash",
             updatedAt = 20L,
-            favoriteChangedAt = 30L
+            favoriteChangedAt = 30L,
+            readingProgress = 0.37f
         )
         val currentRemote = ArticleSyncManifestEntry(
             articleId = "article-1",
@@ -267,9 +272,11 @@ class LibrarySyncPayloadTest {
             independentChangedAt = 0L,
             favoriteChangedAt = 30L,
             watchLaterChangedAt = 0L,
-            deletedAt = 0L
+            deletedAt = 0L,
+            readingProgress = 0.37f
         )
         val staleRemote = currentRemote.copy(contentHash = "old-hash")
+        val staleProgressRemote = currentRemote.copy(readingProgress = 0.21f)
 
         assertEquals(
             emptyList<SyncedSavedArticle>(),
@@ -278,6 +285,10 @@ class LibrarySyncPayloadTest {
         assertEquals(
             listOf(article),
             LibrarySyncPayload.filterArticlesNeedingSync(listOf(article), listOf(staleRemote))
+        )
+        assertEquals(
+            listOf(article),
+            LibrarySyncPayload.filterArticlesNeedingSync(listOf(article), listOf(staleProgressRemote))
         )
     }
 
@@ -739,7 +750,8 @@ class LibrarySyncPayloadTest {
         articleId: String,
         contentHash: String,
         updatedAt: Long,
-        favoriteChangedAt: Long = 0L
+        favoriteChangedAt: Long = 0L,
+        readingProgress: Float = 0f
     ): SyncedSavedArticle {
         return SyncedSavedArticle(
             articleId = articleId,
@@ -766,7 +778,8 @@ class LibrarySyncPayloadTest {
             watchLaterChangedAt = 0L,
             watchLaterSortOrder = 0L,
             deleted = false,
-            deletedAt = 0L
+            deletedAt = 0L,
+            readingProgress = readingProgress
         )
     }
 
