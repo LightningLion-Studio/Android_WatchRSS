@@ -77,8 +77,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.lightningstudio.watchrss.BuildConfig
+import com.lightningstudio.watchrss.BiliPlayerActivity
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.RssPlayerActivity
+import com.lightningstudio.watchrss.data.bili.parseBiliVideoTarget
 import com.lightningstudio.watchrss.data.douyin.buildDouyinPlaybackWebUrl
 import com.lightningstudio.watchrss.data.douyin.parseDouyinAwemeId
 import com.lightningstudio.watchrss.data.rss.ARTICLE_TEXT_CHUNK_BYTES
@@ -1065,6 +1067,8 @@ internal fun DetailContent(
                         is ContentBlock.Video -> {
                             val resolvedUrl = resolveMediaUrl(block.url, offlineMedia, baseLink)
                             val defaultWebUrl = resolveRemoteUrl(block.url, baseLink)
+                            val biliTarget = parseBiliVideoTarget(block.url)
+                                ?: item?.link?.let(::parseBiliVideoTarget)
                             val douyinAwemeId = item?.link?.let(::parseDouyinAwemeId)
                             val douyinWebUrl = buildDouyinPlaybackWebUrl(
                                 awemeId = douyinAwemeId,
@@ -1080,7 +1084,17 @@ internal fun DetailContent(
                                 isScrolling = isScrolling,
                                 onClick = {
                                     val targetWebUrl = douyinWebUrl ?: defaultWebUrl
-                                    if (douyinAwemeId != null || !douyinWebUrl.isNullOrBlank()) {
+                                    if (biliTarget != null) {
+                                        context.startActivity(
+                                            BiliPlayerActivity.createIntent(
+                                                context = context,
+                                                aid = biliTarget.aid,
+                                                bvid = biliTarget.bvid,
+                                                cid = biliTarget.cid,
+                                                title = item?.title
+                                            )
+                                        )
+                                    } else if (douyinAwemeId != null || !douyinWebUrl.isNullOrBlank()) {
                                         context.startActivity(
                                             RssPlayerActivity.createIntent(
                                                 context = context,

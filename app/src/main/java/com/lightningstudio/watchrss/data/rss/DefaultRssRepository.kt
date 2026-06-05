@@ -1087,9 +1087,11 @@ class DefaultRssRepository(
                     localBodyHash = localItem?.syncBodyHash.orEmpty()
                 )
             }
+            val bodyMetadata = payload.bodyMetadata()
             payload.article.copy(
                 contentHtml = contentHtml,
-                contentText = contentText
+                contentText = contentText,
+                cachedBodyMetadata = bodyMetadata
             )
         }
         mergeSyncedSavedArticles(
@@ -1898,7 +1900,8 @@ class DefaultRssRepository(
             ?: article.excerpt.takeIf { it.isNotBlank() }
         val title = article.title.ifBlank { article.url }
         val fetchedAt = syncedArticleFetchedAt(article, fallbackNow = System.currentTimeMillis())
-        val syncMetadata = ArticleSyncBody.metadataFor(article)
+        val syncMetadata = article.cachedBodyMetadata?.takeIf { it.isCurrentFor(article) }
+            ?: ArticleSyncBody.metadataFor(article)
         val incomingReadingProgress = article.readingProgress.coerceIn(0f, 1f)
         val entity = RssItemEntity(
             channelId = channelId,
@@ -2006,6 +2009,16 @@ class DefaultRssRepository(
             bodyAvailable = true,
             bodySyncMode = bodySyncModeForSync(),
             readingProgress = readingProgress
+        )
+    }
+
+    private fun SyncedChunkedArticle.bodyMetadata(): ArticleBodyMetadata {
+        return ArticleBodyMetadata(
+            bodyHash = bodyHash,
+            bodyByteCount = bodyByteCount,
+            chunkSize = chunkSize,
+            chunkHashes = chunkHashes,
+            metadataHash = ArticleSyncBody.metadataHashFor(article)
         )
     }
 

@@ -6,6 +6,39 @@ import org.junit.Test
 
 class RssContentBlocksTest {
     @Test
+    fun buildContentBlocks_addsBiliVideoBlock_whenOnlyDetailLinkExists() {
+        val item = RssItem(
+            id = 1L,
+            channelId = 1L,
+            title = "B站视频",
+            description = "UP主：测试作者",
+            content = null,
+            originalContent = null,
+            link = "https://www.bilibili.com/video/BV1bDDEBZEp8?cid=37347986442",
+            pubDate = null,
+            imageUrl = "https://example.com/cover.jpg",
+            audioUrl = null,
+            videoUrl = null,
+            summary = null,
+            previewImageUrl = null,
+            isRead = false,
+            isLiked = false,
+            readingProgress = 0f,
+            fetchedAt = 0L
+        )
+
+        val blocks = buildContentBlocks(item = item, useOriginalContent = false)
+
+        assertTrue(
+            blocks.any { block ->
+                block is ContentBlock.Video &&
+                    block.url == "https://www.bilibili.com/video/BV1bDDEBZEp8?cid=37347986442" &&
+                    block.poster == "https://example.com/cover.jpg"
+            }
+        )
+    }
+
+    @Test
     fun buildContentBlocks_addsDouyinVideoBlock_whenOnlyDetailLinkExists() {
         val item = RssItem(
             id = 1L,

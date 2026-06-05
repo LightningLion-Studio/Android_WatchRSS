@@ -368,6 +368,45 @@ class LibrarySyncPayloadTest {
     }
 
     @Test
+    fun chunkedResponse_requestsFullBodyWhenLocalManifestIsDeletedTombstone() {
+        val remoteManifest = remoteManifestWithChunks("article-restored", listOf("a", "b")).copy(
+            bodySyncMode = ARTICLE_BODY_SYNC_MODE_FULL,
+            updatedAt = 100L,
+            independentChangedAt = 100L,
+            deleted = false,
+            deletedAt = 50L,
+            metadataHash = "remote-metadata"
+        )
+        val localManifest = SyncedArticleManifest(
+            articleId = remoteManifest.articleId,
+            sourceDeviceId = "watch",
+            contentHash = remoteManifest.contentHash,
+            updatedAt = 50L,
+            independentChangedAt = 50L,
+            favoriteChangedAt = remoteManifest.favoriteChangedAt,
+            watchLaterChangedAt = remoteManifest.watchLaterChangedAt,
+            deletedAt = 50L,
+            deleted = true,
+            bodyHash = remoteManifest.bodyHash,
+            bodyByteCount = remoteManifest.bodyByteCount,
+            chunkSize = remoteManifest.chunkSize,
+            chunkHashes = remoteManifest.chunkHashes,
+            metadataHash = "local-metadata",
+            bodyAvailable = true,
+            bodySyncMode = ARTICLE_BODY_SYNC_MODE_FULL
+        )
+
+        val requests = LibrarySyncPayload.buildBodyRequestsForRemoteArticles(
+            localManifest = listOf(localManifest),
+            remoteManifest = listOf(remoteManifest),
+            supportsMetadataOnlyArticles = true
+        )
+
+        assertFalse(requests.single().metadataOnly)
+        assertEquals(listOf(0, 1), requests.single().chunkIndexes)
+    }
+
+    @Test
     fun chunkedResponse_usesMetadataOnlyForSavedArticleWhenLocalBodyExists() {
         val localArticle = syncedArticle(
             articleId = "article-1",
@@ -443,7 +482,7 @@ class LibrarySyncPayloadTest {
     }
 
     @Test
-    fun chunkedResponse_usesMetadataOnlyForFullArticle() {
+    fun chunkedResponse_requestsBodyForFullArticleWhenPeerSupportsMetadataOnly() {
         val remoteManifest = remoteManifestWithChunks("full-article", listOf("a", "b")).copy(
             bodySyncMode = ARTICLE_BODY_SYNC_MODE_FULL,
             updatedAt = 30L,
@@ -461,8 +500,8 @@ class LibrarySyncPayloadTest {
             supportsMetadataOnlyArticles = false
         )
 
-        assertTrue(requests.single().metadataOnly)
-        assertEquals(emptyList<Int>(), requests.single().chunkIndexes)
+        assertFalse(requests.single().metadataOnly)
+        assertEquals(listOf(0, 1), requests.single().chunkIndexes)
         assertEquals(listOf(0, 1), fallbackRequests.single().chunkIndexes)
     }
 
@@ -672,6 +711,48 @@ class LibrarySyncPayloadTest {
 
         assertEquals(emptyList<Int>(), parsed.chunks.map { it.index })
         assertTrue(parsed.metadataOnly)
+    }
+
+    @Test
+    fun chunkedResponse_sendsFullBodyForFullArticleWhenPeerRequestsReusableBody() {
+        val article = syncedArticle(
+            articleId = "full-body-reuse",
+            contentHash = "hash",
+            updatedAt = 20L
+        ).copy(
+            independentSaved = true,
+            independentChangedAt = 30L,
+            independentSortOrder = 30L,
+            contentText = "正文".repeat(4096)
+        )
+        val metadata = ArticleSyncBody.metadataFor(article)
+        val frames = LibrarySyncPayload.buildChunkedResponseFrames(
+            deviceId = "watch",
+            articles = listOf(article),
+            articleRequests = listOf(
+                SyncedArticleBodyRequest(
+                    articleId = article.articleId,
+                    bodyHash = metadata.bodyHash,
+                    chunkIndexes = emptyList(),
+                    metadataOnly = false
+                )
+            ),
+            applied = 0,
+            useBatches = true
+        )
+
+        val parsed = LibrarySyncPayload.parseChunkedArticles(
+            LibrarySyncPayload.combineArticlePayloads(frames)
+        ).single()
+        val rebuilt = ArticleSyncBody.rebuildBody(
+            localArticle = null,
+            payload = parsed,
+            localBodyHash = ""
+        )
+
+        assertEquals(false, parsed.metadataOnly)
+        assertEquals(metadata.chunkHashes.indices.toList(), parsed.chunks.map { it.index })
+        assertEquals(article.contentText, rebuilt.second)
     }
 
     @Test

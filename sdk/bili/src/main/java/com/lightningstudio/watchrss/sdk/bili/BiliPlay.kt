@@ -13,7 +13,8 @@ class BiliPlay(private val client: BiliClient) {
         qn: Int = 64,
         fnval: Int = 4048,
         fourk: Int = 0,
-        platform: String? = null
+        platform: String? = null,
+        useWbi: Boolean = true
     ): BiliResult<BiliPlayUrl> {
         if (aid == null && bvid.isNullOrBlank()) {
             return BiliResult(-1, "missing_id")
@@ -28,12 +29,18 @@ class BiliPlay(private val client: BiliClient) {
         if (!bvid.isNullOrBlank()) params["bvid"] = bvid
         if (!platform.isNullOrBlank()) params["platform"] = platform
 
-        val signed = client.signedWbiParams(params)
-        if (!signed.containsKey("w_rid")) {
-            return BiliResult(-1, "missing_wbi_keys")
+        val requestParams = if (useWbi) {
+            val signed = client.signedWbiParams(params)
+            if (!signed.containsKey("w_rid")) {
+                return BiliResult(-1, "missing_wbi_keys")
+            }
+            signed
+        } else {
+            params
         }
-        val url = "${client.config.webBaseUrl}/x/player/wbi/playurl"
-        val response = client.httpClient.get(url, params = signed)
+        val path = if (useWbi) "/x/player/wbi/playurl" else "/x/player/playurl"
+        val url = "${client.config.webBaseUrl}$path"
+        val response = client.httpClient.get(url, params = requestParams)
         val status = parseBiliStatus(response.body)
         if (status.code != 0) {
             return BiliResult(status.code, status.message)
@@ -49,7 +56,7 @@ class BiliPlay(private val client: BiliClient) {
         qn: Int = 32,
         platform: String = "html5"
     ): BiliResult<BiliPlayUrl> {
-        return fetchPlayUrl(
+        val wbiResult = fetchPlayUrl(
             cid = cid,
             aid = aid,
             bvid = bvid,
@@ -58,6 +65,22 @@ class BiliPlay(private val client: BiliClient) {
             fourk = 0,
             platform = platform
         )
+        if (wbiResult.shouldUseLegacyMp4Fallback()) {
+            val legacyResult = fetchPlayUrl(
+                cid = cid,
+                aid = aid,
+                bvid = bvid,
+                qn = qn,
+                fnval = 1,
+                fourk = 0,
+                platform = platform,
+                useWbi = false
+            )
+            if (!legacyResult.shouldUseLegacyMp4Fallback()) {
+                return legacyResult
+            }
+        }
+        return wbiResult
     }
 
     private fun parsePlayUrl(data: JsonObject): BiliPlayUrl {
@@ -117,5 +140,14 @@ class BiliPlay(private val client: BiliClient) {
                 )
             }
             ?: emptyList()
+    }
+
+    private fun BiliResult<BiliPlayUrl>.shouldUseLegacyMp4Fallback(): Boolean {
+        if (code == -1 && message == "missing_wbi_keys") return true
+        if (!isSuccess) return false
+        val playUrl = data ?: return true
+        val hasDurl = playUrl.durl.any { !it.url.isNullOrBlank() }
+        val hasDashVideo = playUrl.dash?.video?.any { !it.baseUrl.isNullOrBlank() } == true
+        return !hasDurl && !hasDashVideo
     }
 }
