@@ -447,7 +447,16 @@ object LibrarySyncPayload {
                 batchCount = batchCount,
                 totalArticles = totalArticles
             )
-        }
+        }.withResponseProgressHeader(
+            deviceId = deviceId,
+            totalArticles = articles.size,
+            stats = buildResponseStats(
+                articleCount = articles.size,
+                applied = applied,
+                sourcesSent = rssSources.size,
+                sourcesApplied = sourcesApplied
+            )
+        )
     }
 
     fun buildChunkedResponseFrames(
@@ -487,7 +496,16 @@ object LibrarySyncPayload {
                     putStats(articleCount = articles.size, applied = applied, sourcesApplied = sourcesApplied)
                 }
             }
-        }
+        }.withResponseProgressHeader(
+            deviceId = deviceId,
+            totalArticles = articles.size,
+            stats = buildResponseStats(
+                articleCount = articles.size,
+                applied = applied,
+                sourcesSent = 0,
+                sourcesApplied = sourcesApplied
+            )
+        )
     }
 
     fun combineArticlePayloads(frames: List<JSONObject>): JSONObject {
@@ -814,6 +832,50 @@ object LibrarySyncPayload {
             payload.put(FIELD_BATCH_TOTAL_WIRE_BYTES, totalWireBytes)
         }
         return this
+    }
+
+    private fun List<JSONObject>.withResponseProgressHeader(
+        deviceId: String,
+        totalArticles: Int?,
+        stats: JSONObject?
+    ): List<JSONObject> {
+        if (!needsResponseProgressHeader()) return this
+        val batchCount = size + 1
+        val header = JSONObject().apply {
+            put("success", true)
+            put("version", PROTOCOL_VERSION)
+            put("action", BluetoothSyncProtocol.ACTION_SYNC_LIBRARY)
+            put("phase", PHASE_COMPLETE)
+            put("deviceId", deviceId)
+            put("sentAt", System.currentTimeMillis())
+            put("articles", JSONArray())
+            putBatchFields(batchIndex = 0, batchCount = batchCount, totalArticles = totalArticles)
+            stats?.let { put("stats", it) }
+        }
+        val frames = ArrayList<JSONObject>(batchCount)
+        frames += header
+        forEachIndexed { index, payload ->
+            payload.putBatchFields(batchIndex = index + 1, batchCount = batchCount, totalArticles = totalArticles)
+            frames += payload
+        }
+        return frames.withBatchWireByteHints()
+    }
+
+    private fun List<JSONObject>.needsResponseProgressHeader(): Boolean =
+        size > 1 || any { payload ->
+            BluetoothSyncProtocol.encodedSize(payload) > RESPONSE_PROGRESS_HEADER_MIN_BODY_BYTES
+        }
+
+    private fun buildResponseStats(
+        articleCount: Int,
+        applied: Int,
+        sourcesSent: Int,
+        sourcesApplied: Int
+    ): JSONObject = JSONObject().apply {
+        put("sent", articleCount)
+        put("applied", applied)
+        put("sourcesSent", sourcesSent)
+        put("sourcesApplied", sourcesApplied)
     }
 
     private fun JSONObject.putBatchFields(
@@ -1165,6 +1227,7 @@ object LibrarySyncPayload {
 
     private const val ARTICLE_BATCH_TARGET_BYTES = 384 * 1024
     private const val BATCH_WIRE_HINT_STABILIZE_ATTEMPTS = 6
+    private const val RESPONSE_PROGRESS_HEADER_MIN_BODY_BYTES = 16 * 1024
     private const val MAX_BATCH_COUNT_FOR_SIZING = 9999
     private const val CHANGE_SEQUENCE_PROTOCOL_VERSION = 8
     private const val METADATA_ONLY_ARTICLES_PROTOCOL_VERSION = 8
