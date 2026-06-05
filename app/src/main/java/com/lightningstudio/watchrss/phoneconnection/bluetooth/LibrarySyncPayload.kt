@@ -51,10 +51,13 @@ object LibrarySyncPayload {
     const val LEGACY_PROTOCOL_VERSION = 4
     const val MAX_BODY_REQUEST_CHUNKS_PER_SYNC = Int.MAX_VALUE
     const val MAX_ARTICLE_REQUEST_BATCH_COUNT = 256
+    const val FIELD_BATCH_WIRE_BYTES = "batchWireBytes"
+    const val FIELD_BATCH_TOTAL_WIRE_BYTES = "batchTotalWireBytes"
     const val PHASE_MANIFEST = "manifest"
     const val PHASE_PROBE = "probe"
     const val PHASE_ARTICLES = "articles"
     const val PHASE_COMPLETE = "complete"
+    private const val FIELD_SUPPORTS_TRANSFER_BYTE_PROGRESS = "supportsTransferByteProgress"
 
     fun buildProbeResponse(deviceId: String): JSONObject {
         return JSONObject().apply {
@@ -62,6 +65,7 @@ object LibrarySyncPayload {
             put("version", PROTOCOL_VERSION)
             put("action", BluetoothSyncProtocol.ACTION_SYNC_LIBRARY)
             put("phase", PHASE_PROBE)
+            put(FIELD_SUPPORTS_TRANSFER_BYTE_PROGRESS, true)
             put("deviceId", deviceId)
             put("sentAt", System.currentTimeMillis())
         }
@@ -426,6 +430,7 @@ object LibrarySyncPayload {
     ): List<JSONObject> {
         if (!useBatches) {
             return listOf(buildResponse(deviceId, articles, applied, rssSources, sourcesApplied))
+                .withBatchWireByteHints()
         }
         return buildArticleFrames(
             articleItems = articles.map { it.toJson() },
@@ -463,6 +468,7 @@ object LibrarySyncPayload {
         }
         if (!useBatches) {
             return listOf(buildChunkedResponse(deviceId, articleItems, applied, sourcesApplied))
+                .withBatchWireByteHints()
         }
         return buildArticleFrames(
             articleItems = articleItems,
@@ -642,6 +648,7 @@ object LibrarySyncPayload {
             put("supportsChunkedBodies", true)
             put("supportsChangeSequences", true)
             put("supportsMetadataOnlyArticles", true)
+            put(FIELD_SUPPORTS_TRANSFER_BYTE_PROGRESS, true)
             put("deviceId", deviceId)
             put("sentAt", System.currentTimeMillis())
             put("articleManifest", articles.toManifestJsonArray())
@@ -674,6 +681,7 @@ object LibrarySyncPayload {
             put("supportsChunkedBodies", true)
             put("supportsChangeSequences", true)
             put("supportsMetadataOnlyArticles", true)
+            put(FIELD_SUPPORTS_TRANSFER_BYTE_PROGRESS, true)
             put("deviceId", deviceId)
             put("sentAt", System.currentTimeMillis())
             put("articleManifest", articleManifest.toEntryJsonArray())
@@ -730,6 +738,7 @@ object LibrarySyncPayload {
     ): List<JSONObject> {
         if (articleItems.isEmpty()) {
             return listOf(buildPayload(JSONArray(), 0, 1, totalArticles))
+                .withBatchWireByteHints()
         }
 
         val chunks = mutableListOf<List<JSONObject>>()
@@ -756,20 +765,55 @@ object LibrarySyncPayload {
             val payloads = chunks.mapIndexed { index, chunk ->
                 buildPayload(chunk.toRawJsonArray(), index, batchCount, totalArticles)
             }
-            val oversizedIndex = payloads.indexOfFirst { payload ->
+            val preHintOversizedIndex = payloads.indexOfFirst { payload ->
                 BluetoothSyncProtocol.encodedSize(payload) > BluetoothSyncProtocol.MAX_FRAME_BYTES
             }
-            if (oversizedIndex < 0) return payloads
+            val annotatedPayloads = payloads.withBatchWireByteHints()
+            val postHintOversizedIndex = annotatedPayloads.indexOfFirst { payload ->
+                BluetoothSyncProtocol.encodedSize(payload) > BluetoothSyncProtocol.MAX_FRAME_BYTES
+            }
+            val oversizedIndex = if (preHintOversizedIndex >= 0) {
+                preHintOversizedIndex
+            } else {
+                postHintOversizedIndex
+            }
+            if (oversizedIndex < 0) return annotatedPayloads
             val oversized = chunks[oversizedIndex]
             require(oversized.size > 1) {
                 val item = oversized.first()
-                val payloadSize = BluetoothSyncProtocol.encodedSize(payloads[oversizedIndex])
+                val payloadSize = BluetoothSyncProtocol.encodedSize(annotatedPayloads[oversizedIndex])
                 "单篇文章蓝牙消息过大：${item.optString("title").ifBlank { item.optString("url") }.take(40)}（$payloadSize 字节）"
             }
             val midpoint = oversized.size / 2
             chunks[oversizedIndex] = oversized.take(midpoint)
             chunks.add(oversizedIndex + 1, oversized.drop(midpoint))
         }
+    }
+
+    private fun List<JSONObject>.withBatchWireByteHints(): List<JSONObject> {
+        if (isEmpty()) return this
+        var previousWireBytes = emptyList<Long>()
+        var previousTotalWireBytes = -1L
+        repeat(BATCH_WIRE_HINT_STABILIZE_ATTEMPTS) {
+            val wireBytes = map { BluetoothSyncProtocol.wireSize(it) }
+            val totalWireBytes = wireBytes.sum()
+            if (wireBytes == previousWireBytes && totalWireBytes == previousTotalWireBytes) {
+                return this
+            }
+            previousWireBytes = wireBytes
+            previousTotalWireBytes = totalWireBytes
+            forEachIndexed { index, payload ->
+                payload.put(FIELD_BATCH_WIRE_BYTES, wireBytes[index])
+                payload.put(FIELD_BATCH_TOTAL_WIRE_BYTES, totalWireBytes)
+            }
+        }
+        val wireBytes = map { BluetoothSyncProtocol.wireSize(it) }
+        val totalWireBytes = wireBytes.sum()
+        forEachIndexed { index, payload ->
+            payload.put(FIELD_BATCH_WIRE_BYTES, wireBytes[index])
+            payload.put(FIELD_BATCH_TOTAL_WIRE_BYTES, totalWireBytes)
+        }
+        return this
     }
 
     private fun JSONObject.putBatchFields(
@@ -1120,6 +1164,7 @@ object LibrarySyncPayload {
     }
 
     private const val ARTICLE_BATCH_TARGET_BYTES = 384 * 1024
+    private const val BATCH_WIRE_HINT_STABILIZE_ATTEMPTS = 6
     private const val MAX_BATCH_COUNT_FOR_SIZING = 9999
     private const val CHANGE_SEQUENCE_PROTOCOL_VERSION = 8
     private const val METADATA_ONLY_ARTICLES_PROTOCOL_VERSION = 8

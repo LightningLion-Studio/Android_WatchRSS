@@ -326,6 +326,7 @@ class LibrarySyncPayloadTest {
         )
 
         assertTrue(requests.single().chunkIndexes.isNotEmpty())
+        assertBatchWireByteHints(frames)
         assertEquals(requests.single().chunkIndexes, parsed.chunks.map { it.index })
         assertEquals(newArticle.contentText, rebuilt.second)
     }
@@ -743,7 +744,22 @@ class LibrarySyncPayloadTest {
 
         assertTrue(frames.size > 1)
         assertTrue(frames.all { BluetoothSyncProtocol.encodedSize(it) <= BluetoothSyncProtocol.MAX_FRAME_BYTES })
+        assertBatchWireByteHints(frames)
         assertEquals(article.contentText, rebuilt.second)
+    }
+
+    private fun assertBatchWireByteHints(frames: List<JSONObject>) {
+        val totalWireBytes = frames.sumOf { BluetoothSyncProtocol.wireSize(it) }
+        frames.forEach { frame ->
+            assertEquals(
+                BluetoothSyncProtocol.wireSize(frame),
+                frame.getLong(LibrarySyncPayload.FIELD_BATCH_WIRE_BYTES)
+            )
+            assertEquals(
+                totalWireBytes,
+                frame.getLong(LibrarySyncPayload.FIELD_BATCH_TOTAL_WIRE_BYTES)
+            )
+        }
     }
 
     private fun syncedArticle(

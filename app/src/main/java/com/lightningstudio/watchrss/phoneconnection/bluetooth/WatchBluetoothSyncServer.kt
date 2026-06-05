@@ -50,6 +50,7 @@ private data class LibraryManifestExchangeResult(
 private data class ArticleRequestBatchStats(
     var frameCount: Int = 0,
     var totalBytes: Int = 0,
+    var totalWireBytes: Long = 0L,
     var maxFrameBytes: Int = 0,
     var articleCount: Int = 0
 ) {
@@ -57,6 +58,7 @@ private data class ArticleRequestBatchStats(
         frameCount += 1
         val bytes = runCatching { BluetoothSyncProtocol.encodedSize(frame) }.getOrDefault(0)
         totalBytes += bytes
+        totalWireBytes += runCatching { BluetoothSyncProtocol.wireSize(frame) }.getOrDefault(0L)
         maxFrameBytes = maxOf(maxFrameBytes, bytes)
         articleCount += frame.optJSONArray("articles")?.length() ?: 0
     }
@@ -65,6 +67,7 @@ private data class ArticleRequestBatchStats(
         return mapOf(
             "${prefix}FrameCount" to frameCount,
             "${prefix}TotalBytes" to totalBytes,
+            "${prefix}TotalWireBytes" to totalWireBytes,
             "${prefix}MaxFrameBytes" to maxFrameBytes,
             "${prefix}ArticleCount" to articleCount
         )
@@ -945,6 +948,22 @@ class WatchBluetoothSyncServer(
             put("${prefix}SourcesApplied", if (payload.has("sourcesApplied")) payload.optInt("sourcesApplied") else null)
             put("${prefix}BatchIndex", if (payload.has("batchIndex")) payload.optInt("batchIndex") else null)
             put("${prefix}BatchCount", if (payload.has("batchCount")) payload.optInt("batchCount") else null)
+            put(
+                "${prefix}BatchWireBytes",
+                if (payload.has(LibrarySyncPayload.FIELD_BATCH_WIRE_BYTES)) {
+                    payload.optLong(LibrarySyncPayload.FIELD_BATCH_WIRE_BYTES)
+                } else {
+                    null
+                }
+            )
+            put(
+                "${prefix}BatchTotalWireBytes",
+                if (payload.has(LibrarySyncPayload.FIELD_BATCH_TOTAL_WIRE_BYTES)) {
+                    payload.optLong(LibrarySyncPayload.FIELD_BATCH_TOTAL_WIRE_BYTES)
+                } else {
+                    null
+                }
+            )
             put("${prefix}TotalArticles", if (payload.has("totalArticles")) payload.optInt("totalArticles") else null)
         }
     }
@@ -970,12 +989,16 @@ class WatchBluetoothSyncServer(
         val bytes = payloads.sumOf { payload ->
             runCatching { BluetoothSyncProtocol.encodedSize(payload) }.getOrDefault(0)
         }
+        val wireBytes = payloads.sumOf { payload ->
+            runCatching { BluetoothSyncProtocol.wireSize(payload) }.getOrDefault(0L)
+        }
         val maxBytes = payloads.maxOfOrNull { payload ->
             runCatching { BluetoothSyncProtocol.encodedSize(payload) }.getOrDefault(0)
         } ?: 0
         return mapOf(
             "${prefix}FrameCount" to payloads.size,
             "${prefix}TotalBytes" to bytes,
+            "${prefix}TotalWireBytes" to wireBytes,
             "${prefix}MaxFrameBytes" to maxBytes,
             "${prefix}ArticleCount" to articleCount
         )
