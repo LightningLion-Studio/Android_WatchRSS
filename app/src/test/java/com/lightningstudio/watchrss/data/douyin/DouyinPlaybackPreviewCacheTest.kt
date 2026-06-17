@@ -19,6 +19,10 @@ import org.junit.Test
 import org.mockito.Mockito
 import java.io.IOException
 import java.io.InputStream
+import java.net.ServerSocket
+import java.net.Socket
+import java.util.concurrent.CopyOnWriteArrayList
+import kotlin.concurrent.thread
 
 class DouyinPlaybackPreviewCacheTest {
 
@@ -611,6 +615,52 @@ class DouyinPlaybackPreviewCacheTest {
     }
 
     @Test
+    fun updatePlaybackWindow_removesCancelledPrefetchProgressFromDebugSnapshot() {
+        val server = HangingHttpServer()
+        try {
+            val oldItems = (0..7).map { index ->
+                testDouyinStreamItem(
+                    awemeId = "old-$index",
+                    playUrl = "http://127.0.0.1:${server.port}/old-$index.mp4",
+                    resolvedAtMs = 500L + index
+                )
+            }
+            val newItems = (0..7).map { index ->
+                testDouyinStreamItem(
+                    awemeId = "new-$index",
+                    playUrl = "http://127.0.0.1:${server.port}/new-$index.mp4",
+                    resolvedAtMs = 600L + index
+                )
+            }
+
+            DouyinPlaybackPreviewCache.updatePlaybackWindow(
+                items = oldItems,
+                anchorIndex = 0,
+                headers = emptyMap(),
+                reason = "old_window"
+            )
+            assertTrue(
+                DouyinPlaybackPreviewCache.debugSnapshot()
+                    .activePrefetches
+                    .any { it.awemeId == "old-0" }
+            )
+
+            DouyinPlaybackPreviewCache.updatePlaybackWindow(
+                items = newItems,
+                anchorIndex = 0,
+                headers = emptyMap(),
+                reason = "new_window"
+            )
+
+            val activePrefetches = DouyinPlaybackPreviewCache.debugSnapshot().activePrefetches
+            assertTrue(activePrefetches.none { it.awemeId.startsWith("old-") })
+            assertTrue(activePrefetches.any { it.awemeId == "new-0" })
+        } finally {
+            server.close()
+        }
+    }
+
+    @Test
     fun debugSnapshot_exposesRegistrationWindowAndMemoryEntries() {
         val snapshotDir = createTempDir(prefix = "douyin-preview-debug")
         DouyinPlaybackPreviewCache.configureForTests(snapshotDir)
@@ -652,6 +702,45 @@ class DouyinPlaybackPreviewCacheTest {
         assertEquals(previewBytes.size, debugSnapshot.memoryEntries.first().cachedBytes)
 
         snapshotDir.deleteRecursively()
+    }
+}
+
+private fun testDouyinStreamItem(
+    awemeId: String,
+    playUrl: String,
+    resolvedAtMs: Long
+): DouyinStreamItem {
+    return DouyinStreamItem(
+        awemeId = awemeId,
+        playUrl = playUrl,
+        coverUrl = null,
+        title = "title-$awemeId",
+        author = "author",
+        likeCount = 0L,
+        playUrlResolvedAtMs = resolvedAtMs,
+        sourceOrigin = DouyinSourceOrigin.NETWORK_FEED,
+        durationMs = 30_000L
+    )
+}
+
+private class HangingHttpServer : AutoCloseable {
+    private val serverSocket = ServerSocket(0)
+    private val sockets = CopyOnWriteArrayList<Socket>()
+    private val acceptThread = thread(start = true, isDaemon = true) {
+        while (!serverSocket.isClosed) {
+            val socket = runCatching { serverSocket.accept() }.getOrNull() ?: break
+            sockets += socket
+        }
+    }
+
+    val port: Int = serverSocket.localPort
+
+    override fun close() {
+        sockets.forEach { socket ->
+            runCatching { socket.close() }
+        }
+        runCatching { serverSocket.close() }
+        runCatching { acceptThread.join(1_000) }
     }
 }
 

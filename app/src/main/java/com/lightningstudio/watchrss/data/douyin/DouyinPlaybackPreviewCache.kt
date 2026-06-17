@@ -1112,6 +1112,7 @@ private class DouyinPlaybackPreviewManager {
                 .toList()
             prefetchJobs.entries.removeAll { !targetKeys.contains(it.key) }
             prefetchCallsByKey.entries.removeAll { !targetKeys.contains(it.key) }
+            prefetchProgressByKey.keys.removeAll { !targetKeys.contains(it) }
             downloadControlsByKey.keys.removeAll { !targetKeys.contains(it) }
             removed to removedCalls
         }
