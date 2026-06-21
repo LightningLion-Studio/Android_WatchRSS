@@ -105,8 +105,10 @@ import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackSourceKind
 import com.lightningstudio.watchrss.data.douyin.DouyinStreamItem
 import com.lightningstudio.watchrss.data.douyin.resolveDouyinLookaheadItemIndices
 import com.lightningstudio.watchrss.data.douyin.selectPreferredVariant
+import com.lightningstudio.watchrss.data.network.InternetAvailabilityStatus
 import com.lightningstudio.watchrss.debug.DouyinPlaybackDebugController
 import com.lightningstudio.watchrss.phoneconnection.PhoneConnectionFeature
+import com.lightningstudio.watchrss.ui.components.InternetAvailabilityOverlay
 import com.lightningstudio.watchrss.ui.components.ToastMessage
 import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.components.WatchIconButton
@@ -546,6 +548,12 @@ private fun hasIOExceptionCause(error: Throwable): Boolean {
     return false
 }
 
+private fun String?.requiresInternetConnection(): Boolean {
+    val value = this?.trim().orEmpty()
+    return value.startsWith("http://", ignoreCase = true) ||
+        value.startsWith("https://", ignoreCase = true)
+}
+
 private fun isLikelyDouyinCodecFailure(error: PlaybackException): Boolean {
     val summary = buildString {
         append(error.errorCodeName)
@@ -569,6 +577,7 @@ internal fun DouyinImmersiveScreen(
     volumeGuardEnabled: Boolean = true,
     playbackStartVolumeLimitPercent: Int? = 10,
     continuePlaybackInBackground: Boolean = false,
+    internetAvailabilityStatus: InternetAvailabilityStatus = InternetAvailabilityStatus.Checking,
     onRefresh: () -> Unit,
     onPageSettled: (Int) -> Unit,
     onEnterFlow: () -> Unit,
@@ -995,14 +1004,23 @@ internal fun DouyinImmersiveScreen(
     val activeIsBuffering = activeSlotMatchesCurrentItem && foregroundSlot.isBuffering
     val activeIsPlaying = activeSlotMatchesCurrentItem && foregroundSlot.isPlaying
     val activeHasError = activeSlotMatchesCurrentItem && foregroundSlot.hasError
+    val activePlaybackNeedsInternet = (activeMediaUri ?: preparedPlaybackTargetMediaUri)
+        .requiresInternetConnection()
+    val showNetworkUnavailable = internetAvailabilityStatus == InternetAvailabilityStatus.Unavailable &&
+        !uiState.showTitlePage &&
+        activeItem != null &&
+        activePlaybackNeedsInternet &&
+        !activeIsPlaying &&
+        (activeIsBuffering || activeHasError || !foregroundSlot.hasRenderedFirstFrame)
     val activeShouldShowLoadingIndicator = shouldShowDouyinLoadingIndicator(
         isActive = activeSlotMatchesCurrentItem,
         isBuffering = activeIsBuffering,
         isPlaying = activeIsPlaying,
         hasError = activeHasError,
         isScrollInProgress = pagerState.isScrollInProgress
-    )
+    ) && !showNetworkUnavailable
     val shouldKeepScreenOn = activeItem != null &&
+        !showNetworkUnavailable &&
         !activeHasError &&
         (activeIsPlaying || activeIsBuffering)
     fun pauseSlotPlayback(
@@ -1202,6 +1220,15 @@ internal fun DouyinImmersiveScreen(
 
     fun stopAllPlayback() {
         allSlots.forEach(::stopSlotPlayback)
+    }
+
+    LaunchedEffect(showNetworkUnavailable, foregroundSlotKey, activeItem?.awemeId) {
+        if (!showNetworkUnavailable) {
+            return@LaunchedEffect
+        }
+        activeAutoplayEnabled = false
+        stopForegroundPlayback()
+        slotFor(foregroundSlotKey).isBuffering = false
     }
 
     fun scheduleAutoSkipCurrentPage() {
@@ -2211,7 +2238,8 @@ internal fun DouyinImmersiveScreen(
         foregroundSlotKey,
         primarySlot.hasRenderedFirstFrame,
         secondarySlot.hasRenderedFirstFrame,
-        uiState.showTitlePage
+        uiState.showTitlePage,
+        showNetworkUnavailable
     ) {
         if (preparedItem == null || activePrepareKey.isNullOrBlank() || activeMediaUri.isNullOrBlank()) {
             allSlots.forEach(::clearSlotBinding)
@@ -2253,7 +2281,7 @@ internal fun DouyinImmersiveScreen(
             autoplayEnabled = activeAutoplayEnabled,
             pausedByGesture = activePausedByGesture,
             pausedByLifecycle = activePausedByLifecycle,
-            hasError = activeHasError,
+            hasError = activeHasError || showNetworkUnavailable,
             isScrollInProgress = pagerState.isScrollInProgress
         )
         bindSlotTarget(
@@ -2287,6 +2315,7 @@ internal fun DouyinImmersiveScreen(
         activePausedByGesture,
         activePausedByLifecycle,
         activeHasError,
+        showNetworkUnavailable,
         uiState.showTitlePage,
         activeAutoplayEnabled,
         useImmediateEntryPlayback
@@ -2298,7 +2327,7 @@ internal fun DouyinImmersiveScreen(
             showTitlePage = uiState.showTitlePage,
             pausedByGesture = activePausedByGesture,
             pausedByLifecycle = activePausedByLifecycle,
-            hasError = activeHasError
+            hasError = activeHasError || showNetworkUnavailable
         )
         if (targetItem == null || targetPrepareKey.isNullOrBlank() || !canAutoPlay) {
             activeAutoplayEnabled = false
@@ -2367,6 +2396,7 @@ internal fun DouyinImmersiveScreen(
         activePausedByGesture,
         activePausedByLifecycle,
         activeHasError,
+        showNetworkUnavailable,
         uiState.showTitlePage,
         pagerState.isScrollInProgress
     ) {
@@ -2382,8 +2412,9 @@ internal fun DouyinImmersiveScreen(
                 showTitlePage = uiState.showTitlePage,
                 pausedByGesture = activePausedByGesture,
                 pausedByLifecycle = activePausedByLifecycle,
-                hasError = activeHasError
+                hasError = activeHasError || showNetworkUnavailable
             ) &&
+            !showNetworkUnavailable &&
             !pagerState.isScrollInProgress
         if (shouldPlay) {
             enforceEntryPlaybackStartVolumeLimit()
@@ -2401,6 +2432,7 @@ internal fun DouyinImmersiveScreen(
                     activePausedByGesture ||
                     activePausedByLifecycle ||
                     activeHasError ||
+                    showNetworkUnavailable ||
                     uiState.showTitlePage
             )
         }
@@ -2526,7 +2558,7 @@ internal fun DouyinImmersiveScreen(
                     videoSlot = visibleVideoSlot,
                     controlsVisible = controlsVisible,
                     scaleMode = scaleMode,
-                    isBuffering = if (pageIsActive) {
+                    isBuffering = if (pageIsActive && !showNetworkUnavailable) {
                         if (showPosterFallback) {
                             showFirstVideoStartupLoadingIndicator
                         } else {
@@ -2553,7 +2585,7 @@ internal fun DouyinImmersiveScreen(
                         } else {
                             activePausedByGesture = false
                             activeAutoplayEnabled = true
-                            if (activeItem?.awemeId == item.awemeId && !activeHasError) {
+                            if (activeItem?.awemeId == item.awemeId && !activeHasError && !showNetworkUnavailable) {
                                 enforceEntryPlaybackStartVolumeLimit()
                                 restoreAudibleSlotVolume(foregroundSlot)
                                 foregroundSlot.player.playWhenReady = true
@@ -2593,6 +2625,13 @@ internal fun DouyinImmersiveScreen(
             state = volumeState,
             modifier = Modifier.align(Alignment.Center)
         )
+
+        if (showNetworkUnavailable) {
+            InternetAvailabilityOverlay(
+                status = internetAvailabilityStatus,
+                onAction = { requestActivePlaybackRefresh(true) }
+            )
+        }
     }
 }
 

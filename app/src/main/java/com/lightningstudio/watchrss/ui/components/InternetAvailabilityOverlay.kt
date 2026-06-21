@@ -1,0 +1,226 @@
+package com.lightningstudio.watchrss.ui.components
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import com.lightningstudio.watchrss.R
+import com.lightningstudio.watchrss.data.network.InternetAvailabilityStatus
+import com.lightningstudio.watchrss.ui.theme.watchColorResource
+import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
+
+private val InternetAvailableGreen = Color(0xFF41C96B)
+
+@Composable
+fun InternetAvailabilityOverlay(
+    status: InternetAvailabilityStatus,
+    modifier: Modifier = Modifier,
+    message: String = "请连接Wi-Fi或蜂窝移动网络后继续播放",
+    actionText: String = "重试",
+    actionEnabled: Boolean = status != InternetAvailabilityStatus.Checking,
+    onAction: () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.94f))
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = {}
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val textWidth = (maxWidth * 0.92f).coerceAtMost(208.dp)
+
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 18.dp, vertical = 18.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Spacer(modifier = Modifier.height(18.dp))
+
+                Text(
+                    text = "互联网",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.widthIn(max = textWidth)
+                )
+
+                Spacer(modifier = Modifier.height(18.dp))
+
+                InternetAvailabilityStatusBar(
+                    status = status,
+                    modifier = Modifier.widthIn(max = textWidth)
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Text(
+                    text = internetAvailabilityStatusMessage(status),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.widthIn(max = textWidth)
+                )
+
+                Spacer(modifier = Modifier.weight(1f))
+
+                InternetAvailabilityActionButton(
+                    text = actionText,
+                    enabled = actionEnabled,
+                    onClick = onAction
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun InternetAvailabilityStatusBar(
+    status: InternetAvailabilityStatus,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f))
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f),
+                shape = RoundedCornerShape(22.dp)
+            )
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "互联网可用状态",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(modifier = Modifier.size(12.dp))
+        InternetAvailabilityStatusIndicator(status = status)
+    }
+}
+
+@Composable
+private fun InternetAvailabilityStatusIndicator(
+    status: InternetAvailabilityStatus,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier.size(18.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        when (status) {
+            InternetAvailabilityStatus.Checking -> {
+                WatchCircularProgressIndicator(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            InternetAvailabilityStatus.Unavailable -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(CircleShape)
+                        .background(watchColorResource(R.color.danger_red))
+                )
+            }
+
+            InternetAvailabilityStatus.Available -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(CircleShape)
+                        .background(InternetAvailableGreen)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun InternetAvailabilityActionButton(
+    text: String,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    val radius = watchDimensionResource(R.dimen.hey_button_default_radius)
+    val height = watchDimensionResource(R.dimen.hey_button_height)
+    val horizontalPadding = watchDimensionResource(R.dimen.hey_button_mergin_horizontal)
+    val verticalPadding = watchDimensionResource(R.dimen.hey_button_padding_vertical)
+
+    Box(
+        modifier = Modifier
+            .height(height)
+            .clip(RoundedCornerShape(radius))
+            .background(MaterialTheme.colorScheme.primary)
+            .alpha(if (enabled) 1f else 0.45f)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = horizontalPadding, vertical = verticalPadding),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+private fun internetAvailabilityStatusMessage(status: InternetAvailabilityStatus): String {
+    return when (status) {
+        InternetAvailabilityStatus.Checking -> "正在检测互联网状态..."
+        InternetAvailabilityStatus.Unavailable -> "未检测到可用互联网"
+        InternetAvailabilityStatus.Available -> "已检测到互联网，可以继续"
+    }
+}

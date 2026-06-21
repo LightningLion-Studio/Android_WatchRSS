@@ -88,12 +88,15 @@ import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.lightningstudio.watchrss.R
+import com.lightningstudio.watchrss.data.network.InternetAvailabilityStatus
+import com.lightningstudio.watchrss.ui.components.InternetAvailabilityOverlay
 import com.lightningstudio.watchrss.ui.components.PlayerVolumeOverlay
 import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.components.rememberPlayerVolumeState
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownVolumeHandler
 import com.lightningstudio.watchrss.ui.theme.watchColorResource
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
+import com.lightningstudio.watchrss.ui.util.OFFLINE_USER_MESSAGE
 import com.lightningstudio.watchrss.ui.util.normalizeUserFacingMessage
 import com.lightningstudio.watchrss.ui.util.offlineToastMessageOrNull
 import com.lightningstudio.watchrss.ui.util.showAppToast
@@ -108,6 +111,11 @@ import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
+import java.net.ConnectException
+import java.net.NoRouteToHostException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
+import javax.net.ssl.SSLException
 
 internal enum class PlayerScaleMode {
     Standard,
@@ -138,6 +146,7 @@ fun BiliPlayerScreen(
     uiState: BiliPlayerUiState,
     onRetry: () -> Unit,
     onOpenWeb: () -> Unit,
+    internetAvailabilityStatus: InternetAvailabilityStatus = InternetAvailabilityStatus.Checking,
     onPlaybackError: () -> Boolean = { false },
     onPanStateChange: (Float, Float) -> Unit,
     onPlaybackReady: (positionMs: Int, durationMs: Int) -> Unit = { _, _ -> },
@@ -204,8 +213,14 @@ fun BiliPlayerScreen(
         mutableStateOf(uiState.initialSource != null)
     }
     val hasConfiguredSource = uiState.initialSource != null
+    val playbackSourceNeedsInternet = (activeSource ?: uiState.initialSource)
+        ?.requiresInternetConnection() == true
+    val isOfflineNetworkPlayback = internetAvailabilityStatus == InternetAvailabilityStatus.Unavailable &&
+        !isPlaying &&
+        (playbackSourceNeedsInternet || (uiState.isLoading && !hasConfiguredSource))
     val shouldKeepScreenOn = isActive &&
         hasConfiguredSource &&
+        !isOfflineNetworkPlayback &&
         playbackError.isNullOrBlank() &&
         (isPlaying || isBuffering || (activeSource != null && isTextureAvailable))
 
@@ -425,6 +440,20 @@ fun BiliPlayerScreen(
         releasePlayer()
     }
 
+    LaunchedEffect(isOfflineNetworkPlayback, playerRef, activeSource) {
+        if (!isOfflineNetworkPlayback) {
+            return@LaunchedEffect
+        }
+        if (!isPlaying) {
+            isBuffering = false
+            pendingPreparedPlayWhenReady = false
+            runCatching {
+                playerRef?.playWhenReady = false
+                playerRef?.pause()
+            }
+        }
+    }
+
     LaunchedEffect(hasConfiguredSource, uiState.isLoading) {
         if (uiState.isLoading && !hasConfiguredSource) {
             autoPlayInitialized = false
@@ -564,7 +593,15 @@ fun BiliPlayerScreen(
                 if (!playbackCompleted && (positionMs > 0 || durationMs > 0)) {
                     onPlaybackErrorCheckpoint(positionMs, durationMs)
                 }
-                playbackError = if (onPlaybackError()) null else "播放失败"
+                val isNetworkPlaybackFailure =
+                    activeSource?.requiresInternetConnection() == true && error.hasNetworkFailureCause()
+                playbackError = if (isNetworkPlaybackFailure) {
+                    OFFLINE_USER_MESSAGE
+                } else if (onPlaybackError()) {
+                    null
+                } else {
+                    "播放失败"
+                }
             }
 
             override fun onVideoSizeChanged(videoSizeNow: VideoSize) {
@@ -829,13 +866,19 @@ fun BiliPlayerScreen(
         val showLoading = (uiState.isLoading && activeSource == null) ||
             (activeSource != null && !isPrepared) ||
             isBuffering
-        if (showLoading && errorText.isNullOrBlank()) {
+        val showNetworkUnavailable = !isPlaying &&
+            (isOfflineNetworkPlayback ||
+                errorText == OFFLINE_USER_MESSAGE ||
+                (internetAvailabilityStatus == InternetAvailabilityStatus.Unavailable &&
+                    playbackSourceNeedsInternet &&
+                    (playbackError != null || !isPrepared)))
+        if (showLoading && errorText.isNullOrBlank() && !showNetworkUnavailable) {
             WatchCircularProgressIndicator(
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.align(Alignment.Center)
             )
         }
-        if (!errorText.isNullOrBlank()) {
+        if (!errorText.isNullOrBlank() && !showNetworkUnavailable) {
             Column(
                 modifier = Modifier
                     .align(Alignment.Center)
@@ -859,7 +902,7 @@ fun BiliPlayerScreen(
             modifier = Modifier.align(Alignment.Center)
         )
 
-        if (errorText.isNullOrBlank()) {
+        if (errorText.isNullOrBlank() && !showNetworkUnavailable) {
             Box(modifier = Modifier.fillMaxSize()) {
                 if (controlsVisible) {
                     Box(
@@ -984,6 +1027,17 @@ fun BiliPlayerScreen(
                 }
             }
         }
+
+        if (showNetworkUnavailable) {
+            InternetAvailabilityOverlay(
+                status = if (errorText == OFFLINE_USER_MESSAGE) {
+                    InternetAvailabilityStatus.Unavailable
+                } else {
+                    internetAvailabilityStatus
+                },
+                onAction = onRetry
+            )
+        }
     }
 }
 
@@ -997,6 +1051,26 @@ private fun buildDefaultPlaybackDataSourceFactory(
         }
     }
     return DefaultDataSource.Factory(context, upstreamFactory)
+}
+
+private fun BiliPlaybackSource.requiresInternetConnection(): Boolean {
+    return url.startsWith("http://", ignoreCase = true) ||
+        url.startsWith("https://", ignoreCase = true)
+}
+
+private fun Throwable.hasNetworkFailureCause(): Boolean {
+    var current: Throwable? = this
+    while (current != null) {
+        when (current) {
+            is UnknownHostException,
+            is ConnectException,
+            is NoRouteToHostException,
+            is SocketTimeoutException,
+            is SSLException -> return true
+        }
+        current = current.cause
+    }
+    return false
 }
 
 @Composable

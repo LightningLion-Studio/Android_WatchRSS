@@ -9,6 +9,7 @@ import androidx.activity.viewModels
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.core.content.FileProvider
+import com.lightningstudio.watchrss.data.network.InternetAvailabilityStatus
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
@@ -42,6 +43,9 @@ class RssPlayerActivity : BaseWatchActivity() {
                 val playbackStartVolumeLimitPercent by container.settingsRepository.mediaPlaybackStartVolumeLimitPercent.collectAsState(
                     initial = DEFAULT_MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT
                 )
+                val internetAvailabilityStatus by container.internetAvailabilityMonitor.internetAvailability.collectAsState(
+                    initial = InternetAvailabilityStatus.Checking
+                )
                 val continuePlaybackInBackground by viewModel.continuePlaybackInBackground.collectAsState(
                     initial = false
                 )
@@ -57,6 +61,7 @@ class RssPlayerActivity : BaseWatchActivity() {
                             openExternalLink(this, link)
                         }
                     },
+                    internetAvailabilityStatus = internetAvailabilityStatus,
                     onPanStateChange = { offsetX, rangeX ->
                         panOffsetX = offsetX
                         panRangeX = rangeX

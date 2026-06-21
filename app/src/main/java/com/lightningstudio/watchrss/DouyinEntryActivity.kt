@@ -22,6 +22,7 @@ import androidx.lifecycle.lifecycleScope
 import com.lightningstudio.watchrss.data.douyin.DouyinStreamItem
 import com.lightningstudio.watchrss.data.douyin.buildDouyinExternalSavedItem
 import com.lightningstudio.watchrss.data.douyin.containsDouyinSavedItem
+import com.lightningstudio.watchrss.data.network.InternetAvailabilityStatus
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.rss.SaveType
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT
@@ -112,6 +113,9 @@ class DouyinEntryActivity : BaseWatchActivity() {
                     val playbackStartVolumeLimitPercent by container.settingsRepository.mediaPlaybackStartVolumeLimitPercent.collectAsState(
                         initial = DEFAULT_MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT
                     )
+                    val internetAvailabilityStatus by container.internetAvailabilityMonitor.internetAvailability.collectAsState(
+                        initial = InternetAvailabilityStatus.Checking
+                    )
                     val douyinChannel by remember(rssRepository) {
                         rssRepository.observeChannels().map { channels ->
                             channels.firstOrNull { it.url == BuiltinChannelType.DOUYIN.url }
@@ -194,6 +198,7 @@ class DouyinEntryActivity : BaseWatchActivity() {
                                     volumeGuardEnabled = volumeGuardEnabled,
                                     playbackStartVolumeLimitPercent = playbackStartVolumeLimitPercent,
                                     continuePlaybackInBackground = continuePlaybackInBackground,
+                                    internetAvailabilityStatus = internetAvailabilityStatus,
                                     onRefresh = {
                                         if (uiState.showTitlePage) {
                                             viewModel.refreshTitlePageFeed()

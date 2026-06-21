@@ -19,6 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
+import com.lightningstudio.watchrss.data.network.InternetAvailabilityStatus
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED
@@ -60,6 +61,9 @@ class DouyinPlayerActivity : BaseWatchActivity() {
                     )
                     val playbackStartVolumeLimitPercent by settingsRepository.mediaPlaybackStartVolumeLimitPercent.collectAsState(
                         initial = DEFAULT_MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT
+                    )
+                    val internetAvailabilityStatus by container.internetAvailabilityMonitor.internetAvailability.collectAsState(
+                        initial = InternetAvailabilityStatus.Checking
                     )
                     val continuePlaybackInBackground by remember(rssRepository) {
                         rssRepository.observeChannels().map { channels ->
@@ -119,6 +123,7 @@ class DouyinPlayerActivity : BaseWatchActivity() {
                                             ?: return@BiliPlayerScreen
                                         WebViewActivity.open(this@DouyinPlayerActivity, link)
                                     },
+                                    internetAvailabilityStatus = internetAvailabilityStatus,
                                     onPanStateChange = { _, _ -> },
                                     allowPan = false,
                                     isActive = page == pagerState.currentPage,

@@ -11,6 +11,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
+import com.lightningstudio.watchrss.data.network.InternetAvailabilityStatus
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED
@@ -55,6 +56,9 @@ class BiliPlayerActivity : BaseWatchActivity() {
                     val playbackStartVolumeLimitPercent by settingsRepository.mediaPlaybackStartVolumeLimitPercent.collectAsState(
                         initial = DEFAULT_MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT
                     )
+                    val internetAvailabilityStatus by container.internetAvailabilityMonitor.internetAvailability.collectAsState(
+                        initial = InternetAvailabilityStatus.Checking
+                    )
                     val continuePlaybackInBackground by remember(rssRepository) {
                         rssRepository.observeChannels().map { channels ->
                             channels.firstOrNull { it.url == BuiltinChannelType.BILI.url }
@@ -69,6 +73,7 @@ class BiliPlayerActivity : BaseWatchActivity() {
                             val safeLink = link ?: return@BiliPlayerScreen
                             WebViewActivity.open(this, safeLink)
                         },
+                        internetAvailabilityStatus = internetAvailabilityStatus,
                         onPlaybackReady = viewModel::onPlaybackReady,
                         onPlaybackProgress = { positionMs, durationMs ->
                             viewModel.onPlaybackProgress(positionMs, durationMs)
