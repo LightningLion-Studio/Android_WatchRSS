@@ -43,6 +43,7 @@ import com.lightningstudio.watchrss.ui.testing.ProfileTestTags
 @Composable
 fun ProfileScreen(
     showPhoneConnectionEntry: Boolean = true,
+    onAccountClick: () -> Unit = {},
     onFavoritesClick: () -> Unit,
     onWatchLaterClick: () -> Unit,
     onPhoneConnectionClick: () -> Unit,
@@ -84,6 +85,22 @@ fun ProfileScreen(
             )
 
             Spacer(modifier = Modifier.height(sectionSpacing))
+
+            ProfileEntry(
+                title = "账号",
+                icon = Icons.Outlined.Person,
+                onClick = onAccountClick,
+                testTag = ProfileTestTags.ACCOUNT_ENTRY,
+                pillHeight = pillHeight,
+                pillRadius = pillRadius,
+                pillColor = pillColor,
+                pillHorizontalPadding = pillHorizontalPadding,
+                pillVerticalPadding = pillVerticalPadding,
+                iconSize = iconSize,
+                iconSpacing = iconSpacing
+            )
+
+            Spacer(modifier = Modifier.height(entrySpacing))
 
             ProfileEntry(
                 title = "我的收藏",

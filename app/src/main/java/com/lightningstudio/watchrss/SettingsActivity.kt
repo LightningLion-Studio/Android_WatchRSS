@@ -57,9 +57,6 @@ class SettingsActivity : BaseWatchActivity() {
                     onOpenLlmPromptPreset = {
                         startActivity(LlmPromptPresetActivity.createIntent(this))
                     },
-                    onOpenReadAloudSettings = {
-                        startActivity(ReadAloudApiSettingsActivity.createIntent(this))
-                    },
                     onBeianClick = {
                         startActivity(BeianActivity.createIntent(this))
                     }

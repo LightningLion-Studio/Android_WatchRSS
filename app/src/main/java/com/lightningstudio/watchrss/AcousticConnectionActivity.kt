@@ -222,12 +222,6 @@ class AcousticConnectionActivity : BaseWatchActivity() {
                 isBusy = false
             }
 
-            PhoneConnectionAbility.READ_ALOUD_CONFIG -> {
-                statusMessage = "朗读配置不支持声波连接"
-                detailMessage = "请使用 WiFi 扫码方式配置朗读服务"
-                primaryButtonLabel = null
-                isBusy = false
-            }
         }
     }
 
@@ -287,7 +281,6 @@ class AcousticConnectionActivity : BaseWatchActivity() {
                 PhoneConnectionAbility.SYNC_WATCH_LATER -> startPureSoundPlayback()
                 PhoneConnectionAbility.SYNC_BILI_WATCH_RECORDS,
                 PhoneConnectionAbility.LLM_SUMMARY_CONFIG -> Unit
-                PhoneConnectionAbility.READ_ALOUD_CONFIG -> Unit
                 null -> Unit
             }
 
@@ -420,7 +413,6 @@ class AcousticConnectionActivity : BaseWatchActivity() {
 
                 PhoneConnectionAbility.LLM_SUMMARY_CONFIG -> Unit
                 PhoneConnectionAbility.SYNC_BILI_WATCH_RECORDS -> Unit
-                PhoneConnectionAbility.READ_ALOUD_CONFIG -> Unit
 
                 PhoneConnectionAbility.SYNC_FAVORITES,
                 PhoneConnectionAbility.SYNC_WATCH_LATER -> {

@@ -3,16 +3,23 @@ package com.lightningstudio.watchrss
 import android.app.Application
 import com.lightningstudio.watchrss.data.AppContainer
 import com.lightningstudio.watchrss.data.DefaultAppContainer
+import com.lightningstudio.watchrss.data.account.WatchAccountStore
+import com.lightningstudio.watchrss.data.telemetry.WatchUsageTelemetry
 import com.lightningstudio.watchrss.debug.DebugLogBuffer
 import com.lightningstudio.watchrss.debug.StartupDurationTracker
+import com.lightningstudio.watchrss.phoneconnection.WatchDeviceIdentity
 import com.lightningstudio.watchrss.phoneconnection.bluetooth.WatchBluetoothForegroundSyncManager
 import com.lightningstudio.watchrss.sdk.bili.BiliDebugLog
 import com.lightningstudio.watchrss.util.AppLogger
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 class WatchRssApplication : Application() {
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val defaultContainer: AppContainer by lazy {
         DefaultAppContainer(this)
     }
@@ -25,6 +32,19 @@ class WatchRssApplication : Application() {
 
     val container: AppContainer
         get() = testContainerOverride ?: defaultContainer
+
+    val accountStore: WatchAccountStore by lazy {
+        WatchAccountStore(this)
+    }
+
+    val usageTelemetry: WatchUsageTelemetry by lazy {
+        WatchUsageTelemetry(
+            context = this,
+            accountStore = accountStore,
+            deviceIdentity = WatchDeviceIdentity(this),
+            appScope = appScope
+        )
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -42,6 +62,7 @@ class WatchRssApplication : Application() {
         }
 
         bluetoothForegroundSyncManager.install()
+        usageTelemetry.recordAppLaunch()
     }
 
     fun setContainerForTesting(container: AppContainer?) {

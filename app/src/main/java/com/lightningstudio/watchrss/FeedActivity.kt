@@ -4,19 +4,14 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.lightningstudio.watchrss.debug.PerfTrace
 import com.lightningstudio.watchrss.debug.PerformanceMonitor
-import com.lightningstudio.watchrss.ui.screen.common.ReadAloudBubbleDock
-import com.lightningstudio.watchrss.ui.screen.common.ReadAloudFloatingBubbleOverlay
 import com.lightningstudio.watchrss.ui.screen.rss.FeedScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
@@ -58,11 +53,6 @@ class FeedActivity : BaseWatchActivity() {
                 val isRefreshing by viewModel.isRefreshing.collectAsState()
                 val hasMore by viewModel.hasMore.collectAsState()
                 val message by viewModel.message.collectAsState()
-                val readAloudState by (application as WatchRssApplication)
-                    .container
-                    .readAloudController
-                    .uiState
-                    .collectAsState()
 
                 LaunchedEffect(message) {
                     if (message != null) {
@@ -71,58 +61,48 @@ class FeedActivity : BaseWatchActivity() {
                     }
                 }
 
-                Box(modifier = Modifier.fillMaxSize()) {
-                    FeedScreen(
-                        channel = channel,
-                        items = items,
-                        hasLoadedItems = hasLoadedItems,
-                        isRefreshing = isRefreshing,
-                        hasMore = hasMore,
-                        openSwipeId = openSwipeKey,
-                        onOpenSwipe = { openSwipeKey = it },
-                        onCloseSwipe = { openSwipeKey = null },
-                        draggingSwipeId = draggingSwipeKey,
-                        onDragStart = { draggingSwipeKey = it },
-                        onDragEnd = { draggingSwipeKey = null },
-                        onHeaderClick = {
-                            if (closeOpenSwipe()) return@FeedScreen
-                            if (!allowNavigation()) return@FeedScreen
-                            openChannelDetail()
-                        },
-                        onRefresh = { viewModel.refresh() },
-                        onLoadMore = { viewModel.loadMore() },
-                        onItemClick = { item ->
-                            if (closeOpenSwipe()) return@FeedScreen
-                            if (!allowNavigation()) return@FeedScreen
-                            val intent = Intent(this@FeedActivity, DetailActivity::class.java)
-                            intent.putExtra(DetailActivity.EXTRA_ITEM_ID, item.id)
-                            startActivity(intent)
-                        },
-                        onItemLongClick = { item ->
-                            if (!allowNavigation()) return@FeedScreen
-                            showItemActions(item)
-                        },
-                        onFavoriteClick = { item ->
-                            closeOpenSwipe()
-                            viewModel.toggleFavorite(item.id)
-                        },
-                        onWatchLaterClick = { item ->
-                            closeOpenSwipe()
-                            viewModel.toggleWatchLater(item.id)
-                        },
-                        onBack = { finish() },
-                        onOriginalContentScrollStateChanged = viewModel::setOriginalContentUpdatesPaused,
-                        onRequestOriginalContents = viewModel::requestOriginalContents
-                    )
-                    ReadAloudFloatingBubbleOverlay(
-                        state = readAloudState,
-                        defaultDock = ReadAloudBubbleDock.TOP,
-                        onClick = {
-                            if (!allowNavigation()) return@ReadAloudFloatingBubbleOverlay
-                            startActivity(ReadAloudPlaybackActivity.createIntent(this@FeedActivity))
-                        }
-                    )
-                }
+                FeedScreen(
+                    channel = channel,
+                    items = items,
+                    hasLoadedItems = hasLoadedItems,
+                    isRefreshing = isRefreshing,
+                    hasMore = hasMore,
+                    openSwipeId = openSwipeKey,
+                    onOpenSwipe = { openSwipeKey = it },
+                    onCloseSwipe = { openSwipeKey = null },
+                    draggingSwipeId = draggingSwipeKey,
+                    onDragStart = { draggingSwipeKey = it },
+                    onDragEnd = { draggingSwipeKey = null },
+                    onHeaderClick = {
+                        if (closeOpenSwipe()) return@FeedScreen
+                        if (!allowNavigation()) return@FeedScreen
+                        openChannelDetail()
+                    },
+                    onRefresh = { viewModel.refresh() },
+                    onLoadMore = { viewModel.loadMore() },
+                    onItemClick = { item ->
+                        if (closeOpenSwipe()) return@FeedScreen
+                        if (!allowNavigation()) return@FeedScreen
+                        val intent = Intent(this@FeedActivity, DetailActivity::class.java)
+                        intent.putExtra(DetailActivity.EXTRA_ITEM_ID, item.id)
+                        startActivity(intent)
+                    },
+                    onItemLongClick = { item ->
+                        if (!allowNavigation()) return@FeedScreen
+                        showItemActions(item)
+                    },
+                    onFavoriteClick = { item ->
+                        closeOpenSwipe()
+                        viewModel.toggleFavorite(item.id)
+                    },
+                    onWatchLaterClick = { item ->
+                        closeOpenSwipe()
+                        viewModel.toggleWatchLater(item.id)
+                    },
+                    onBack = { finish() },
+                    onOriginalContentScrollStateChanged = viewModel::setOriginalContentUpdatesPaused,
+                    onRequestOriginalContents = viewModel::requestOriginalContents
+                )
             }
         }
     }

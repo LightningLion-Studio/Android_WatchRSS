@@ -4,6 +4,7 @@ import android.os.Trace
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -26,6 +27,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.LinkAnnotation
@@ -51,6 +53,11 @@ import com.lightningstudio.watchrss.ui.util.RssInlineImageLoader
 import com.lightningstudio.watchrss.ui.util.TextStyle as ContentTextStyle
 import kotlinx.coroutines.delay
 
+internal data class DetailTextHighlightRange(
+    val start: Int,
+    val end: Int
+)
+
 @Composable
 internal fun DetailTextBlock(
     text: String,
@@ -62,6 +69,9 @@ internal fun DetailTextBlock(
     inlineActionText: String? = null,
     inlineActionColor: Color = Color(0xFF87CEEB),
     onInlineActionClick: (() -> Unit)? = null,
+    highlightRange: DetailTextHighlightRange? = null,
+    highlightColor: Color = Color.Transparent,
+    onLongClick: (() -> Unit)? = null,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null
 ) {
     if (isDetailTracingEnabled()) {
@@ -70,13 +80,33 @@ internal fun DetailTextBlock(
     val lineHeight = fontSizeSp * 1.2f
     val fontFamily = if (style == ContentTextStyle.CODE) FontFamily.Monospace else null
     val color = if (style == ContentTextStyle.QUOTE) textColor.copy(alpha = 0.8f) else textColor
-    val annotatedText = remember(text, inlineActionText, inlineActionColor, onInlineActionClick) {
+    val annotatedText = remember(
+        text,
+        inlineActionText,
+        inlineActionColor,
+        onInlineActionClick,
+        highlightRange,
+        highlightColor
+    ) {
         buildDetailTextAnnotatedString(
             text = text,
             inlineActionText = inlineActionText,
             inlineActionColor = inlineActionColor,
-            onInlineActionClick = onInlineActionClick
+            onInlineActionClick = onInlineActionClick,
+            highlightRange = highlightRange,
+            highlightColor = highlightColor
         )
+    }
+    val longClickModifier = if (onLongClick == null) {
+        Modifier
+    } else {
+        Modifier.pointerInput(onLongClick) {
+            detectTapGestures(
+                onLongPress = {
+                    onLongClick()
+                }
+            )
+        }
     }
     Text(
         text = annotatedText,
@@ -89,6 +119,7 @@ internal fun DetailTextBlock(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = topPadding)
+            .then(longClickModifier)
             .scrollSemanticsDisabled(isScrolling)
             .debugTraceLayout("DetailTextBlock/layout")
             .debugTraceDraw("DetailTextBlock/draw")
@@ -102,39 +133,67 @@ private fun buildDetailTextAnnotatedString(
     text: String,
     inlineActionText: String?,
     inlineActionColor: Color,
-    onInlineActionClick: (() -> Unit)?
+    onInlineActionClick: (() -> Unit)?,
+    highlightRange: DetailTextHighlightRange?,
+    highlightColor: Color
 ) = buildAnnotatedString {
     if (inlineActionText.isNullOrEmpty() || onInlineActionClick == null) {
         append(text)
-        return@buildAnnotatedString
+    } else {
+        val linkStyle = TextLinkStyles(
+            style = SpanStyle(
+                color = inlineActionColor,
+                textDecoration = TextDecoration.Underline
+            )
+        )
+        var searchStart = 0
+        while (searchStart < text.length) {
+            val matchIndex = text.indexOf(inlineActionText, startIndex = searchStart)
+            if (matchIndex < 0) {
+                append(text.substring(searchStart))
+                break
+            }
+            if (matchIndex > searchStart) {
+                append(text.substring(searchStart, matchIndex))
+            }
+            withLink(
+                LinkAnnotation.Clickable(
+                    tag = inlineActionText,
+                    styles = linkStyle,
+                    linkInteractionListener = { onInlineActionClick() }
+                )
+            ) {
+                append(inlineActionText)
+            }
+            searchStart = matchIndex + inlineActionText.length
+        }
     }
 
-    val linkStyle = TextLinkStyles(
-        style = SpanStyle(
-            color = inlineActionColor,
-            textDecoration = TextDecoration.Underline
+    val start = highlightRange?.start?.coerceIn(0, text.length) ?: return@buildAnnotatedString
+    val end = highlightRange.end.coerceIn(start, text.length)
+    if (start < end && highlightColor.alpha > 0f) {
+        addStyle(
+            style = SpanStyle(background = highlightColor),
+            start = start,
+            end = end
         )
-    )
-    var searchStart = 0
-    while (searchStart < text.length) {
-        val matchIndex = text.indexOf(inlineActionText, startIndex = searchStart)
-        if (matchIndex < 0) {
-            append(text.substring(searchStart))
-            break
-        }
-        if (matchIndex > searchStart) {
-            append(text.substring(searchStart, matchIndex))
-        }
-        withLink(
-            LinkAnnotation.Clickable(
-                tag = inlineActionText,
-                styles = linkStyle,
-                linkInteractionListener = { onInlineActionClick() }
-            )
-        ) {
-            append(inlineActionText)
-        }
-        searchStart = matchIndex + inlineActionText.length
+    }
+}
+
+internal fun buildHighlightedPlainText(
+    text: String,
+    highlightRange: DetailTextHighlightRange?,
+    highlightColor: Color
+) = buildAnnotatedString {
+    append(text)
+    val start = highlightRange?.start?.coerceIn(0, text.length) ?: return@buildAnnotatedString
+    val end = highlightRange.end.coerceIn(start, text.length)
+    if (start < end && highlightColor.alpha > 0f) {
+        addStyle(
+            style = SpanStyle(background = highlightColor),
+            start = start,
+            end = end
+        )
     }
 }
 

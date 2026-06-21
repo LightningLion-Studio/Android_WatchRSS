@@ -34,8 +34,6 @@ import com.lightningstudio.watchrss.data.rss.RssChannel
 import com.lightningstudio.watchrss.debug.PerformanceMonitor
 import com.lightningstudio.watchrss.debug.StartupDurationTracker
 import com.lightningstudio.watchrss.sdk.douyin.DouyinVideo
-import com.lightningstudio.watchrss.ui.screen.common.ReadAloudBubbleDock
-import com.lightningstudio.watchrss.ui.screen.common.ReadAloudFloatingBubbleOverlay
 import com.lightningstudio.watchrss.ui.screen.home.HomeComposeScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
@@ -135,11 +133,10 @@ class HomeFeedListActivity : BaseWatchActivity() {
                 val isRefreshing by viewModel.isRefreshing.collectAsState()
                 val message by viewModel.message.collectAsState()
                 val platformLoginState by viewModel.platformLoginState.collectAsState()
-                val readAloudState by (application as WatchRssApplication)
+                val readAloudController = (application as WatchRssApplication)
                     .container
                     .readAloudController
-                    .uiState
-                    .collectAsState()
+                val readAloudState by readAloudController.uiState.collectAsState()
 
                 androidx.compose.runtime.LaunchedEffect(hasLoadedChannels) {
                     if (hasLoadedChannels) {
@@ -163,6 +160,8 @@ class HomeFeedListActivity : BaseWatchActivity() {
                         channels = channels,
                         hasLoadedChannels = hasLoadedChannels,
                         platformLoginState = platformLoginState,
+                        readAloudState = readAloudState,
+                        readAloudAudioSpectrum = readAloudController.audioSpectrumFrames,
                         enableChannelSwipeActions = false,
                         isRefreshing = isRefreshing,
                         debugAutoScrollPerf = intent.getBooleanExtra(
@@ -190,6 +189,11 @@ class HomeFeedListActivity : BaseWatchActivity() {
                                 intent = Intent(this@HomeFeedListActivity, RssRecommendActivity::class.java)
                             )
                         },
+                        onReadAloudClick = {
+                            startNavigatingActivity(
+                                ReadAloudPlaybackActivity.createIntent(this@HomeFeedListActivity)
+                            )
+                        },
                         onChannelClick = { channel ->
                             if (closeOpenSwipe()) return@HomeComposeScreen
                             openChannel(channel)
@@ -215,15 +219,6 @@ class HomeFeedListActivity : BaseWatchActivity() {
                         },
                         onBeianClick = {
                             startNavigatingActivity(BeianActivity.createIntent(this@HomeFeedListActivity))
-                        }
-                    )
-                    ReadAloudFloatingBubbleOverlay(
-                        state = readAloudState,
-                        defaultDock = ReadAloudBubbleDock.RIGHT,
-                        onClick = {
-                            startNavigatingActivity(
-                                ReadAloudPlaybackActivity.createIntent(this@HomeFeedListActivity)
-                            )
                         }
                     )
                 }

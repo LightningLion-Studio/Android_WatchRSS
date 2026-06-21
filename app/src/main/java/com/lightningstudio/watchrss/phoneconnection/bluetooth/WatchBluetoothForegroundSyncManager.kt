@@ -150,7 +150,10 @@ class WatchBluetoothForegroundSyncManager(
                 withContext(Dispatchers.IO) {
                     WatchBluetoothSyncServer(
                         context = application,
-                        allowedActions = setOf(BluetoothSyncProtocol.ACTION_SYNC_LIBRARY),
+                        allowedActions = setOf(
+                            BluetoothSyncProtocol.ACTION_SYNC_LIBRARY,
+                            BluetoothSyncProtocol.ACTION_SYNC_ACCOUNT
+                        ),
                         onClientAccepted = {
                             updateTransferInProgress(true)
                         }

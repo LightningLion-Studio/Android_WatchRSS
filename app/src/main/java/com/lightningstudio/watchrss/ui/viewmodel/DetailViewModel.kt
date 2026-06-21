@@ -21,9 +21,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -166,6 +168,22 @@ class DetailViewModel(
                 settingsRepository.recordTemporaryOriginalContentEnableAndShouldShowHint(currentItem.channelId)
             ) {
                 _message.value = ORIGINAL_CONTENT_MODE_HINT_MESSAGE
+            }
+        }
+    }
+
+    fun setOriginalContentEnabled(enabled: Boolean) {
+        if (itemId <= 0L) return
+
+        viewModelScope.launch {
+            val currentItem = item.value ?: item.filterNotNull().first()
+            if (ImportedContentIds.isImportedTextItemUrl(currentItem.link)) return@launch
+
+            setTemporaryOriginalContentOverride(enabled)
+            if (!enabled) return@launch
+
+            if (currentItem.isOriginalContentMissing()) {
+                repository.requestOriginalContent(currentItem.id, force = true)
             }
         }
     }

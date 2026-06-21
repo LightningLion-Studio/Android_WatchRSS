@@ -780,6 +780,29 @@ class WatchBluetoothSyncServer(
                     }
                 }
 
+                BluetoothSyncProtocol.ACTION_SYNC_ACCOUNT -> {
+                    val app = context.applicationContext as WatchRssApplication
+                    val localDeviceId = WatchDeviceIdentity(context).deviceId
+                    val state = AccountSyncPayload.parseRequest(request)
+                    app.accountStore.save(state)
+                    app.usageTelemetry.recordSyncAccount()
+                    WatchBluetoothDebugLog.event(
+                        sessionId = sessionId,
+                        event = "request.syncAccount.saved",
+                        fields = mapOf(
+                            "userId" to state.userId,
+                            "plan" to state.entitlement.plan,
+                            "tokenExpiresAt" to state.tokenExpiresAtMillis,
+                            "diagnosticsEnabled" to state.telemetryConfig.diagnosticsEnabled
+                        )
+                    )
+                    AccountSyncPayload.buildResponse(
+                        deviceId = localDeviceId,
+                        state = state,
+                        telemetryBacklog = app.usageTelemetry.backlogCount()
+                    )
+                }
+
                 BluetoothSyncProtocol.ACTION_SYNC_LIBRARY -> {
                     val localDeviceId = WatchDeviceIdentity(context).deviceId
                     if (request.optString("phase") == LibrarySyncPayload.PHASE_PROBE) {

@@ -17,6 +17,10 @@ class ProfileActivity : BaseWatchActivity() {
             WatchRSSTheme {
                 ProfileScreen(
                     showPhoneConnectionEntry = PhoneConnectionFeature.isAvailable,
+                    onAccountClick = {
+                        if (!allowNavigation()) return@ProfileScreen
+                        startActivity(Intent(this, AccountStatusActivity::class.java))
+                    },
                     onFavoritesClick = {
                         if (!allowNavigation()) return@ProfileScreen
                         val intent = Intent(this, SavedItemsActivity::class.java)

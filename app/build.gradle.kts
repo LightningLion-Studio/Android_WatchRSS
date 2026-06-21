@@ -38,6 +38,7 @@ android {
         versionName = "1.2.2-1"
         buildConfigField("boolean", "ENABLE_RUNTIME_PERF_MONITOR", "false")
         buildConfigField("boolean", "ENABLE_WATCH_DEBUG_MASK", "false")
+        manifestPlaceholders["debugActivityExported"] = "false"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         if (clearPackageDataForInstrumentation) {
@@ -59,6 +60,7 @@ android {
         debug {
             buildConfigField("boolean", "ENABLE_RUNTIME_PERF_MONITOR", "true")
             buildConfigField("boolean", "ENABLE_WATCH_DEBUG_MASK", "true")
+            manifestPlaceholders["debugActivityExported"] = "true"
             if (hasKeystoreProperties) {
                 signingConfig = signingConfigs.getByName("release")
             }
@@ -86,6 +88,7 @@ android {
             initWith(getByName("release"))
             matchingFallbacks += listOf("release")
             isDebuggable = true
+            manifestPlaceholders["debugActivityExported"] = "true"
             if (hasKeystoreProperties) {
                 signingConfig = signingConfigs.getByName("release")
             }

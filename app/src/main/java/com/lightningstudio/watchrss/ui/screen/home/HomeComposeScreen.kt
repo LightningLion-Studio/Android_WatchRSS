@@ -1,5 +1,10 @@
 package com.lightningstudio.watchrss.ui.screen.home
 
+import android.content.Context
+import android.graphics.Paint
+import android.graphics.RectF
+import android.view.Choreographer
+import android.view.View
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -56,6 +61,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
@@ -71,19 +77,24 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.PullRefreshBox
 import com.lightningstudio.watchrss.ui.components.rememberPullRefreshEnabled
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.rss.RssChannel
+import com.lightningstudio.watchrss.data.tts.ReadAloudUiState
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
+import com.lightningstudio.watchrss.ui.screen.rss.buildPlaybackStatusText
 import com.lightningstudio.watchrss.ui.testing.HomeTestTags
 import com.lightningstudio.watchrss.ui.theme.watchColorResource
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import com.lightningstudio.watchrss.ui.util.formatTime
 import com.lightningstudio.watchrss.ui.viewmodel.HomePlatformLoginState
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
+import java.util.ArrayDeque
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.roundToInt
 
@@ -92,6 +103,8 @@ fun HomeComposeScreen(
     channels: List<RssChannel>,
     hasLoadedChannels: Boolean = true,
     platformLoginState: HomePlatformLoginState = HomePlatformLoginState(),
+    readAloudState: ReadAloudUiState = ReadAloudUiState(),
+    readAloudAudioSpectrum: SharedFlow<FloatArray>? = null,
     enableChannelSwipeActions: Boolean = false,
     isRefreshing: Boolean,
     debugAutoScrollPerf: Boolean = false,
@@ -105,6 +118,7 @@ fun HomeComposeScreen(
     onDragEnd: () -> Unit,
     onProfileClick: () -> Unit,
     onRecommendClick: () -> Unit,
+    onReadAloudClick: () -> Unit = {},
     onChannelClick: (RssChannel) -> Unit,
     onChannelLongClick: (RssChannel) -> Unit,
     onSwipeBack: () -> Unit,
@@ -115,8 +129,9 @@ fun HomeComposeScreen(
 ) {
     val baseDensity = LocalDensity.current
     CompositionLocalProvider(LocalDensity provides Density(2f, baseDensity.fontScale)) {
-        val entries = remember(channels, hasLoadedChannels) {
-            buildHomeEntries(channels, hasLoadedChannels)
+        val showReadAloudEntry = readAloudState.visible && readAloudState.currentItemId != null
+        val entries = remember(channels, hasLoadedChannels, showReadAloudEntry) {
+            buildHomeEntries(channels, hasLoadedChannels, showReadAloudEntry)
         }
         val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
         val itemSpacing = watchDimensionResource(R.dimen.hey_distance_6dp)
@@ -212,6 +227,13 @@ fun HomeComposeScreen(
                                     onClick = onRecommendClick
                                 )
                             }
+                            HomeEntry.ReadAloud -> {
+                                HomeReadAloudEntry(
+                                    state = readAloudState,
+                                    audioSpectrum = readAloudAudioSpectrum,
+                                    onClick = onReadAloudClick
+                                )
+                            }
                             HomeEntry.AddRss -> {
                                 HomeAddEntry(
                                     onAddRssClick = onAddRssClick,
@@ -253,6 +275,7 @@ fun HomeComposeScreen(
 
 private sealed class HomeEntry(val key: String) {
     data object Profile : HomeEntry("profile")
+    data object ReadAloud : HomeEntry("read_aloud")
     data class Channel(val channel: RssChannel) : HomeEntry("channel_${channel.id}")
     data object Empty : HomeEntry("empty")
     data object Recommend : HomeEntry("recommend")
@@ -262,10 +285,14 @@ private sealed class HomeEntry(val key: String) {
 
 private fun buildHomeEntries(
     channels: List<RssChannel>,
-    hasLoadedChannels: Boolean
+    hasLoadedChannels: Boolean,
+    showReadAloudEntry: Boolean
 ): List<HomeEntry> {
     val entries = mutableListOf<HomeEntry>()
     entries.add(HomeEntry.Profile)
+    if (showReadAloudEntry) {
+        entries.add(HomeEntry.ReadAloud)
+    }
     if (!hasLoadedChannels) {
         // Wait for the first Room emission to avoid flashing an empty-state card on cold start.
     } else if (channels.isEmpty()) {
@@ -328,6 +355,215 @@ private fun HomeProfileEntry(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = hintSize
         )
+    }
+}
+
+@Composable
+private fun HomeReadAloudEntry(
+    state: ReadAloudUiState,
+    audioSpectrum: SharedFlow<FloatArray>?,
+    onClick: () -> Unit
+) {
+    val status = buildPlaybackStatusText(state)
+    val title = if (state.isPlaying) "正在朗读" else "朗读已暂停"
+    val itemTitle = state.currentTitle.ifBlank { "本地朗读" }
+    val source = state.currentChannelTitle.takeIf { it.isNotBlank() }
+    val borderColor = if (state.isPlaying) {
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.82f)
+    } else {
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f)
+    }
+    val summary = if (source == null) {
+        "$itemTitle\n$status"
+    } else {
+        "$itemTitle\n$source · $status"
+    }
+    HomeDefaultItem(
+        title = title,
+        summary = summary,
+        backgroundColor = MaterialTheme.colorScheme.surfaceVariant,
+        borderColor = borderColor,
+        borderWidth = 1.dp,
+        titleFontSize = 16.sp,
+        showIndicator = false,
+        trailingContent = {
+            HomeReadAloudFourierVisualizer(
+                isPlaying = state.isPlaying,
+                audioSpectrum = audioSpectrum,
+                fallbackSpectrum = state.audioSpectrum
+            )
+        },
+        onClick = onClick
+    )
+}
+
+@Composable
+private fun HomeReadAloudFourierVisualizer(
+    isPlaying: Boolean,
+    audioSpectrum: SharedFlow<FloatArray>?,
+    fallbackSpectrum: List<Float>,
+    modifier: Modifier = Modifier
+) {
+    val accent = MaterialTheme.colorScheme.primary
+    val spectrumViewHolder = remember { HomeReadAloudSpectrumViewHolder() }
+
+    LaunchedEffect(audioSpectrum, fallbackSpectrum) {
+        val spectrumView = spectrumViewHolder.awaitView()
+        if (audioSpectrum == null) {
+            spectrumView.setTargets(fallbackSpectrum)
+        } else {
+            audioSpectrum.collect { spectrum ->
+                spectrumView.setTargets(spectrum)
+            }
+        }
+    }
+
+    AndroidView(
+        factory = { context ->
+            HomeReadAloudSpectrumView(context).also { view ->
+                spectrumViewHolder.view = view
+            }
+        },
+        update = { view ->
+            view.setSpectrumColor(accent.toArgb())
+            view.setPlaying(isPlaying)
+            if (audioSpectrum == null) {
+                view.setTargets(fallbackSpectrum)
+            }
+        },
+        modifier = modifier
+            .width(38.dp)
+            .height(34.dp)
+    )
+}
+
+private class HomeReadAloudSpectrumViewHolder {
+    var view: HomeReadAloudSpectrumView? = null
+
+    suspend fun awaitView(): HomeReadAloudSpectrumView {
+        while (true) {
+            view?.let { return it }
+            delay(READ_ALOUD_HOME_SPECTRUM_VIEW_AWAIT_DELAY_MS)
+        }
+    }
+}
+
+private class HomeReadAloudSpectrumView(context: Context) : View(context), Choreographer.FrameCallback {
+    private val currentLevels = FloatArray(READ_ALOUD_HOME_SPECTRUM_BARS)
+    private val pendingFrames = ArrayDeque<FloatArray>(READ_ALOUD_HOME_SPECTRUM_MAX_PENDING_FRAMES)
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val barRect = RectF()
+    private var isPlaying = false
+    private var isFrameCallbackPosted = false
+
+    init {
+        setWillNotDraw(false)
+        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+    }
+
+    fun setPlaying(value: Boolean) {
+        if (isPlaying == value) return
+        isPlaying = value
+        ensureFrameCallback()
+    }
+
+    fun setSpectrumColor(color: Int) {
+        if (paint.color == color) return
+        paint.color = color
+        invalidate()
+    }
+
+    fun setTargets(source: List<Float>) {
+        currentLevels.forEachIndexed { index, _ ->
+            currentLevels[index] = ((source.getOrNull(index) ?: 0f) * 2f).coerceIn(0f, 1f)
+        }
+        invalidate()
+    }
+
+    fun setTargets(source: FloatArray) {
+        if (source.isEmpty()) {
+            pendingFrames.clear()
+            currentLevels.fill(0f)
+            invalidate()
+            return
+        }
+        if (pendingFrames.size >= READ_ALOUD_HOME_SPECTRUM_MAX_PENDING_FRAMES) {
+            pendingFrames.removeFirst()
+        }
+        pendingFrames.addLast(
+            FloatArray(READ_ALOUD_HOME_SPECTRUM_BARS) { index ->
+                ((source.getOrNull(index) ?: 0f) * 2f).coerceIn(0f, 1f)
+            }
+        )
+        ensureFrameCallback()
+    }
+
+    override fun doFrame(frameTimeNanos: Long) {
+        isFrameCallbackPosted = false
+        if (isPlaying && pendingFrames.isNotEmpty()) {
+            val nextFrame = pendingFrames.removeFirst()
+            nextFrame.copyInto(currentLevels)
+            invalidate()
+        } else if (!isPlaying && currentLevels.any { level -> level > READ_ALOUD_HOME_SPECTRUM_IDLE_EPSILON }) {
+            currentLevels.forEachIndexed { index, current ->
+                val next = current * READ_ALOUD_HOME_SPECTRUM_STOP_DECAY
+                currentLevels[index] = if (next < READ_ALOUD_HOME_SPECTRUM_IDLE_EPSILON) {
+                    0f
+                } else {
+                    next
+                }
+            }
+            invalidate()
+        }
+        if ((isPlaying && pendingFrames.isNotEmpty()) ||
+            (!isPlaying && currentLevels.any { level -> level > READ_ALOUD_HOME_SPECTRUM_IDLE_EPSILON })
+        ) {
+            ensureFrameCallback()
+        }
+    }
+
+    override fun onDraw(canvas: android.graphics.Canvas) {
+        super.onDraw(canvas)
+        if (width <= 0 || height <= 0) return
+        val barCount = READ_ALOUD_HOME_SPECTRUM_BARS
+        val gap = width / (barCount * 1.9f)
+        val barWidth = (width - gap * (barCount - 1)) / barCount
+        val centerY = height * 0.5f
+        val inactiveAlpha = if (isPlaying) 1f else 0.52f
+        currentLevels.forEachIndexed { index, level ->
+            if (level <= 0.005f) return@forEachIndexed
+            val barHeight = (height * level).coerceAtLeast(height * 0.16f)
+            val left = index * (barWidth + gap)
+            val top = centerY - barHeight / 2f
+            paint.alpha = (((0.32f + level * 0.58f) * inactiveAlpha) * 255)
+                .toInt()
+                .coerceIn(0, 255)
+            barRect.set(left, top, left + barWidth, top + barHeight)
+            canvas.drawRoundRect(barRect, barWidth / 2f, barWidth / 2f, paint)
+        }
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        ensureFrameCallback()
+    }
+
+    override fun onDetachedFromWindow() {
+        Choreographer.getInstance().removeFrameCallback(this)
+        isFrameCallbackPosted = false
+        pendingFrames.clear()
+        super.onDetachedFromWindow()
+    }
+
+    private fun ensureFrameCallback() {
+        if (!isAttachedToWindow || isFrameCallbackPosted) return
+        if ((isPlaying && pendingFrames.isEmpty()) ||
+            (!isPlaying && currentLevels.none { level -> level > READ_ALOUD_HOME_SPECTRUM_IDLE_EPSILON })
+        ) {
+            return
+        }
+        isFrameCallbackPosted = true
+        Choreographer.getInstance().postFrameCallback(this)
     }
 }
 
@@ -713,13 +949,16 @@ private fun HomeDefaultItem(
     backgroundColor: Color,
     titleFontSize: TextUnit? = null,
     showIndicator: Boolean,
+    borderColor: Color? = null,
+    borderWidth: Dp = 1.dp,
     indicatorTestTag: String? = null,
     testTag: String? = null,
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
     interactionsEnabled: Boolean = true,
-    interactionSource: MutableInteractionSource? = null
+    interactionSource: MutableInteractionSource? = null,
+    trailingContent: (@Composable () -> Unit)? = null
 ) {
     val paddingStart = watchDimensionResource(R.dimen.hey_content_horizontal_distance_6_0)
     val paddingEnd = watchDimensionResource(R.dimen.hey_listitem_padding_right)
@@ -750,6 +989,11 @@ private fun HomeDefaultItem(
                 clip = true
             }
             .background(backgroundColor, shape)
+            .then(
+                borderColor?.let { color ->
+                    Modifier.border(borderWidth, color, shape)
+                } ?: Modifier
+            )
             .then(clickModifier)
             .then(testTag?.let(Modifier::testTag) ?: Modifier)
     ) {
@@ -779,6 +1023,14 @@ private fun HomeDefaultItem(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
+            }
+            if (trailingContent != null) {
+                Box(
+                    modifier = Modifier.padding(start = arrowMargin),
+                    contentAlignment = Alignment.Center
+                ) {
+                    trailingContent()
+                }
             }
             if (showIndicator) {
                 Box(
@@ -918,6 +1170,11 @@ private fun Modifier.clickableWithRipple(
     }
 }
 
+private const val READ_ALOUD_HOME_SPECTRUM_BARS = 5
+private const val READ_ALOUD_HOME_SPECTRUM_MAX_PENDING_FRAMES = 16
+private const val READ_ALOUD_HOME_SPECTRUM_STOP_DECAY = 0.72f
+private const val READ_ALOUD_HOME_SPECTRUM_IDLE_EPSILON = 0.002f
+private const val READ_ALOUD_HOME_SPECTRUM_VIEW_AWAIT_DELAY_MS = 16L
 private const val DEBUG_AUTOSCROLL_MIN_ENTRIES = 8
 private const val DEBUG_AUTOSCROLL_START_DELAY_MS = 8_000L
 private const val DEBUG_AUTOSCROLL_DURATION_MS = 1_100

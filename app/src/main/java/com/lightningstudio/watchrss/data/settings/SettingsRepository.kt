@@ -32,14 +32,6 @@ private val LLM_SHOW_TOKEN_USAGE = booleanPreferencesKey("llm_show_token_usage")
 private val LLM_PROMPT_PRESET = intPreferencesKey("llm_prompt_preset")
 private const val TEMP_ORIGINAL_MODE_HINT_ATTEMPTS_PREFIX = "temp_original_mode_hint_attempts_"
 private const val TEMP_ORIGINAL_MODE_HINT_LAST_TOAST_PREFIX = "temp_original_mode_hint_last_toast_"
-private val READ_ALOUD_PROVIDER = stringPreferencesKey("read_aloud_provider")
-private val READ_ALOUD_MODEL = stringPreferencesKey("read_aloud_model")
-private val READ_ALOUD_VOICE = stringPreferencesKey("read_aloud_voice")
-private val READ_ALOUD_BASE_URL = stringPreferencesKey("read_aloud_base_url")
-private val READ_ALOUD_REGION = stringPreferencesKey("read_aloud_region")
-private val READ_ALOUD_APP_ID = stringPreferencesKey("read_aloud_app_id")
-private val READ_ALOUD_RESOURCE_ID = stringPreferencesKey("read_aloud_resource_id")
-private val READ_ALOUD_ENABLED = booleanPreferencesKey("read_aloud_enabled")
 const val MIN_CACHE_LIMIT_MB: Long = 512
 const val MAX_CACHE_LIMIT_MB: Long = 4 * 1024
 const val DEFAULT_CACHE_LIMIT_MB: Long = MIN_CACHE_LIMIT_MB
@@ -103,14 +95,6 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     val llmAutoSummarize: Flow<Boolean> = dataStore.data.map { it[LLM_AUTO_SUMMARIZE] ?: false }
     val llmShowTokenUsage: Flow<Boolean> = dataStore.data.map { it[LLM_SHOW_TOKEN_USAGE] ?: false }
     val llmPromptPreset: Flow<Int> = dataStore.data.map { it[LLM_PROMPT_PRESET] ?: 0 }
-    val readAloudProvider: Flow<String> = dataStore.data.map { it[READ_ALOUD_PROVIDER] ?: "" }
-    val readAloudModel: Flow<String> = dataStore.data.map { it[READ_ALOUD_MODEL] ?: "" }
-    val readAloudVoice: Flow<String> = dataStore.data.map { it[READ_ALOUD_VOICE] ?: "" }
-    val readAloudBaseUrl: Flow<String> = dataStore.data.map { it[READ_ALOUD_BASE_URL] ?: "" }
-    val readAloudRegion: Flow<String> = dataStore.data.map { it[READ_ALOUD_REGION] ?: "" }
-    val readAloudAppId: Flow<String> = dataStore.data.map { it[READ_ALOUD_APP_ID] ?: "" }
-    val readAloudResourceId: Flow<String> = dataStore.data.map { it[READ_ALOUD_RESOURCE_ID] ?: "" }
-    val readAloudEnabled: Flow<Boolean> = dataStore.data.map { it[READ_ALOUD_ENABLED] ?: false }
 
     suspend fun setCacheLimitBytes(bytes: Long) {
         dataStore.edit { preferences ->
@@ -240,28 +224,6 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         }
 
         return shouldShowHint
-    }
-
-    suspend fun setReadAloudConfig(
-        provider: String,
-        model: String,
-        voice: String,
-        baseUrl: String,
-        region: String,
-        appId: String,
-        resourceId: String,
-        enabled: Boolean
-    ) {
-        dataStore.edit { preferences ->
-            preferences[READ_ALOUD_PROVIDER] = provider
-            preferences[READ_ALOUD_MODEL] = model
-            preferences[READ_ALOUD_VOICE] = voice
-            preferences[READ_ALOUD_BASE_URL] = baseUrl
-            preferences[READ_ALOUD_REGION] = region
-            preferences[READ_ALOUD_APP_ID] = appId
-            preferences[READ_ALOUD_RESOURCE_ID] = resourceId
-            preferences[READ_ALOUD_ENABLED] = enabled
-        }
     }
 
     private fun clampCacheLimitBytes(bytes: Long): Long {

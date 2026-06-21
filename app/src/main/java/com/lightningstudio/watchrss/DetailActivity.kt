@@ -10,6 +10,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.lifecycleScope
+import com.lightningstudio.watchrss.data.tts.ReadAloudStartAnchor
 import com.lightningstudio.watchrss.ui.screen.rss.DetailScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.util.showAppToast
@@ -43,12 +44,18 @@ class DetailActivity : BaseWatchActivity() {
         if (itemId > 0L) {
             llmSummaryViewModel.prepare(itemId)
         }
+        if (intent.hasExtra(EXTRA_USE_ORIGINAL_CONTENT)) {
+            viewModel.setOriginalContentEnabled(
+                intent.getBooleanExtra(EXTRA_USE_ORIGINAL_CONTENT, false)
+            )
+        }
 
         setContent {
             WatchRSSTheme {
                 val context = LocalContext.current
                 val llmSummaryState by llmSummaryViewModel.state.collectAsState()
                 val message by viewModel.message.collectAsState()
+                val readAloudState by container.readAloudController.uiState.collectAsState()
                 LaunchedEffect(message) {
                     if (message != null) {
                         showAppToast(context, message, Toast.LENGTH_SHORT)
@@ -58,9 +65,11 @@ class DetailActivity : BaseWatchActivity() {
                 DetailScreen(
                     viewModel = viewModel,
                     llmSummaryState = llmSummaryState,
+                    readAloudState = readAloudState,
                     isStartingActivity = isStartingActivity.collectAsState().value,
                     onOpenAiSummary = ::openAiSummary,
                     onOpenReadAloud = ::openReadAloud,
+                    onOpenReadAloudControls = ::openReadAloudControls,
                     onBack = { itemId, reachedBottom, isWatchLater ->
                         handleBackPress(itemId, reachedBottom, isWatchLater)
                     }
@@ -108,21 +117,34 @@ class DetailActivity : BaseWatchActivity() {
         }
     }
 
-    private fun openReadAloud() {
+    private fun openReadAloud(startAnchor: ReadAloudStartAnchor?, preferOriginalContent: Boolean) {
         val itemId = intent.getLongExtra(EXTRA_ITEM_ID, 0L)
         if (itemId <= 0L) return
 
-        lifecycleScope.launch {
-            val isConfigured = container.readAloudController.hasConfig()
-            if (isConfigured) {
-                container.readAloudController.startFromItem(itemId)
-                _isStartingActivity.value = true
-                startActivity(ReadAloudPlaybackActivity.createIntent(this@DetailActivity))
-            } else {
-                _isStartingActivity.value = true
-                startActivity(ReadAloudApiSettingsActivity.createIntent(this@DetailActivity, itemId))
-            }
+        container.readAloudController.startFromItem(itemId, startAnchor, preferOriginalContent)
+        val message = if (startAnchor == null) {
+            "已开始朗读，长按文章可打开朗读页面"
+        } else {
+            "已从当前屏幕开始朗读"
         }
+        showAppToast(this, message, Toast.LENGTH_SHORT)
+    }
+
+    private fun openReadAloudControls(startAnchor: ReadAloudStartAnchor?, preferOriginalContent: Boolean) {
+        val itemId = intent.getLongExtra(EXTRA_ITEM_ID, 0L)
+        if (itemId <= 0L) return
+
+        val readAloudState = container.readAloudController.uiState.value
+        if (!readAloudState.visible || readAloudState.currentItemId != itemId) {
+            container.readAloudController.startFromItem(itemId, startAnchor, preferOriginalContent)
+        }
+        _isStartingActivity.value = true
+        startActivity(
+            ReadAloudPlaybackActivity.createIntent(
+                context = this@DetailActivity,
+                returnToArticle = true
+            )
+        )
     }
 
     override fun buildResumeIntent(): Intent? {
@@ -131,11 +153,18 @@ class DetailActivity : BaseWatchActivity() {
         return Intent(this, DetailActivity::class.java).apply {
             putExtra(EXTRA_ITEM_ID, itemId)
             putExtra(EXTRA_FROM_WATCH_LATER, fromWatchLater)
+            if (intent.hasExtra(EXTRA_USE_ORIGINAL_CONTENT)) {
+                putExtra(
+                    EXTRA_USE_ORIGINAL_CONTENT,
+                    intent.getBooleanExtra(EXTRA_USE_ORIGINAL_CONTENT, false)
+                )
+            }
         }
     }
 
     companion object {
         const val EXTRA_ITEM_ID = "itemId"
+        const val EXTRA_USE_ORIGINAL_CONTENT = "useOriginalContent"
         const val EXTRA_FROM_WATCH_LATER = "fromWatchLater"
         const val EXTRA_REMOVE_WATCH_LATER_ID = "removeWatchLaterId"
     }

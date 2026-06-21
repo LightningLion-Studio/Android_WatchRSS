@@ -15,6 +15,7 @@ class ReadAloudPlaybackActivity : BaseWatchActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setupSystemBars()
+        val returnToArticle = intent.getBooleanExtra(EXTRA_RETURN_TO_ARTICLE, false)
         setContent {
             WatchRSSTheme {
                 val state by controller.uiState.collectAsState()
@@ -27,13 +28,25 @@ class ReadAloudPlaybackActivity : BaseWatchActivity() {
                         controller.stop()
                         finish()
                     },
-                    onOpenCurrentArticle = state.currentItemId?.let { itemId ->
-                        {
-                            startActivity(
-                                Intent(this, DetailActivity::class.java).apply {
-                                    putExtra(DetailActivity.EXTRA_ITEM_ID, itemId)
-                                }
-                            )
+                    onToggleAutoAdvance = controller::toggleAutoAdvance,
+                    onDecreaseSpeechRate = controller::decreaseSpeechRate,
+                    onIncreaseSpeechRate = controller::increaseSpeechRate,
+                    currentArticleActionText = if (returnToArticle) {
+                        "返回文章"
+                    } else {
+                        "查看当前文章"
+                    },
+                    onOpenCurrentArticle = if (returnToArticle) {
+                        { finish() }
+                    } else {
+                        state.currentItemId?.let { itemId ->
+                            {
+                                startActivity(
+                                    Intent(this, DetailActivity::class.java).apply {
+                                        putExtra(DetailActivity.EXTRA_ITEM_ID, itemId)
+                                    }
+                                )
+                            }
                         }
                     }
                 )
@@ -42,8 +55,12 @@ class ReadAloudPlaybackActivity : BaseWatchActivity() {
     }
 
     companion object {
-        fun createIntent(context: Context): Intent {
-            return Intent(context, ReadAloudPlaybackActivity::class.java)
+        private const val EXTRA_RETURN_TO_ARTICLE = "returnToArticle"
+
+        fun createIntent(context: Context, returnToArticle: Boolean = false): Intent {
+            return Intent(context, ReadAloudPlaybackActivity::class.java).apply {
+                putExtra(EXTRA_RETURN_TO_ARTICLE, returnToArticle)
+            }
         }
     }
 }

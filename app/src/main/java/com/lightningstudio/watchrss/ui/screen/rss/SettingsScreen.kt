@@ -109,7 +109,6 @@ fun SettingsScreen(
     onOpenDouyinCookieInput: () -> Unit,
     onOpenLlmConnectivity: () -> Unit,
     onOpenLlmPromptPreset: () -> Unit,
-    onOpenReadAloudSettings: () -> Unit,
     onBeianClick: () -> Unit,
     onOpenAdvanced: (() -> Unit)? = null
 ) {
@@ -169,7 +168,6 @@ fun SettingsScreen(
             onOpenDouyinCookieInput = onOpenDouyinCookieInput,
             onOpenLlmConnectivity = onOpenLlmConnectivity,
             onOpenLlmPromptPreset = onOpenLlmPromptPreset,
-            onOpenReadAloudSettings = onOpenReadAloudSettings,
             onBeianClick = onBeianClick
         )
         SettingsPage.Advanced -> AdvancedSettingsPage(
@@ -243,7 +241,6 @@ private fun MainSettingsPage(
     onOpenDouyinCookieInput: () -> Unit,
     onOpenLlmConnectivity: () -> Unit,
     onOpenLlmPromptPreset: () -> Unit,
-    onOpenReadAloudSettings: () -> Unit,
     onBeianClick: () -> Unit
 ) {
     val fontOptions = remember { (12..32 step 2).toList() }
@@ -536,18 +533,6 @@ private fun MainSettingsPage(
                 )
                 Text(
                     text = "配置大模型服务商与 API Key",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
-                )
-
-                Spacer(modifier = Modifier.height(entrySpacing))
-                WatchSettingsPillRow(
-                    label = "朗读 API",
-                    onClick = onOpenReadAloudSettings
-                )
-                Text(
-                    text = "配置 OpenAI、微软 Azure、ElevenLabs 等朗读服务",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = valueIndent, top = valueSpacing)

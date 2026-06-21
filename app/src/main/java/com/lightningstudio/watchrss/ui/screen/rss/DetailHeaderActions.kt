@@ -55,6 +55,7 @@ import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
@@ -181,7 +182,10 @@ internal fun AiFloatingButton(
 internal fun DetailTitle(
     title: String,
     titlePadding: Dp,
-    textColor: Color
+    textColor: Color,
+    highlightRange: DetailTextHighlightRange? = null,
+    highlightColor: Color = Color.Transparent,
+    onTextLayout: ((TextLayoutResult) -> Unit)? = null
 ) {
     val hintSize = textSize(R.dimen.hey_m_title)
     val titleStyle = MaterialTheme.typography.titleMedium.copy(
@@ -220,11 +224,19 @@ internal fun DetailTitle(
                 secondLimitPx = secondLimitPx
             )
         }
+        val highlightedTitle = remember(formattedTitle, highlightRange, highlightColor) {
+            buildHighlightedPlainText(
+                text = formattedTitle,
+                highlightRange = highlightRange,
+                highlightColor = highlightColor
+            )
+        }
         Text(
-            text = formattedTitle,
+            text = highlightedTitle,
             style = titleStyle,
             color = textColor,
             textAlign = TextAlign.Center,
+            onTextLayout = { result -> onTextLayout?.invoke(result) },
             modifier = Modifier.fillMaxWidth()
         )
     }

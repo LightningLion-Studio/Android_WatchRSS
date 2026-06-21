@@ -24,20 +24,17 @@ class PhoneConnectionActivity : BaseWatchActivity() {
         private const val EXTRA_PREFERRED_ABILITY = "preferred_ability"
         private const val EXTRA_RETURN_REMOTE_URL = "return_remote_url"
         private const val EXTRA_LLM_SUMMARY_ITEM_ID = "llm_summary_item_id"
-        private const val EXTRA_READ_ALOUD_ITEM_ID = "read_aloud_item_id"
 
         fun createIntent(
             context: Context,
             preferredAbility: PhoneConnectionAbility? = null,
             returnRemoteUrl: Boolean = false,
-            llmSummaryItemId: Long = 0L,
-            readAloudItemId: Long = 0L
+            llmSummaryItemId: Long = 0L
         ): Intent {
             return Intent(context, PhoneConnectionActivity::class.java).apply {
                 putExtra(EXTRA_PREFERRED_ABILITY, preferredAbility?.name)
                 putExtra(EXTRA_RETURN_REMOTE_URL, returnRemoteUrl)
                 putExtra(EXTRA_LLM_SUMMARY_ITEM_ID, llmSummaryItemId)
-                putExtra(EXTRA_READ_ALOUD_ITEM_ID, readAloudItemId)
             }
         }
     }

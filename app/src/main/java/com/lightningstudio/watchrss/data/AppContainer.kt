@@ -35,10 +35,8 @@ import com.lightningstudio.watchrss.data.rss.RssOfflineStore
 import com.lightningstudio.watchrss.data.rss.RssParseService
 import com.lightningstudio.watchrss.data.rss.RssRepository
 import com.lightningstudio.watchrss.data.settings.LlmApiKeyStore
-import com.lightningstudio.watchrss.data.settings.ReadAloudApiKeyStore
 import com.lightningstudio.watchrss.data.settings.SettingsRepository
 import com.lightningstudio.watchrss.data.tts.ReadAloudController
-import com.lightningstudio.watchrss.data.tts.ReadAloudSynthesisService
 import com.lightningstudio.watchrss.phoneconnection.WatchDeviceIdentity
 import com.lightningstudio.watchrss.ui.util.RssImageLoader
 import kotlinx.coroutines.CoroutineScope
@@ -49,8 +47,6 @@ interface AppContainer {
     val rssRepository: RssRepository
     val settingsRepository: SettingsRepository
     val llmApiKeyStore: LlmApiKeyStore
-    val readAloudApiKeyStore: ReadAloudApiKeyStore
-    val readAloudSynthesisService: ReadAloudSynthesisService
     val readAloudController: ReadAloudController
     val managedCacheService: ManagedCacheService
     val biliPlaybackCacheManager: BiliPlaybackCacheManager
@@ -109,10 +105,6 @@ class DefaultAppContainer(context: Context) : AppContainer {
 
     override val llmApiKeyStore: LlmApiKeyStore by lazy {
         LlmApiKeyStore(appContext)
-    }
-
-    override val readAloudApiKeyStore: ReadAloudApiKeyStore by lazy {
-        ReadAloudApiKeyStore(appContext)
     }
 
     override val managedCacheService: ManagedCacheService by lazy {
@@ -176,12 +168,6 @@ class DefaultAppContainer(context: Context) : AppContainer {
         DefaultInternetAvailabilityMonitor(appContext)
     }
 
-    override val readAloudSynthesisService: ReadAloudSynthesisService by lazy {
-        ReadAloudSynthesisService(
-            cacheDir = appContext.cacheDir.resolve("read_aloud")
-        )
-    }
-
     override val rssRepository: RssRepository by lazy {
         val fetchService = RssFetchService()
         val readableService = RssReadableService()
@@ -217,10 +203,7 @@ class DefaultAppContainer(context: Context) : AppContainer {
         ReadAloudController(
             context = appContext,
             appScope = appScope,
-            rssRepository = rssRepository,
-            settingsRepository = settingsRepository,
-            apiKeyStore = readAloudApiKeyStore,
-            synthesisService = readAloudSynthesisService
+            rssRepository = rssRepository
         )
     }
 }

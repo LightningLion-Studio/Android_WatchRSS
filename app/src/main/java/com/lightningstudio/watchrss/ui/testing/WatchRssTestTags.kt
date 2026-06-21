@@ -49,6 +49,7 @@ object DouyinChannelInfoTestTags {
 
 object ProfileTestTags {
     const val ROOT = "profile/root"
+    const val ACCOUNT_ENTRY = "profile/account_entry"
     const val FAVORITES_ENTRY = "profile/favorites_entry"
     const val WATCH_LATER_ENTRY = "profile/watch_later_entry"
     const val PHONE_CONNECTION_ENTRY = "profile/phone_connection_entry"
