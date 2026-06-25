@@ -42,12 +42,14 @@ fun DouyinLoginCheckingScreen(
 
 @Composable
 fun DouyinLoginBannedScreen(
+    title: String = "当前网络不可用",
+    message: String = "请切换到 Wi-Fi 或蜂窝网络后重试。以太网、蓝牙共享等网络暂不支持抖音登录。",
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     DouyinLoginStatusLayout(
-        title = "当前网络不可用",
-        message = "请切换到 Wi-Fi 或蜂窝网络后重试。以太网、蓝牙共享等网络暂不支持抖音登录。",
+        title = title,
+        message = message,
         actionLabel = "返回",
         onAction = onBack,
         modifier = modifier

@@ -101,4 +101,24 @@ class ProfileScreenTest {
         composeRule.onNodeWithTag(ProfileTestTags.PHONE_CONNECTION_ENTRY).assertDoesNotExist()
         composeRule.onNodeWithTag(ProfileTestTags.SETTINGS_ENTRY).assertExists()
     }
+
+    @Test
+    fun profileScreen_hidesAccountEntryWhenDisabled() {
+        composeRule.setWatchContent {
+            ProfileScreen(
+                showAccountEntry = false,
+                onFavoritesClick = {},
+                onWatchLaterClick = {},
+                onPhoneConnectionClick = {},
+                onSettingsClick = {},
+                onAboutClick = {},
+                onContactDeveloperClick = {},
+                onBeianClick = {}
+            )
+        }
+
+        composeRule.onNodeWithTag(ProfileTestTags.ACCOUNT_ENTRY).assertDoesNotExist()
+        composeRule.onNodeWithTag(ProfileTestTags.FAVORITES_ENTRY).assertExists()
+        composeRule.onNodeWithTag(ProfileTestTags.WATCH_LATER_ENTRY).assertExists()
+    }
 }

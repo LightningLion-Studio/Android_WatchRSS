@@ -56,6 +56,10 @@ class FakeRssRepository(
 
     override fun observeOfflineMedia(itemId: Long): Flow<List<OfflineMedia>> = flowOf(emptyList())
 
+    override suspend fun getImportedTextReader(itemId: Long) = null
+
+    override suspend fun loadImportedTextChunk(marker: String, chunkIndex: Int) = null
+
     override suspend fun previewChannel(url: String): Result<AddRssPreview> {
         return Result.failure(UnsupportedOperationException("previewChannel is not configured in FakeRssRepository"))
     }

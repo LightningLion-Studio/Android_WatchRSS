@@ -185,7 +185,8 @@ private fun OobeIntroStep(
                         onContinue = {
                             when (uiState.internetAvailabilityStatus) {
                                 InternetAvailabilityStatus.Available -> onContinue()
-                                InternetAvailabilityStatus.Unavailable -> showOfflineWarning = true
+                                InternetAvailabilityStatus.Unavailable,
+                                InternetAvailabilityStatus.Bluetooth -> showOfflineWarning = true
                                 InternetAvailabilityStatus.Checking -> Unit
                             }
                         }
@@ -260,6 +261,7 @@ private fun OobeIntroStep(
                 showOfflineWarning = false
             }
             OobeOfflineWarningDialog(
+                status = uiState.internetAvailabilityStatus,
                 onConfirm = {
                     showOfflineWarning = false
                     onContinue()
@@ -570,7 +572,12 @@ private fun OobeInternetStep(
     val statusMessage = when (status) {
         InternetAvailabilityStatus.Checking -> "正在检测互联网状态…"
         InternetAvailabilityStatus.Unavailable -> "未检测到可用互联网"
+        InternetAvailabilityStatus.Bluetooth -> "当前为蓝牙网络，加载可能较慢"
         InternetAvailabilityStatus.Available -> "已检测到互联网，可以继续"
+    }
+    val guidanceMessage = when (status) {
+        InternetAvailabilityStatus.Bluetooth -> "当前使用蓝牙网络，网速较慢，建议连接 WiFi 或移动网络后使用本应用"
+        else -> "请连接Wi-Fi或蜂窝移动网络后使用本应用"
     }
 
     BoxWithConstraints(modifier = modifier) {
@@ -592,7 +599,7 @@ private fun OobeInternetStep(
             Spacer(modifier = Modifier.height(10.dp))
 
             Text(
-                text = "请连接Wi-Fi或蜂窝移动网络后使用本应用",
+                text = guidanceMessage,
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center,
@@ -644,6 +651,10 @@ private fun OobeInternetStatusBar(
 
         InternetAvailabilityStatus.Unavailable -> {
             statusTag = OobeTestTags.INTERNET_STATUS_UNAVAILABLE
+        }
+
+        InternetAvailabilityStatus.Bluetooth -> {
+            statusTag = OobeTestTags.INTERNET_STATUS_BLUETOOTH
         }
 
         InternetAvailabilityStatus.Available -> {
@@ -705,6 +716,15 @@ private fun OobeInternetStatusIndicator(
                 )
             }
 
+            InternetAvailabilityStatus.Bluetooth -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(CircleShape)
+                        .background(Color(0xFFFFA726))
+                )
+            }
+
             InternetAvailabilityStatus.Available -> {
                 Box(
                     modifier = Modifier
@@ -719,6 +739,7 @@ private fun OobeInternetStatusIndicator(
 
 @Composable
 private fun OobeOfflineWarningDialog(
+    status: InternetAvailabilityStatus,
     onConfirm: () -> Unit,
     onCancel: () -> Unit
 ) {
@@ -754,6 +775,7 @@ private fun OobeOfflineWarningDialog(
                 verticalArrangement = Arrangement.spacedBy(scaleDp(32.dp))
             ) {
                 OobeOfflineWarningDialogContent(
+                    status = status,
                     scale = scale,
                     scaleDp = scaleDp
                 )
@@ -769,10 +791,15 @@ private fun OobeOfflineWarningDialog(
 
 @Composable
 private fun OobeOfflineWarningDialogContent(
+    status: InternetAvailabilityStatus,
     scale: Float,
     scaleDp: (Dp) -> Dp
 ) {
     val fontFamily = FontFamily(Font(R.font.watch_sans))
+    val message = when (status) {
+        InternetAvailabilityStatus.Bluetooth -> "当前使用蓝牙网络，网速较慢，建议连接 WiFi 或移动网络"
+        else -> "你没有连接到互联网，确定要继续吗"
+    }
 
     Column(
         modifier = Modifier
@@ -793,7 +820,7 @@ private fun OobeOfflineWarningDialogContent(
             modifier = Modifier.fillMaxWidth()
         )
         Text(
-            text = "你没有连接到互联网，确定要继续吗",
+            text = message,
             fontFamily = fontFamily,
             fontWeight = FontWeight.Normal,
             fontSize = (34f * scale).sp,

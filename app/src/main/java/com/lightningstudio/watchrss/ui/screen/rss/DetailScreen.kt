@@ -379,17 +379,16 @@ internal fun DetailContent(
             llmSummaryState.status is SummaryStatus.Error)
     val showAiButton = llmFeatureEnabled && !llmAutoSummarize
     val showReadAloudAction = item != null
+    val articleActionItemCount = if (canToggleOriginalContent || showReadAloudAction) 1 else 0
     val importedTextFirstItemIndex = remember(
-        canToggleOriginalContent,
-        showReadAloudAction,
+        articleActionItemCount,
         hasOfflineFailures,
         isRetryingOfflineMedia,
         showAiBanner,
         showOriginalLoadingNotice
     ) {
         DETAIL_CONTENT_START_ITEM_INDEX +
-            (if (canToggleOriginalContent) 1 else 0) +
-            (if (showReadAloudAction) 1 else 0) +
+            articleActionItemCount +
             (if (hasOfflineFailures || isRetryingOfflineMedia) 1 else 0) +
             (if (showAiBanner) 1 else 0) +
             (if (showOriginalLoadingNotice) 1 else 0) +
@@ -1091,31 +1090,36 @@ internal fun DetailContent(
                     }
                 }
             }
-            if (canToggleOriginalContent) {
-                item(key = "linkAction") {
+            if (canToggleOriginalContent || showReadAloudAction) {
+                item(key = "articleActions") {
                     Spacer(modifier = Modifier.height(blockSpacing))
-                    DetailActionButton(
-                        text = if (originalContentEnabled) "取消阅读原文" else "阅读原文",
-                        fontSize = bodyFontSize,
-                        containerColor = actionContainerColor,
-                        contentColor = textColor,
-                        borderColor = actionBorderColor,
-                        onClick = onToggleOriginalContent,
-                        onLongClick = { showOriginalModeWarning = true }
-                    )
-                }
-            }
-            if (showReadAloudAction) {
-                item(key = "readAloudAction") {
-                    Spacer(modifier = Modifier.height(blockSpacing))
-                    DetailActionButton(
-                        text = "大声朗读",
-                        fontSize = bodyFontSize,
-                        containerColor = activeActionContainerColor,
-                        contentColor = activeColor,
-                        borderColor = activeActionBorderColor,
-                        onClick = { onOpenReadAloud(null, originalContentEnabled) }
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (canToggleOriginalContent) {
+                            DetailActionButton(
+                                text = if (originalContentEnabled) "取消阅读原文" else "阅读原文",
+                                fontSize = bodyFontSize,
+                                containerColor = actionContainerColor,
+                                contentColor = textColor,
+                                borderColor = actionBorderColor,
+                                onClick = onToggleOriginalContent,
+                                onLongClick = { showOriginalModeWarning = true }
+                            )
+                        }
+                        if (showReadAloudAction) {
+                            Spacer(modifier = Modifier.weight(1f))
+                            DetailActionButton(
+                                text = "大声朗读",
+                                fontSize = bodyFontSize,
+                                containerColor = activeActionContainerColor,
+                                contentColor = activeColor,
+                                borderColor = activeActionBorderColor,
+                                onClick = { onOpenReadAloud(null, originalContentEnabled) }
+                            )
+                        }
+                    }
                 }
             }
             if (hasOfflineFailures || isRetryingOfflineMedia) {

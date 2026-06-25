@@ -36,12 +36,13 @@ import com.lightningstudio.watchrss.ui.theme.watchColorResource
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 
 private val InternetAvailableGreen = Color(0xFF41C96B)
+private val InternetBluetoothAmber = Color(0xFFFFA726)
 
 @Composable
 fun InternetAvailabilityOverlay(
     status: InternetAvailabilityStatus,
     modifier: Modifier = Modifier,
-    message: String = "请连接Wi-Fi或蜂窝移动网络后继续播放",
+    message: String = internetAvailabilityMessage(status),
     actionText: String = "重试",
     actionEnabled: Boolean = status != InternetAvailabilityStatus.Checking,
     onAction: () -> Unit
@@ -174,6 +175,15 @@ private fun InternetAvailabilityStatusIndicator(
                 )
             }
 
+            InternetAvailabilityStatus.Bluetooth -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(CircleShape)
+                        .background(InternetBluetoothAmber)
+                )
+            }
+
             InternetAvailabilityStatus.Available -> {
                 Box(
                     modifier = Modifier
@@ -217,10 +227,20 @@ private fun InternetAvailabilityActionButton(
     }
 }
 
+private fun internetAvailabilityMessage(status: InternetAvailabilityStatus): String {
+    return when (status) {
+        InternetAvailabilityStatus.Checking -> "正在检测网络连接"
+        InternetAvailabilityStatus.Unavailable -> "请连接 WiFi 或移动网络"
+        InternetAvailabilityStatus.Bluetooth -> "当前使用蓝牙网络，网速较慢，建议连接 WiFi 或移动网络"
+        InternetAvailabilityStatus.Available -> "网络连接可用"
+    }
+}
+
 private fun internetAvailabilityStatusMessage(status: InternetAvailabilityStatus): String {
     return when (status) {
         InternetAvailabilityStatus.Checking -> "正在检测互联网状态..."
         InternetAvailabilityStatus.Unavailable -> "未检测到可用互联网"
+        InternetAvailabilityStatus.Bluetooth -> "已连接蓝牙网络，可能影响加载速度"
         InternetAvailabilityStatus.Available -> "已检测到互联网，可以继续"
     }
 }

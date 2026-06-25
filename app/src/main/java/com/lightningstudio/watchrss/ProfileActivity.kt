@@ -16,6 +16,7 @@ class ProfileActivity : BaseWatchActivity() {
         setContent {
             WatchRSSTheme {
                 ProfileScreen(
+                    showAccountEntry = BuildConfig.DEBUG,
                     showPhoneConnectionEntry = PhoneConnectionFeature.isAvailable,
                     onAccountClick = {
                         if (!allowNavigation()) return@ProfileScreen

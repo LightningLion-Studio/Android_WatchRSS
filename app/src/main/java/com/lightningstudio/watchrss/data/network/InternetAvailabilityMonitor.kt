@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 enum class InternetAvailabilityStatus {
     Checking,
     Unavailable,
+    Bluetooth,
     Available
 }
 
@@ -98,16 +99,20 @@ class DefaultInternetAvailabilityMonitor(
             return InternetAvailabilityStatus.Unavailable
         }
 
-        val hasSupportedTransport = capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
-            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
-        if (!hasSupportedTransport) {
+        val hasInternetCapability = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        val isValidated = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+        if (!hasInternetCapability || !isValidated) {
             return InternetAvailabilityStatus.Unavailable
         }
 
-        val hasInternetCapability = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-        val isValidated = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
-        return if (hasInternetCapability && isValidated) {
-            InternetAvailabilityStatus.Available
+        val hasPreferredTransport = capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+        if (hasPreferredTransport) {
+            return InternetAvailabilityStatus.Available
+        }
+
+        return if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_BLUETOOTH)) {
+            InternetAvailabilityStatus.Bluetooth
         } else {
             InternetAvailabilityStatus.Unavailable
         }

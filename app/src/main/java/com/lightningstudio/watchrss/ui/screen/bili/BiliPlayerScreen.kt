@@ -215,12 +215,15 @@ fun BiliPlayerScreen(
     val hasConfiguredSource = uiState.initialSource != null
     val playbackSourceNeedsInternet = (activeSource ?: uiState.initialSource)
         ?.requiresInternetConnection() == true
-    val isOfflineNetworkPlayback = internetAvailabilityStatus == InternetAvailabilityStatus.Unavailable &&
+    val shouldShowConnectionPromptForStatus =
+        internetAvailabilityStatus == InternetAvailabilityStatus.Unavailable ||
+            internetAvailabilityStatus == InternetAvailabilityStatus.Bluetooth
+    val isConnectionPromptPlayback = shouldShowConnectionPromptForStatus &&
         !isPlaying &&
         (playbackSourceNeedsInternet || (uiState.isLoading && !hasConfiguredSource))
     val shouldKeepScreenOn = isActive &&
         hasConfiguredSource &&
-        !isOfflineNetworkPlayback &&
+        !isConnectionPromptPlayback &&
         playbackError.isNullOrBlank() &&
         (isPlaying || isBuffering || (activeSource != null && isTextureAvailable))
 
@@ -440,8 +443,8 @@ fun BiliPlayerScreen(
         releasePlayer()
     }
 
-    LaunchedEffect(isOfflineNetworkPlayback, playerRef, activeSource) {
-        if (!isOfflineNetworkPlayback) {
+    LaunchedEffect(isConnectionPromptPlayback, playerRef, activeSource) {
+        if (!isConnectionPromptPlayback) {
             return@LaunchedEffect
         }
         if (!isPlaying) {
@@ -867,9 +870,9 @@ fun BiliPlayerScreen(
             (activeSource != null && !isPrepared) ||
             isBuffering
         val showNetworkUnavailable = !isPlaying &&
-            (isOfflineNetworkPlayback ||
+            (isConnectionPromptPlayback ||
                 errorText == OFFLINE_USER_MESSAGE ||
-                (internetAvailabilityStatus == InternetAvailabilityStatus.Unavailable &&
+                (shouldShowConnectionPromptForStatus &&
                     playbackSourceNeedsInternet &&
                     (playbackError != null || !isPrepared)))
         if (showLoading && errorText.isNullOrBlank() && !showNetworkUnavailable) {

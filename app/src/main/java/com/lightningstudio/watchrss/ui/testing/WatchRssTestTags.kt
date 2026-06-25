@@ -17,6 +17,7 @@ object OobeTestTags {
     const val ERROR_TEXT = "oobe/error_text"
     const val INTERNET_STATUS_CHECKING = "oobe/internet_status_checking"
     const val INTERNET_STATUS_UNAVAILABLE = "oobe/internet_status_unavailable"
+    const val INTERNET_STATUS_BLUETOOTH = "oobe/internet_status_bluetooth"
     const val INTERNET_STATUS_AVAILABLE = "oobe/internet_status_available"
     const val OFFLINE_WARNING_DIALOG = "oobe/offline_warning_dialog"
     const val OFFLINE_WARNING_CONFIRM_BUTTON = "oobe/offline_warning_confirm_button"

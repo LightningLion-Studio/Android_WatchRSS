@@ -64,7 +64,6 @@ class SettingsScreenTest {
                 onOpenDouyinCookieInput = {},
                 onOpenLlmConnectivity = {},
                 onOpenLlmPromptPreset = {},
-                onOpenReadAloudSettings = {},
                 onBeianClick = {}
             )
         }
@@ -137,7 +136,6 @@ class SettingsScreenTest {
                 onOpenDouyinCookieInput = {},
                 onOpenLlmConnectivity = {},
                 onOpenLlmPromptPreset = {},
-                onOpenReadAloudSettings = {},
                 onBeianClick = {}
             )
         }
@@ -198,7 +196,6 @@ class SettingsScreenTest {
                 onOpenDouyinCookieInput = {},
                 onOpenLlmConnectivity = {},
                 onOpenLlmPromptPreset = {},
-                onOpenReadAloudSettings = {},
                 onBeianClick = {}
             )
         }

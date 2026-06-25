@@ -1006,7 +1006,10 @@ internal fun DouyinImmersiveScreen(
     val activeHasError = activeSlotMatchesCurrentItem && foregroundSlot.hasError
     val activePlaybackNeedsInternet = (activeMediaUri ?: preparedPlaybackTargetMediaUri)
         .requiresInternetConnection()
-    val showNetworkUnavailable = internetAvailabilityStatus == InternetAvailabilityStatus.Unavailable &&
+    val showNetworkUnavailable = (
+        internetAvailabilityStatus == InternetAvailabilityStatus.Unavailable ||
+            internetAvailabilityStatus == InternetAvailabilityStatus.Bluetooth
+        ) &&
         !uiState.showTitlePage &&
         activeItem != null &&
         activePlaybackNeedsInternet &&
