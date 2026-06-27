@@ -86,14 +86,14 @@ fun InternetAvailabilityOverlay(
                     modifier = Modifier.widthIn(max = textWidth)
                 )
 
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(9.dp))
 
                 InternetAvailabilityStatusBar(
                     status = status,
                     modifier = Modifier.widthIn(max = textWidth)
                 )
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(2.dp))
 
                 Text(
                     text = internetAvailabilityStatusMessage(status),
@@ -209,6 +209,7 @@ private fun InternetAvailabilityActionButton(
 
     Box(
         modifier = Modifier
+            .widthIn(min = 112.dp)
             .height(height)
             .clip(RoundedCornerShape(radius))
             .background(MaterialTheme.colorScheme.primary)
@@ -219,7 +220,7 @@ private fun InternetAvailabilityActionButton(
     ) {
         Text(
             text = text,
-            style = MaterialTheme.typography.labelMedium,
+            style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onPrimary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis

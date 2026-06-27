@@ -11,6 +11,7 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.speech.tts.Voice
 import com.lightningstudio.watchrss.BuildConfig
+import com.lightningstudio.watchrss.data.media.MediaPlaybackStartVolumeLimiter
 import com.lightningstudio.watchrss.data.rss.ImportedContentIds
 import com.lightningstudio.watchrss.data.rss.ImportedTextReader
 import com.lightningstudio.watchrss.data.rss.RssChannel
@@ -40,13 +41,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.ArrayDeque
 import java.util.Locale
-import kotlin.math.PI
-import kotlin.math.cos
-import kotlin.math.exp
-import kotlin.math.ln
 import kotlin.math.roundToLong
-import kotlin.math.sin
-import kotlin.math.sqrt
 
 private const val TAG = "ReadAloudController"
 private const val QUEUE_LIMIT = 48
@@ -110,7 +105,9 @@ data class ReadAloudStartAnchor(
 class ReadAloudController(
     context: Context,
     private val appScope: CoroutineScope,
-    private val rssRepository: RssRepository
+    private val rssRepository: RssRepository,
+    private val playbackStartVolumeLimiter: MediaPlaybackStartVolumeLimiter? = null,
+    private val playbackStartVolumeLimitPercentProvider: suspend () -> Int? = { null }
 ) {
     private val appContext = context.applicationContext
     private val _uiState = MutableStateFlow(ReadAloudUiState())
@@ -146,13 +143,12 @@ class ReadAloudController(
     private var currentSegmentStartedAtNs: Long = 0L
     private var currentSegmentUnits: Double = 0.0
     private var currentSegmentSpeechRate: Float = 1f
-    private val audioSpectrumLevels = FloatArray(READ_ALOUD_AUDIO_SPECTRUM_BANDS)
+    private val audioSpectrumAnalyzer = ReadAloudAudioSpectrumAnalyzer()
     private var synthesisSampleRateHz: Int = 0
     private var synthesisAudioFormat: Int = AudioFormat.ENCODING_INVALID
     private var synthesisChannelCount: Int = 1
     private var synthesisBeginLogged: Boolean = false
     private var audioSpectrumSampleLogged: Boolean = false
-    private var audioSpectrumFramesSinceAnalysis: Int = 0
 
     private val utteranceListener = object : UtteranceProgressListener() {
         override fun onStart(utteranceId: String?) {
@@ -192,7 +188,6 @@ class ReadAloudController(
             synthesisSampleRateHz = sampleRateInHz
             synthesisAudioFormat = audioFormat
             synthesisChannelCount = channelCount.coerceAtLeast(1)
-            audioSpectrumFramesSinceAnalysis = 0
             clearAudioSpectrum()
             if (BuildConfig.DEBUG && !synthesisBeginLogged) {
                 synthesisBeginLogged = true
@@ -273,11 +268,31 @@ class ReadAloudController(
                     ?: error("频道不存在")
                 queue = buildQueue(item, channel, startAnchor, preferOriginalContent)
                 currentQueueIndex = queue.indexOfFirst { it.item.id == itemId }.coerceAtLeast(0)
+                enforcePlaybackStartVolumeLimitForNewSession()
                 playQueueIndex(currentQueueIndex)
             }.onFailure { error ->
                 if (error is CancellationException) return@onFailure
                 showPlaybackError(error.message ?: "朗读启动失败", error)
             }
+        }
+    }
+
+    private suspend fun enforcePlaybackStartVolumeLimitForNewSession() {
+        val limiter = playbackStartVolumeLimiter ?: return
+        val limitPercent = try {
+            playbackStartVolumeLimitPercentProvider()
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Throwable) {
+            AppLogger.e(TAG, "读取朗读静音开播设置失败", error)
+            null
+        }
+        try {
+            limiter.enforcePlaybackStartVolumeLimit(limitPercent)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Throwable) {
+            AppLogger.e(TAG, "朗读静音开播音量限制失败", error)
         }
     }
 
@@ -580,8 +595,7 @@ class ReadAloudController(
     }
 
     private fun clearAudioSpectrum() {
-        audioSpectrumLevels.fill(0f)
-        audioSpectrumFramesSinceAnalysis = 0
+        audioSpectrumAnalyzer.clear()
         _audioSpectrumFrames.tryEmit(FloatArray(0))
         _uiState.update { it.copy(audioSpectrum = emptyList()) }
     }
@@ -592,185 +606,30 @@ class ReadAloudController(
         audioFormat: Int,
         channelCount: Int
     ) {
-        if (sampleRateHz <= 0) return
-        val frameCount = pcmFrameCount(audio, audioFormat, channelCount)
-        if (frameCount <= 0) return
-        val samples = pcmToMonoSamples(audio, audioFormat, channelCount)
-        if (samples.isEmpty()) return
-        val analysisIntervalFrames = (sampleRateHz / READ_ALOUD_AUDIO_SPECTRUM_KEYFRAMES_PER_SECOND)
-            .coerceAtLeast(READ_ALOUD_AUDIO_ANALYSIS_MIN_SAMPLES)
-        var analysisFrameInChunk = analysisIntervalFrames - audioSpectrumFramesSinceAnalysis
-        var lastAnalysisFrameInChunk = -1
-        var emittedFrameCount = 0
-        while (analysisFrameInChunk <= frameCount) {
-            val levels = pcmToAudioSpectrum(
-                samples = samples,
-                sampleRateHz = sampleRateHz,
-                endFrameExclusive = analysisFrameInChunk
-            )
-            if (levels.isNotEmpty()) {
-                _audioSpectrumFrames.tryEmit(levels)
-                emittedFrameCount += 1
-                if (BuildConfig.DEBUG && !audioSpectrumSampleLogged && levels.any { it > 0.01f }) {
-                    audioSpectrumSampleLogged = true
-                    AppLogger.d(
-                        TAG,
-                        "TTS PCM DFT sample=" +
-                            levels.joinToString(prefix = "[", postfix = "]") { level ->
-                                "%.2f".format(Locale.US, level)
-                            }
-                    )
-                }
+        val emittedFrameCount = audioSpectrumAnalyzer.analyze(
+            audio = audio,
+            sampleRateHz = sampleRateHz,
+            audioFormat = audioFormat,
+            channelCount = channelCount
+        ) { levels ->
+            _audioSpectrumFrames.tryEmit(levels)
+            if (BuildConfig.DEBUG && !audioSpectrumSampleLogged && levels.any { it > 0.01f }) {
+                audioSpectrumSampleLogged = true
+                AppLogger.d(
+                    TAG,
+                    "TTS PCM FFT sample=" +
+                        levels.joinToString(prefix = "[", postfix = "]") { level ->
+                            "%.2f".format(Locale.US, level)
+                        }
+                )
             }
-            lastAnalysisFrameInChunk = analysisFrameInChunk
-            analysisFrameInChunk += analysisIntervalFrames
-        }
-        audioSpectrumFramesSinceAnalysis = if (lastAnalysisFrameInChunk >= 0) {
-            frameCount - lastAnalysisFrameInChunk
-        } else {
-            audioSpectrumFramesSinceAnalysis + frameCount
-        }
-        if (audioSpectrumFramesSinceAnalysis >= analysisIntervalFrames) {
-            audioSpectrumFramesSinceAnalysis %= analysisIntervalFrames
         }
         if (BuildConfig.DEBUG && emittedFrameCount > 1) {
             AppLogger.d(
                 TAG,
-                "TTS PCM DFT frames=$emittedFrameCount intervalFrames=$analysisIntervalFrames " +
-                    "chunkFrames=$frameCount"
+                "TTS PCM FFT frames=$emittedFrameCount chunkBytes=${audio.size}"
             )
         }
-    }
-
-    private fun pcmFrameCount(
-        audio: ByteArray,
-        audioFormat: Int,
-        channelCount: Int
-    ): Int {
-        val channels = channelCount.coerceAtLeast(1)
-        val frameSize = when (audioFormat) {
-            AudioFormat.ENCODING_PCM_16BIT -> channels * 2
-            AudioFormat.ENCODING_PCM_8BIT -> channels
-            AudioFormat.ENCODING_PCM_FLOAT -> channels * 4
-            else -> return 0
-        }
-        return if (frameSize > 0) audio.size / frameSize else 0
-    }
-
-    private fun pcmToMonoSamples(
-        audio: ByteArray,
-        audioFormat: Int,
-        channelCount: Int
-    ): FloatArray {
-        val channels = channelCount.coerceAtLeast(1)
-        return when (audioFormat) {
-            AudioFormat.ENCODING_PCM_16BIT -> pcm16ToMonoSamples(audio, channels)
-            AudioFormat.ENCODING_PCM_8BIT -> pcm8ToMonoSamples(audio, channels)
-            AudioFormat.ENCODING_PCM_FLOAT -> pcmFloatToMonoSamples(audio, channels)
-            else -> FloatArray(0)
-        }
-    }
-
-    private fun pcm16ToMonoSamples(audio: ByteArray, channelCount: Int): FloatArray {
-        val frameSize = channelCount * 2
-        if (frameSize <= 0 || audio.size < frameSize) return FloatArray(0)
-        val frameCount = audio.size / frameSize
-        val output = FloatArray(frameCount)
-        for (frame in 0 until frameCount) {
-            var mono = 0f
-            repeat(channelCount) { channel ->
-                val byteIndex = frame * frameSize + channel * 2
-                val low = audio[byteIndex].toInt() and 0xFF
-                val high = audio[byteIndex + 1].toInt()
-                val sample = ((high shl 8) or low).toShort().toFloat() / Short.MAX_VALUE
-                mono += sample
-            }
-            output[frame] = mono / channelCount
-        }
-        return output
-    }
-
-    private fun pcm8ToMonoSamples(audio: ByteArray, channelCount: Int): FloatArray {
-        if (audio.size < channelCount) return FloatArray(0)
-        val frameCount = audio.size / channelCount
-        val output = FloatArray(frameCount)
-        for (frame in 0 until frameCount) {
-            var mono = 0f
-            repeat(channelCount) { channel ->
-                val byteIndex = frame * channelCount + channel
-                mono += ((audio[byteIndex].toInt() and 0xFF) - 128) / 128f
-            }
-            output[frame] = mono / channelCount
-        }
-        return output
-    }
-
-    private fun pcmFloatToMonoSamples(audio: ByteArray, channelCount: Int): FloatArray {
-        val frameSize = channelCount * 4
-        if (frameSize <= 0 || audio.size < frameSize) return FloatArray(0)
-        val frameCount = audio.size / frameSize
-        val output = FloatArray(frameCount)
-        for (frame in 0 until frameCount) {
-            var mono = 0f
-            repeat(channelCount) { channel ->
-                val byteIndex = frame * frameSize + channel * 4
-                val bits =
-                    (audio[byteIndex].toInt() and 0xFF) or
-                        ((audio[byteIndex + 1].toInt() and 0xFF) shl 8) or
-                        ((audio[byteIndex + 2].toInt() and 0xFF) shl 16) or
-                        ((audio[byteIndex + 3].toInt() and 0xFF) shl 24)
-                mono += Float.fromBits(bits).coerceIn(-1f, 1f)
-            }
-            output[frame] = mono / channelCount
-        }
-        return output
-    }
-
-    private fun pcmToAudioSpectrum(
-        samples: FloatArray,
-        sampleRateHz: Int,
-        endFrameExclusive: Int = samples.size
-    ): FloatArray {
-        val safeEndFrame = endFrameExclusive.coerceIn(0, samples.size)
-        val sampleCount = safeEndFrame.coerceAtMost(READ_ALOUD_AUDIO_ANALYSIS_WINDOW_SAMPLES)
-        if (sampleCount < READ_ALOUD_AUDIO_ANALYSIS_MIN_SAMPLES) return FloatArray(0)
-        val sampleStart = safeEndFrame - sampleCount
-        val nyquist = sampleRateHz / 2f
-        val minFrequency = READ_ALOUD_AUDIO_MIN_FREQUENCY_HZ.coerceAtMost(nyquist * 0.5f)
-        val maxFrequency = READ_ALOUD_AUDIO_MAX_FREQUENCY_HZ
-            .coerceAtMost(nyquist * 0.92f)
-            .coerceAtLeast(minFrequency * 1.5f)
-        val levels = FloatArray(READ_ALOUD_AUDIO_SPECTRUM_BANDS)
-        repeat(READ_ALOUD_AUDIO_SPECTRUM_BANDS) { band ->
-            val frequency = spectrumBandFrequency(band, minFrequency, maxFrequency)
-            val angularStep = READ_ALOUD_TWO_PI * frequency / sampleRateHz
-            val cosine = cos(angularStep)
-            val sine = sin(angularStep)
-            val coefficient = 2.0 * cosine
-            var previous = 0.0
-            var previous2 = 0.0
-            for (sampleIndex in 0 until sampleCount) {
-                val current = samples[sampleStart + sampleIndex] + coefficient * previous - previous2
-                previous2 = previous
-                previous = current
-            }
-            val real = previous - previous2 * cosine
-            val imaginary = previous2 * sine
-            val magnitude = sqrt(real * real + imaginary * imaginary) / sampleCount
-            levels[band] = (
-                ln(1.0 + magnitude * READ_ALOUD_AUDIO_SPECTRUM_GAIN) /
-                    READ_ALOUD_AUDIO_SPECTRUM_LOG_NORMALIZER
-                ).toFloat()
-                .coerceIn(0f, 1f)
-        }
-        return levels
-    }
-
-    private fun spectrumBandFrequency(band: Int, minFrequency: Float, maxFrequency: Float): Double {
-        val ratio = (band + 0.5) / READ_ALOUD_AUDIO_SPECTRUM_BANDS.toDouble()
-        val logMin = ln(minFrequency.toDouble())
-        val logMax = ln(maxFrequency.toDouble())
-        return exp(logMin + (logMax - logMin) * ratio)
     }
 
     private fun startFallbackHighlightJob(
@@ -1738,18 +1597,7 @@ private const val READ_ALOUD_FALLBACK_HIGHLIGHT_INTERVAL_MS = 900L
 private const val READ_ALOUD_FALLBACK_MAX_PROGRESS = 0.985f
 private const val READ_ALOUD_FALLBACK_CJK_WINDOW_CHARS = 6
 private const val READ_ALOUD_FALLBACK_MIN_CJK_WINDOW_CHARS = 2
-private const val READ_ALOUD_AUDIO_SPECTRUM_BANDS = 5
-private const val READ_ALOUD_AUDIO_ANALYSIS_WINDOW_SAMPLES = 128
-private const val READ_ALOUD_AUDIO_ANALYSIS_MIN_SAMPLES = 32
-private const val READ_ALOUD_AUDIO_SPECTRUM_KEYFRAMES_PER_SECOND = 60
 private const val READ_ALOUD_AUDIO_SPECTRUM_FRAME_BUFFER_CAPACITY = 96
-private const val READ_ALOUD_AUDIO_MIN_FREQUENCY_HZ = 90f
-private const val READ_ALOUD_AUDIO_MAX_FREQUENCY_HZ = 4_200f
-private const val READ_ALOUD_AUDIO_SPECTRUM_GAIN = 320.0
-private const val READ_ALOUD_AUDIO_SPECTRUM_ATTACK = 0.64f
-private const val READ_ALOUD_AUDIO_SPECTRUM_RELEASE = 0.24f
-private const val READ_ALOUD_AUDIO_SPECTRUM_LOG_NORMALIZER = 4.0
-private val READ_ALOUD_TWO_PI = PI * 2.0
 private val SPEECH_RATE_OPTIONS = listOf(
     0.75f,
     0.9f,

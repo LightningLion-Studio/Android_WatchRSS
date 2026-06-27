@@ -140,6 +140,7 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.jsoup)
+    implementation(libs.jtransforms)
     implementation(libs.androidx.metrics.performance)
     implementation(libs.swipe.reveal.layout) {
         exclude(group = "com.android.support", module = "support-v4")

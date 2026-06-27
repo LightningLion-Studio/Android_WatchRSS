@@ -29,6 +29,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
+import com.lightningstudio.watchrss.data.media.DigitalCrownVolumeGuardState
+import com.lightningstudio.watchrss.data.media.applyDigitalCrownVolumeGuard
+import com.lightningstudio.watchrss.data.media.hasOutOfBandVolumeChange
+import com.lightningstudio.watchrss.data.media.playbackStartVolumeForPercent
+import com.lightningstudio.watchrss.data.media.shouldEnforcePlaybackStartGuard
+import com.lightningstudio.watchrss.data.media.volumeForPercent
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import com.lightningstudio.watchrss.ui.util.showAppToast
 import com.lightningstudio.watchrss.util.AppLogger
@@ -257,173 +263,8 @@ fun PlayerVolumeOverlay(
 
 private const val VOLUME_OVERLAY_HIDE_DELAY_MS = 1_200L
 private const val DIGITAL_CROWN_SESSION_CAP_PERCENT = 0.21f
-private const val DIGITAL_CROWN_SESSION_IDLE_TIMEOUT_MS = 600L
 private const val VOLUME_GUARD_TRIGGERED_TOAST = "音量调节防干扰触发，先停下以继续调整音量"
 // 每单位 scaled delta（已乘以 DIGITAL_CROWN_VOLUME_STEP=0.01）调节的音量百分比
 // 按实测一圈表冠总 net scaled ≈ 16.5，校准为 1/16.5 ≈ 0.06，使一圈刚好覆盖 0→100% 音量范围
 private const val VOLUME_SENSITIVITY_PERCENT = 0.06f
 private const val VOLUME_TAG = "PlayerVolume"
-
-internal data class DigitalCrownVolumeGuardState(
-    val sessionCapVolume: Float? = null,
-    val lastEventUptimeMs: Long = Long.MIN_VALUE,
-    val guardNotificationShown: Boolean = false
-)
-
-internal data class DigitalCrownVolumeGuardResult(
-    val targetVolume: Float,
-    val nextState: DigitalCrownVolumeGuardState,
-    val shouldNotifyGuardTriggered: Boolean = false
-)
-
-internal fun applyDigitalCrownVolumeGuard(
-    currentVolume: Float,
-    requestedDeltaVolume: Float,
-    minVolume: Int,
-    maxVolume: Int,
-    guardEnabled: Boolean,
-    sessionCapVolume: Float,
-    previousState: DigitalCrownVolumeGuardState,
-    eventUptimeMs: Long
-): DigitalCrownVolumeGuardResult {
-    val minVolumeFloat = minVolume.toFloat()
-    val maxVolumeFloat = maxVolume.toFloat()
-    val clampedCurrent = currentVolume.coerceIn(minVolumeFloat, maxVolumeFloat)
-    if (requestedDeltaVolume == 0f) {
-        return DigitalCrownVolumeGuardResult(
-            targetVolume = clampedCurrent,
-            nextState = previousState
-        )
-    }
-
-    val isNewSession = previousState.lastEventUptimeMs == Long.MIN_VALUE ||
-        eventUptimeMs - previousState.lastEventUptimeMs > DIGITAL_CROWN_SESSION_IDLE_TIMEOUT_MS
-    val direction = requestedDeltaVolume.compareTo(0f)
-    var activeCapVolume = if (isNewSession || direction <= 0 || !guardEnabled) {
-        null
-    } else {
-        previousState.sessionCapVolume
-    }
-    var guardNotificationShown = if (activeCapVolume == null) {
-        false
-    } else {
-        previousState.guardNotificationShown
-    }
-    var targetVolume = (clampedCurrent + requestedDeltaVolume).coerceIn(minVolumeFloat, maxVolumeFloat)
-    var wasLimitedByGuard = false
-
-    if (guardEnabled && direction > 0) {
-        val capActivationVolume = volumeGuardActivationVolume(
-            sessionCapVolume = sessionCapVolume,
-            minVolume = minVolume,
-            maxVolume = maxVolume
-        )
-        val effectiveCapVolume = activeCapVolume ?: if (clampedCurrent < capActivationVolume) {
-            sessionCapVolume
-        } else {
-            null
-        }
-        if (effectiveCapVolume != null) {
-            activeCapVolume = effectiveCapVolume
-            val cappedTargetVolume = targetVolume.coerceAtMost(effectiveCapVolume)
-            wasLimitedByGuard = cappedTargetVolume < targetVolume
-            targetVolume = cappedTargetVolume
-        }
-    }
-    val shouldNotifyGuardTriggered = wasLimitedByGuard && !guardNotificationShown
-    if (shouldNotifyGuardTriggered) {
-        guardNotificationShown = true
-    }
-
-    return DigitalCrownVolumeGuardResult(
-        targetVolume = targetVolume,
-        nextState = DigitalCrownVolumeGuardState(
-            sessionCapVolume = activeCapVolume,
-            lastEventUptimeMs = eventUptimeMs,
-            guardNotificationShown = guardNotificationShown
-        ),
-        shouldNotifyGuardTriggered = shouldNotifyGuardTriggered
-    )
-}
-
-internal fun shouldEnforcePlaybackStartGuard(
-    playbackStartVolumeLimitPercent: Int?,
-    dismissedByUser: Boolean,
-    currentVolume: Int,
-    minVolume: Int,
-    maxVolume: Int
-): Boolean {
-    if (playbackStartVolumeLimitPercent == null || dismissedByUser) return false
-    val targetVolume = playbackStartVolumeForPercent(
-        targetPercent = playbackStartVolumeLimitPercent,
-        minVolume = minVolume,
-        maxVolume = maxVolume
-    )
-    return currentVolume.coerceIn(minVolume, maxVolume).toFloat() > targetVolume
-}
-
-internal fun hasOutOfBandVolumeChange(
-    observedVolume: Int,
-    actualVolume: Int
-): Boolean {
-    return observedVolume != actualVolume
-}
-
-internal fun volumeProgress(
-    currentVolume: Int,
-    minVolume: Int,
-    maxVolume: Int
-): Float {
-    if (maxVolume <= minVolume) return 0f
-    val clampedVolume = currentVolume.coerceIn(minVolume, maxVolume)
-    val range = (maxVolume - minVolume).coerceAtLeast(1)
-    return ((clampedVolume - minVolume).toFloat() / range.toFloat()).coerceIn(0f, 1f)
-}
-
-internal fun nearestPositiveVolumeForPercent(
-    targetPercent: Float,
-    minVolume: Int,
-    maxVolume: Int
-): Int {
-    if (maxVolume <= minVolume) return minVolume
-    if (targetPercent <= 0f) return minVolume
-    val range = (maxVolume - minVolume).coerceAtLeast(1)
-    val target = minVolume + (range * targetPercent).roundToInt()
-    return target.coerceIn(minVolume + 1, maxVolume)
-}
-
-internal fun playbackStartVolumeForPercent(
-    targetPercent: Int,
-    minVolume: Int,
-    maxVolume: Int
-): Float {
-    return volumeForPercent(
-        targetPercent = targetPercent.coerceIn(0, 100) / 100f,
-        minVolume = minVolume,
-        maxVolume = maxVolume
-    )
-}
-
-internal fun volumeForPercent(
-    targetPercent: Float,
-    minVolume: Int,
-    maxVolume: Int
-): Float {
-    if (maxVolume <= minVolume) return minVolume.toFloat()
-    if (targetPercent <= 0f) return minVolume.toFloat()
-    val range = (maxVolume - minVolume).coerceAtLeast(1)
-    val target = minVolume + (range * targetPercent)
-    return target.coerceIn((minVolume + 1).toFloat(), maxVolume.toFloat())
-}
-
-internal fun volumeGuardActivationVolume(
-    sessionCapVolume: Float,
-    minVolume: Int,
-    maxVolume: Int
-): Float {
-    if (maxVolume <= minVolume) return minVolume.toFloat()
-    return sessionCapVolume
-        .roundToInt()
-        .coerceIn(minVolume, maxVolume)
-        .toFloat()
-}

@@ -94,7 +94,6 @@ import com.lightningstudio.watchrss.ui.viewmodel.HomePlatformLoginState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
-import java.util.ArrayDeque
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.roundToInt
 
@@ -450,11 +449,12 @@ private class HomeReadAloudSpectrumViewHolder {
 
 private class HomeReadAloudSpectrumView(context: Context) : View(context), Choreographer.FrameCallback {
     private val currentLevels = FloatArray(READ_ALOUD_HOME_SPECTRUM_BARS)
-    private val pendingFrames = ArrayDeque<FloatArray>(READ_ALOUD_HOME_SPECTRUM_MAX_PENDING_FRAMES)
+    private val targetLevels = FloatArray(READ_ALOUD_HOME_SPECTRUM_BARS)
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val barRect = RectF()
     private var isPlaying = false
     private var isFrameCallbackPosted = false
+    private var lastFrameTimeNanos = 0L
 
     init {
         setWillNotDraw(false)
@@ -464,6 +464,7 @@ private class HomeReadAloudSpectrumView(context: Context) : View(context), Chore
     fun setPlaying(value: Boolean) {
         if (isPlaying == value) return
         isPlaying = value
+        lastFrameTimeNanos = 0L
         ensureFrameCallback()
     }
 
@@ -474,51 +475,35 @@ private class HomeReadAloudSpectrumView(context: Context) : View(context), Chore
     }
 
     fun setTargets(source: List<Float>) {
-        currentLevels.forEachIndexed { index, _ ->
-            currentLevels[index] = ((source.getOrNull(index) ?: 0f) * 2f).coerceIn(0f, 1f)
+        val changed = updateTargetLevels { index ->
+            source.getOrNull(index) ?: 0f
         }
-        invalidate()
+        if (changed && !isFrameCallbackPosted) {
+            lastFrameTimeNanos = 0L
+        }
+        ensureFrameCallback()
     }
 
     fun setTargets(source: FloatArray) {
-        if (source.isEmpty()) {
-            pendingFrames.clear()
-            currentLevels.fill(0f)
-            invalidate()
-            return
+        val changed = updateTargetLevels { index ->
+            source.getOrNull(index) ?: 0f
         }
-        if (pendingFrames.size >= READ_ALOUD_HOME_SPECTRUM_MAX_PENDING_FRAMES) {
-            pendingFrames.removeFirst()
+        if (changed && !isFrameCallbackPosted) {
+            lastFrameTimeNanos = 0L
         }
-        pendingFrames.addLast(
-            FloatArray(READ_ALOUD_HOME_SPECTRUM_BARS) { index ->
-                ((source.getOrNull(index) ?: 0f) * 2f).coerceIn(0f, 1f)
-            }
-        )
         ensureFrameCallback()
     }
 
     override fun doFrame(frameTimeNanos: Long) {
         isFrameCallbackPosted = false
-        if (isPlaying && pendingFrames.isNotEmpty()) {
-            val nextFrame = pendingFrames.removeFirst()
-            nextFrame.copyInto(currentLevels)
-            invalidate()
-        } else if (!isPlaying && currentLevels.any { level -> level > READ_ALOUD_HOME_SPECTRUM_IDLE_EPSILON }) {
-            currentLevels.forEachIndexed { index, current ->
-                val next = current * READ_ALOUD_HOME_SPECTRUM_STOP_DECAY
-                currentLevels[index] = if (next < READ_ALOUD_HOME_SPECTRUM_IDLE_EPSILON) {
-                    0f
-                } else {
-                    next
-                }
-            }
+        val elapsedSeconds = frameElapsedSeconds(frameTimeNanos)
+        if (applyLevelFrame(elapsedSeconds)) {
             invalidate()
         }
-        if ((isPlaying && pendingFrames.isNotEmpty()) ||
-            (!isPlaying && currentLevels.any { level -> level > READ_ALOUD_HOME_SPECTRUM_IDLE_EPSILON })
-        ) {
+        if (hasAnimationWork()) {
             ensureFrameCallback()
+        } else {
+            lastFrameTimeNanos = 0L
         }
     }
 
@@ -551,19 +536,69 @@ private class HomeReadAloudSpectrumView(context: Context) : View(context), Chore
     override fun onDetachedFromWindow() {
         Choreographer.getInstance().removeFrameCallback(this)
         isFrameCallbackPosted = false
-        pendingFrames.clear()
+        lastFrameTimeNanos = 0L
         super.onDetachedFromWindow()
     }
 
     private fun ensureFrameCallback() {
         if (!isAttachedToWindow || isFrameCallbackPosted) return
-        if ((isPlaying && pendingFrames.isEmpty()) ||
-            (!isPlaying && currentLevels.none { level -> level > READ_ALOUD_HOME_SPECTRUM_IDLE_EPSILON })
-        ) {
-            return
-        }
+        if (!hasAnimationWork()) return
         isFrameCallbackPosted = true
         Choreographer.getInstance().postFrameCallback(this)
+    }
+
+    private fun updateTargetLevels(source: (Int) -> Float): Boolean {
+        var changed = false
+        targetLevels.forEachIndexed { index, current ->
+            val next = (source(index) * 2f).coerceIn(0f, 1f)
+            if (current != next) {
+                targetLevels[index] = next
+                changed = true
+            }
+        }
+        return changed
+    }
+
+    private fun frameElapsedSeconds(frameTimeNanos: Long): Float {
+        val previousFrameTimeNanos = lastFrameTimeNanos
+        lastFrameTimeNanos = frameTimeNanos
+        if (previousFrameTimeNanos <= 0L || frameTimeNanos <= previousFrameTimeNanos) {
+            return READ_ALOUD_HOME_SPECTRUM_DEFAULT_FRAME_SECONDS
+        }
+        return (frameTimeNanos - previousFrameTimeNanos) / READ_ALOUD_NANOS_PER_SECOND
+    }
+
+    private fun applyLevelFrame(elapsedSeconds: Float): Boolean {
+        val maxDrop = (
+            elapsedSeconds.coerceAtLeast(0f) *
+                READ_ALOUD_HOME_SPECTRUM_DROP_RANGE_PER_SECOND
+            )
+        var changed = false
+        currentLevels.forEachIndexed { index, current ->
+            val target = if (isPlaying) targetLevels[index] else 0f
+            val next = when {
+                isPlaying && target >= current -> target
+                current <= READ_ALOUD_HOME_SPECTRUM_IDLE_EPSILON &&
+                    target <= READ_ALOUD_HOME_SPECTRUM_IDLE_EPSILON -> 0f
+                current - target <= READ_ALOUD_HOME_SPECTRUM_IDLE_EPSILON -> target
+                current - target <= maxDrop -> target
+                else -> current - maxDrop
+            }.coerceIn(0f, 1f)
+            if (current != next) {
+                currentLevels[index] = next
+                changed = true
+            }
+        }
+        return changed
+    }
+
+    private fun hasAnimationWork(): Boolean {
+        currentLevels.forEachIndexed { index, current ->
+            val target = if (isPlaying) targetLevels[index] else 0f
+            if (isPlaying && target > current) return true
+            if (current - target > READ_ALOUD_HOME_SPECTRUM_IDLE_EPSILON) return true
+        }
+        return false
     }
 }
 
@@ -1171,8 +1206,9 @@ private fun Modifier.clickableWithRipple(
 }
 
 private const val READ_ALOUD_HOME_SPECTRUM_BARS = 5
-private const val READ_ALOUD_HOME_SPECTRUM_MAX_PENDING_FRAMES = 16
-private const val READ_ALOUD_HOME_SPECTRUM_STOP_DECAY = 0.72f
+private const val READ_ALOUD_NANOS_PER_SECOND = 1_000_000_000f
+private const val READ_ALOUD_HOME_SPECTRUM_DEFAULT_FRAME_SECONDS = 1f / 60f
+private const val READ_ALOUD_HOME_SPECTRUM_DROP_RANGE_PER_SECOND = 2f
 private const val READ_ALOUD_HOME_SPECTRUM_IDLE_EPSILON = 0.002f
 private const val READ_ALOUD_HOME_SPECTRUM_VIEW_AWAIT_DELAY_MS = 16L
 private const val DEBUG_AUTOSCROLL_MIN_ENTRIES = 8

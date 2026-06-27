@@ -25,6 +25,7 @@ import com.lightningstudio.watchrss.data.douyin.DouyinRepositoryContract
 import com.lightningstudio.watchrss.data.douyin.DouyinWatchHistoryStore
 import com.lightningstudio.watchrss.data.douyin.DouyinWatchHistoryStoreContract
 import com.lightningstudio.watchrss.data.db.WatchRssDatabase
+import com.lightningstudio.watchrss.data.media.AudioManagerMediaPlaybackStartVolumeLimiter
 import com.lightningstudio.watchrss.data.network.DefaultInternetAvailabilityMonitor
 import com.lightningstudio.watchrss.data.network.InternetAvailabilityMonitor
 import com.lightningstudio.watchrss.data.rss.DefaultRssRepository
@@ -42,6 +43,7 @@ import com.lightningstudio.watchrss.ui.util.RssImageLoader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 
 interface AppContainer {
     val rssRepository: RssRepository
@@ -203,7 +205,11 @@ class DefaultAppContainer(context: Context) : AppContainer {
         ReadAloudController(
             context = appContext,
             appScope = appScope,
-            rssRepository = rssRepository
+            rssRepository = rssRepository,
+            playbackStartVolumeLimiter = AudioManagerMediaPlaybackStartVolumeLimiter(appContext),
+            playbackStartVolumeLimitPercentProvider = {
+                settingsRepository.mediaPlaybackStartVolumeLimitPercent.first()
+            }
         )
     }
 }

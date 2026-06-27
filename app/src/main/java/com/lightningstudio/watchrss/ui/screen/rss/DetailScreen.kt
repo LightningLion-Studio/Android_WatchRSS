@@ -15,6 +15,7 @@ import androidx.compose.animation.core.updateTransition
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -63,6 +64,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
@@ -305,6 +307,7 @@ internal fun DetailContent(
     }
     var titleTextLayout by remember(item?.id) { mutableStateOf<TextLayoutResult?>(null) }
     var lastManualReadAloudScrollAt by remember(item?.id) { mutableStateOf(0L) }
+    var lastReadAloudLongPressAt by remember(item?.id) { mutableStateOf(0L) }
     var readAloudAutoScrollInProgress by remember(item?.id) { mutableStateOf(false) }
     val activeReadAloudHighlight = readAloudState.highlightRange
         ?.takeIf { range ->
@@ -561,9 +564,28 @@ internal fun DetailContent(
         return null
     }
 
-    fun openReadAloudFromVisibleAnchor() {
+    fun openReadAloudControlsOnce(startAnchor: ReadAloudStartAnchor?) {
         if (item == null) return
-        onOpenReadAloudControls(currentReadAloudStartAnchor(), originalContentEnabled)
+        val now = SystemClock.uptimeMillis()
+        if (now - lastReadAloudLongPressAt < READ_ALOUD_LONG_PRESS_DEBOUNCE_MS) return
+        lastReadAloudLongPressAt = now
+        onOpenReadAloudControls(startAnchor, originalContentEnabled)
+    }
+
+    fun openReadAloudFromBeginning() {
+        openReadAloudControlsOnce(null)
+    }
+
+    fun openReadAloudFromVisibleAnchor() {
+        openReadAloudControlsOnce(currentReadAloudStartAnchor())
+    }
+
+    fun Modifier.readAloudLongPressTarget(onLongPress: () -> Unit): Modifier = pointerInput(onLongPress) {
+        detectTapGestures(
+            onLongPress = {
+                onLongPress()
+            }
+        )
     }
 
     LaunchedEffect(listState, item?.id) {
@@ -1059,13 +1081,27 @@ internal fun DetailContent(
             contentPadding = PaddingValues(horizontal = pagePadding)
         ) {
             item(key = "topSpacer") {
-                Spacer(modifier = Modifier.height(safePadding + extraSafePadding))
+                Spacer(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(safePadding + extraSafePadding)
+                        .readAloudLongPressTarget(::openReadAloudFromBeginning)
+                )
             }
             item(key = "titleGap") {
-                Spacer(modifier = Modifier.height(watchDimensionResource(R.dimen.hey_distance_4dp)))
+                Spacer(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(watchDimensionResource(R.dimen.hey_distance_4dp))
+                        .readAloudLongPressTarget(::openReadAloudFromBeginning)
+                )
             }
             item(key = "title") {
-                Box(modifier = Modifier.fillMaxWidth()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .readAloudLongPressTarget(::openReadAloudFromBeginning)
+                ) {
                     if (item != null) {
                         DetailTitle(
                             title = item.title,
@@ -1149,7 +1185,12 @@ internal fun DetailContent(
                 }
             }
             item(key = "contentGap") {
-                Spacer(modifier = Modifier.height(blockSpacing))
+                Spacer(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(blockSpacing)
+                        .readAloudLongPressTarget(::openReadAloudFromVisibleAnchor)
+                )
             }
             if (showOriginalLoadingNotice) {
                 item(key = "originalLoading") {
@@ -1199,7 +1240,12 @@ internal fun DetailContent(
                     }
                     val topPadding = if (index == 0) 0.dp else blockSpacing
                     if (text == null) {
-                        Spacer(modifier = Modifier.height(if (index == 0) 1.dp else blockSpacing))
+                        Spacer(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(if (index == 0) 1.dp else blockSpacing)
+                                .readAloudLongPressTarget(::openReadAloudFromVisibleAnchor)
+                        )
                     } else if (text.isNotBlank()) {
                         val highlightRange = activeReadAloudHighlight
                             ?.takeIf { highlight -> highlight.importedChunkIndex == index }
@@ -1345,7 +1391,12 @@ internal fun DetailContent(
                 }
             }
             item(key = "actionSpacing") {
-                Spacer(modifier = Modifier.height(actionVerticalSpacing))
+                Spacer(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(actionVerticalSpacing)
+                        .readAloudLongPressTarget(::openReadAloudFromVisibleAnchor)
+                )
             }
             item(key = "actions") {
                 Box(
@@ -1392,7 +1443,12 @@ internal fun DetailContent(
                 }
             }
             item(key = "bottomSpacer") {
-                Spacer(modifier = Modifier.height(if (showAiButton) 56.dp else actionVerticalSpacing))
+                Spacer(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(if (showAiButton) 56.dp else actionVerticalSpacing)
+                        .readAloudLongPressTarget(::openReadAloudFromVisibleAnchor)
+                )
             }
         }
 
@@ -2428,6 +2484,7 @@ private const val DETAIL_LOADING_SKELETON_ITEM_COUNT = 1
 private const val IMPORTED_TEXT_RESTORE_OFFSET_TIMEOUT_MS = 3_000L
 private const val IMPORTED_TEXT_SAVE_LAYOUT_TIMEOUT_MS = 800L
 private const val READ_ALOUD_MANUAL_SCROLL_GRACE_MS = 3_000L
+private const val READ_ALOUD_LONG_PRESS_DEBOUNCE_MS = 600L
 private const val READ_ALOUD_SCROLL_TARGET_TIMEOUT_MS = 700L
 private const val READ_ALOUD_SCROLL_LAYOUT_TIMEOUT_MS = 1_200L
 private const val READ_ALOUD_AUTO_SCROLL_SETTLE_MS = 120L

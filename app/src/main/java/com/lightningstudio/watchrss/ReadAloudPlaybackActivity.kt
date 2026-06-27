@@ -6,11 +6,14 @@ import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED
+import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
 import com.lightningstudio.watchrss.ui.screen.rss.ReadAloudPlaybackScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 
 class ReadAloudPlaybackActivity : BaseWatchActivity() {
-    private val controller by lazy { (application as WatchRssApplication).container.readAloudController }
+    private val container by lazy { (application as WatchRssApplication).container }
+    private val controller by lazy { container.readAloudController }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -19,6 +22,12 @@ class ReadAloudPlaybackActivity : BaseWatchActivity() {
         setContent {
             WatchRSSTheme {
                 val state by controller.uiState.collectAsState()
+                val volumeControlEnabled by container.settingsRepository.mediaVolumeControlEnabled.collectAsState(
+                    initial = DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED
+                )
+                val volumeGuardEnabled by container.settingsRepository.mediaVolumeGuardEnabled.collectAsState(
+                    initial = DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
+                )
                 ReadAloudPlaybackScreen(
                     state = state,
                     onTogglePlayPause = controller::togglePlayPause,
@@ -31,6 +40,8 @@ class ReadAloudPlaybackActivity : BaseWatchActivity() {
                     onToggleAutoAdvance = controller::toggleAutoAdvance,
                     onDecreaseSpeechRate = controller::decreaseSpeechRate,
                     onIncreaseSpeechRate = controller::increaseSpeechRate,
+                    digitalCrownVolumeEnabled = volumeControlEnabled,
+                    volumeGuardEnabled = volumeGuardEnabled,
                     currentArticleActionText = if (returnToArticle) {
                         "返回文章"
                     } else {

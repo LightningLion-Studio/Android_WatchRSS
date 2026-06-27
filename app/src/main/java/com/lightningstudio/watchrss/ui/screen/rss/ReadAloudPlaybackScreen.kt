@@ -49,7 +49,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.data.tts.ReadAloudPhase
 import com.lightningstudio.watchrss.data.tts.ReadAloudUiState
+import com.lightningstudio.watchrss.ui.components.PlayerVolumeOverlay
 import com.lightningstudio.watchrss.ui.components.WatchSurface
+import com.lightningstudio.watchrss.ui.components.rememberPlayerVolumeState
+import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownVolumeHandler
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -63,48 +66,74 @@ fun ReadAloudPlaybackScreen(
     onToggleAutoAdvance: () -> Unit,
     onDecreaseSpeechRate: () -> Unit,
     onIncreaseSpeechRate: () -> Unit,
+    digitalCrownVolumeEnabled: Boolean = true,
+    volumeGuardEnabled: Boolean = true,
     currentArticleActionText: String = "查看当前文章",
     onOpenCurrentArticle: (() -> Unit)? = null
 ) {
     WatchSurface(pureBlack = true) {
-        Column(
+        val effectiveVolumeGuardEnabled = volumeGuardEnabled && digitalCrownVolumeEnabled
+        val volumeState = rememberPlayerVolumeState(
+            guardEnabled = effectiveVolumeGuardEnabled,
+            playbackStartVolumeLimitPercent = null
+        )
+
+        InstallDigitalCrownVolumeHandler(
+            enabled = digitalCrownVolumeEnabled,
+            showSystemUi = false,
+            reverseDirection = true,
+            supportsDigitalCrown = true,
+            onVolumeAdjust = volumeState::adjustByDelta
+        )
+
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black)
-                .padding(horizontal = 18.dp, vertical = 12.dp)
                 .semantics {
                     contentDescription = "朗读播控页面"
                     stateDescription = buildPlaybackStatusText(state)
-                },
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+                }
         ) {
-            Text(
-                text = "朗读播控",
-                color = Color.White,
-                style = MaterialTheme.typography.titleSmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.semantics { heading() }
-            )
-
-            ReadAloudControlPanel(
-                state = state,
-                onTogglePlayPause = onTogglePlayPause,
-                onPrevious = onPrevious,
-                onNext = onNext,
-                onStop = onStop,
-                onToggleAutoAdvance = onToggleAutoAdvance,
-                onDecreaseSpeechRate = onDecreaseSpeechRate,
-                onIncreaseSpeechRate = onIncreaseSpeechRate
-            )
-
-            if (onOpenCurrentArticle != null) {
-                ReadAloudTextAction(
-                    text = currentArticleActionText,
-                    onClick = onOpenCurrentArticle
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 18.dp, vertical = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "朗读播控",
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.semantics { heading() }
                 )
+
+                ReadAloudControlPanel(
+                    state = state,
+                    onTogglePlayPause = onTogglePlayPause,
+                    onPrevious = onPrevious,
+                    onNext = onNext,
+                    onStop = onStop,
+                    onToggleAutoAdvance = onToggleAutoAdvance,
+                    onDecreaseSpeechRate = onDecreaseSpeechRate,
+                    onIncreaseSpeechRate = onIncreaseSpeechRate
+                )
+
+                if (onOpenCurrentArticle != null) {
+                    ReadAloudTextAction(
+                        text = currentArticleActionText,
+                        onClick = onOpenCurrentArticle
+                    )
+                }
             }
+
+            PlayerVolumeOverlay(
+                state = volumeState,
+                modifier = Modifier.align(Alignment.Center)
+            )
         }
     }
 }

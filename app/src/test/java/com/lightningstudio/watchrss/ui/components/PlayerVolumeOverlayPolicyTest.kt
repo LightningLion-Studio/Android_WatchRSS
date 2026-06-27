@@ -1,5 +1,12 @@
 package com.lightningstudio.watchrss.ui.components
 
+import com.lightningstudio.watchrss.data.media.DigitalCrownVolumeGuardState
+import com.lightningstudio.watchrss.data.media.applyDigitalCrownVolumeGuard
+import com.lightningstudio.watchrss.data.media.hasOutOfBandVolumeChange
+import com.lightningstudio.watchrss.data.media.nearestPositiveVolumeForPercent
+import com.lightningstudio.watchrss.data.media.playbackStartVolumeForPercent
+import com.lightningstudio.watchrss.data.media.shouldEnforcePlaybackStartGuard
+import com.lightningstudio.watchrss.data.media.volumeForPercent
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
