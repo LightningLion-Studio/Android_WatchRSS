@@ -60,11 +60,13 @@ fun InternetAvailabilityOverlay(
     ) {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val textWidth = (maxWidth * 0.92f).coerceAtMost(208.dp)
+            val guidanceTextWidth = (maxWidth * 0.98f).coerceAtMost(224.dp)
+            val buttonReservedHeight = 72.dp
 
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 18.dp, vertical = 18.dp),
+                    .padding(start = 18.dp, end = 18.dp, top = 18.dp, bottom = buttonReservedHeight),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Spacer(modifier = Modifier.height(18.dp))
@@ -83,7 +85,7 @@ fun InternetAvailabilityOverlay(
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.widthIn(max = textWidth)
+                    modifier = Modifier.widthIn(max = guidanceTextWidth)
                 )
 
                 Spacer(modifier = Modifier.height(9.dp))
@@ -104,14 +106,18 @@ fun InternetAvailabilityOverlay(
                 )
 
                 Spacer(modifier = Modifier.weight(1f))
+            }
 
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 8.dp)
+            ) {
                 InternetAvailabilityActionButton(
                     text = actionText,
                     enabled = actionEnabled,
                     onClick = onAction
                 )
-
-                Spacer(modifier = Modifier.height(4.dp))
             }
         }
     }
@@ -200,6 +206,7 @@ private fun InternetAvailabilityStatusIndicator(
 private fun InternetAvailabilityActionButton(
     text: String,
     enabled: Boolean,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     val radius = watchDimensionResource(R.dimen.hey_button_default_radius)
@@ -208,7 +215,7 @@ private fun InternetAvailabilityActionButton(
     val verticalPadding = watchDimensionResource(R.dimen.hey_button_padding_vertical)
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .widthIn(min = 112.dp)
             .height(height)
             .clip(RoundedCornerShape(radius))

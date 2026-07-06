@@ -595,6 +595,7 @@ internal fun DouyinImmersiveScreen(
             )
         )
     }
+    var allowBluetoothPlayback by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(uiState.showTitlePage, uiState.currentPage, uiState.items.size) {
         if (uiState.showTitlePage || entryStartIndex > uiState.items.lastIndex.coerceAtLeast(0)) {
             entryStartIndex = resolveDouyinEntryStartIndex(
@@ -1006,9 +1007,11 @@ internal fun DouyinImmersiveScreen(
     val activeHasError = activeSlotMatchesCurrentItem && foregroundSlot.hasError
     val activePlaybackNeedsInternet = (activeMediaUri ?: preparedPlaybackTargetMediaUri)
         .requiresInternetConnection()
+    val shouldShowBluetoothPrompt =
+        internetAvailabilityStatus == InternetAvailabilityStatus.Bluetooth && !allowBluetoothPlayback
     val showNetworkUnavailable = (
         internetAvailabilityStatus == InternetAvailabilityStatus.Unavailable ||
-            internetAvailabilityStatus == InternetAvailabilityStatus.Bluetooth
+            shouldShowBluetoothPrompt
         ) &&
         !uiState.showTitlePage &&
         activeItem != null &&
@@ -2632,7 +2635,28 @@ internal fun DouyinImmersiveScreen(
         if (showNetworkUnavailable) {
             InternetAvailabilityOverlay(
                 status = internetAvailabilityStatus,
-                onAction = { requestActivePlaybackRefresh(true) }
+                actionText = if (internetAvailabilityStatus == InternetAvailabilityStatus.Bluetooth) {
+                    "继续"
+                } else {
+                    "重试"
+                },
+                onAction = {
+                    if (internetAvailabilityStatus == InternetAvailabilityStatus.Bluetooth) {
+                        allowBluetoothPlayback = true
+                        activePausedByGesture = false
+                        activeAutoplayEnabled = true
+                        if (activeItem?.awemeId == foregroundSlot.boundAwemeId && !activeHasError) {
+                            enforceEntryPlaybackStartVolumeLimit()
+                            restoreAudibleSlotVolume(foregroundSlot)
+                            foregroundSlot.player.playWhenReady = true
+                            foregroundSlot.player.play()
+                        } else {
+                            requestActivePlaybackRefresh(true)
+                        }
+                    } else {
+                        requestActivePlaybackRefresh(true)
+                    }
+                }
             )
         }
     }

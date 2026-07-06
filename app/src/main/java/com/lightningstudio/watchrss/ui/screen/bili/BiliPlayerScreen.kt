@@ -199,6 +199,7 @@ fun BiliPlayerScreen(
     var videoSize by remember { mutableStateOf(IntSize.Zero) }
     var videoRotation by remember { mutableStateOf(0) }
     var playWhenReady by remember { mutableStateOf(false) }
+    var allowBluetoothPlayback by remember { mutableStateOf(false) }
     var panOffsetX by remember { mutableStateOf(0f) }
     val panAnimator = remember { Animatable(0f) }
     val panDecay = remember { exponentialDecay<Float>() }
@@ -215,9 +216,11 @@ fun BiliPlayerScreen(
     val hasConfiguredSource = uiState.initialSource != null
     val playbackSourceNeedsInternet = (activeSource ?: uiState.initialSource)
         ?.requiresInternetConnection() == true
+    val shouldShowBluetoothPrompt =
+        internetAvailabilityStatus == InternetAvailabilityStatus.Bluetooth && !allowBluetoothPlayback
     val shouldShowConnectionPromptForStatus =
         internetAvailabilityStatus == InternetAvailabilityStatus.Unavailable ||
-            internetAvailabilityStatus == InternetAvailabilityStatus.Bluetooth
+            shouldShowBluetoothPrompt
     val isConnectionPromptPlayback = shouldShowConnectionPromptForStatus &&
         !isPlaying &&
         (playbackSourceNeedsInternet || (uiState.isLoading && !hasConfiguredSource))
@@ -264,6 +267,28 @@ fun BiliPlayerScreen(
         if (!playbackStartGuardPending) return
         volumeState.enforcePlaybackStartGuard()
         playbackStartGuardPending = false
+    }
+
+    fun continueBluetoothPlayback() {
+        allowBluetoothPlayback = true
+        playWhenReady = true
+        val player = playerRef ?: return
+        runCatching {
+            if (isActive) {
+                enforcePendingPlaybackStartGuard()
+                player.playWhenReady = true
+                player.play()
+                if (isPrepared) {
+                    isPlaying = true
+                    isBuffering = false
+                } else {
+                    isBuffering = true
+                }
+            } else {
+                player.playWhenReady = false
+                pendingPreparedPlayWhenReady = true
+            }
+        }
     }
 
     fun togglePlayback() {
@@ -1032,13 +1057,25 @@ fun BiliPlayerScreen(
         }
 
         if (showNetworkUnavailable) {
+            val overlayStatus = if (errorText == OFFLINE_USER_MESSAGE) {
+                InternetAvailabilityStatus.Unavailable
+            } else {
+                internetAvailabilityStatus
+            }
             InternetAvailabilityOverlay(
-                status = if (errorText == OFFLINE_USER_MESSAGE) {
-                    InternetAvailabilityStatus.Unavailable
+                status = overlayStatus,
+                actionText = if (overlayStatus == InternetAvailabilityStatus.Bluetooth) {
+                    "继续"
                 } else {
-                    internetAvailabilityStatus
+                    "重试"
                 },
-                onAction = onRetry
+                onAction = {
+                    if (overlayStatus == InternetAvailabilityStatus.Bluetooth) {
+                        continueBluetoothPlayback()
+                    } else {
+                        onRetry()
+                    }
+                }
             )
         }
     }

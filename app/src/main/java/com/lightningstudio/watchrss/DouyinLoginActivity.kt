@@ -60,8 +60,7 @@ class DouyinLoginActivity : BaseWatchActivity() {
 
                         InternetAvailabilityStatus.Bluetooth -> {
                             DouyinLoginBannedScreen(
-                                title = "蓝牙网络较慢",
-                                message = "当前使用蓝牙网络，网速较慢，建议连接 WiFi 或移动网络后重试。",
+                                status = InternetAvailabilityStatus.Bluetooth,
                                 onBack = { finish() }
                             )
                         }
