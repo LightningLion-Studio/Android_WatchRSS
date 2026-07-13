@@ -47,7 +47,8 @@ data class LibraryChangeSequence(
 )
 
 object LibrarySyncPayload {
-    const val PROTOCOL_VERSION = 9
+    const val PROTOCOL_VERSION = 10
+    const val MIN_SUPPORTED_PHONE_PROTOCOL_VERSION = 10
     const val LEGACY_PROTOCOL_VERSION = 4
     const val MAX_BODY_REQUEST_CHUNKS_PER_SYNC = Int.MAX_VALUE
     const val MAX_ARTICLE_REQUEST_BATCH_COUNT = 256
@@ -68,6 +69,22 @@ object LibrarySyncPayload {
             put(FIELD_SUPPORTS_TRANSFER_BYTE_PROGRESS, true)
             put("deviceId", deviceId)
             put("sentAt", System.currentTimeMillis())
+        }
+    }
+
+    fun buildUnsupportedPhoneProtocolResponse(request: JSONObject): JSONObject? {
+        if (request.optString("action") != BluetoothSyncProtocol.ACTION_SYNC_LIBRARY) return null
+        val remoteVersion = request.optInt("version", 0)
+        if (remoteVersion >= MIN_SUPPORTED_PHONE_PROTOCOL_VERSION) return null
+        return JSONObject().apply {
+            put("success", false)
+            put("version", PROTOCOL_VERSION)
+            put("minimumPhoneProtocolVersion", MIN_SUPPORTED_PHONE_PROTOCOL_VERSION)
+            put("action", BluetoothSyncProtocol.ACTION_SYNC_LIBRARY)
+            put(
+                "message",
+                "手机版版本过低，请升级到最新版后再同步（最低蓝牙协议 v$MIN_SUPPORTED_PHONE_PROTOCOL_VERSION，当前 v$remoteVersion）"
+            )
         }
     }
 

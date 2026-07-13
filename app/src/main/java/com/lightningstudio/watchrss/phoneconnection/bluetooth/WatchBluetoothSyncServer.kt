@@ -142,13 +142,17 @@ class WatchBluetoothSyncServer(
                     )
                     onClientAccepted?.invoke()
                     val request = readFrameLogged(client, sessionId, "initialRequest")
-                    val libraryExchange = if (request.isManifestLibrarySync()) {
+                    val unsupportedPhoneProtocolResponse =
+                        LibrarySyncPayload.buildUnsupportedPhoneProtocolResponse(request)
+                    val libraryExchange = if (
+                        unsupportedPhoneProtocolResponse == null && request.isManifestLibrarySync()
+                    ) {
                         handleLibraryManifestExchange(client, request, sessionId)
                     } else {
                         null
                     }
                     val response = libraryExchange?.response ?: run {
-                        handleRequest(request, sessionId).also { response ->
+                        (unsupportedPhoneProtocolResponse ?: handleRequest(request, sessionId)).also { response ->
                             writeFrameLogged(client, sessionId, "response", response)
                         }
                     }
