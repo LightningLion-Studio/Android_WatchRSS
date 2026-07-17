@@ -30,6 +30,7 @@ data class ArticleBodyPayload(
 object ArticleSyncBody {
     const val CHUNK_SIZE_BYTES = 128 * 1024
     private const val BODY_ENCODING_VERSION = 2
+    private const val MAX_DECOMPRESSED_TEXT_BYTES = 32 * 1024 * 1024
 
     fun metadataFor(article: SyncedSavedArticle): ArticleBodyMetadata {
         val output = BodyChunkOutputStream()
@@ -215,7 +216,38 @@ object ArticleSyncBody {
             ByteArrayInputStream(bytes)
         }
         return input.use { stream ->
-            decodeBodyJson(InputStreamReader(stream, Charsets.UTF_8))
+            decodeBodyJson(
+                InputStreamReader(
+                    LimitedInputStream(stream, MAX_DECOMPRESSED_TEXT_BYTES),
+                    Charsets.UTF_8
+                )
+            )
+        }
+    }
+
+    private class LimitedInputStream(
+        private val upstream: InputStream,
+        private val maxBytes: Int
+    ) : InputStream() {
+        private var totalBytes = 0
+
+        override fun read(): Int {
+            val value = upstream.read()
+            if (value >= 0) count(1)
+            return value
+        }
+
+        override fun read(buffer: ByteArray, offset: Int, length: Int): Int {
+            val read = upstream.read(buffer, offset, length)
+            if (read > 0) count(read)
+            return read
+        }
+
+        private fun count(bytes: Int) {
+            totalBytes += bytes
+            if (totalBytes > maxBytes) {
+                throw IllegalArgumentException("解压内容过大")
+            }
         }
     }
 

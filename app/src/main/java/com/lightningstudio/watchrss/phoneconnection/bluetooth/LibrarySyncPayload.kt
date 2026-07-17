@@ -124,9 +124,7 @@ object LibrarySyncPayload {
                         bodySyncMode = item.optString("bodySyncMode")
                             .trim()
                             .ifBlank { ARTICLE_BODY_SYNC_MODE_FULL },
-                        readingProgress = item.optDouble("readingProgress", 0.0)
-                            .toFloat()
-                            .coerceIn(0f, 1f)
+                        readingProgress = item.optFiniteProgress("readingProgress")
                     )
                 )
             }
@@ -335,9 +333,7 @@ object LibrarySyncPayload {
                         watchLaterSortOrder = item.optLong("watchLaterSortOrder"),
                         deleted = item.optBoolean("deleted"),
                         deletedAt = item.optLong("deletedAt"),
-                        readingProgress = item.optDouble("readingProgress", 0.0)
-                            .toFloat()
-                            .coerceIn(0f, 1f)
+                        readingProgress = item.optFiniteProgress("readingProgress")
                     )
                 )
             }
@@ -709,6 +705,7 @@ object LibrarySyncPayload {
             put("supportsChunkedBodies", true)
             put("supportsChangeSequences", true)
             put("supportsMetadataOnlyArticles", true)
+            put("supportsReceivedAck", true)
             put(FIELD_SUPPORTS_TRANSFER_BYTE_PROGRESS, true)
             put("deviceId", deviceId)
             put("sentAt", System.currentTimeMillis())
@@ -742,6 +739,7 @@ object LibrarySyncPayload {
             put("supportsChunkedBodies", true)
             put("supportsChangeSequences", true)
             put("supportsMetadataOnlyArticles", true)
+            put("supportsReceivedAck", true)
             put(FIELD_SUPPORTS_TRANSFER_BYTE_PROGRESS, true)
             put("deviceId", deviceId)
             put("sentAt", System.currentTimeMillis())
@@ -1323,10 +1321,28 @@ object LibrarySyncPayload {
 
     private fun gunzip(bytes: ByteArray): String {
         return GZIPInputStream(ByteArrayInputStream(bytes)).use { gzip ->
-            gzip.readBytes().toString(Charsets.UTF_8)
+            val out = ByteArrayOutputStream()
+            val buffer = ByteArray(8 * 1024)
+            var total = 0
+            while (true) {
+                val read = gzip.read(buffer)
+                if (read < 0) break
+                total += read
+                if (total > MAX_DECOMPRESSED_TEXT_BYTES) {
+                    throw IllegalArgumentException("解压内容过大")
+                }
+                out.write(buffer, 0, read)
+            }
+            out.toByteArray().toString(Charsets.UTF_8)
         }
     }
 
+    private fun JSONObject.optFiniteProgress(name: String): Float {
+        val value = optDouble(name, 0.0).takeIf { it.isFinite() } ?: 0.0
+        return value.toFloat().coerceIn(0f, 1f)
+    }
+
+    private const val MAX_DECOMPRESSED_TEXT_BYTES = 32 * 1024 * 1024
     private const val ARTICLE_BATCH_TARGET_BYTES = 384 * 1024
     private const val RESPONSE_PROGRESS_HEADER_MIN_BODY_BYTES = 16 * 1024
     private const val EXACT_CHUNKED_ARTICLE_SIZE_MAX_BYTES = 64 * 1024L

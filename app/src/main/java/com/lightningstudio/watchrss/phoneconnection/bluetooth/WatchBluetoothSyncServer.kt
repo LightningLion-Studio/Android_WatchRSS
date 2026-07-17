@@ -141,7 +141,12 @@ class WatchBluetoothSyncServer(
                         fields = remoteFields(remoteName, remoteAddress)
                     )
                     onClientAccepted?.invoke()
-                    val request = readFrameLogged(client, sessionId, "initialRequest")
+                    val request = readFrameLoggedWithTimeout(
+                        client = client,
+                        sessionId = sessionId,
+                        label = "initialRequest",
+                        timeoutMs = INITIAL_REQUEST_READ_TIMEOUT_MS
+                    )
                     val unsupportedPhoneProtocolResponse =
                         LibrarySyncPayload.buildUnsupportedPhoneProtocolResponse(request)
                     val libraryExchange = if (
@@ -487,11 +492,16 @@ class WatchBluetoothSyncServer(
         }
     }
 
-    private fun readArticleRequestFrames(
+    private suspend fun readArticleRequestFrames(
         client: BluetoothSocket,
         sessionId: String
     ): List<JSONObject> {
-        val first = readFrameLogged(client, sessionId, "articlesRequest")
+        val first = readFrameLoggedWithTimeout(
+            client = client,
+            sessionId = sessionId,
+            label = "articlesRequest",
+            timeoutMs = EXCHANGE_FRAME_READ_TIMEOUT_MS
+        )
         val batchCount = LibrarySyncPayload.validateArticleRequestFrame(
             frame = first,
             expectedBatchIndex = 0
@@ -499,7 +509,12 @@ class WatchBluetoothSyncServer(
         val frames = mutableListOf(first)
         while (frames.size < batchCount) {
             val index = frames.size
-            val frame = readFrameLogged(client, sessionId, batchLabel("articlesRequest", index, batchCount))
+            val frame = readFrameLoggedWithTimeout(
+                client = client,
+                sessionId = sessionId,
+                label = batchLabel("articlesRequest", index, batchCount),
+                timeoutMs = EXCHANGE_FRAME_READ_TIMEOUT_MS
+            )
             LibrarySyncPayload.validateArticleRequestFrame(
                 frame = frame,
                 expectedBatchIndex = index,
@@ -510,11 +525,16 @@ class WatchBluetoothSyncServer(
         return frames
     }
 
-    private fun readChunkedArticleRequestFrames(
+    private suspend fun readChunkedArticleRequestFrames(
         client: BluetoothSocket,
         sessionId: String
     ): ChunkedArticleRequestFrames {
-        val first = readFrameLogged(client, sessionId, "articlesRequest")
+        val first = readFrameLoggedWithTimeout(
+            client = client,
+            sessionId = sessionId,
+            label = "articlesRequest",
+            timeoutMs = EXCHANGE_FRAME_READ_TIMEOUT_MS
+        )
         val batchCount = LibrarySyncPayload.validateArticleRequestFrame(
             frame = first,
             expectedBatchIndex = 0
@@ -534,10 +554,11 @@ class WatchBluetoothSyncServer(
         consume(first)
         var frameCount = 1
         while (frameCount < batchCount) {
-            val frame = readFrameLogged(
-                client,
-                sessionId,
-                batchLabel("articlesRequest", frameCount, batchCount)
+            val frame = readFrameLoggedWithTimeout(
+                client = client,
+                sessionId = sessionId,
+                label = batchLabel("articlesRequest", frameCount, batchCount),
+                timeoutMs = EXCHANGE_FRAME_READ_TIMEOUT_MS
             )
             LibrarySyncPayload.validateArticleRequestFrame(
                 frame = frame,
@@ -603,37 +624,29 @@ class WatchBluetoothSyncServer(
             event = "ack.read.start",
             fields = mapOf("timeoutMs" to RESPONSE_ACK_TIMEOUT_MS)
         )
-        val ack = coroutineScope {
-            val timeoutJob = launch {
-                delay(RESPONSE_ACK_TIMEOUT_MS)
-                runCatching {
-                    client.close()
-                }.onSuccess {
-                    WatchBluetoothDebugLog.warn(
-                        sessionId = sessionId,
-                        event = "ack.read.timeout.closed",
-                        fields = mapOf("elapsedMs" to elapsedSince(startedAt))
-                    )
-                }
-            }
-            runCatching {
-                BluetoothSyncProtocol.readFrame(client.inputStream)
-            }.also {
-                timeoutJob.cancel()
-            }.onFailure { throwable ->
-                WatchBluetoothDebugLog.warn(
-                    sessionId = sessionId,
-                    event = "ack.read.failed",
-                    fields = mapOf(
-                        "elapsedMs" to elapsedSince(startedAt),
-                        "errorClass" to throwable::class.java.name,
-                        "message" to throwable.message.orEmpty()
-                    ),
-                    throwable = throwable
+        var ack = readAckPayloadOrNull(client, sessionId, RESPONSE_ACK_TIMEOUT_MS, startedAt)
+        var parsedAck = BluetoothSyncProtocol.parseAck(ack)
+        if (
+            parsedAck != null &&
+            parsedAck.success &&
+            !parsedAck.applied &&
+            parsedAck.phase == BluetoothSyncProtocol.ACK_PHASE_RECEIVED
+        ) {
+            WatchBluetoothDebugLog.event(
+                sessionId = sessionId,
+                event = "ack.received.waitApplied",
+                fields = mapOf(
+                    "timeoutMs" to APPLIED_ACK_TIMEOUT_MS,
+                    "elapsedMs" to elapsedSince(startedAt)
                 )
-            }.getOrNull()
+            )
+            val appliedPayload = readAckPayloadOrNull(client, sessionId, APPLIED_ACK_TIMEOUT_MS, startedAt)
+            val appliedAck = BluetoothSyncProtocol.parseAck(appliedPayload)
+            if (appliedAck != null) {
+                ack = appliedPayload
+                parsedAck = appliedAck
+            }
         }
-        val parsedAck = BluetoothSyncProtocol.parseAck(ack)
         return if (parsedAck != null) {
             Log.i(TAG, "response ack received phase=${parsedAck.phase} applied=${parsedAck.applied}")
             WatchBluetoothDebugLog.event(
@@ -654,6 +667,73 @@ class WatchBluetoothSyncServer(
                     mapOf("elapsedMs" to elapsedSince(startedAt))
             )
             null
+        }
+    }
+
+    private suspend fun readAckPayloadOrNull(
+        client: BluetoothSocket,
+        sessionId: String,
+        timeoutMs: Long,
+        startedAt: Long
+    ): JSONObject? = coroutineScope {
+        val timeoutJob = launch {
+            delay(timeoutMs)
+            runCatching {
+                client.close()
+            }.onSuccess {
+                WatchBluetoothDebugLog.warn(
+                    sessionId = sessionId,
+                    event = "ack.read.timeout.closed",
+                    fields = mapOf(
+                        "timeoutMs" to timeoutMs,
+                        "elapsedMs" to elapsedSince(startedAt)
+                    )
+                )
+            }
+        }
+        runCatching {
+            BluetoothSyncProtocol.readFrame(client.inputStream)
+        }.also {
+            timeoutJob.cancel()
+        }.onFailure { throwable ->
+            WatchBluetoothDebugLog.warn(
+                sessionId = sessionId,
+                event = "ack.read.failed",
+                fields = mapOf(
+                    "elapsedMs" to elapsedSince(startedAt),
+                    "errorClass" to throwable::class.java.name,
+                    "message" to throwable.message.orEmpty()
+                ),
+                throwable = throwable
+            )
+        }.getOrNull()
+    }
+
+    private suspend fun readFrameLoggedWithTimeout(
+        client: BluetoothSocket,
+        sessionId: String,
+        label: String,
+        timeoutMs: Long
+    ): JSONObject = coroutineScope {
+        val timeoutJob = launch {
+            delay(timeoutMs)
+            runCatching {
+                client.close()
+            }.onSuccess {
+                WatchBluetoothDebugLog.warn(
+                    sessionId = sessionId,
+                    event = "frame.read.timeout.closed",
+                    fields = mapOf(
+                        "label" to label,
+                        "timeoutMs" to timeoutMs
+                    )
+                )
+            }
+        }
+        try {
+            readFrameLogged(client, sessionId, label)
+        } finally {
+            timeoutJob.cancel()
         }
     }
 
@@ -1103,5 +1183,8 @@ class WatchBluetoothSyncServer(
         private const val TAG = "WatchRSS_BtSyncServer"
         private const val DEFAULT_TIMEOUT_MS = 120_000L
         private const val RESPONSE_ACK_TIMEOUT_MS = 10_000L
+        private const val APPLIED_ACK_TIMEOUT_MS = 120_000L
+        private const val INITIAL_REQUEST_READ_TIMEOUT_MS = 30_000L
+        private const val EXCHANGE_FRAME_READ_TIMEOUT_MS = 180_000L
     }
 }

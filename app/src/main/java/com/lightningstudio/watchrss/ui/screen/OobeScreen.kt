@@ -72,6 +72,8 @@ import com.lightningstudio.watchrss.ui.components.InternetAvailabilityPage
 import com.lightningstudio.watchrss.ui.components.WatchCheckbox
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.components.WatchSwitch
+import com.lightningstudio.watchrss.ui.components.internetAvailabilityGuidanceMessage
+import com.lightningstudio.watchrss.ui.components.internetAvailabilityStatusMessage
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownScrollHandler
 import com.lightningstudio.watchrss.ui.settings.MainSettingsCatalog
 import com.lightningstudio.watchrss.ui.settings.MainSettingInfo
@@ -567,16 +569,8 @@ private fun OobeInternetStep(
     onContinue: () -> Unit
 ) {
     val continueEnabled = status != InternetAvailabilityStatus.Checking
-    val statusMessage = when (status) {
-        InternetAvailabilityStatus.Checking -> "正在检测互联网状态…"
-        InternetAvailabilityStatus.Unavailable -> "未检测到可用互联网"
-        InternetAvailabilityStatus.Bluetooth -> "当前为蓝牙网络，加载可能较慢"
-        InternetAvailabilityStatus.Available -> "已检测到互联网，可以继续"
-    }
-    val guidanceMessage = when (status) {
-        InternetAvailabilityStatus.Bluetooth -> "当前使用蓝牙网络，网速较慢，建议连接 WiFi 或移动网络后使用本应用"
-        else -> "请连接Wi-Fi或蜂窝移动网络后使用本应用"
-    }
+    val statusMessage = internetAvailabilityStatusMessage(status)
+    val guidanceMessage = internetAvailabilityGuidanceMessage(status)
     val statusTag = when (status) {
         InternetAvailabilityStatus.Checking -> OobeTestTags.INTERNET_STATUS_CHECKING
         InternetAvailabilityStatus.Unavailable -> OobeTestTags.INTERNET_STATUS_UNAVAILABLE

@@ -42,7 +42,7 @@ private val InternetBluetoothAmber = Color(0xFFFFA726)
 fun InternetAvailabilityOverlay(
     status: InternetAvailabilityStatus,
     modifier: Modifier = Modifier,
-    message: String = internetAvailabilityMessage(status),
+    message: String = internetAvailabilityGuidanceMessage(status),
     actionText: String = "重试",
     actionEnabled: Boolean = status != InternetAvailabilityStatus.Checking,
     onAction: () -> Unit
@@ -61,7 +61,7 @@ fun InternetAvailabilityOverlay(
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val textWidth = (maxWidth * 0.92f).coerceAtMost(208.dp)
             val guidanceTextWidth = (maxWidth * 0.98f).coerceAtMost(224.dp)
-            val buttonReservedHeight = 72.dp
+            val buttonReservedHeight = 56.dp
 
             Column(
                 modifier = Modifier
@@ -235,7 +235,7 @@ private fun InternetAvailabilityActionButton(
     }
 }
 
-private fun internetAvailabilityMessage(status: InternetAvailabilityStatus): String {
+internal fun internetAvailabilityGuidanceMessage(status: InternetAvailabilityStatus): String {
     return when (status) {
         InternetAvailabilityStatus.Checking -> "正在检测网络连接"
         InternetAvailabilityStatus.Unavailable -> "请连接 WiFi 或移动网络"
@@ -244,7 +244,7 @@ private fun internetAvailabilityMessage(status: InternetAvailabilityStatus): Str
     }
 }
 
-private fun internetAvailabilityStatusMessage(status: InternetAvailabilityStatus): String {
+internal fun internetAvailabilityStatusMessage(status: InternetAvailabilityStatus): String {
     return when (status) {
         InternetAvailabilityStatus.Checking -> "正在检测互联网状态..."
         InternetAvailabilityStatus.Unavailable -> "未检测到可用互联网"

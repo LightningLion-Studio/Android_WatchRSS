@@ -54,7 +54,7 @@ fun InternetAvailabilityPage(
         val titleSpacing = if (hasLongGuidance) 8.dp else 10.dp
         val statusBarSpacing = if (hasLongGuidance) 12.dp else 18.dp
         val statusMessageSpacing = if (hasLongGuidance) 8.dp else 10.dp
-        val buttonReservedHeight = 72.dp
+        val buttonReservedHeight = 56.dp
 
         Column(
             modifier = Modifier
