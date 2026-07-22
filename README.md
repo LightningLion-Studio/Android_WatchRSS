@@ -50,6 +50,17 @@ scripts/update_log_upload_assets.sh --rotate-key
 ```
 - 脚本会生成/更新 `../Loger_key/rsa_pub_pkcs1.pem`，同步 `private_key.pem` / `rsa_pub_pkcs1.pem` 到 LogUploader 根目录，同步私钥到 `../log-decrypter/public/private_key.pem`，把公钥写进 `src/config/publicKey.js`，运行 `npm run build`，再把 `dist` 产物同步进 Android assets 并修正 Vite 资源路径为相对路径。
 
+### 获取并解密用户日志
+
+- 输入用户提供的六位取件码后，脚本会通过 InstantDB Admin API 查询日志、下载关联的加密文件，并按修改时间从新到旧尝试仓库外保存的所有私钥：
+```bash
+scripts/fetch_user_log.sh 795035
+```
+- 也可以直接运行 `scripts/fetch_user_log.sh`，再根据提示输入取件码。
+- 解密结果默认写入已被 Git 忽略的 `artifacts/user_logs/`，目录权限为 `0700`，日志权限为 `0600`。
+- InstantDB 凭据默认读取仓库外的 `../Loger_key/LogUploader/LogUploader/.env`；私钥默认从 `../Loger_key` 和 `../log-decrypter` 递归发现、按公钥指纹去重，不会复制进 Android 仓库。
+- 如果六位码匹配多条记录，脚本会列出候选项并停止；确认目标后使用 `--log-id <uuid>` 重试。运行 `scripts/fetch_user_log.sh --help` 可查看路径覆盖参数。
+
 ## 📦 Profileable Release 打包
 - 执行 `scripts/build_profileable_release.sh` 可构建 `profileableRelease`，并将 APK、`mapping.txt`、`output-metadata.json` 收集到 `app/build/outputs/dist/profileableRelease/`。
 - 如需自定义输出目录，可执行：
