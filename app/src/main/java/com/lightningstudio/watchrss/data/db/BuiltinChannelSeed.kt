@@ -6,8 +6,8 @@ import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 
 internal object BuiltinChannelSeed {
     private const val COLUMN_LIST =
-        "url, title, description, imageUrl, lastFetchedAt, createdAt, sortOrder, isPinned, useOriginalContent"
-    private const val VALUE_PLACEHOLDERS = "(?,?,?,?,?,?,?,?,?)"
+        "url, title, description, imageUrl, lastFetchedAt, createdAt, sortOrder, isPinned, useOriginalContent, continuePlaybackInBackground"
+    private const val VALUE_PLACEHOLDERS = "(?,?,?,?,?,?,?,?,?,?)"
 
     val callback = object : RoomDatabase.Callback() {
         override fun onCreate(db: SupportSQLiteDatabase) {
@@ -47,7 +47,7 @@ internal object BuiltinChannelSeed {
             append(") VALUES ")
             append(List(rows.size) { VALUE_PLACEHOLDERS }.joinToString(","))
         }
-        val bindArgs = ArrayList<Any?>(rows.size * 9)
+        val bindArgs = ArrayList<Any?>(rows.size * 10)
         rows.forEach { row ->
             bindArgs += row.url
             bindArgs += row.title
@@ -58,6 +58,7 @@ internal object BuiltinChannelSeed {
             bindArgs += row.sortOrder
             bindArgs += if (row.isPinned) 1 else 0
             bindArgs += if (row.useOriginalContent) 1 else 0
+            bindArgs += if (row.continuePlaybackInBackground) 1 else 0
         }
         return BuiltinChannelInsertCommand(sql = sql, bindArgs = bindArgs.toTypedArray())
     }

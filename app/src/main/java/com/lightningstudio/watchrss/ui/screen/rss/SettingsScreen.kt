@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss.ui.screen.rss
 
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -39,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
@@ -52,10 +54,12 @@ import androidx.compose.ui.semantics.semantics
 import androidx.annotation.DrawableRes
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import com.lightningstudio.watchrss.BuildConfig
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.settings.CACHE_LIMIT_OPTIONS_MB
+import com.lightningstudio.watchrss.data.settings.formatMediaPlaybackStartVolumeLimitPercent
+import com.lightningstudio.watchrss.data.settings.nextMediaPlaybackStartVolumeLimitPercent
+import com.lightningstudio.watchrss.data.settings.previousMediaPlaybackStartVolumeLimitPercent
 import com.lightningstudio.watchrss.data.settings.RssInlineImagePrefetchMode
 import com.lightningstudio.watchrss.ui.components.WatchSwitch
 import com.lightningstudio.watchrss.ui.components.WatchSurface
@@ -64,6 +68,7 @@ import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownScrollHandler
 import com.lightningstudio.watchrss.ui.settings.MainSettingsCatalog
 import com.lightningstudio.watchrss.ui.testing.SettingsTestTags
 import com.lightningstudio.watchrss.ui.util.isSystemShareSettingSupported
+import com.lightningstudio.watchrss.ui.util.showAppToast
 import kotlinx.coroutines.flow.StateFlow
 
 private enum class SettingsPage {
@@ -78,7 +83,9 @@ fun SettingsScreen(
     readingThemeDark: StateFlow<Boolean>,
     shareUseSystem: StateFlow<Boolean>,
     readingFontSizeSp: StateFlow<Int>,
-    phoneConnectionEnabled: StateFlow<Boolean>,
+    mediaVolumeControlEnabled: StateFlow<Boolean>,
+    mediaVolumeGuardEnabled: StateFlow<Boolean>,
+    mediaPlaybackStartVolumeLimitPercent: StateFlow<Int?>,
     rssInlineImagePrefetchMode: StateFlow<RssInlineImagePrefetchMode>,
     llmFeatureEnabled: StateFlow<Boolean>,
     llmAutoSummarize: StateFlow<Boolean>,
@@ -89,7 +96,9 @@ fun SettingsScreen(
     onToggleReadingTheme: () -> Unit,
     onToggleShareMode: () -> Unit,
     onSelectFontSize: (Int) -> Unit,
-    onTogglePhoneConnection: () -> Unit,
+    onToggleMediaVolumeControl: () -> Unit,
+    onToggleMediaVolumeGuard: () -> Unit,
+    onSelectMediaPlaybackStartVolumeLimit: (Int?) -> Unit,
     onSelectRssInlineImagePrefetchMode: (RssInlineImagePrefetchMode) -> Unit,
     onToggleLlmFeatureEnabled: () -> Unit,
     onToggleLlmAutoSummarize: () -> Unit,
@@ -99,10 +108,9 @@ fun SettingsScreen(
     onOpenPerfLargeArticle: () -> Unit,
     onOpenDouyinCookieInput: () -> Unit,
     onOpenLlmConnectivity: () -> Unit,
-    onOpenLlmPhoneConfig: () -> Unit,
     onOpenLlmPromptPreset: () -> Unit,
-    onOpenReadAloudSettings: () -> Unit,
-    onBeianClick: () -> Unit
+    onBeianClick: () -> Unit,
+    onOpenAdvanced: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val cacheLimit by cacheLimitMb.collectAsState()
@@ -110,7 +118,9 @@ fun SettingsScreen(
     val themeDark by readingThemeDark.collectAsState()
     val useSystemShare by shareUseSystem.collectAsState()
     val fontSizeSp by readingFontSizeSp.collectAsState()
-    val phoneConnection by phoneConnectionEnabled.collectAsState()
+    val mediaVolumeControl by mediaVolumeControlEnabled.collectAsState()
+    val mediaVolumeGuard by mediaVolumeGuardEnabled.collectAsState()
+    val mediaPlaybackStartVolumeLimit by mediaPlaybackStartVolumeLimitPercent.collectAsState()
     val imagePrefetchMode by rssInlineImagePrefetchMode.collectAsState()
     val llmEnabled by llmFeatureEnabled.collectAsState()
     val llmAuto by llmAutoSummarize.collectAsState()
@@ -129,7 +139,9 @@ fun SettingsScreen(
         SettingsPage.Main -> MainSettingsPage(
             readingThemeDark = themeDark,
             readingFontSizeSp = fontSizeSp,
-            phoneConnectionEnabled = phoneConnection,
+            mediaVolumeControlEnabled = mediaVolumeControl,
+            mediaVolumeGuardEnabled = mediaVolumeGuard,
+            mediaPlaybackStartVolumeLimitPercent = mediaPlaybackStartVolumeLimit,
             llmFeatureEnabled = llmEnabled,
             llmAutoSummarize = llmAuto,
             llmShowTokenUsage = llmTokenUsage,
@@ -137,19 +149,25 @@ fun SettingsScreen(
             showPerformanceTools = showPerformanceTools,
             onToggleReadingTheme = onToggleReadingTheme,
             onSelectFontSize = onSelectFontSize,
-            onTogglePhoneConnection = onTogglePhoneConnection,
+            onToggleMediaVolumeControl = onToggleMediaVolumeControl,
+            onToggleMediaVolumeGuard = onToggleMediaVolumeGuard,
+            onSelectMediaPlaybackStartVolumeLimit = onSelectMediaPlaybackStartVolumeLimit,
             onToggleLlmFeatureEnabled = onToggleLlmFeatureEnabled,
             onToggleLlmAutoSummarize = onToggleLlmAutoSummarize,
             onToggleLlmShowTokenUsage = onToggleLlmShowTokenUsage,
-            onOpenAdvanced = { currentPage = SettingsPage.Advanced },
+            onOpenAdvanced = {
+                if (onOpenAdvanced != null) {
+                    onOpenAdvanced()
+                } else {
+                    currentPage = SettingsPage.Advanced
+                }
+            },
             onOpenOobe = onOpenOobe,
             onOpenPerfLargeList = onOpenPerfLargeList,
             onOpenPerfLargeArticle = onOpenPerfLargeArticle,
             onOpenDouyinCookieInput = onOpenDouyinCookieInput,
             onOpenLlmConnectivity = onOpenLlmConnectivity,
-            onOpenLlmPhoneConfig = onOpenLlmPhoneConfig,
             onOpenLlmPromptPreset = onOpenLlmPromptPreset,
-            onOpenReadAloudSettings = onOpenReadAloudSettings,
             onBeianClick = onBeianClick
         )
         SettingsPage.Advanced -> AdvancedSettingsPage(
@@ -166,10 +184,43 @@ fun SettingsScreen(
 }
 
 @Composable
+fun AdvancedSettingsScreen(
+    cacheLimitMb: StateFlow<Long>,
+    cacheUsageMb: StateFlow<Long>,
+    shareUseSystem: StateFlow<Boolean>,
+    rssInlineImagePrefetchMode: StateFlow<RssInlineImagePrefetchMode>,
+    onSelectCacheLimit: (Long) -> Unit,
+    onToggleShareMode: () -> Unit,
+    onSelectRssInlineImagePrefetchMode: (RssInlineImagePrefetchMode) -> Unit
+) {
+    val context = LocalContext.current
+    val cacheLimit by cacheLimitMb.collectAsState()
+    val usage by cacheUsageMb.collectAsState()
+    val useSystemShare by shareUseSystem.collectAsState()
+    val imagePrefetchMode by rssInlineImagePrefetchMode.collectAsState()
+    val showSystemShareSetting = remember(context) {
+        isSystemShareSettingSupported(context)
+    }
+
+    AdvancedSettingsPage(
+        cacheLimit = cacheLimit,
+        cacheUsage = usage,
+        shareUseSystem = useSystemShare,
+        rssInlineImagePrefetchMode = imagePrefetchMode,
+        showSystemShareSetting = showSystemShareSetting,
+        onSelectCacheLimit = onSelectCacheLimit,
+        onToggleShareMode = onToggleShareMode,
+        onSelectRssInlineImagePrefetchMode = onSelectRssInlineImagePrefetchMode
+    )
+}
+
+@Composable
 private fun MainSettingsPage(
     readingThemeDark: Boolean,
     readingFontSizeSp: Int,
-    phoneConnectionEnabled: Boolean,
+    mediaVolumeControlEnabled: Boolean,
+    mediaVolumeGuardEnabled: Boolean,
+    mediaPlaybackStartVolumeLimitPercent: Int?,
     llmFeatureEnabled: Boolean,
     llmAutoSummarize: Boolean,
     llmShowTokenUsage: Boolean,
@@ -177,7 +228,9 @@ private fun MainSettingsPage(
     showPerformanceTools: Boolean,
     onToggleReadingTheme: () -> Unit,
     onSelectFontSize: (Int) -> Unit,
-    onTogglePhoneConnection: () -> Unit,
+    onToggleMediaVolumeControl: () -> Unit,
+    onToggleMediaVolumeGuard: () -> Unit,
+    onSelectMediaPlaybackStartVolumeLimit: (Int?) -> Unit,
     onToggleLlmFeatureEnabled: () -> Unit,
     onToggleLlmAutoSummarize: () -> Unit,
     onToggleLlmShowTokenUsage: () -> Unit,
@@ -187,9 +240,7 @@ private fun MainSettingsPage(
     onOpenPerfLargeArticle: () -> Unit,
     onOpenDouyinCookieInput: () -> Unit,
     onOpenLlmConnectivity: () -> Unit,
-    onOpenLlmPhoneConfig: () -> Unit,
     onOpenLlmPromptPreset: () -> Unit,
-    onOpenReadAloudSettings: () -> Unit,
     onBeianClick: () -> Unit
 ) {
     val fontOptions = remember { (12..32 step 2).toList() }
@@ -200,12 +251,26 @@ private fun MainSettingsPage(
     val entrySpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_8dp
     val valueSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_4dp
     val stepperSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_6dp
+    val compactStepperSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_4dp
     val stepperValueWidth = watchDimensionResource(R.dimen.watch_action_button_height)
+    val playbackStartVolumeValueWidth = stepperValueWidth + compactStepperSpacing
     val valueIndent = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_10dp
     val pillHeight = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_multiple_item_height
     val scrollState = rememberScrollState()
+    val context = LocalContext.current
     val readingThemeInfo = remember { MainSettingsCatalog.readingTheme }
     val fontSizeInfo = remember { MainSettingsCatalog.fontSize }
+    val mediaVolumeControlInfo = remember { MainSettingsCatalog.mediaVolumeControl }
+    val mediaVolumeGuardInfo = remember { MainSettingsCatalog.mediaVolumeGuard }
+    val mediaPlaybackStartVolumeLimitInfo = remember { MainSettingsCatalog.mediaPlaybackStartVolumeLimit }
+    val mediaVolumeGuardUnavailableMessage = "仅在启用滚轮调节音量后可使用音量调节防干扰"
+    val showVolumeGuardUnavailableToast = {
+        showAppToast(
+            context,
+            mediaVolumeGuardUnavailableMessage,
+            Toast.LENGTH_SHORT
+        )
+    }
 
     InstallDigitalCrownScrollHandler(scrollState)
 
@@ -275,6 +340,125 @@ private fun MainSettingsPage(
 
             Spacer(modifier = Modifier.height(entrySpacing))
 
+            WatchSettingsPillRow(label = mediaVolumeControlInfo.title, endPaddingMultiplier = 1.5f) {
+                WatchSwitch(
+                    checked = mediaVolumeControlEnabled,
+                    modifier = Modifier.testTag(SettingsTestTags.MEDIA_VOLUME_CONTROL_SWITCH),
+                    onCheckedChange = { onToggleMediaVolumeControl() }
+                )
+            }
+            Text(
+                text = mediaVolumeControlInfo.description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+            )
+
+            Spacer(modifier = Modifier.height(entrySpacing))
+
+            WatchSettingsPillRow(
+                label = mediaVolumeGuardInfo.title,
+                testTag = SettingsTestTags.MEDIA_VOLUME_GUARD_ROW,
+                onClick = if (mediaVolumeControlEnabled) {
+                    null
+                } else {
+                    showVolumeGuardUnavailableToast
+                },
+                endPaddingMultiplier = 1.5f
+            ) {
+                if (mediaVolumeControlEnabled) {
+                    WatchSwitch(
+                        checked = mediaVolumeGuardEnabled,
+                        modifier = Modifier.testTag(SettingsTestTags.MEDIA_VOLUME_GUARD_SWITCH),
+                        onCheckedChange = { onToggleMediaVolumeGuard() }
+                    )
+                } else {
+                    WatchSwitch(
+                        checked = mediaVolumeGuardEnabled,
+                        modifier = Modifier
+                            .testTag(SettingsTestTags.MEDIA_VOLUME_GUARD_SWITCH)
+                            .alpha(0.5f),
+                        onCheckedChange = { showVolumeGuardUnavailableToast() }
+                    )
+                }
+            }
+            Text(
+                text = if (!mediaVolumeControlEnabled) {
+                    "已随滚轮音量调节停用"
+                } else if (mediaVolumeGuardEnabled) {
+                    "已开启"
+                } else {
+                    "已关闭"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+            )
+            Text(
+                text = "滚轮连续上调时会先停在约21%，停一下再滚可继续升高",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+            )
+
+            Spacer(modifier = Modifier.height(entrySpacing))
+
+            WatchSettingsPillRow(label = mediaPlaybackStartVolumeLimitInfo.title) {
+                RoundIconButtonIcon(
+                    icon = Icons.Outlined.Remove,
+                    contentDescription = "降低静音开播上限",
+                    enabled = true,
+                    testTag = SettingsTestTags.PLAYBACK_START_VOLUME_DECREASE_BUTTON,
+                    onClick = {
+                        onSelectMediaPlaybackStartVolumeLimit(
+                            previousMediaPlaybackStartVolumeLimitPercent(
+                                mediaPlaybackStartVolumeLimitPercent
+                            )
+                        )
+                    }
+                )
+                Spacer(modifier = Modifier.width(compactStepperSpacing))
+                StepperValue(
+                    text = formatMediaPlaybackStartVolumeLimitPercent(
+                        mediaPlaybackStartVolumeLimitPercent
+                    ),
+                    width = playbackStartVolumeValueWidth,
+                    testTag = SettingsTestTags.PLAYBACK_START_VOLUME_VALUE
+                )
+                Spacer(modifier = Modifier.width(compactStepperSpacing))
+                RoundIconButtonIcon(
+                    icon = Icons.Outlined.Add,
+                    contentDescription = "提高静音开播上限",
+                    enabled = true,
+                    testTag = SettingsTestTags.PLAYBACK_START_VOLUME_INCREASE_BUTTON,
+                    onClick = {
+                        onSelectMediaPlaybackStartVolumeLimit(
+                            nextMediaPlaybackStartVolumeLimitPercent(
+                                mediaPlaybackStartVolumeLimitPercent
+                            )
+                        )
+                    }
+                )
+            }
+            Text(
+                text = mediaPlaybackStartVolumeLimitInfo.description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+            )
+            Text(
+                text = if (mediaPlaybackStartVolumeLimitPercent == null) {
+                    "当前不限制开播音量"
+                } else {
+                    "开播时高于 ${mediaPlaybackStartVolumeLimitPercent}% 才压低"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+            )
+
+            Spacer(modifier = Modifier.height(entrySpacing))
+
             WatchSettingsPillRow(
                 label = "高级",
                 leadingIcon = Icons.Outlined.Settings,
@@ -314,22 +498,6 @@ private fun MainSettingsPage(
 
                 Spacer(modifier = Modifier.height(entrySpacing))
 
-                WatchSettingsPillRow(label = "手机互联", endPaddingMultiplier = 1.5f) {
-                    WatchSwitch(
-                        checked = phoneConnectionEnabled,
-                        modifier = Modifier.testTag(SettingsTestTags.PHONE_CONNECTION_SWITCH),
-                        onCheckedChange = { onTogglePhoneConnection() }
-                    )
-                }
-                Text(
-                    text = "会在添加RSS页面和收藏及稍后再看页面显示有关手机互联的按钮",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
-                )
-
-                Spacer(modifier = Modifier.height(entrySpacing))
-
                 WatchSettingsPillRow(
                     label = "抖音登录 Cookie",
                     testTag = SettingsTestTags.DOUYIN_COOKIE_ENTRY,
@@ -365,30 +533,6 @@ private fun MainSettingsPage(
                 )
                 Text(
                     text = "配置大模型服务商与 API Key",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
-                )
-
-                Spacer(modifier = Modifier.height(entrySpacing))
-                WatchSettingsPillRow(
-                    label = "手机扫码配置大模型",
-                    onClick = onOpenLlmPhoneConfig
-                )
-                Text(
-                    text = "直接进入手机互联扫码配置，并固定为 LLM 配置能力",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
-                )
-
-                Spacer(modifier = Modifier.height(entrySpacing))
-                WatchSettingsPillRow(
-                    label = "朗读 API",
-                    onClick = onOpenReadAloudSettings
-                )
-                Text(
-                    text = "配置 OpenAI、微软 Azure、ElevenLabs 等朗读服务",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
@@ -670,7 +814,7 @@ private fun ReadingThemeToggle(
                 value = isDark,
                 role = Role.Switch,
                 interactionSource = interactionSource,
-                indication = LocalIndication.current,
+                indication = null,
                 onValueChange = { onToggle() }
             ),
         contentAlignment = Alignment.Center

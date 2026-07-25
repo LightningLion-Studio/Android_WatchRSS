@@ -38,6 +38,11 @@ fun ChannelSettingsScreen(
     showOriginalContent: Boolean,
     originalContentEnabled: Boolean,
     onToggleOriginalContent: () -> Unit,
+    showContinuePlaybackInBackground: Boolean,
+    continuePlaybackInBackgroundEnabled: Boolean,
+    onToggleContinuePlaybackInBackground: () -> Unit,
+    clearEnabled: Boolean,
+    onClear: () -> Unit,
     deleteEnabled: Boolean,
     onDelete: () -> Unit
 ) {
@@ -72,11 +77,34 @@ fun ChannelSettingsScreen(
                     text = "刷新时抓取原文正文与图片",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = valueIndent, top = valueSpacing)
                 )
             }
 
+            if (showContinuePlaybackInBackground) {
+                Spacer(modifier = Modifier.height(entrySpacing))
+                SettingsPillRow(label = "在后台继续播放", endPaddingMultiplier = 1.5f) {
+                    WatchSwitch(
+                        checked = continuePlaybackInBackgroundEnabled,
+                        onCheckedChange = { onToggleContinuePlaybackInBackground() }
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(entrySpacing))
+
+            if (clearEnabled) {
+                SettingsDangerRow(
+                    label = "清空内容",
+                    icon = Icons.Outlined.Delete,
+                    enabled = true,
+                    onClick = onClear
+                )
+
+                Spacer(modifier = Modifier.height(entrySpacing))
+            }
 
             SettingsDangerRow(
                 label = "删除频道",

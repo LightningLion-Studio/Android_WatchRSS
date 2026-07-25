@@ -7,7 +7,6 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
-import com.lightningstudio.watchrss.BuildConfig
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -17,6 +16,10 @@ private val READING_THEME_DARK = booleanPreferencesKey("reading_theme_dark")
 private val READING_FONT_SIZE_SP = intPreferencesKey("reading_font_size_sp")
 private val SHARE_USE_SYSTEM = booleanPreferencesKey("share_use_system")
 private val PHONE_CONNECTION_ENABLED = booleanPreferencesKey("phone_connection_enabled")
+private val MEDIA_VOLUME_CONTROL_ENABLED = booleanPreferencesKey("media_volume_control_enabled")
+private val MEDIA_VOLUME_GUARD_ENABLED = booleanPreferencesKey("media_volume_guard_enabled")
+private val MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT =
+    intPreferencesKey("media_playback_start_volume_limit_percent")
 private val RSS_INLINE_IMAGE_PREFETCH_MODE = intPreferencesKey("rss_inline_image_prefetch_mode")
 private val LLM_PROVIDER = stringPreferencesKey("llm_provider")
 private val LLM_MODEL = stringPreferencesKey("llm_model")
@@ -29,14 +32,6 @@ private val LLM_SHOW_TOKEN_USAGE = booleanPreferencesKey("llm_show_token_usage")
 private val LLM_PROMPT_PRESET = intPreferencesKey("llm_prompt_preset")
 private const val TEMP_ORIGINAL_MODE_HINT_ATTEMPTS_PREFIX = "temp_original_mode_hint_attempts_"
 private const val TEMP_ORIGINAL_MODE_HINT_LAST_TOAST_PREFIX = "temp_original_mode_hint_last_toast_"
-private val READ_ALOUD_PROVIDER = stringPreferencesKey("read_aloud_provider")
-private val READ_ALOUD_MODEL = stringPreferencesKey("read_aloud_model")
-private val READ_ALOUD_VOICE = stringPreferencesKey("read_aloud_voice")
-private val READ_ALOUD_BASE_URL = stringPreferencesKey("read_aloud_base_url")
-private val READ_ALOUD_REGION = stringPreferencesKey("read_aloud_region")
-private val READ_ALOUD_APP_ID = stringPreferencesKey("read_aloud_app_id")
-private val READ_ALOUD_RESOURCE_ID = stringPreferencesKey("read_aloud_resource_id")
-private val READ_ALOUD_ENABLED = booleanPreferencesKey("read_aloud_enabled")
 const val MIN_CACHE_LIMIT_MB: Long = 512
 const val MAX_CACHE_LIMIT_MB: Long = 4 * 1024
 const val DEFAULT_CACHE_LIMIT_MB: Long = MIN_CACHE_LIMIT_MB
@@ -44,6 +39,8 @@ val CACHE_LIMIT_OPTIONS_MB: List<Long> = listOf(512L, 768L, 1024L, 1536L, 2048L,
 const val MB_BYTES: Long = 1024 * 1024
 const val DEFAULT_READING_FONT_SIZE_SP: Int = 14
 const val CURRENT_OOBE_VERSION: Int = 3
+const val DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED: Boolean = true
+const val DEFAULT_MEDIA_VOLUME_GUARD_ENABLED: Boolean = false
 const val TEMP_ORIGINAL_MODE_HINT_WINDOW_MS: Long = 12L * 60L * 60L * 1000L
 const val TEMP_ORIGINAL_MODE_HINT_THRESHOLD: Int = 3
 class SettingsRepository(private val dataStore: DataStore<Preferences>) {
@@ -63,7 +60,25 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         preferences[SHARE_USE_SYSTEM] ?: false
     }
     val phoneConnectionEnabled: Flow<Boolean> = dataStore.data.map { preferences ->
-        preferences[PHONE_CONNECTION_ENABLED] ?: BuildConfig.DEBUG
+        preferences[PHONE_CONNECTION_ENABLED] ?: true
+    }
+    val mediaVolumeControlEnabled: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[MEDIA_VOLUME_CONTROL_ENABLED] ?: DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED
+    }
+    val mediaVolumeGuardEnabled: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[MEDIA_VOLUME_GUARD_ENABLED] ?: DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
+    }
+    val mediaPlaybackStartVolumeLimitPercent: Flow<Int?> = dataStore.data.map { preferences ->
+        if (preferences.contains(MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT)) {
+            decodeMediaPlaybackStartVolumeLimitPercent(
+                preferences[MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT]
+                    ?: MEDIA_PLAYBACK_START_VOLUME_UNLIMITED_PERSISTED_VALUE
+            )
+        } else {
+            defaultMediaPlaybackStartVolumeLimitPercentForGuard(
+                preferences[MEDIA_VOLUME_GUARD_ENABLED] ?: DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
+            )
+        }
     }
     val rssInlineImagePrefetchMode: Flow<RssInlineImagePrefetchMode> = dataStore.data.map { preferences ->
         RssInlineImagePrefetchMode.fromPersistedValue(
@@ -80,14 +95,6 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     val llmAutoSummarize: Flow<Boolean> = dataStore.data.map { it[LLM_AUTO_SUMMARIZE] ?: false }
     val llmShowTokenUsage: Flow<Boolean> = dataStore.data.map { it[LLM_SHOW_TOKEN_USAGE] ?: false }
     val llmPromptPreset: Flow<Int> = dataStore.data.map { it[LLM_PROMPT_PRESET] ?: 0 }
-    val readAloudProvider: Flow<String> = dataStore.data.map { it[READ_ALOUD_PROVIDER] ?: "" }
-    val readAloudModel: Flow<String> = dataStore.data.map { it[READ_ALOUD_MODEL] ?: "" }
-    val readAloudVoice: Flow<String> = dataStore.data.map { it[READ_ALOUD_VOICE] ?: "" }
-    val readAloudBaseUrl: Flow<String> = dataStore.data.map { it[READ_ALOUD_BASE_URL] ?: "" }
-    val readAloudRegion: Flow<String> = dataStore.data.map { it[READ_ALOUD_REGION] ?: "" }
-    val readAloudAppId: Flow<String> = dataStore.data.map { it[READ_ALOUD_APP_ID] ?: "" }
-    val readAloudResourceId: Flow<String> = dataStore.data.map { it[READ_ALOUD_RESOURCE_ID] ?: "" }
-    val readAloudEnabled: Flow<Boolean> = dataStore.data.map { it[READ_ALOUD_ENABLED] ?: false }
 
     suspend fun setCacheLimitBytes(bytes: Long) {
         dataStore.edit { preferences ->
@@ -122,6 +129,34 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     suspend fun setPhoneConnectionEnabled(value: Boolean) {
         dataStore.edit { preferences ->
             preferences[PHONE_CONNECTION_ENABLED] = value
+        }
+    }
+
+    suspend fun setMediaVolumeControlEnabled(value: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[MEDIA_VOLUME_CONTROL_ENABLED] = value
+        }
+    }
+
+    suspend fun setMediaVolumeGuardEnabled(value: Boolean) {
+        dataStore.edit { preferences ->
+            if (!preferences.contains(MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT)) {
+                preferences[MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT] =
+                    encodeMediaPlaybackStartVolumeLimitPercent(
+                        defaultMediaPlaybackStartVolumeLimitPercentForGuard(
+                            preferences[MEDIA_VOLUME_GUARD_ENABLED]
+                                ?: DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
+                        )
+                    )
+            }
+            preferences[MEDIA_VOLUME_GUARD_ENABLED] = value
+        }
+    }
+
+    suspend fun setMediaPlaybackStartVolumeLimitPercent(value: Int?) {
+        dataStore.edit { preferences ->
+            preferences[MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT] =
+                encodeMediaPlaybackStartVolumeLimitPercent(value)
         }
     }
 
@@ -189,28 +224,6 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         }
 
         return shouldShowHint
-    }
-
-    suspend fun setReadAloudConfig(
-        provider: String,
-        model: String,
-        voice: String,
-        baseUrl: String,
-        region: String,
-        appId: String,
-        resourceId: String,
-        enabled: Boolean
-    ) {
-        dataStore.edit { preferences ->
-            preferences[READ_ALOUD_PROVIDER] = provider
-            preferences[READ_ALOUD_MODEL] = model
-            preferences[READ_ALOUD_VOICE] = voice
-            preferences[READ_ALOUD_BASE_URL] = baseUrl
-            preferences[READ_ALOUD_REGION] = region
-            preferences[READ_ALOUD_APP_ID] = appId
-            preferences[READ_ALOUD_RESOURCE_ID] = resourceId
-            preferences[READ_ALOUD_ENABLED] = enabled
-        }
     }
 
     private fun clampCacheLimitBytes(bytes: Long): Long {

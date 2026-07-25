@@ -11,21 +11,29 @@ import com.lightningstudio.watchrss.data.douyin.formatDouyinError
 import com.lightningstudio.watchrss.data.douyin.isDouyinWebUrl
 import com.lightningstudio.watchrss.data.douyin.parseDouyinAwemeId
 import com.lightningstudio.watchrss.data.douyin.shouldRefreshDouyinPlayback
+import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
+import com.lightningstudio.watchrss.data.rss.RssRepository
 import com.lightningstudio.watchrss.sdk.douyin.DouyinContent
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
 
 class RssPlayerViewModel(
     savedStateHandle: SavedStateHandle,
-    private val douyinRepository: DouyinRepositoryContract
+    private val douyinRepository: DouyinRepositoryContract,
+    private val rssRepository: RssRepository
 ) : ViewModel() {
     private val rawPlayUrl: String = savedStateHandle.get<String>(KEY_PLAY_URL)?.trim().orEmpty()
     private val rawWebUrl: String = savedStateHandle.get<String>(KEY_WEB_URL)?.trim().orEmpty()
     private val rawAwemeId: String = savedStateHandle.get<String>(KEY_AWEME_ID)?.trim().orEmpty()
+    private val rawChannelId: Long = savedStateHandle.get<Long>(KEY_CHANNEL_ID) ?: 0L
     private val douyinAwemeId: String? = rawAwemeId.takeIf { it.isNotEmpty() }
         ?: parseDouyinAwemeId(rawWebUrl)
         ?: parseDouyinAwemeId(rawPlayUrl)
@@ -37,6 +45,17 @@ class RssPlayerViewModel(
 
     private val _uiState = MutableStateFlow(BiliPlayerUiState())
     val uiState: StateFlow<BiliPlayerUiState> = _uiState
+
+    val continuePlaybackInBackground: StateFlow<Boolean> = when {
+        rawChannelId > 0L -> rssRepository.observeChannel(rawChannelId)
+            .map { channel -> channel?.continuePlaybackInBackground ?: false }
+        isDouyinTarget -> rssRepository.observeChannels()
+            .map { channels ->
+                channels.firstOrNull { it.url == BuiltinChannelType.DOUYIN.url }
+                    ?.continuePlaybackInBackground ?: false
+            }
+        else -> flowOf(false)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     private var resolvedPlayUrl: String = rawPlayUrl
     private var resolvedWebUrl: String = if (isDouyinTarget) {
@@ -253,5 +272,6 @@ class RssPlayerViewModel(
         const val KEY_PLAY_URL = "playUrl"
         const val KEY_WEB_URL = "webUrl"
         const val KEY_AWEME_ID = "awemeId"
+        const val KEY_CHANNEL_ID = "channelId"
     }
 }

@@ -5,7 +5,9 @@ import com.lightningstudio.watchrss.data.telemetry.WatchUsageTelemetry
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.hardware.input.InputManager
+import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.InputDevice
@@ -14,6 +16,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
+import android.view.Window
 import android.view.animation.DecelerateInterpolator
 import androidx.activity.ComponentActivity
 import androidx.core.view.WindowCompat
@@ -39,6 +42,7 @@ open class BaseWatchActivity : ComponentActivity() {
     private var lastNavigationAt = 0L
     private var pendingActivityStartAllowanceAt = 0L
     private var hasResumedOnce = false
+    private var usesPlatformSwipeDismiss = false
     private var pendingHardwareBackKeyCode: Int? = null
     private var nextDigitalCrownHandlerId = 0
     private val digitalCrownHandlers = LinkedHashMap<Int, DigitalCrownHandlerRegistration>()
@@ -52,7 +56,10 @@ open class BaseWatchActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        PerformanceMonitor.attach(this)
+        usesPlatformSwipeDismiss = requestPlatformSwipeDismissFeatureIfNeeded()
+        if (BuildConfig.ENABLE_RUNTIME_PERF_MONITOR) {
+            PerformanceMonitor.attach(this)
+        }
 
         // 记录Activity启动
         AppLogger.log("Activity", "启动: ${this.javaClass.simpleName}")
@@ -73,7 +80,7 @@ open class BaseWatchActivity : ComponentActivity() {
     }
 
     override fun setContentView(layoutResID: Int) {
-        if (!BuildConfig.DEBUG) {
+        if (!BuildConfig.ENABLE_WATCH_DEBUG_MASK) {
             super.setContentView(layoutResID)
             return
         }
@@ -87,7 +94,7 @@ open class BaseWatchActivity : ComponentActivity() {
             super.setContentView(view)
             return
         }
-        if (!BuildConfig.DEBUG) {
+        if (!BuildConfig.ENABLE_WATCH_DEBUG_MASK) {
             super.setContentView(view)
             return
         }
@@ -107,7 +114,7 @@ open class BaseWatchActivity : ComponentActivity() {
             super.setContentView(view, params)
             return
         }
-        if (!BuildConfig.DEBUG) {
+        if (!BuildConfig.ENABLE_WATCH_DEBUG_MASK) {
             super.setContentView(view, params)
             return
         }
@@ -129,7 +136,7 @@ open class BaseWatchActivity : ComponentActivity() {
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
         val root = window.decorView
         val action = ev.actionMasked
-        val swipeHandled = if (isSwipeBackEnabled()) {
+        val swipeHandled = if (isSwipeBackEnabled() && !usesPlatformSwipeDismiss) {
             handleSwipeBack(root, ev)
         } else {
             false
@@ -336,6 +343,8 @@ open class BaseWatchActivity : ComponentActivity() {
 
     protected open fun isSwipeBackEnabled(): Boolean = true
 
+    protected open fun shouldUsePlatformSwipeDismissFeature(): Boolean = true
+
     protected open fun shouldAnimateSwipeBackGesture(): Boolean = true
 
     protected open fun shouldResetViewStateImmediatelyOnTouchEnd(): Boolean = true
@@ -397,6 +406,45 @@ open class BaseWatchActivity : ComponentActivity() {
             return false
         }
         return ev.x <= width * SWIPE_START_RATIO
+    }
+
+    @Suppress("DEPRECATION")
+    private fun requestPlatformSwipeDismissFeatureIfNeeded(): Boolean {
+        if (!isSwipeBackEnabled()) {
+            return false
+        }
+        if (!shouldUsePlatformSwipeDismissFeature()) {
+            return false
+        }
+        if (!isOppoDevice()) {
+            return false
+        }
+        if (!packageManager.hasSystemFeature(PackageManager.FEATURE_WATCH)) {
+            return false
+        }
+        return runCatching {
+            requestWindowFeature(Window.FEATURE_SWIPE_TO_DISMISS)
+        }.getOrElse { error ->
+            AppLogger.d(
+                "SwipeBack",
+                "系统右滑退出特性启用失败: ${error.javaClass.simpleName}: ${error.message.orEmpty()}"
+            )
+            false
+        }
+    }
+
+    private fun isOppoDevice(): Boolean {
+        return listOf(
+            Build.MANUFACTURER,
+            Build.BRAND,
+            Build.PRODUCT,
+            Build.DEVICE,
+            Build.MODEL,
+            Build.FINGERPRINT
+        ).any { marker ->
+            marker.contains("oppo", ignoreCase = true) ||
+                marker.contains("oplus", ignoreCase = true)
+        }
     }
 
     private fun handleHardwareBackKeyEvent(event: KeyEvent): Boolean {

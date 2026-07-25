@@ -16,15 +16,15 @@ internal object RssPreviewUpdatePlanner {
     }
 
     fun attemptKeyFor(item: RssItemEntity): String {
-        val source = listOf(
-            normalize(item.description).orEmpty(),
-            normalize(item.originalContent).orEmpty(),
-            normalize(item.content).orEmpty(),
-            normalize(item.imageUrl).orEmpty(),
-            normalize(item.link).orEmpty(),
-            "summaryMissing=${item.summary.isNullOrBlank()}",
-            "previewMissing=${item.previewImageUrl.isNullOrBlank() && item.imageUrl.isNullOrBlank()}"
-        ).joinToString(separator = "\u0001")
+        val source = buildString {
+            appendPart(attemptFingerprint(item.description))
+            appendPart(attemptFingerprint(item.originalContent))
+            appendPart(attemptFingerprint(item.content))
+            appendPart(normalize(item.imageUrl))
+            appendPart(normalize(item.link))
+            appendPart("summaryMissing=${item.summary.isNullOrBlank()}")
+            appendPart("previewMissing=${item.previewImageUrl.isNullOrBlank() && item.imageUrl.isNullOrBlank()}")
+        }
         return sha256(source)
     }
 
@@ -49,7 +49,26 @@ internal object RssPreviewUpdatePlanner {
         )
     }
 
-    private fun normalize(value: String?): String? = value?.trim()?.ifEmpty { null }
+    private fun StringBuilder.appendPart(value: String?) {
+        append(value.orEmpty())
+        append('\u0001')
+    }
+
+    private fun attemptFingerprint(value: String?): String? {
+        if (value.isNullOrBlank()) return null
+        if (value.length <= ATTEMPT_INLINE_CHARS) return normalize(value)
+        return "len=${value.length};hash=${value.hashCode()}"
+    }
+
+    private fun normalize(value: String?): String? {
+        val raw = value ?: return null
+        if (raw.isBlank()) return null
+        return if (raw.length <= SAFE_TRIM_COPY_LIMIT_CHARS) {
+            raw.trim()
+        } else {
+            raw
+        }
+    }
 
     private fun sha256(raw: String): String {
         return try {
@@ -61,3 +80,6 @@ internal object RssPreviewUpdatePlanner {
         }
     }
 }
+
+private const val ATTEMPT_INLINE_CHARS = 4_096
+private const val SAFE_TRIM_COPY_LIMIT_CHARS = 16_384

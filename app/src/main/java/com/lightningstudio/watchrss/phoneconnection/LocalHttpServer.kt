@@ -39,7 +39,6 @@ import org.json.JSONObject
  * - [createSyncWatchLaterServer] — 仅开放获取稍后阅读列表端点
  * - [createSyncBiliWatchRecordsServer] — 仅开放 B 站观看历史/进度端点
  * - [createLlmConfigServer]      — 仅开放 LLM 配置的读写端点
- * - [createReadAloudConfigServer]— 仅开放朗读配置的读写端点
  *
  * ## 典型调用流程
  *
@@ -74,8 +73,6 @@ import org.json.JSONObject
  * | GET  /getBiliPlaybackProgress | SYNC_BILI_WATCH_RECORDS | 手机端拉取手表本地 B 站断点续播进度         |
  * | GET  /getLLMSummaryConfig     | LLM_SUMMARY_CONFIG     | 手机端读取手表当前 LLM 配置（API Key 脱敏）|
  * | POST /setLLMSummaryConfig     | LLM_SUMMARY_CONFIG     | 手机端写入 LLM 配置到手表                  |
- * | GET  /getReadAloudConfig      | READ_ALOUD_CONFIG      | 手机端读取手表当前朗读配置（API Key 脱敏） |
- * | POST /setReadAloudConfig      | READ_ALOUD_CONFIG      | 手机端写入朗读配置到手表                   |
  *
  * ## 版本协商
  *
@@ -95,8 +92,7 @@ class LocalHttpServer private constructor(
     private val preferredAbility: PhoneConnectionAbility? = null,
     private val onRemoteInput: ((String) -> Unit)? = null,
     private val onSyncComplete: (() -> Unit)? = null,
-    private val onLlmConfigSaved: (() -> Unit)? = null,
-    private val onReadAloudConfigSaved: (() -> Unit)? = null
+    private val onLlmConfigSaved: (() -> Unit)? = null
 ) : NanoHTTPD(port) {
 
     /**
@@ -114,9 +110,7 @@ class LocalHttpServer private constructor(
         /** 仅支持手机端同步 B 站观看历史和本地播放进度 */
         SYNC_BILI_WATCH_RECORDS,
         /** 仅支持手机端读写 LLM 摘要配置 */
-        LLM_CONFIG,
-        /** 仅支持手机端读写朗读配置 */
-        READ_ALOUD_CONFIG
+        LLM_CONFIG
     }
 
     /** 本实例实际开放的能力集合，由 [serverType] 在构造时确定，运行期不可变。 */
@@ -126,7 +120,6 @@ class LocalHttpServer private constructor(
         ServerType.SYNC_WATCH_LATER -> setOf(PhoneConnectionAbility.SYNC_WATCH_LATER)
         ServerType.SYNC_BILI_WATCH_RECORDS -> setOf(PhoneConnectionAbility.SYNC_BILI_WATCH_RECORDS)
         ServerType.LLM_CONFIG -> setOf(PhoneConnectionAbility.LLM_SUMMARY_CONFIG)
-        ServerType.READ_ALOUD_CONFIG -> setOf(PhoneConnectionAbility.READ_ALOUD_CONFIG)
     }
 
     /**
@@ -173,12 +166,6 @@ class LocalHttpServer private constructor(
             }
             uri == "/setLLMSummaryConfig" && supports(PhoneConnectionAbility.LLM_SUMMARY_CONFIG) -> {
                 handleSetLlmSummaryConfig(session)
-            }
-            uri == "/getReadAloudConfig" && supports(PhoneConnectionAbility.READ_ALOUD_CONFIG) -> {
-                handleGetReadAloudConfig()
-            }
-            uri == "/setReadAloudConfig" && supports(PhoneConnectionAbility.READ_ALOUD_CONFIG) -> {
-                handleSetReadAloudConfig(session)
             }
             else -> {
                 newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Not Found")
@@ -753,144 +740,6 @@ class LocalHttpServer private constructor(
         }
     }
 
-    private fun handleGetReadAloudConfig(): Response {
-        return try {
-            val settingsRepository = container.settingsRepository
-            val apiKeyStore = container.readAloudApiKeyStore
-
-            var provider = ""
-            var model = ""
-            var voice = ""
-            var baseUrl = ""
-            var region = ""
-            var appId = ""
-            var resourceId = ""
-            var enabled = false
-            kotlinx.coroutines.runBlocking {
-                provider = settingsRepository.readAloudProvider.first()
-                model = settingsRepository.readAloudModel.first()
-                voice = settingsRepository.readAloudVoice.first()
-                baseUrl = settingsRepository.readAloudBaseUrl.first()
-                region = settingsRepository.readAloudRegion.first()
-                appId = settingsRepository.readAloudAppId.first()
-                resourceId = settingsRepository.readAloudResourceId.first()
-                enabled = settingsRepository.readAloudEnabled.first()
-            }
-
-            val hasConfig = provider.isNotEmpty() || apiKeyStore.hasApiKey()
-            val dataObj = if (hasConfig) {
-                val rawKey = apiKeyStore.getApiKey()
-                val maskedKey = if (rawKey.length <= 4) "****" else "****${rawKey.takeLast(4)}"
-                JSONObject().apply {
-                    put("provider", provider)
-                    put("apiKey", maskedKey)
-                    put("model", model)
-                    put("voice", voice)
-                    put("baseUrl", baseUrl)
-                    put("region", region)
-                    put("appId", appId)
-                    put("resourceId", resourceId)
-                    put("enabled", enabled)
-                }
-            } else {
-                JSONObject.NULL
-            }
-
-            newFixedLengthResponse(
-                Response.Status.OK,
-                "application/json",
-                JSONObject().apply {
-                    put("success", true)
-                    put("data", dataObj)
-                }.toString()
-            )
-        } catch (e: Exception) {
-            AppLogger.e("LocalHttpServer", "handleGetReadAloudConfig failed", e)
-            newFixedLengthResponse(
-                Response.Status.INTERNAL_ERROR,
-                "application/json",
-                JSONObject().apply {
-                    put("success", false)
-                    put("data", JSONObject.NULL)
-                }.toString()
-            )
-        }
-    }
-
-    private fun handleSetReadAloudConfig(session: IHTTPSession): Response {
-        return try {
-            val params = mutableMapOf<String, String>()
-            session.parseBody(params)
-            val postData = params["postData"] ?: ""
-            val json = JSONObject(postData)
-
-            val provider = json.optString("provider", "")
-            val apiKey = json.optString("apiKey", "")
-            val model = json.optString("model", "")
-            val voice = json.optString("voice", "")
-            val baseUrl = json.optString("baseUrl", "")
-            val region = json.optString("region", "")
-            val appId = json.optString("appId", "")
-            val resourceId = json.optString("resourceId", "")
-            val enabled = json.optBoolean("enabled", true)
-
-            if (provider.isEmpty()) {
-                return newFixedLengthResponse(
-                    Response.Status.BAD_REQUEST,
-                    "application/json",
-                    JSONObject().apply {
-                        put("success", false)
-                        put("message", "provider 不能为空")
-                    }.toString()
-                )
-            }
-            if (apiKey.isEmpty()) {
-                return newFixedLengthResponse(
-                    Response.Status.BAD_REQUEST,
-                    "application/json",
-                    JSONObject().apply {
-                        put("success", false)
-                        put("message", "apiKey 不能为空")
-                    }.toString()
-                )
-            }
-
-            container.readAloudApiKeyStore.setApiKey(apiKey)
-            kotlinx.coroutines.runBlocking {
-                container.settingsRepository.setReadAloudConfig(
-                    provider = provider,
-                    model = model,
-                    voice = voice,
-                    baseUrl = baseUrl,
-                    region = region,
-                    appId = appId,
-                    resourceId = resourceId,
-                    enabled = enabled
-                )
-            }
-            onReadAloudConfigSaved?.invoke()
-
-            newFixedLengthResponse(
-                Response.Status.OK,
-                "application/json",
-                JSONObject().apply {
-                    put("success", true)
-                    put("message", "配置已保存")
-                }.toString()
-            )
-        } catch (e: Exception) {
-            AppLogger.e("LocalHttpServer", "handleSetReadAloudConfig failed", e)
-            newFixedLengthResponse(
-                Response.Status.INTERNAL_ERROR,
-                "application/json",
-                JSONObject().apply {
-                    put("success", false)
-                    put("message", e.message ?: "Unknown error")
-                }.toString()
-            )
-        }
-    }
-
     companion object {
         /**
          * 端口传入 0 让系统自动选择可用端口，避免端口冲突。
@@ -1009,17 +858,5 @@ class LocalHttpServer private constructor(
             )
         }
 
-        fun createReadAloudConfigServer(
-            container: AppContainer,
-            onReadAloudConfigSaved: (() -> Unit)? = null
-        ): LocalHttpServer {
-            return LocalHttpServer(
-                DEFAULT_PORT,
-                container,
-                ServerType.READ_ALOUD_CONFIG,
-                preferredAbility = PhoneConnectionAbility.READ_ALOUD_CONFIG,
-                onReadAloudConfigSaved = onReadAloudConfigSaved
-            )
-        }
     }
 }

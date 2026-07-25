@@ -61,9 +61,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.network.InternetAvailabilityStatus
+import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED
+import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
 import com.lightningstudio.watchrss.data.settings.DEFAULT_READING_FONT_SIZE_SP
+import com.lightningstudio.watchrss.data.settings.defaultMediaPlaybackStartVolumeLimitPercentForGuard
+import com.lightningstudio.watchrss.data.settings.formatMediaPlaybackStartVolumeLimitPercent
+import com.lightningstudio.watchrss.data.settings.nextMediaPlaybackStartVolumeLimitPercent
+import com.lightningstudio.watchrss.data.settings.previousMediaPlaybackStartVolumeLimitPercent
+import com.lightningstudio.watchrss.ui.components.InternetAvailabilityPage
 import com.lightningstudio.watchrss.ui.components.WatchCheckbox
-import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.components.WatchSwitch
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownScrollHandler
@@ -75,12 +81,10 @@ import com.lightningstudio.watchrss.ui.settings.WatchSettingsPillRow
 import com.lightningstudio.watchrss.ui.settings.WatchStepperValue
 import com.lightningstudio.watchrss.ui.testing.OobeTestTags
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
-import com.lightningstudio.watchrss.ui.theme.watchColorResource
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import com.lightningstudio.watchrss.ui.viewmodel.OobeUiState
 
 private val OobeOrange = Color(0xFFFF8A3D)
-private val OobeGreen = Color(0xFF41C96B)
 private const val OOBE_WELCOME_PAGE = 0
 private const val OOBE_AGREEMENT_PAGE = 1
 private const val OOBE_CUSTOM_PAGE = 2
@@ -179,7 +183,8 @@ private fun OobeIntroStep(
                         onContinue = {
                             when (uiState.internetAvailabilityStatus) {
                                 InternetAvailabilityStatus.Available -> onContinue()
-                                InternetAvailabilityStatus.Unavailable -> showOfflineWarning = true
+                                InternetAvailabilityStatus.Unavailable,
+                                InternetAvailabilityStatus.Bluetooth -> showOfflineWarning = true
                                 InternetAvailabilityStatus.Checking -> Unit
                             }
                         }
@@ -254,6 +259,7 @@ private fun OobeIntroStep(
                 showOfflineWarning = false
             }
             OobeOfflineWarningDialog(
+                status = uiState.internetAvailabilityStatus,
                 onConfirm = {
                     showOfflineWarning = false
                     onContinue()
@@ -361,13 +367,31 @@ private fun OobeCustomizationStep(
     val scrollState = rememberScrollState()
     val readingThemeInfo = remember { MainSettingsCatalog.readingTheme }
     val fontSizeInfo = remember { MainSettingsCatalog.fontSize }
+    val mediaVolumeControlInfo = remember { MainSettingsCatalog.mediaVolumeControl }
+    val mediaVolumeGuardInfo = remember { MainSettingsCatalog.mediaVolumeGuard }
+    val mediaPlaybackStartVolumeLimitInfo = remember { MainSettingsCatalog.mediaPlaybackStartVolumeLimit }
     val fontOptions = remember { (12..32 step 2).toList() }
     val entrySpacing = WatchDimens.hey_distance_8dp
     val pillHeight = WatchDimens.hey_multiple_item_height
     val stepperSpacing = WatchDimens.hey_distance_6dp
+    val compactStepperSpacing = WatchDimens.hey_distance_4dp
     val stepperValueWidth = watchDimensionResource(R.dimen.watch_action_button_height)
+    val playbackStartVolumeValueWidth = stepperValueWidth + compactStepperSpacing
     var previewReadingThemeDark by rememberSaveable { mutableStateOf(true) }
     var previewFontSizeSp by rememberSaveable { mutableStateOf(DEFAULT_READING_FONT_SIZE_SP) }
+    var previewMediaVolumeControlEnabled by rememberSaveable {
+        mutableStateOf(DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED)
+    }
+    var previewMediaVolumeGuardEnabled by rememberSaveable {
+        mutableStateOf(DEFAULT_MEDIA_VOLUME_GUARD_ENABLED)
+    }
+    var previewMediaPlaybackStartVolumeLimitPercent by rememberSaveable {
+        mutableStateOf(
+            defaultMediaPlaybackStartVolumeLimitPercentForGuard(
+                DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
+            )
+        )
+    }
     val lowerFont = fontOptions.lastOrNull { it < previewFontSizeSp }
     val higherFont = fontOptions.firstOrNull { it > previewFontSizeSp }
 
@@ -435,7 +459,71 @@ private fun OobeCustomizationStep(
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(entrySpacing))
+
+        OobeCustomizationSetting(
+            info = mediaVolumeControlInfo,
+            endPaddingMultiplier = 1.5f
+        ) {
+            WatchSwitch(
+                checked = previewMediaVolumeControlEnabled,
+                modifier = Modifier.testTag(OobeTestTags.CUSTOM_MEDIA_VOLUME_CONTROL_SWITCH),
+                onCheckedChange = { previewMediaVolumeControlEnabled = it }
+            )
+        }
+
+        if (previewMediaVolumeControlEnabled) {
+            Spacer(modifier = Modifier.height(entrySpacing))
+
+            OobeCustomizationSetting(
+                info = mediaVolumeGuardInfo,
+                endPaddingMultiplier = 1.5f
+            ) {
+                WatchSwitch(
+                    checked = previewMediaVolumeGuardEnabled,
+                    modifier = Modifier.testTag(OobeTestTags.CUSTOM_MEDIA_GUARD_SWITCH),
+                    onCheckedChange = { previewMediaVolumeGuardEnabled = it }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(entrySpacing))
+
+        OobeCustomizationSetting(info = mediaPlaybackStartVolumeLimitInfo) {
+            WatchRoundIconButtonIcon(
+                icon = Icons.Outlined.Remove,
+                contentDescription = "降低静音开播上限",
+                enabled = true,
+                onClick = {
+                    previewMediaPlaybackStartVolumeLimitPercent =
+                        previousMediaPlaybackStartVolumeLimitPercent(
+                            previewMediaPlaybackStartVolumeLimitPercent
+                        )
+                }
+            )
+            Spacer(modifier = Modifier.width(compactStepperSpacing))
+            WatchStepperValue(
+                text = formatMediaPlaybackStartVolumeLimitPercent(
+                    previewMediaPlaybackStartVolumeLimitPercent
+                ),
+                width = playbackStartVolumeValueWidth,
+                modifier = Modifier.testTag(OobeTestTags.CUSTOM_PLAYBACK_START_VOLUME_VALUE)
+            )
+            Spacer(modifier = Modifier.width(compactStepperSpacing))
+            WatchRoundIconButtonIcon(
+                icon = Icons.Filled.Add,
+                contentDescription = "提高静音开播上限",
+                enabled = true,
+                onClick = {
+                    previewMediaPlaybackStartVolumeLimitPercent =
+                        nextMediaPlaybackStartVolumeLimitPercent(
+                            previewMediaPlaybackStartVolumeLimitPercent
+                        )
+                }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(entrySpacing))
 
         OobePrimaryButton(
             text = "下一页",
@@ -482,155 +570,36 @@ private fun OobeInternetStep(
     val statusMessage = when (status) {
         InternetAvailabilityStatus.Checking -> "正在检测互联网状态…"
         InternetAvailabilityStatus.Unavailable -> "未检测到可用互联网"
+        InternetAvailabilityStatus.Bluetooth -> "当前为蓝牙网络，加载可能较慢"
         InternetAvailabilityStatus.Available -> "已检测到互联网，可以继续"
     }
-
-    BoxWithConstraints(modifier = modifier) {
-        val textWidth = (maxWidth * 0.92f).coerceAtMost(208.dp)
-
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Spacer(modifier = Modifier.height(18.dp))
-
-            Text(
-                text = "互联网",
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Text(
-                text = "请连接Wi-Fi或蜂窝移动网络后使用本应用",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.widthIn(max = textWidth)
-            )
-
-            Spacer(modifier = Modifier.height(18.dp))
-
-            OobeInternetStatusBar(
-                status = status,
-                modifier = Modifier.widthIn(max = textWidth)
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Text(
-                text = statusMessage,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.widthIn(max = textWidth)
-            )
-
-            Spacer(modifier = Modifier.weight(1f))
-
-            OobePrimaryButton(
-                text = "继续",
-                enabled = continueEnabled,
-                testTag = OobeTestTags.CONTINUE_BUTTON,
-                onClick = onContinue
-            )
-
-            Spacer(modifier = Modifier.height(4.dp))
-        }
+    val guidanceMessage = when (status) {
+        InternetAvailabilityStatus.Bluetooth -> "当前使用蓝牙网络，网速较慢，建议连接 WiFi 或移动网络后使用本应用"
+        else -> "请连接Wi-Fi或蜂窝移动网络后使用本应用"
     }
-}
-
-@Composable
-private fun OobeInternetStatusBar(
-    status: InternetAvailabilityStatus,
-    modifier: Modifier = Modifier
-) {
-    val statusTag: String
-
-    when (status) {
-        InternetAvailabilityStatus.Checking -> {
-            statusTag = OobeTestTags.INTERNET_STATUS_CHECKING
-        }
-
-        InternetAvailabilityStatus.Unavailable -> {
-            statusTag = OobeTestTags.INTERNET_STATUS_UNAVAILABLE
-        }
-
-        InternetAvailabilityStatus.Available -> {
-            statusTag = OobeTestTags.INTERNET_STATUS_AVAILABLE
-        }
+    val statusTag = when (status) {
+        InternetAvailabilityStatus.Checking -> OobeTestTags.INTERNET_STATUS_CHECKING
+        InternetAvailabilityStatus.Unavailable -> OobeTestTags.INTERNET_STATUS_UNAVAILABLE
+        InternetAvailabilityStatus.Bluetooth -> OobeTestTags.INTERNET_STATUS_BLUETOOTH
+        InternetAvailabilityStatus.Available -> OobeTestTags.INTERNET_STATUS_AVAILABLE
     }
 
-    Row(
+    InternetAvailabilityPage(
+        status = status,
+        guidanceMessage = guidanceMessage,
+        statusMessage = statusMessage,
+        actionText = "继续",
+        actionEnabled = continueEnabled,
+        actionModifier = Modifier.testTag(OobeTestTags.CONTINUE_BUTTON),
+        statusIndicatorModifier = Modifier.testTag(statusTag),
+        onAction = onContinue,
         modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.92f))
-            .border(
-                width = 1.dp,
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f),
-                shape = RoundedCornerShape(22.dp)
-            )
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = "互联网可用状态",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(1f)
-        )
-        Spacer(modifier = Modifier.size(12.dp))
-        OobeInternetStatusIndicator(
-            status = status,
-            modifier = Modifier.testTag(statusTag)
-        )
-    }
-}
-
-@Composable
-private fun OobeInternetStatusIndicator(
-    status: InternetAvailabilityStatus,
-    modifier: Modifier = Modifier
-) {
-    Box(
-        modifier = modifier.size(18.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        when (status) {
-            InternetAvailabilityStatus.Checking -> {
-                WatchCircularProgressIndicator(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-
-            InternetAvailabilityStatus.Unavailable -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(CircleShape)
-                        .background(watchColorResource(R.color.danger_red))
-                )
-            }
-
-            InternetAvailabilityStatus.Available -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(CircleShape)
-                        .background(OobeGreen)
-                )
-            }
-        }
-    }
+    )
 }
 
 @Composable
 private fun OobeOfflineWarningDialog(
+    status: InternetAvailabilityStatus,
     onConfirm: () -> Unit,
     onCancel: () -> Unit
 ) {
@@ -666,6 +635,7 @@ private fun OobeOfflineWarningDialog(
                 verticalArrangement = Arrangement.spacedBy(scaleDp(32.dp))
             ) {
                 OobeOfflineWarningDialogContent(
+                    status = status,
                     scale = scale,
                     scaleDp = scaleDp
                 )
@@ -681,10 +651,15 @@ private fun OobeOfflineWarningDialog(
 
 @Composable
 private fun OobeOfflineWarningDialogContent(
+    status: InternetAvailabilityStatus,
     scale: Float,
     scaleDp: (Dp) -> Dp
 ) {
     val fontFamily = FontFamily(Font(R.font.watch_sans))
+    val message = when (status) {
+        InternetAvailabilityStatus.Bluetooth -> "当前使用蓝牙网络，网速较慢，建议连接 WiFi 或移动网络"
+        else -> "你没有连接到互联网，确定要继续吗"
+    }
 
     Column(
         modifier = Modifier
@@ -705,7 +680,7 @@ private fun OobeOfflineWarningDialogContent(
             modifier = Modifier.fillMaxWidth()
         )
         Text(
-            text = "你没有连接到互联网，确定要继续吗",
+            text = message,
             fontFamily = fontFamily,
             fontWeight = FontWeight.Normal,
             fontSize = (34f * scale).sp,
@@ -909,11 +884,12 @@ private fun OobePrimaryButton(
     text: String,
     enabled: Boolean,
     testTag: String,
+    modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     val shape = RoundedCornerShape(24.dp)
     Box(
-        modifier = Modifier
+        modifier = modifier
             .testTag(testTag)
             .clip(shape)
             .background(

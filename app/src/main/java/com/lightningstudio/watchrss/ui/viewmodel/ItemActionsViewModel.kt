@@ -3,9 +3,11 @@ package com.lightningstudio.watchrss.ui.viewmodel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.lightningstudio.watchrss.data.rss.ImportedContentIds
 import com.lightningstudio.watchrss.data.rss.RssRepository
 import com.lightningstudio.watchrss.data.rss.SavedState
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -25,6 +27,11 @@ class ItemActionsViewModel(
             SavedState(isFavorite = false, isWatchLater = false)
         )
 
+    val canDeleteItem = combine(item, repository.observeChannels()) { currentItem, channels ->
+        val channelUrl = channels.firstOrNull { it.id == currentItem?.channelId }?.url
+        ImportedContentIds.isDeletableLocalContentChannel(channelUrl)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
     fun toggleFavorite() {
         if (itemId <= 0L) return
         viewModelScope.launch {
@@ -36,6 +43,13 @@ class ItemActionsViewModel(
         if (itemId <= 0L) return
         viewModelScope.launch {
             repository.toggleWatchLater(itemId)
+        }
+    }
+
+    fun deleteItem() {
+        if (itemId <= 0L) return
+        viewModelScope.launch {
+            repository.deleteItem(itemId)
         }
     }
 

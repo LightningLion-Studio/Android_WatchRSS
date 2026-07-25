@@ -19,5 +19,6 @@ data class RssChannelEntity(
     val createdAt: Long,
     val sortOrder: Long,
     val isPinned: Boolean,
-    val useOriginalContent: Boolean = false
+    val useOriginalContent: Boolean = false,
+    val continuePlaybackInBackground: Boolean = false
 )

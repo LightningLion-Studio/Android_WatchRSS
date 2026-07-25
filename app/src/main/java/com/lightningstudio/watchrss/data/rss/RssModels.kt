@@ -10,7 +10,8 @@ data class RssChannel(
     val sortOrder: Long,
     val isPinned: Boolean,
     val useOriginalContent: Boolean,
-    val unreadCount: Int
+    val unreadCount: Int,
+    val continuePlaybackInBackground: Boolean = false
 )
 
 data class RssItem(
@@ -34,9 +35,9 @@ data class RssItem(
 )
 
 fun RssItem.effectiveContent(useOriginalContent: Boolean): String? {
-    val safeOriginal = originalContent?.trim()?.ifEmpty { null }
-    val safeContent = content?.trim()?.ifEmpty { null }
-    val safeDescription = description?.trim()?.ifEmpty { null }
+    val safeOriginal = originalContent.contentOrNull()
+    val safeContent = content.contentOrNull()
+    val safeDescription = description.contentOrNull()
     return if (useOriginalContent) {
         safeOriginal ?: safeContent ?: safeDescription
     } else {
@@ -45,3 +46,15 @@ fun RssItem.effectiveContent(useOriginalContent: Boolean): String? {
 }
 
 fun RssItem.isOriginalContentMissing(): Boolean = originalContent.isNullOrBlank()
+
+private fun String?.contentOrNull(): String? {
+    val value = this ?: return null
+    if (value.isBlank()) return null
+    return if (value.length <= SAFE_TRIM_COPY_LIMIT_CHARS) {
+        value.trim()
+    } else {
+        value
+    }
+}
+
+private const val SAFE_TRIM_COPY_LIMIT_CHARS = 16_384

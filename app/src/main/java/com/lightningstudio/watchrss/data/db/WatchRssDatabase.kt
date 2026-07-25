@@ -11,9 +11,13 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         RssChannelEntity::class,
         RssItemEntity::class,
         SavedEntryEntity::class,
-        OfflineMediaEntity::class
+        SavedSyncStateEntity::class,
+        OfflineMediaEntity::class,
+        SyncChangeLogEntity::class,
+        SyncPeerStateEntity::class,
+        RssSourceSyncStateEntity::class
     ],
-    version = 9,
+    version = 14,
     exportSchema = false
 )
 @SkipQueryVerification
@@ -21,7 +25,11 @@ abstract class WatchRssDatabase : RoomDatabase() {
     abstract fun rssChannelDao(): RssChannelDao
     abstract fun rssItemDao(): RssItemDao
     abstract fun savedEntryDao(): SavedEntryDao
+    abstract fun savedSyncStateDao(): SavedSyncStateDao
     abstract fun offlineMediaDao(): OfflineMediaDao
+    abstract fun syncChangeLogDao(): SyncChangeLogDao
+    abstract fun syncPeerStateDao(): SyncPeerStateDao
+    abstract fun rssSourceSyncStateDao(): RssSourceSyncStateDao
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -135,6 +143,125 @@ abstract class WatchRssDatabase : RoomDatabase() {
                 )
                 database.execSQL(
                     "UPDATE saved_entries SET sortOrder = createdAt"
+                )
+            }
+        }
+
+        val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS saved_sync_states (
+                        articleId TEXT NOT NULL,
+                        saveType TEXT NOT NULL,
+                        itemId INTEGER,
+                        url TEXT NOT NULL,
+                        saved INTEGER NOT NULL,
+                        changedAt INTEGER NOT NULL,
+                        sortOrder INTEGER NOT NULL,
+                        sourceDeviceId TEXT NOT NULL,
+                        PRIMARY KEY(articleId, saveType)
+                    )
+                    """.trimIndent()
+                )
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_saved_sync_states_itemId ON saved_sync_states(itemId)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_saved_sync_states_saveType_saved ON saved_sync_states(saveType, saved)")
+            }
+        }
+
+        val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE rss_channels ADD COLUMN continuePlaybackInBackground INTEGER NOT NULL DEFAULT 0"
+                )
+            }
+        }
+
+        val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    UPDATE rss_items
+                    SET
+                        content = CASE
+                            WHEN content IS NOT NULL AND length(content) > 100000 THEN NULL
+                            ELSE content
+                        END,
+                        originalContent = CASE
+                            WHEN originalContent IS NOT NULL AND length(originalContent) > 100000 THEN NULL
+                            ELSE originalContent
+                        END
+                    WHERE channelId IN (
+                        SELECT id FROM rss_channels
+                        WHERE url = 'watchrss://phone-imports'
+                           OR url LIKE 'https://watchrss.local/import-content%'
+                    )
+                    AND (
+                        (content IS NOT NULL AND length(content) > 100000) OR
+                        (originalContent IS NOT NULL AND length(originalContent) > 100000)
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+
+        val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("ALTER TABLE rss_items ADD COLUMN syncBodyHash TEXT NOT NULL DEFAULT ''")
+                database.execSQL("ALTER TABLE rss_items ADD COLUMN syncBodyByteCount INTEGER NOT NULL DEFAULT 0")
+                database.execSQL("ALTER TABLE rss_items ADD COLUMN syncChunkSize INTEGER NOT NULL DEFAULT 0")
+                database.execSQL("ALTER TABLE rss_items ADD COLUMN syncChunkHashesJson TEXT NOT NULL DEFAULT ''")
+                database.execSQL("ALTER TABLE rss_items ADD COLUMN syncMetadataHash TEXT NOT NULL DEFAULT ''")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_rss_items_syncBodyHash ON rss_items(syncBodyHash)")
+            }
+        }
+
+        val MIGRATION_13_14 = object : Migration(13, 14) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS sync_change_log (
+                        seq INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        kind TEXT NOT NULL,
+                        entityId TEXT NOT NULL,
+                        changedAt INTEGER NOT NULL,
+                        originDeviceId TEXT NOT NULL,
+                        reason TEXT NOT NULL,
+                        createdAt INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_sync_change_log_kind_entityId ON sync_change_log(kind, entityId)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_sync_change_log_seq ON sync_change_log(seq)")
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS sync_peer_state (
+                        peerDeviceId TEXT NOT NULL PRIMARY KEY,
+                        lastLocalSeqAckedByPeer INTEGER NOT NULL DEFAULT 0,
+                        lastRemoteSeqApplied INTEGER NOT NULL DEFAULT 0,
+                        lastFullSyncAt INTEGER NOT NULL DEFAULT 0,
+                        lastProtocolVersion INTEGER NOT NULL DEFAULT 0,
+                        updatedAt INTEGER NOT NULL DEFAULT 0
+                    )
+                    """.trimIndent()
+                )
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS rss_source_sync_states (
+                        url TEXT NOT NULL PRIMARY KEY,
+                        sourceDeviceId TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        description TEXT NOT NULL,
+                        siteUrl TEXT,
+                        imageUrl TEXT,
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL,
+                        sortOrder INTEGER NOT NULL,
+                        isPinned INTEGER NOT NULL,
+                        deleted INTEGER NOT NULL,
+                        deletedAt INTEGER NOT NULL
+                    )
+                    """.trimIndent()
                 )
             }
         }

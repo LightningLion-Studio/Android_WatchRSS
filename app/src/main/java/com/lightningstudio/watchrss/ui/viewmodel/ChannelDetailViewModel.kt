@@ -17,6 +17,9 @@ class ChannelDetailViewModel(
     val channel = repository.observeChannel(channelId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+    val hasPlayableMedia = repository.observeChannelHasPlayableMedia(channelId)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
     fun refresh() {
         viewModelScope.launch {
             repository.refreshChannel(channelId)
@@ -35,10 +38,22 @@ class ChannelDetailViewModel(
         }
     }
 
+    fun clearLocalContent() {
+        viewModelScope.launch {
+            repository.clearLocalContentChannel(channelId)
+        }
+    }
+
     fun setOriginalContentEnabled(enabled: Boolean) {
         viewModelScope.launch {
             repository.setChannelOriginalContent(channelId, enabled)
             repository.refreshChannelInBackground(channelId, refreshAll = true)
+        }
+    }
+
+    fun setContinuePlaybackInBackgroundEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.setChannelContinuePlaybackInBackground(channelId, enabled)
         }
     }
 

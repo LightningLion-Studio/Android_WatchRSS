@@ -2,6 +2,7 @@ package com.lightningstudio.watchrss.testutil
 
 import com.lightningstudio.watchrss.data.rss.AddRssPreview
 import com.lightningstudio.watchrss.data.rss.ExternalSavedItem
+import com.lightningstudio.watchrss.data.rss.ImportedTextReader
 import com.lightningstudio.watchrss.data.rss.OfflineMedia
 import com.lightningstudio.watchrss.data.rss.OfflineMediaType
 import com.lightningstudio.watchrss.data.rss.RssChannel
@@ -12,6 +13,14 @@ import com.lightningstudio.watchrss.data.rss.RssRepository
 import com.lightningstudio.watchrss.data.rss.SaveType
 import com.lightningstudio.watchrss.data.rss.SavedItem
 import com.lightningstudio.watchrss.data.rss.SavedState
+import com.lightningstudio.watchrss.data.rss.SyncedArticleBodyRequest
+import com.lightningstudio.watchrss.data.rss.SyncedArticleManifest
+import com.lightningstudio.watchrss.data.rss.SyncedChunkedArticle
+import com.lightningstudio.watchrss.data.rss.SyncedSavedArticle
+import com.lightningstudio.watchrss.data.rss.SyncedSavedArticleMergeStats
+import com.lightningstudio.watchrss.data.rss.SyncedRssSource
+import com.lightningstudio.watchrss.data.rss.SyncedRssSourceMergeStats
+import com.lightningstudio.watchrss.data.rss.WatchLibrarySyncWindow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -44,6 +53,12 @@ class TestRssRepository(
     val toggledWatchLaterIds = mutableListOf<Long>()
     val reorderedSavedItems = mutableListOf<Pair<SaveType, List<Long>>>()
     val syncedExternalSavedItems = mutableListOf<Triple<ExternalSavedItem, SaveType, Boolean>>()
+    val mergedSyncedSavedArticles = mutableListOf<SyncedSavedArticle>()
+    val mergedSyncedChunkedArticles = mutableListOf<SyncedChunkedArticle>()
+    var exportedSyncedSavedArticles: List<SyncedSavedArticle> = emptyList()
+    var exportedSyncedArticleManifests: List<SyncedArticleManifest> = emptyList()
+    val mergedSyncedRssSources = mutableListOf<SyncedRssSource>()
+    var exportedSyncedRssSources: List<SyncedRssSource> = emptyList()
     val retriedOfflineMediaIds = mutableListOf<Long>()
     var retryOfflineMediaBehavior: suspend (Long) -> Unit = {}
     val toggledLikeIds = mutableListOf<Long>()
@@ -52,6 +67,8 @@ class TestRssRepository(
     val movedToTopChannelIds = mutableListOf<Long>()
     val setPinnedRequests = mutableListOf<Pair<Long, Boolean>>()
     val setOriginalContentRequests = mutableListOf<Pair<Long, Boolean>>()
+    val setContinuePlaybackInBackgroundRequests = mutableListOf<Pair<Long, Boolean>>()
+    val clearedLocalContentChannelIds = mutableListOf<Long>()
     val deletedChannelIds = mutableListOf<Long>()
     var trimCacheCalls = 0
 
@@ -106,6 +123,14 @@ class TestRssRepository(
         return itemsByChannelFlow.map { items -> items[channelId].orEmpty().size }
     }
 
+    override fun observeChannelHasPlayableMedia(channelId: Long): Flow<Boolean> {
+        return itemsByChannelFlow.map { items ->
+            items[channelId].orEmpty().any { item ->
+                !item.audioUrl.isNullOrBlank() || !item.videoUrl.isNullOrBlank()
+            }
+        }
+    }
+
     override fun observeItem(itemId: Long): Flow<RssItem?> {
         return itemsByIdFlow.map { items -> items[itemId] }
     }
@@ -144,6 +169,10 @@ class TestRssRepository(
     override fun observeOfflineMedia(itemId: Long): Flow<List<OfflineMedia>> {
         return offlineMediaFlow.map { media -> media[itemId].orEmpty() }
     }
+
+    override suspend fun getImportedTextReader(itemId: Long): ImportedTextReader? = null
+
+    override suspend fun loadImportedTextChunk(marker: String, chunkIndex: Int): String? = null
 
     override suspend fun previewChannel(url: String): Result<AddRssPreview> = previewChannelResult
 
@@ -225,6 +254,86 @@ class TestRssRepository(
         )
     }
 
+    override suspend fun exportSyncedSavedArticles(deviceId: String): List<SyncedSavedArticle> {
+        return exportedSyncedSavedArticles
+    }
+
+    override suspend fun exportSyncedArticleManifests(deviceId: String): List<SyncedArticleManifest> {
+        return exportedSyncedArticleManifests
+    }
+
+    override suspend fun prepareLibrarySyncWindow(
+        peerDeviceId: String,
+        localDeviceId: String
+    ): WatchLibrarySyncWindow {
+        return WatchLibrarySyncWindow(
+            articleManifest = exportedSyncedArticleManifests,
+            fullArticleManifest = exportedSyncedArticleManifests,
+            rssSources = exportedSyncedRssSources,
+            fullSnapshot = true,
+            fromSeqExclusive = 0L,
+            toSeqInclusive = 0L,
+            peerAckedSeq = 0L,
+            fallbackReason = "test"
+        )
+    }
+
+    override suspend fun markLibrarySyncSuccess(
+        peerDeviceId: String,
+        localSeqToInclusive: Long,
+        remoteSeqToInclusive: Long,
+        remoteProtocolVersion: Int,
+        fullSnapshot: Boolean
+    ) = Unit
+
+    override suspend fun exportSyncedSavedArticlesForRequests(
+        deviceId: String,
+        requests: List<SyncedArticleBodyRequest>
+    ): List<SyncedSavedArticle> {
+        val requestedIds = requests.mapTo(mutableSetOf()) { it.articleId }
+        return exportedSyncedSavedArticles.filter { it.articleId in requestedIds }
+    }
+
+    override suspend fun mergeSyncedSavedArticles(
+        articles: List<SyncedSavedArticle>,
+        remoteDeviceId: String,
+        localDeviceId: String
+    ): SyncedSavedArticleMergeStats {
+        mergedSyncedSavedArticles += articles
+        return SyncedSavedArticleMergeStats(
+            received = articles.size,
+            applied = articles.size
+        )
+    }
+
+    override suspend fun mergeSyncedChunkedArticles(
+        articles: List<SyncedChunkedArticle>,
+        remoteDeviceId: String,
+        localDeviceId: String
+    ): SyncedSavedArticleMergeStats {
+        mergedSyncedChunkedArticles += articles
+        return SyncedSavedArticleMergeStats(
+            received = articles.size,
+            applied = articles.size
+        )
+    }
+
+    override suspend fun exportSyncedRssSources(deviceId: String): List<SyncedRssSource> {
+        return exportedSyncedRssSources
+    }
+
+    override suspend fun mergeSyncedRssSources(
+        sources: List<SyncedRssSource>,
+        remoteDeviceId: String,
+        localDeviceId: String
+    ): SyncedRssSourceMergeStats {
+        mergedSyncedRssSources += sources
+        return SyncedRssSourceMergeStats(
+            received = sources.size,
+            applied = sources.size
+        )
+    }
+
     override suspend fun retryOfflineMedia(itemId: Long) {
         retriedOfflineMediaIds += itemId
         retryOfflineMediaBehavior(itemId)
@@ -268,6 +377,29 @@ class TestRssRepository(
         }
     }
 
+    override suspend fun setChannelContinuePlaybackInBackground(channelId: Long, enabled: Boolean) {
+        setContinuePlaybackInBackgroundRequests += channelId to enabled
+        channelsFlow.value = channelsFlow.value.map { channel ->
+            if (channel.id == channelId) channel.copy(continuePlaybackInBackground = enabled) else channel
+        }
+    }
+
+    override suspend fun deleteItem(itemId: Long) {
+        val updated = itemsByChannelFlow.value.mapValues { (_, items) ->
+            items.filterNot { it.id == itemId }
+        }
+        itemsByChannelFlow.value = updated
+        rebuildItemsIndex()
+    }
+
+    override suspend fun clearLocalContentChannel(channelId: Long) {
+        clearedLocalContentChannelIds += channelId
+        val updated = itemsByChannelFlow.value.toMutableMap()
+        updated[channelId] = emptyList()
+        itemsByChannelFlow.value = updated
+        rebuildItemsIndex()
+    }
+
     override suspend fun deleteChannel(channelId: Long) {
         deletedChannelIds += channelId
         channelsFlow.value = channelsFlow.value.filterNot { it.id == channelId }
@@ -306,7 +438,8 @@ fun sampleRssChannel(
     url: String = "https://example.com/feed.xml",
     unreadCount: Int = 3,
     isPinned: Boolean = false,
-    useOriginalContent: Boolean = false
+    useOriginalContent: Boolean = false,
+    continuePlaybackInBackground: Boolean = false
 ): RssChannel {
     return RssChannel(
         id = id,
@@ -318,7 +451,8 @@ fun sampleRssChannel(
         sortOrder = id,
         isPinned = isPinned,
         useOriginalContent = useOriginalContent,
-        unreadCount = unreadCount
+        unreadCount = unreadCount,
+        continuePlaybackInBackground = continuePlaybackInBackground
     )
 }
 
@@ -330,7 +464,9 @@ fun sampleRssItem(
     content: String? = "正文 $id",
     originalContent: String? = null,
     link: String? = "https://example.com/items/$id",
-    readingProgress: Float = 0f
+    readingProgress: Float = 0f,
+    audioUrl: String? = null,
+    videoUrl: String? = null
 ): RssItem {
     return RssItem(
         id = id,
@@ -342,8 +478,8 @@ fun sampleRssItem(
         link = link,
         pubDate = "2024-01-01",
         imageUrl = null,
-        audioUrl = null,
-        videoUrl = null,
+        audioUrl = audioUrl,
+        videoUrl = videoUrl,
         summary = description,
         previewImageUrl = null,
         isRead = false,

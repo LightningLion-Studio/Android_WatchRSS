@@ -1,9 +1,11 @@
 package com.lightningstudio.watchrss.ui.screen
 
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.lightningstudio.watchrss.testutil.setWatchContent
 import com.lightningstudio.watchrss.ui.testing.OobeTestTags
@@ -94,7 +96,38 @@ class OobeScreenTest {
         composeRule.onNodeWithText("自定义").assertExists()
         composeRule.onNodeWithText("阅读主题").assertExists()
         composeRule.onNodeWithText("字体大小").assertExists()
+        composeRule.onNodeWithText("使用滚轮调节音量").assertExists()
+        composeRule.onNodeWithText("音量调节防干扰").assertExists()
+        composeRule.onNodeWithText("静音开播").assertExists()
         composeRule.onNodeWithTag(OobeTestTags.CUSTOM_THEME_TOGGLE, useUnmergedTree = true).assertExists()
         composeRule.onNodeWithTag(OobeTestTags.CUSTOM_FONT_VALUE, useUnmergedTree = true).assertExists()
+        composeRule.onNodeWithTag(OobeTestTags.CUSTOM_MEDIA_VOLUME_CONTROL_SWITCH, useUnmergedTree = true).assertExists()
+        composeRule.onNodeWithTag(OobeTestTags.CUSTOM_MEDIA_GUARD_SWITCH, useUnmergedTree = true)
+            .assertExists()
+            .assertIsOff()
+        composeRule.onNodeWithTag(OobeTestTags.CUSTOM_PLAYBACK_START_VOLUME_VALUE, useUnmergedTree = true).assertExists()
+        composeRule.onNodeWithText("无限制").assertExists()
+    }
+
+    @Test
+    fun customPage_hidesVolumeGuardWhenWheelVolumeIsOff() {
+        composeRule.setWatchContent {
+            OobeScreen(
+                uiState = OobeUiState(introPage = 2),
+                onSetIntroPage = {},
+                onContinueFromIntro = {},
+                onOpenUserAgreement = {},
+                onOpenPrivacy = {}
+            )
+        }
+
+        composeRule.onNodeWithTag(OobeTestTags.CUSTOM_MEDIA_VOLUME_CONTROL_SWITCH, useUnmergedTree = true)
+            .performScrollTo()
+            .performClick()
+
+        composeRule.onNodeWithText("音量调节防干扰").assertDoesNotExist()
+        composeRule.onNodeWithTag(OobeTestTags.CUSTOM_MEDIA_GUARD_SWITCH, useUnmergedTree = true)
+            .assertDoesNotExist()
+        composeRule.onNodeWithText("静音开播").assertExists()
     }
 }

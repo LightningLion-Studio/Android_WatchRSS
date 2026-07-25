@@ -58,6 +58,13 @@ class DouyinLoginActivity : BaseWatchActivity() {
                             DouyinLoginBannedScreen(onBack = { finish() })
                         }
 
+                        InternetAvailabilityStatus.Bluetooth -> {
+                            DouyinLoginBannedScreen(
+                                status = InternetAvailabilityStatus.Bluetooth,
+                                onBack = { finish() }
+                            )
+                        }
+
                         InternetAvailabilityStatus.Available -> {
                             DouyinLoginScreen(
                                 initialErrorMessage = initialWebViewError,

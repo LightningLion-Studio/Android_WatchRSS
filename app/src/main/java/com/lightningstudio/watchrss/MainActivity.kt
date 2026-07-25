@@ -78,7 +78,14 @@ class MainActivity : BaseWatchActivity() {
                 HomeFeedListActivity.createIntent(
                     context = this@MainActivity,
                     launcherEntry = launcherEntry
-                )
+                ).apply {
+                    if (intent.getBooleanExtra(EXTRA_DEBUG_HOME_AUTOSCROLL_PERF, false)) {
+                        putExtra(
+                            HomeFeedListActivity.EXTRA_DEBUG_AUTOSCROLL_PERF,
+                            true
+                        )
+                    }
+                }
             )
             finish()
         }
@@ -105,13 +112,21 @@ class MainActivity : BaseWatchActivity() {
             AppResumeStateStore.load(this@MainActivity)
         } ?: return false
         val component = resumeIntent.component ?: return false
-        val targetIntent = if (component.className == MainActivity::class.java.name) {
-            HomeFeedListActivity.createIntent(this@MainActivity)
-        } else {
-            resumeIntent
+        val homeIntent = HomeFeedListActivity.createIntent(
+            context = this@MainActivity,
+            launcherEntry = true
+        )
+        if (component.className == MainActivity::class.java.name ||
+            component.className == HomeFeedListActivity::class.java.name
+        ) {
+            startActivity(homeIntent)
+            return true
         }
-        startActivity(
-            targetIntent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+        startActivities(
+            arrayOf(
+                homeIntent,
+                resumeIntent
+            )
         )
         return true
     }
@@ -122,6 +137,7 @@ class MainActivity : BaseWatchActivity() {
     }
 
     companion object {
+        private const val EXTRA_DEBUG_HOME_AUTOSCROLL_PERF = "debug_home_autoscroll_perf"
         private const val SYSTEM_SPLASH_FADE_DURATION_MS = 80L
     }
 }

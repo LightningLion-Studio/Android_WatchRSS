@@ -7,6 +7,7 @@ import com.lightningstudio.watchrss.testutil.TestBiliRepository
 import com.lightningstudio.watchrss.testutil.TestBiliFavoriteRequest
 import com.lightningstudio.watchrss.testutil.TestRssRepository
 import com.lightningstudio.watchrss.testutil.sampleBiliItem
+import com.lightningstudio.watchrss.testutil.sampleBiliVideoDetail
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -110,6 +111,34 @@ class BiliFeedViewModelTest {
             rssRepo.syncedExternalSavedItems.map { it.second }
         )
         assertEquals(listOf(Triple(55L, "BV55", 77L), Triple(55L, "BV55", 77L)), platformRepo.cachedPreviewRequests)
+    }
+
+    @Test
+    fun favorite_withBvidOnlyItem_resolvesAidBeforeSaving() = runTest {
+        val resolvedItem = sampleBiliItem(aid = 56L, bvid = "BV56", cid = 78L)
+        val platformRepo = TestBiliRepository(initialLoggedIn = true).apply {
+            videoDetailResult = com.lightningstudio.watchrss.sdk.bili.BiliResult(
+                code = 0,
+                data = sampleBiliVideoDetail(item = resolvedItem)
+            )
+        }
+        val rssRepo = TestRssRepository()
+        val viewModel = BiliFeedViewModel(platformRepo, rssRepo)
+        val bvidOnlyItem = resolvedItem.copy(aid = null)
+        advanceUntilIdle()
+
+        viewModel.favorite(bvidOnlyItem)
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(TestBiliFavoriteRequest(aid = 56L, add = true, bvid = "BV56")),
+            platformRepo.favoriteRequests
+        )
+        assertEquals(
+            listOf(SaveType.FAVORITE),
+            rssRepo.syncedExternalSavedItems.map { it.second }
+        )
+        assertEquals(listOf(Triple(56L, "BV56", 78L)), platformRepo.cachedPreviewRequests)
     }
 
     @Test

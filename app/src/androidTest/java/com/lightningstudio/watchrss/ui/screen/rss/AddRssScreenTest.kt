@@ -1,6 +1,8 @@
 package com.lightningstudio.watchrss.ui.screen.rss
 
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -31,7 +33,6 @@ class AddRssScreenTest {
         composeRule.setWatchContent {
             AddRssScreen(
                 uiState = state,
-                showRemoteInputButton = true,
                 onUrlChange = { state.value = state.value.copy(url = it) },
                 onSubmit = { submitClicks++ },
                 onConfirm = {},
@@ -40,13 +41,12 @@ class AddRssScreenTest {
                 onOpenExisting = {},
                 onChannelAdded = { _, _ -> },
                 onConsumed = {},
-                onClearError = {},
-                onRemoteInput = {}
+                onClearError = {}
             )
         }
 
         composeRule.onNodeWithTag(AddRssTestTags.URL_INPUT).performTextInput("https://example.com/feed.xml")
-        composeRule.onNodeWithTag(AddRssTestTags.REMOTE_INPUT_BUTTON).assertExists()
+        composeRule.onAllNodesWithTag(AddRssTestTags.REMOTE_INPUT_BUTTON).assertCountEquals(0)
         composeRule.onNodeWithTag(AddRssTestTags.SUBMIT_BUTTON).performClick()
 
         composeRule.runOnIdle {
@@ -70,7 +70,6 @@ class AddRssScreenTest {
         composeRule.setWatchContent {
             AddRssScreen(
                 uiState = state,
-                showRemoteInputButton = false,
                 onUrlChange = {},
                 onSubmit = {},
                 onConfirm = { confirmClicks++ },
@@ -79,8 +78,7 @@ class AddRssScreenTest {
                 onOpenExisting = {},
                 onChannelAdded = { _, _ -> },
                 onConsumed = {},
-                onClearError = {},
-                onRemoteInput = {}
+                onClearError = {}
             )
         }
 
@@ -108,7 +106,6 @@ class AddRssScreenTest {
         composeRule.setWatchContent {
             AddRssScreen(
                 uiState = state,
-                showRemoteInputButton = false,
                 onUrlChange = {},
                 onSubmit = {},
                 onConfirm = {},
@@ -117,8 +114,7 @@ class AddRssScreenTest {
                 onOpenExisting = { openedChannelId = it.id },
                 onChannelAdded = { _, _ -> },
                 onConsumed = {},
-                onClearError = {},
-                onRemoteInput = {}
+                onClearError = {}
             )
         }
 
@@ -143,7 +139,6 @@ class AddRssScreenTest {
         composeRule.setWatchContent {
             AddRssScreen(
                 uiState = state,
-                showRemoteInputButton = false,
                 onUrlChange = {},
                 onSubmit = {},
                 onConfirm = {},
@@ -152,8 +147,7 @@ class AddRssScreenTest {
                 onOpenExisting = {},
                 onChannelAdded = { _, _ -> },
                 onConsumed = {},
-                onClearError = {},
-                onRemoteInput = {}
+                onClearError = {}
             )
         }
 

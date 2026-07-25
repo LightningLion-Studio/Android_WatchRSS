@@ -20,10 +20,8 @@ import com.lightningstudio.watchrss.data.douyin.DouyinWatchHistoryStoreContract
 import com.lightningstudio.watchrss.data.network.InternetAvailabilityMonitor
 import com.lightningstudio.watchrss.data.rss.RssRepository
 import com.lightningstudio.watchrss.data.settings.LlmApiKeyStore
-import com.lightningstudio.watchrss.data.settings.ReadAloudApiKeyStore
 import com.lightningstudio.watchrss.data.settings.SettingsRepository
 import com.lightningstudio.watchrss.data.tts.ReadAloudController
-import com.lightningstudio.watchrss.data.tts.ReadAloudSynthesisService
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.rules.ExternalResource
 import java.io.File
@@ -47,12 +45,6 @@ class TestAppContainer(
 
     override val llmApiKeyStore: LlmApiKeyStore
         get() = fallback.llmApiKeyStore
-
-    override val readAloudApiKeyStore: ReadAloudApiKeyStore
-        get() = fallback.readAloudApiKeyStore
-
-    override val readAloudSynthesisService: ReadAloudSynthesisService
-        get() = fallback.readAloudSynthesisService
 
     override val readAloudController: ReadAloudController
         get() = fallback.readAloudController

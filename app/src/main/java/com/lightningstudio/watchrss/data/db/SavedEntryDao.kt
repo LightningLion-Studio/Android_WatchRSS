@@ -44,8 +44,36 @@ interface SavedEntryDao {
 
     @Query(
         """
-        SELECT rss_items.*, rss_channels.title AS channelTitle,
-               saved_entries.createdAt AS savedAt, saved_entries.saveType AS saveType
+        SELECT
+               rss_items.id AS id,
+               rss_items.channelId AS channelId,
+               rss_items.title AS title,
+               rss_items.description AS description,
+               NULL AS content,
+               NULL AS originalContent,
+               rss_items.link AS link,
+               rss_items.guid AS guid,
+               rss_items.pubDate AS pubDate,
+               rss_items.imageUrl AS imageUrl,
+               rss_items.audioUrl AS audioUrl,
+               rss_items.videoUrl AS videoUrl,
+               rss_items.summary AS summary,
+               rss_items.previewImageUrl AS previewImageUrl,
+               rss_items.isRead AS isRead,
+               rss_items.isLiked AS isLiked,
+               rss_items.readingProgress AS readingProgress,
+               rss_items.dedupKey AS dedupKey,
+               rss_items.fetchedAt AS fetchedAt,
+               rss_items.contentSizeBytes AS contentSizeBytes,
+               rss_items.syncBodyHash AS syncBodyHash,
+               rss_items.syncBodyByteCount AS syncBodyByteCount,
+               rss_items.syncChunkSize AS syncChunkSize,
+               rss_items.syncChunkHashesJson AS syncChunkHashesJson,
+               rss_items.syncMetadataHash AS syncMetadataHash,
+               rss_channels.title AS channelTitle,
+               rss_channels.url AS channelUrl,
+               saved_entries.createdAt AS savedAt,
+               saved_entries.saveType AS saveType
         FROM saved_entries
         JOIN rss_items ON rss_items.id = saved_entries.itemId
         JOIN rss_channels ON rss_channels.id = rss_items.channelId
@@ -54,11 +82,66 @@ interface SavedEntryDao {
         """
     )
     fun observeSavedItems(saveType: String): Flow<List<SavedRssItem>>
+
+    @Query(
+        """
+        SELECT rss_items.*, rss_channels.title AS channelTitle, rss_channels.url AS channelUrl,
+               saved_entries.createdAt AS savedAt, saved_entries.saveType AS saveType
+        FROM saved_entries
+        JOIN rss_items ON rss_items.id = saved_entries.itemId
+        JOIN rss_channels ON rss_channels.id = rss_items.channelId
+        WHERE saved_entries.saveType = :saveType
+        ORDER BY saved_entries.sortOrder DESC, saved_entries.createdAt DESC
+        """
+    )
+    suspend fun getSavedItems(saveType: String): List<SavedRssItem>
+
+    @Query(
+        """
+        SELECT
+               rss_items.id AS id,
+               rss_items.channelId AS channelId,
+               rss_items.title AS title,
+               rss_items.description AS description,
+               NULL AS content,
+               NULL AS originalContent,
+               rss_items.link AS link,
+               rss_items.guid AS guid,
+               rss_items.pubDate AS pubDate,
+               rss_items.imageUrl AS imageUrl,
+               rss_items.audioUrl AS audioUrl,
+               rss_items.videoUrl AS videoUrl,
+               rss_items.summary AS summary,
+               rss_items.previewImageUrl AS previewImageUrl,
+               rss_items.isRead AS isRead,
+               rss_items.isLiked AS isLiked,
+               rss_items.readingProgress AS readingProgress,
+               rss_items.dedupKey AS dedupKey,
+               rss_items.fetchedAt AS fetchedAt,
+               rss_items.contentSizeBytes AS contentSizeBytes,
+               rss_items.syncBodyHash AS syncBodyHash,
+               rss_items.syncBodyByteCount AS syncBodyByteCount,
+               rss_items.syncChunkSize AS syncChunkSize,
+               rss_items.syncChunkHashesJson AS syncChunkHashesJson,
+               rss_items.syncMetadataHash AS syncMetadataHash,
+               rss_channels.title AS channelTitle,
+               rss_channels.url AS channelUrl,
+               saved_entries.createdAt AS savedAt,
+               saved_entries.saveType AS saveType
+        FROM saved_entries
+        JOIN rss_items ON rss_items.id = saved_entries.itemId
+        JOIN rss_channels ON rss_channels.id = rss_items.channelId
+        WHERE saved_entries.saveType = :saveType
+        ORDER BY saved_entries.sortOrder DESC, saved_entries.createdAt DESC
+        """
+    )
+    suspend fun getSavedItemsForSyncManifest(saveType: String): List<SavedRssItem>
 }
 
 data class SavedRssItem(
     @Embedded val item: RssItemEntity,
     val channelTitle: String,
+    val channelUrl: String,
     val savedAt: Long,
     val saveType: String
 )

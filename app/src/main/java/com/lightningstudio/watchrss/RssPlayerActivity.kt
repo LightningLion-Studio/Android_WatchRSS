@@ -10,6 +10,10 @@ import androidx.lifecycle.lifecycleScope
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.core.content.FileProvider
+import com.lightningstudio.watchrss.data.network.InternetAvailabilityStatus
+import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT
+import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED
+import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
 import com.lightningstudio.watchrss.ui.screen.bili.BiliPlayerScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
@@ -44,6 +48,21 @@ class RssPlayerActivity : BaseWatchActivity() {
         setContent {
             WatchRSSTheme {
                 val uiState by viewModel.uiState.collectAsState()
+                val volumeGuardEnabled by container.settingsRepository.mediaVolumeGuardEnabled.collectAsState(
+                    initial = DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
+                )
+                val volumeControlEnabled by container.settingsRepository.mediaVolumeControlEnabled.collectAsState(
+                    initial = DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED
+                )
+                val playbackStartVolumeLimitPercent by container.settingsRepository.mediaPlaybackStartVolumeLimitPercent.collectAsState(
+                    initial = DEFAULT_MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT
+                )
+                val internetAvailabilityStatus by container.internetAvailabilityMonitor.internetAvailability.collectAsState(
+                    initial = InternetAvailabilityStatus.Checking
+                )
+                val continuePlaybackInBackground by viewModel.continuePlaybackInBackground.collectAsState(
+                    initial = false
+                )
                 BiliPlayerScreen(
                     uiState = uiState,
                     onRetry = viewModel::loadPlayUrl,
@@ -56,10 +75,15 @@ class RssPlayerActivity : BaseWatchActivity() {
                             openExternalLink(this, link)
                         }
                     },
+                    internetAvailabilityStatus = internetAvailabilityStatus,
                     onPanStateChange = { offsetX, rangeX ->
                         panOffsetX = offsetX
                         panRangeX = rangeX
-                    }
+                    },
+                    digitalCrownVolumeEnabled = volumeControlEnabled,
+                    volumeGuardEnabled = volumeGuardEnabled,
+                    playbackStartVolumeLimitPercent = playbackStartVolumeLimitPercent,
+                    continuePlaybackInBackground = continuePlaybackInBackground
                 )
             }
         }
@@ -80,7 +104,8 @@ class RssPlayerActivity : BaseWatchActivity() {
             context = this,
             playUrl = playUrl,
             webUrl = webUrl,
-            awemeId = awemeId
+            awemeId = awemeId,
+            channelId = intent.getLongExtra(RssPlayerViewModel.KEY_CHANNEL_ID, 0L)
         )
     }
 
@@ -89,12 +114,14 @@ class RssPlayerActivity : BaseWatchActivity() {
             context: Context,
             playUrl: String,
             webUrl: String? = null,
-            awemeId: String? = null
+            awemeId: String? = null,
+            channelId: Long = 0L
         ): Intent {
             return Intent(context, RssPlayerActivity::class.java).apply {
                 putExtra(RssPlayerViewModel.KEY_PLAY_URL, playUrl)
                 putExtra(RssPlayerViewModel.KEY_WEB_URL, webUrl.orEmpty())
                 putExtra(RssPlayerViewModel.KEY_AWEME_ID, awemeId.orEmpty())
+                putExtra(RssPlayerViewModel.KEY_CHANNEL_ID, channelId)
             }
         }
     }

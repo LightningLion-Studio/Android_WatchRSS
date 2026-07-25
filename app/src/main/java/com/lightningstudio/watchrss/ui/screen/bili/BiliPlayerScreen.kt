@@ -49,6 +49,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -87,12 +88,15 @@ import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.lightningstudio.watchrss.R
+import com.lightningstudio.watchrss.data.network.InternetAvailabilityStatus
+import com.lightningstudio.watchrss.ui.components.InternetAvailabilityOverlay
 import com.lightningstudio.watchrss.ui.components.PlayerVolumeOverlay
 import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.components.rememberPlayerVolumeState
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownVolumeHandler
 import com.lightningstudio.watchrss.ui.theme.watchColorResource
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
+import com.lightningstudio.watchrss.ui.util.OFFLINE_USER_MESSAGE
 import com.lightningstudio.watchrss.ui.util.normalizeUserFacingMessage
 import com.lightningstudio.watchrss.ui.util.offlineToastMessageOrNull
 import com.lightningstudio.watchrss.ui.util.showAppToast
@@ -107,6 +111,11 @@ import kotlin.math.min
 import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
+import java.net.ConnectException
+import java.net.NoRouteToHostException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
+import javax.net.ssl.SSLException
 
 internal enum class PlayerScaleMode {
     Standard,
@@ -137,6 +146,7 @@ fun BiliPlayerScreen(
     uiState: BiliPlayerUiState,
     onRetry: () -> Unit,
     onOpenWeb: () -> Unit,
+    internetAvailabilityStatus: InternetAvailabilityStatus = InternetAvailabilityStatus.Checking,
     onPlaybackError: () -> Boolean = { false },
     onPanStateChange: (Float, Float) -> Unit,
     onPlaybackReady: (positionMs: Int, durationMs: Int) -> Unit = { _, _ -> },
@@ -147,7 +157,10 @@ fun BiliPlayerScreen(
     playbackDataSourceFactoryProvider: ((Map<String, String>, String?) -> DataSource.Factory)? = null,
     allowPan: Boolean = true,
     isActive: Boolean = true,
-    digitalCrownVolumeEnabled: Boolean = true
+    digitalCrownVolumeEnabled: Boolean = true,
+    volumeGuardEnabled: Boolean = true,
+    playbackStartVolumeLimitPercent: Int? = 10,
+    continuePlaybackInBackground: Boolean = false
 ) {
     val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
     val spacing = watchDimensionResource(R.dimen.hey_distance_6dp)
@@ -158,6 +171,7 @@ fun BiliPlayerScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val context = LocalContext.current
     val view = LocalView.current
+    val continuePlaybackInBackgroundState = rememberUpdatedState(continuePlaybackInBackground)
     var playerRef by remember { mutableStateOf<ExoPlayer?>(null) }
     var textureViewRef by remember { mutableStateOf<TextureView?>(null) }
     var isTextureAvailable by remember { mutableStateOf(false) }
@@ -185,15 +199,34 @@ fun BiliPlayerScreen(
     var videoSize by remember { mutableStateOf(IntSize.Zero) }
     var videoRotation by remember { mutableStateOf(0) }
     var playWhenReady by remember { mutableStateOf(false) }
+    var allowBluetoothPlayback by remember { mutableStateOf(false) }
     var panOffsetX by remember { mutableStateOf(0f) }
     val panAnimator = remember { Animatable(0f) }
     val panDecay = remember { exponentialDecay<Float>() }
     val panScope = rememberCoroutineScope()
     val panFlingJob = remember { mutableStateOf<Job?>(null) }
-    val volumeState = rememberPlayerVolumeState()
+    val effectiveVolumeGuardEnabled = volumeGuardEnabled && digitalCrownVolumeEnabled
+    val volumeState = rememberPlayerVolumeState(
+        guardEnabled = effectiveVolumeGuardEnabled,
+        playbackStartVolumeLimitPercent = playbackStartVolumeLimitPercent
+    )
+    var playbackStartGuardPending by remember(uiState.initialSource) {
+        mutableStateOf(uiState.initialSource != null)
+    }
     val hasConfiguredSource = uiState.initialSource != null
+    val playbackSourceNeedsInternet = (activeSource ?: uiState.initialSource)
+        ?.requiresInternetConnection() == true
+    val shouldShowBluetoothPrompt =
+        internetAvailabilityStatus == InternetAvailabilityStatus.Bluetooth && !allowBluetoothPlayback
+    val shouldShowConnectionPromptForStatus =
+        internetAvailabilityStatus == InternetAvailabilityStatus.Unavailable ||
+            shouldShowBluetoothPrompt
+    val isConnectionPromptPlayback = shouldShowConnectionPromptForStatus &&
+        !isPlaying &&
+        (playbackSourceNeedsInternet || (uiState.isLoading && !hasConfiguredSource))
     val shouldKeepScreenOn = isActive &&
         hasConfiguredSource &&
+        !isConnectionPromptPlayback &&
         playbackError.isNullOrBlank() &&
         (isPlaying || isBuffering || (activeSource != null && isTextureAvailable))
 
@@ -230,6 +263,34 @@ fun BiliPlayerScreen(
         isBuffering = false
     }
 
+    fun enforcePendingPlaybackStartGuard() {
+        if (!playbackStartGuardPending) return
+        volumeState.enforcePlaybackStartGuard()
+        playbackStartGuardPending = false
+    }
+
+    fun continueBluetoothPlayback() {
+        allowBluetoothPlayback = true
+        playWhenReady = true
+        val player = playerRef ?: return
+        runCatching {
+            if (isActive) {
+                enforcePendingPlaybackStartGuard()
+                player.playWhenReady = true
+                player.play()
+                if (isPrepared) {
+                    isPlaying = true
+                    isBuffering = false
+                } else {
+                    isBuffering = true
+                }
+            } else {
+                player.playWhenReady = false
+                pendingPreparedPlayWhenReady = true
+            }
+        }
+    }
+
     fun togglePlayback() {
         val player = playerRef ?: return
         if (!isPrepared) return
@@ -240,6 +301,7 @@ fun BiliPlayerScreen(
         runCatching {
             playWhenReady = true
             pendingPreparedPlayWhenReady = false
+            enforcePendingPlaybackStartGuard()
             player.playWhenReady = isActive
             if (isActive) {
                 player.play()
@@ -296,6 +358,9 @@ fun BiliPlayerScreen(
         player.setMediaItem(MediaItem.fromUri(source.url))
         if (pendingSeekPositionMs > 0) {
             player.seekTo(pendingSeekPositionMs.toLong())
+        }
+        if (shouldPlay) {
+            enforcePendingPlaybackStartGuard()
         }
         player.playWhenReady = isActive && shouldPlay
         player.prepare()
@@ -403,6 +468,20 @@ fun BiliPlayerScreen(
         releasePlayer()
     }
 
+    LaunchedEffect(isConnectionPromptPlayback, playerRef, activeSource) {
+        if (!isConnectionPromptPlayback) {
+            return@LaunchedEffect
+        }
+        if (!isPlaying) {
+            isBuffering = false
+            pendingPreparedPlayWhenReady = false
+            runCatching {
+                playerRef?.playWhenReady = false
+                playerRef?.pause()
+            }
+        }
+    }
+
     LaunchedEffect(hasConfiguredSource, uiState.isLoading) {
         if (uiState.isLoading && !hasConfiguredSource) {
             autoPlayInitialized = false
@@ -433,7 +512,9 @@ fun BiliPlayerScreen(
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_PAUSE) {
-                pausePlayback()
+                if (!continuePlaybackInBackgroundState.value) {
+                    pausePlayback()
+                }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -449,6 +530,7 @@ fun BiliPlayerScreen(
             val player = playerRef
             if (player != null && isPrepared && playWhenReady && !player.isPlaying) {
                 runCatching {
+                    enforcePendingPlaybackStartGuard()
                     player.playWhenReady = true
                     player.play()
                     isPlaying = true
@@ -498,6 +580,7 @@ fun BiliPlayerScreen(
                         pendingSeekPositionMs = 0
                         isBuffering = false
                         if (isActive && pendingPreparedPlayWhenReady) {
+                            enforcePendingPlaybackStartGuard()
                             player.playWhenReady = true
                             player.play()
                         }
@@ -538,7 +621,15 @@ fun BiliPlayerScreen(
                 if (!playbackCompleted && (positionMs > 0 || durationMs > 0)) {
                     onPlaybackErrorCheckpoint(positionMs, durationMs)
                 }
-                playbackError = if (onPlaybackError()) null else "播放失败"
+                val isNetworkPlaybackFailure =
+                    activeSource?.requiresInternetConnection() == true && error.hasNetworkFailureCause()
+                playbackError = if (isNetworkPlaybackFailure) {
+                    OFFLINE_USER_MESSAGE
+                } else if (onPlaybackError()) {
+                    null
+                } else {
+                    "播放失败"
+                }
             }
 
             override fun onVideoSizeChanged(videoSizeNow: VideoSize) {
@@ -674,6 +765,7 @@ fun BiliPlayerScreen(
                                 )
                                 if (isActive && isPrepared && playWhenReady) {
                                     runCatching {
+                                        enforcePendingPlaybackStartGuard()
                                         playerRef?.playWhenReady = true
                                         playerRef?.play()
                                     }
@@ -699,7 +791,9 @@ fun BiliPlayerScreen(
 
                             override fun onSurfaceTextureDestroyed(surfaceTexture: SurfaceTexture): Boolean {
                                 isTextureAvailable = false
-                                pausePlayback(clearPlayWhenReady = false)
+                                if (!continuePlaybackInBackgroundState.value) {
+                                    pausePlayback(clearPlayWhenReady = false)
+                                }
                                 runCatching { playerRef?.clearVideoTextureView(this@apply) }
                                 return true
                             }
@@ -800,13 +894,19 @@ fun BiliPlayerScreen(
         val showLoading = (uiState.isLoading && activeSource == null) ||
             (activeSource != null && !isPrepared) ||
             isBuffering
-        if (showLoading && errorText.isNullOrBlank()) {
+        val showNetworkUnavailable = !isPlaying &&
+            (isConnectionPromptPlayback ||
+                errorText == OFFLINE_USER_MESSAGE ||
+                (shouldShowConnectionPromptForStatus &&
+                    playbackSourceNeedsInternet &&
+                    (playbackError != null || !isPrepared)))
+        if (showLoading && errorText.isNullOrBlank() && !showNetworkUnavailable) {
             WatchCircularProgressIndicator(
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.align(Alignment.Center)
             )
         }
-        if (!errorText.isNullOrBlank()) {
+        if (!errorText.isNullOrBlank() && !showNetworkUnavailable) {
             Column(
                 modifier = Modifier
                     .align(Alignment.Center)
@@ -830,7 +930,7 @@ fun BiliPlayerScreen(
             modifier = Modifier.align(Alignment.Center)
         )
 
-        if (errorText.isNullOrBlank()) {
+        if (errorText.isNullOrBlank() && !showNetworkUnavailable) {
             Box(modifier = Modifier.fillMaxSize()) {
                 if (controlsVisible) {
                     Box(
@@ -955,6 +1055,29 @@ fun BiliPlayerScreen(
                 }
             }
         }
+
+        if (showNetworkUnavailable) {
+            val overlayStatus = if (errorText == OFFLINE_USER_MESSAGE) {
+                InternetAvailabilityStatus.Unavailable
+            } else {
+                internetAvailabilityStatus
+            }
+            InternetAvailabilityOverlay(
+                status = overlayStatus,
+                actionText = if (overlayStatus == InternetAvailabilityStatus.Bluetooth) {
+                    "继续"
+                } else {
+                    "重试"
+                },
+                onAction = {
+                    if (overlayStatus == InternetAvailabilityStatus.Bluetooth) {
+                        continueBluetoothPlayback()
+                    } else {
+                        onRetry()
+                    }
+                }
+            )
+        }
     }
 }
 
@@ -968,6 +1091,26 @@ private fun buildDefaultPlaybackDataSourceFactory(
         }
     }
     return DefaultDataSource.Factory(context, upstreamFactory)
+}
+
+private fun BiliPlaybackSource.requiresInternetConnection(): Boolean {
+    return url.startsWith("http://", ignoreCase = true) ||
+        url.startsWith("https://", ignoreCase = true)
+}
+
+private fun Throwable.hasNetworkFailureCause(): Boolean {
+    var current: Throwable? = this
+    while (current != null) {
+        when (current) {
+            is UnknownHostException,
+            is ConnectException,
+            is NoRouteToHostException,
+            is SocketTimeoutException,
+            is SSLException -> return true
+        }
+        current = current.cause
+    }
+    return false
 }
 
 @Composable

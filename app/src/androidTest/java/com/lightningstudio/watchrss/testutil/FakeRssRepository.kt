@@ -10,6 +10,14 @@ import com.lightningstudio.watchrss.data.rss.RssRepository
 import com.lightningstudio.watchrss.data.rss.SaveType
 import com.lightningstudio.watchrss.data.rss.SavedItem
 import com.lightningstudio.watchrss.data.rss.SavedState
+import com.lightningstudio.watchrss.data.rss.SyncedArticleBodyRequest
+import com.lightningstudio.watchrss.data.rss.SyncedArticleManifest
+import com.lightningstudio.watchrss.data.rss.SyncedChunkedArticle
+import com.lightningstudio.watchrss.data.rss.SyncedSavedArticle
+import com.lightningstudio.watchrss.data.rss.SyncedSavedArticleMergeStats
+import com.lightningstudio.watchrss.data.rss.SyncedRssSource
+import com.lightningstudio.watchrss.data.rss.SyncedRssSourceMergeStats
+import com.lightningstudio.watchrss.data.rss.WatchLibrarySyncWindow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -34,6 +42,8 @@ class FakeRssRepository(
 
     override fun observeItemCount(channelId: Long): Flow<Int> = flowOf(0)
 
+    override fun observeChannelHasPlayableMedia(channelId: Long): Flow<Boolean> = flowOf(false)
+
     override fun observeItem(itemId: Long): Flow<RssItem?> = flowOf(null)
 
     override fun searchItems(channelId: Long, keyword: String, limit: Int): Flow<List<RssItem>> = flowOf(emptyList())
@@ -45,6 +55,10 @@ class FakeRssRepository(
     override fun observeSavedState(itemId: Long): Flow<SavedState> = flowOf(SavedState(isFavorite = false, isWatchLater = false))
 
     override fun observeOfflineMedia(itemId: Long): Flow<List<OfflineMedia>> = flowOf(emptyList())
+
+    override suspend fun getImportedTextReader(itemId: Long) = null
+
+    override suspend fun loadImportedTextChunk(marker: String, chunkIndex: Int) = null
 
     override suspend fun previewChannel(url: String): Result<AddRssPreview> {
         return Result.failure(UnsupportedOperationException("previewChannel is not configured in FakeRssRepository"))
@@ -88,6 +102,74 @@ class FakeRssRepository(
         return Result.success(SavedState(isFavorite = saveType == SaveType.FAVORITE && saved, isWatchLater = saveType == SaveType.WATCH_LATER && saved))
     }
 
+    override suspend fun exportSyncedSavedArticles(deviceId: String): List<SyncedSavedArticle> = emptyList()
+
+    override suspend fun exportSyncedArticleManifests(deviceId: String): List<SyncedArticleManifest> = emptyList()
+
+    override suspend fun prepareLibrarySyncWindow(
+        peerDeviceId: String,
+        localDeviceId: String
+    ): WatchLibrarySyncWindow {
+        return WatchLibrarySyncWindow(
+            articleManifest = emptyList(),
+            fullArticleManifest = emptyList(),
+            rssSources = emptyList(),
+            fullSnapshot = true,
+            fromSeqExclusive = 0L,
+            toSeqInclusive = 0L,
+            peerAckedSeq = 0L,
+            fallbackReason = "fake"
+        )
+    }
+
+    override suspend fun markLibrarySyncSuccess(
+        peerDeviceId: String,
+        localSeqToInclusive: Long,
+        remoteSeqToInclusive: Long,
+        remoteProtocolVersion: Int,
+        fullSnapshot: Boolean
+    ) = Unit
+
+    override suspend fun exportSyncedSavedArticlesForRequests(
+        deviceId: String,
+        requests: List<SyncedArticleBodyRequest>
+    ): List<SyncedSavedArticle> = emptyList()
+
+    override suspend fun mergeSyncedSavedArticles(
+        articles: List<SyncedSavedArticle>,
+        remoteDeviceId: String,
+        localDeviceId: String
+    ): SyncedSavedArticleMergeStats {
+        return SyncedSavedArticleMergeStats(
+            received = articles.size,
+            applied = articles.size
+        )
+    }
+
+    override suspend fun mergeSyncedChunkedArticles(
+        articles: List<SyncedChunkedArticle>,
+        remoteDeviceId: String,
+        localDeviceId: String
+    ): SyncedSavedArticleMergeStats {
+        return SyncedSavedArticleMergeStats(
+            received = articles.size,
+            applied = articles.size
+        )
+    }
+
+    override suspend fun exportSyncedRssSources(deviceId: String): List<SyncedRssSource> = emptyList()
+
+    override suspend fun mergeSyncedRssSources(
+        sources: List<SyncedRssSource>,
+        remoteDeviceId: String,
+        localDeviceId: String
+    ): SyncedRssSourceMergeStats {
+        return SyncedRssSourceMergeStats(
+            received = sources.size,
+            applied = sources.size
+        )
+    }
+
     override suspend fun retryOfflineMedia(itemId: Long) = Unit
 
     override suspend fun toggleLike(itemId: Long): Result<Boolean> = Result.success(false)
@@ -109,6 +191,20 @@ class FakeRssRepository(
     }
 
     override suspend fun setChannelOriginalContent(channelId: Long, enabled: Boolean) = Unit
+
+    override suspend fun setChannelContinuePlaybackInBackground(channelId: Long, enabled: Boolean) {
+        channelsFlow.value = channelsFlow.value.map { channel ->
+            if (channel.id == channelId) {
+                channel.copy(continuePlaybackInBackground = enabled)
+            } else {
+                channel
+            }
+        }
+    }
+
+    override suspend fun deleteItem(itemId: Long) = Unit
+
+    override suspend fun clearLocalContentChannel(channelId: Long) = Unit
 
     override suspend fun deleteChannel(channelId: Long) {
         channelsFlow.value = channelsFlow.value.filterNot { it.id == channelId }

@@ -6,7 +6,12 @@ import com.lightningstudio.watchrss.data.douyin.DouyinResult
 import com.lightningstudio.watchrss.sdk.douyin.DouyinContent
 import com.lightningstudio.watchrss.testutil.MainDispatcherRule
 import com.lightningstudio.watchrss.testutil.TestDouyinRepository
+import com.lightningstudio.watchrss.testutil.TestRssRepository
+import com.lightningstudio.watchrss.testutil.sampleRssChannel
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -23,12 +28,22 @@ class RssPlayerViewModelTest {
     @Test
     fun loadPlayUrl_usesRawUrl_forNonDouyinSource() = runTest {
         val repository = TestDouyinRepository()
+        val rssRepository = TestRssRepository(
+            initialChannels = listOf(
+                sampleRssChannel(id = 9L, continuePlaybackInBackground = true)
+            )
+        )
         val viewModel = createViewModel(
             repository = repository,
+            rssRepository = rssRepository,
             playUrl = "https://example.com/video.mp4",
             webUrl = "https://example.com/detail.html",
-            awemeId = null
+            awemeId = null,
+            channelId = 9L
         )
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.continuePlaybackInBackground.collect()
+        }
 
         advanceUntilIdle()
 
@@ -44,6 +59,7 @@ class RssPlayerViewModelTest {
         )
         assertNull(state.message)
         assertTrue(repository.fetchVideoCalls.isEmpty())
+        assertEquals(true, viewModel.continuePlaybackInBackground.value)
     }
 
     @Test
@@ -163,19 +179,23 @@ class RssPlayerViewModelTest {
 
     private fun createViewModel(
         repository: TestDouyinRepository,
+        rssRepository: TestRssRepository = TestRssRepository(),
         playUrl: String,
         webUrl: String,
-        awemeId: String?
+        awemeId: String?,
+        channelId: Long = 0L
     ): RssPlayerViewModel {
         return RssPlayerViewModel(
             savedStateHandle = SavedStateHandle(
                 mapOf(
                     RssPlayerViewModel.KEY_PLAY_URL to playUrl,
                     RssPlayerViewModel.KEY_WEB_URL to webUrl,
-                    RssPlayerViewModel.KEY_AWEME_ID to awemeId
+                    RssPlayerViewModel.KEY_AWEME_ID to awemeId,
+                    RssPlayerViewModel.KEY_CHANNEL_ID to channelId
                 )
             ),
-            douyinRepository = repository
+            douyinRepository = repository,
+            rssRepository = rssRepository
         )
     }
 }

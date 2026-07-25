@@ -19,7 +19,7 @@ object PerfTrace {
     }
 
     fun log(category: String, message: String) {
-        if (!BuildConfig.DEBUG) return
+        if (!BuildConfig.ENABLE_RUNTIME_PERF_MONITOR) return
         val nowNanos = monotonicNowNanos()
         val monotonicMs = nowNanos / 1_000_000.0
         val sinceProcessStartMs = (nowNanos - processStartNanos) / 1_000_000.0

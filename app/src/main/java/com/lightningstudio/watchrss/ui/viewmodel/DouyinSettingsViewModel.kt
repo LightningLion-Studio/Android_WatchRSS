@@ -18,6 +18,8 @@ data class DouyinSettingsUiState(
     val originalContentEnabled: Boolean = false,
     val deleteEnabled: Boolean = false,
     val showOriginalContent: Boolean = false,
+    val continuePlaybackInBackgroundEnabled: Boolean = false,
+    val showContinuePlaybackInBackground: Boolean = false,
     val shouldReturnHome: Boolean = false
 )
 
@@ -62,6 +64,15 @@ class DouyinSettingsViewModel(
         }
     }
 
+    fun toggleContinuePlaybackInBackground() {
+        val channelId = _uiState.value.channelId ?: return
+        val next = !_uiState.value.continuePlaybackInBackgroundEnabled
+        viewModelScope.launch {
+            rssRepository.setChannelContinuePlaybackInBackground(channelId, next)
+            _uiState.update { it.copy(continuePlaybackInBackgroundEnabled = next) }
+        }
+    }
+
     fun deleteChannel() {
         val channelId = _uiState.value.channelId ?: return
         viewModelScope.launch {
@@ -73,6 +84,8 @@ class DouyinSettingsViewModel(
                     originalContentEnabled = false,
                     deleteEnabled = false,
                     showOriginalContent = false,
+                    continuePlaybackInBackgroundEnabled = false,
+                    showContinuePlaybackInBackground = false,
                     isLoggedIn = false
                 )
             }
@@ -92,7 +105,9 @@ class DouyinSettingsViewModel(
                         channelId = channel?.id,
                         originalContentEnabled = channel?.useOriginalContent ?: false,
                         deleteEnabled = channel != null,
-                        showOriginalContent = channel != null
+                        showOriginalContent = channel != null,
+                        continuePlaybackInBackgroundEnabled = channel?.continuePlaybackInBackground ?: false,
+                        showContinuePlaybackInBackground = channel != null
                     )
                 }
             }

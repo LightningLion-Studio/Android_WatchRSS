@@ -120,6 +120,7 @@ private const val CHANNEL_TITLE_CLICK_HINT_SYMBOL = "ⓘ"
 fun FeedScreen(
     channel: RssChannel?,
     items: List<RssItem>,
+    hasLoadedItems: Boolean = true,
     isRefreshing: Boolean,
     hasMore: Boolean,
     openSwipeId: Long?,
@@ -330,10 +331,14 @@ fun FeedScreen(
                             visible = items.isEmpty(),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            FeedEmptySkeleton(
-                                imageItemSpacing = imageItemSpacing,
-                                textItemSpacing = textItemSpacing
-                            )
+                            if (hasLoadedItems) {
+                                FeedEmptyState()
+                            } else {
+                                FeedEmptySkeleton(
+                                    imageItemSpacing = imageItemSpacing,
+                                    textItemSpacing = textItemSpacing
+                                )
+                            }
                         }
                     }
                     if (items.isNotEmpty()) {
@@ -505,6 +510,22 @@ private fun FeedEmptySkeleton(
         Spacer(modifier = Modifier.height(textItemSpacing))
         FeedTextSkeletonCard()
     }
+}
+
+@Composable
+private fun FeedEmptyState() {
+    val topPadding = watchDimensionResource(R.dimen.hey_distance_20dp)
+    val textSize = textSize(R.dimen.hey_s_title)
+    Text(
+        text = "暂无内容",
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        fontSize = textSize,
+        textAlign = TextAlign.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = topPadding)
+            .semantics { contentDescription = "暂无内容" }
+    )
 }
 
 @Composable

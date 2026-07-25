@@ -29,23 +29,25 @@ import com.lightningstudio.watchrss.data.douyin.DouyinRepositoryContract
 import com.lightningstudio.watchrss.data.douyin.DouyinWatchHistoryStore
 import com.lightningstudio.watchrss.data.douyin.DouyinWatchHistoryStoreContract
 import com.lightningstudio.watchrss.data.db.WatchRssDatabase
+import com.lightningstudio.watchrss.data.media.AudioManagerMediaPlaybackStartVolumeLimiter
 import com.lightningstudio.watchrss.data.network.DefaultInternetAvailabilityMonitor
 import com.lightningstudio.watchrss.data.network.InternetAvailabilityMonitor
 import com.lightningstudio.watchrss.data.rss.DefaultRssRepository
+import com.lightningstudio.watchrss.data.rss.FileArticleContentStore
 import com.lightningstudio.watchrss.data.rss.RssReadableService
 import com.lightningstudio.watchrss.data.rss.RssFetchService
 import com.lightningstudio.watchrss.data.rss.RssOfflineStore
 import com.lightningstudio.watchrss.data.rss.RssParseService
 import com.lightningstudio.watchrss.data.rss.RssRepository
 import com.lightningstudio.watchrss.data.settings.LlmApiKeyStore
-import com.lightningstudio.watchrss.data.settings.ReadAloudApiKeyStore
 import com.lightningstudio.watchrss.data.settings.SettingsRepository
 import com.lightningstudio.watchrss.data.tts.ReadAloudController
-import com.lightningstudio.watchrss.data.tts.ReadAloudSynthesisService
+import com.lightningstudio.watchrss.phoneconnection.WatchDeviceIdentity
 import com.lightningstudio.watchrss.ui.util.RssImageLoader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 
 interface AppContainer {
     val openPanelAnalytics: OpenPanelAnalytics
@@ -53,8 +55,6 @@ interface AppContainer {
     val rssRepository: RssRepository
     val settingsRepository: SettingsRepository
     val llmApiKeyStore: LlmApiKeyStore
-    val readAloudApiKeyStore: ReadAloudApiKeyStore
-    val readAloudSynthesisService: ReadAloudSynthesisService
     val readAloudController: ReadAloudController
     val managedCacheService: ManagedCacheService
     val biliPlaybackCacheManager: BiliPlaybackCacheManager
@@ -72,6 +72,9 @@ interface AppContainer {
 class DefaultAppContainer(context: Context) : AppContainer {
     private val appContext = context.applicationContext
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val deviceIdentity: WatchDeviceIdentity by lazy {
+        WatchDeviceIdentity(appContext)
+    }
 
     init {
         DouyinPlaybackPreviewCache.configure(appContext)
@@ -90,7 +93,12 @@ class DefaultAppContainer(context: Context) : AppContainer {
             WatchRssDatabase.MIGRATION_5_6,
             WatchRssDatabase.MIGRATION_6_7,
             WatchRssDatabase.MIGRATION_7_8,
-            WatchRssDatabase.MIGRATION_8_9
+            WatchRssDatabase.MIGRATION_8_9,
+            WatchRssDatabase.MIGRATION_9_10,
+            WatchRssDatabase.MIGRATION_10_11,
+            WatchRssDatabase.MIGRATION_11_12,
+            WatchRssDatabase.MIGRATION_12_13,
+            WatchRssDatabase.MIGRATION_13_14
         )
             .addCallback(BuiltinChannelSeed.callback)
             .build()
@@ -122,10 +130,6 @@ class DefaultAppContainer(context: Context) : AppContainer {
 
     override val llmApiKeyStore: LlmApiKeyStore by lazy {
         LlmApiKeyStore(appContext)
-    }
-
-    override val readAloudApiKeyStore: ReadAloudApiKeyStore by lazy {
-        ReadAloudApiKeyStore(appContext)
     }
 
     override val managedCacheService: ManagedCacheService by lazy {
@@ -189,16 +193,11 @@ class DefaultAppContainer(context: Context) : AppContainer {
         DefaultInternetAvailabilityMonitor(appContext)
     }
 
-    override val readAloudSynthesisService: ReadAloudSynthesisService by lazy {
-        ReadAloudSynthesisService(
-            cacheDir = appContext.cacheDir.resolve("read_aloud")
-        )
-    }
-
     override val rssRepository: RssRepository by lazy {
         val fetchService = RssFetchService()
         val readableService = RssReadableService()
         val parseService = RssParseService()
+        val articleContentStore = FileArticleContentStore(appContext)
         val offlineStore = RssOfflineStore(
             appContext,
             database.offlineMediaDao(),
@@ -209,13 +208,19 @@ class DefaultAppContainer(context: Context) : AppContainer {
             channelDao = database.rssChannelDao(),
             itemDao = database.rssItemDao(),
             savedEntryDao = database.savedEntryDao(),
+            savedSyncStateDao = database.savedSyncStateDao(),
             offlineMediaDao = database.offlineMediaDao(),
+            syncChangeLogDao = database.syncChangeLogDao(),
+            syncPeerStateDao = database.syncPeerStateDao(),
+            rssSourceSyncStateDao = database.rssSourceSyncStateDao(),
             cacheService = managedCacheService,
             appScope = appScope,
             fetchService = fetchService,
             readableService = readableService,
             parseService = parseService,
-            offlineStore = offlineStore
+            offlineStore = offlineStore,
+            deviceId = deviceIdentity.deviceId,
+            articleContentStore = articleContentStore
         )
     }
 
@@ -224,9 +229,10 @@ class DefaultAppContainer(context: Context) : AppContainer {
             context = appContext,
             appScope = appScope,
             rssRepository = rssRepository,
-            settingsRepository = settingsRepository,
-            apiKeyStore = readAloudApiKeyStore,
-            synthesisService = readAloudSynthesisService
+            playbackStartVolumeLimiter = AudioManagerMediaPlaybackStartVolumeLimiter(appContext),
+            playbackStartVolumeLimitPercentProvider = {
+                settingsRepository.mediaPlaybackStartVolumeLimitPercent.first()
+            }
         )
     }
 }

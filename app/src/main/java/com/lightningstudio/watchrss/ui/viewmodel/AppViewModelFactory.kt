@@ -50,7 +50,7 @@ class AppViewModelFactory(private val container: AppContainer) : ViewModelProvid
                 RssSearchViewModel(savedStateHandle, container.rssRepository)
             }
             modelClass.isAssignableFrom(RssPlayerViewModel::class.java) -> {
-                RssPlayerViewModel(savedStateHandle, container.douyinRepository)
+                RssPlayerViewModel(savedStateHandle, container.douyinRepository, container.rssRepository)
             }
             modelClass.isAssignableFrom(LlmConnectivityViewModel::class.java) -> {
                 LlmConnectivityViewModel(container.settingsRepository, container.llmApiKeyStore)
@@ -60,13 +60,6 @@ class AppViewModelFactory(private val container: AppContainer) : ViewModelProvid
                     container.rssRepository,
                     container.settingsRepository,
                     container.llmApiKeyStore
-                )
-            }
-            modelClass.isAssignableFrom(ReadAloudSettingsViewModel::class.java) -> {
-                ReadAloudSettingsViewModel(
-                    settingsRepository = container.settingsRepository,
-                    apiKeyStore = container.readAloudApiKeyStore,
-                    synthesisService = container.readAloudSynthesisService
                 )
             }
             else -> throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")

@@ -40,6 +40,9 @@ fun BiliSettingsScreen(
     showOriginalContent: Boolean,
     originalContentEnabled: Boolean,
     onToggleOriginalContent: () -> Unit,
+    showContinuePlaybackInBackground: Boolean,
+    continuePlaybackInBackgroundEnabled: Boolean,
+    onToggleContinuePlaybackInBackground: () -> Unit,
     deleteEnabled: Boolean,
     onDelete: () -> Unit,
     onLogout: () -> Unit
@@ -92,11 +95,23 @@ fun BiliSettingsScreen(
                     text = "刷新时抓取原文正文与图片",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = valueIndent, top = valueSpacing)
                 )
                 Spacer(modifier = Modifier.height(entrySpacing))
             } else {
                 Spacer(modifier = Modifier.height(infoSpacing))
+            }
+
+            if (showContinuePlaybackInBackground) {
+                SettingsPillRow(label = "在后台继续播放", endPaddingMultiplier = 1.5f) {
+                    WatchSwitch(
+                        checked = continuePlaybackInBackgroundEnabled,
+                        onCheckedChange = { onToggleContinuePlaybackInBackground() }
+                    )
+                }
+                Spacer(modifier = Modifier.height(entrySpacing))
             }
 
             SettingsDangerRow(

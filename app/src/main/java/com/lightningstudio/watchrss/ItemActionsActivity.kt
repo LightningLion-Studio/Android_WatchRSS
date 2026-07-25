@@ -3,15 +3,21 @@ package com.lightningstudio.watchrss
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.ui.screen.rss.shareCurrent
 import com.lightningstudio.watchrss.ui.screen.rss.showShareQr
 import com.lightningstudio.watchrss.ui.screen.ActionDialogScreen
 import com.lightningstudio.watchrss.ui.screen.ActionItem
+import com.lightningstudio.watchrss.ui.screen.DeleteConfirmDialog
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.util.isSystemShareSettingSupported
 import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
@@ -40,7 +46,9 @@ class ItemActionsActivity : BaseWatchActivity() {
                 val context = LocalContext.current
                 val item by viewModel.item.collectAsState()
                 val savedState by viewModel.savedState.collectAsState()
+                val canDeleteItem by viewModel.canDeleteItem.collectAsState()
                 val shareUseSystem by settingsRepository.shareUseSystem.collectAsState(initial = false)
+                var showDeleteConfirm by remember { mutableStateOf(false) }
                 val useSystemShare = remember(context, shareUseSystem) {
                     shareUseSystem && isSystemShareSettingSupported(context)
                 }
@@ -54,43 +62,73 @@ class ItemActionsActivity : BaseWatchActivity() {
                     shareLink != null
                 }
 
-                val items = listOf(
-                    ActionItem(
-                        label = favoriteLabel,
-                        onClick = {
-                            viewModel.toggleFavorite()
-                            finish()
-                        }
-                    ),
-                    ActionItem(
-                        label = laterLabel,
-                        onClick = {
-                            viewModel.toggleWatchLater()
-                            finish()
-                        }
-                    ),
-                    ActionItem(
-                        label = "分享",
-                        enabled = shareEnabled,
-                        onClick = {
-                            if (useSystemShare) {
-                                shareCurrent(context, shareTitle, shareLink)
-                            } else {
-                                showShareQr(context, shareTitle, shareLink)
+                val items = buildList {
+                    add(
+                        ActionItem(
+                            label = favoriteLabel,
+                            onClick = {
+                                viewModel.toggleFavorite()
+                                finish()
                             }
-                            finish()
-                        }
-                    ),
-                    ActionItem(
-                        label = "取消",
-                        onClick = { finish() }
+                        )
                     )
-                )
+                    add(
+                        ActionItem(
+                            label = laterLabel,
+                            onClick = {
+                                viewModel.toggleWatchLater()
+                                finish()
+                            }
+                        )
+                    )
+                    add(
+                        ActionItem(
+                            label = "分享",
+                            enabled = shareEnabled,
+                            onClick = {
+                                if (useSystemShare) {
+                                    shareCurrent(context, shareTitle, shareLink)
+                                } else {
+                                    showShareQr(context, shareTitle, shareLink)
+                                }
+                                finish()
+                            }
+                        )
+                    )
+                    if (canDeleteItem) {
+                        add(
+                            ActionItem(
+                                label = "删除",
+                                onClick = { showDeleteConfirm = true }
+                            )
+                        )
+                    }
+                    add(
+                        ActionItem(
+                            label = "取消",
+                            onClick = { finish() }
+                        )
+                    )
+                }
 
-                ActionDialogScreen(
-                    items = items,
-                    extraTopPadding = 4.dp
-                )
+                Box(modifier = Modifier.fillMaxSize()) {
+                    ActionDialogScreen(
+                        items = items,
+                        extraTopPadding = 4.dp
+                    )
+                    if (showDeleteConfirm) {
+                        DeleteConfirmDialog(
+                            title = "删除内容",
+                            message = "删除后会从本机和下次同步中移除此内容",
+                            onConfirm = {
+                                showDeleteConfirm = false
+                                viewModel.deleteItem()
+                                finish()
+                            },
+                            onCancel = { showDeleteConfirm = false }
+                        )
+                    }
+                }
             }
         }
     }

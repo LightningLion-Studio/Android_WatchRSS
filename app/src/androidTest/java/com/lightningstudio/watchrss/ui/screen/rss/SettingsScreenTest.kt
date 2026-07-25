@@ -2,8 +2,10 @@ package com.lightningstudio.watchrss.ui.screen.rss
 
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
@@ -36,7 +38,9 @@ class SettingsScreenTest {
                 readingThemeDark = MutableStateFlow(true),
                 shareUseSystem = MutableStateFlow(false),
                 readingFontSizeSp = MutableStateFlow(14),
-                phoneConnectionEnabled = MutableStateFlow(true),
+                mediaVolumeControlEnabled = MutableStateFlow(true),
+                mediaVolumeGuardEnabled = MutableStateFlow(true),
+                mediaPlaybackStartVolumeLimitPercent = MutableStateFlow<Int?>(10),
                 rssInlineImagePrefetchMode = MutableStateFlow(DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE),
                 llmFeatureEnabled = MutableStateFlow(false),
                 llmAutoSummarize = MutableStateFlow(false),
@@ -47,7 +51,9 @@ class SettingsScreenTest {
                 onToggleReadingTheme = {},
                 onToggleShareMode = {},
                 onSelectFontSize = {},
-                onTogglePhoneConnection = {},
+                onToggleMediaVolumeControl = {},
+                onToggleMediaVolumeGuard = {},
+                onSelectMediaPlaybackStartVolumeLimit = {},
                 onSelectRssInlineImagePrefetchMode = {},
                 onToggleLlmFeatureEnabled = {},
                 onToggleLlmAutoSummarize = {},
@@ -57,9 +63,7 @@ class SettingsScreenTest {
                 onOpenPerfLargeArticle = {},
                 onOpenDouyinCookieInput = {},
                 onOpenLlmConnectivity = {},
-                onOpenLlmPhoneConfig = {},
                 onOpenLlmPromptPreset = {},
-                onOpenReadAloudSettings = {},
                 onBeianClick = {}
             )
         }
@@ -67,9 +71,16 @@ class SettingsScreenTest {
         composeRule.onNodeWithTag(SettingsTestTags.ROOT).assertExists()
         composeRule.onNodeWithTag(SettingsTestTags.THEME_SWITCH, useUnmergedTree = true).assertExists()
         composeRule.onNodeWithTag(SettingsTestTags.FONT_VALUE, useUnmergedTree = true).assertExists()
+        composeRule.onNodeWithTag(SettingsTestTags.MEDIA_VOLUME_CONTROL_SWITCH, useUnmergedTree = true).performScrollTo().assertExists()
+        composeRule.onNodeWithTag(SettingsTestTags.MEDIA_VOLUME_GUARD_SWITCH, useUnmergedTree = true).performScrollTo().assertExists()
+        composeRule.onNodeWithText("静音开播").performScrollTo().assertExists()
+        composeRule.onNodeWithTag(SettingsTestTags.PLAYBACK_START_VOLUME_VALUE, useUnmergedTree = true)
+            .performScrollTo()
+            .assertExists()
+        composeRule.onAllNodesWithText("打开视频时调整音量到6%").assertCountEquals(0)
         composeRule.onNodeWithTag(SettingsTestTags.ADVANCED_ENTRY, useUnmergedTree = true).assertExists()
         composeRule.onNodeWithTag(SettingsTestTags.OPEN_OOBE_ENTRY, useUnmergedTree = true).performScrollTo().assertExists()
-        composeRule.onNodeWithTag(SettingsTestTags.PHONE_CONNECTION_SWITCH, useUnmergedTree = true).performScrollTo().assertExists()
+        composeRule.onAllNodesWithTag(SettingsTestTags.PHONE_CONNECTION_SWITCH, useUnmergedTree = true).assertCountEquals(0)
         composeRule.onNodeWithTag(SettingsTestTags.DOUYIN_COOKIE_ENTRY, useUnmergedTree = true).performScrollTo().assertExists()
         composeRule.onNodeWithTag(SettingsTestTags.BEIAN_ENTRY, useUnmergedTree = true).performScrollTo().assertExists()
 
@@ -88,6 +99,9 @@ class SettingsScreenTest {
         val cacheSelections = mutableListOf<Long>()
         val fontSelections = mutableListOf<Int>()
         var themeToggleCount = 0
+        var mediaVolumeControlToggleCount = 0
+        var mediaVolumeGuardToggleCount = 0
+        val playbackStartVolumeSelections = mutableListOf<Int?>()
 
         composeRule.setWatchContent {
             SettingsScreen(
@@ -96,7 +110,9 @@ class SettingsScreenTest {
                 readingThemeDark = MutableStateFlow(true),
                 shareUseSystem = MutableStateFlow(false),
                 readingFontSizeSp = MutableStateFlow(14),
-                phoneConnectionEnabled = MutableStateFlow(true),
+                mediaVolumeControlEnabled = MutableStateFlow(true),
+                mediaVolumeGuardEnabled = MutableStateFlow(true),
+                mediaPlaybackStartVolumeLimitPercent = MutableStateFlow<Int?>(10),
                 rssInlineImagePrefetchMode = MutableStateFlow(DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE),
                 llmFeatureEnabled = MutableStateFlow(false),
                 llmAutoSummarize = MutableStateFlow(false),
@@ -107,7 +123,9 @@ class SettingsScreenTest {
                 onToggleReadingTheme = { themeToggleCount += 1 },
                 onToggleShareMode = {},
                 onSelectFontSize = { fontSelections += it },
-                onTogglePhoneConnection = {},
+                onToggleMediaVolumeControl = { mediaVolumeControlToggleCount += 1 },
+                onToggleMediaVolumeGuard = { mediaVolumeGuardToggleCount += 1 },
+                onSelectMediaPlaybackStartVolumeLimit = { playbackStartVolumeSelections += it },
                 onSelectRssInlineImagePrefetchMode = {},
                 onToggleLlmFeatureEnabled = {},
                 onToggleLlmAutoSummarize = {},
@@ -117,9 +135,7 @@ class SettingsScreenTest {
                 onOpenPerfLargeArticle = {},
                 onOpenDouyinCookieInput = {},
                 onOpenLlmConnectivity = {},
-                onOpenLlmPhoneConfig = {},
                 onOpenLlmPromptPreset = {},
-                onOpenReadAloudSettings = {},
                 onBeianClick = {}
             )
         }
@@ -127,6 +143,10 @@ class SettingsScreenTest {
         composeRule.onNodeWithTag(SettingsTestTags.THEME_SWITCH, useUnmergedTree = true).performClick()
         composeRule.onNodeWithTag(SettingsTestTags.FONT_DECREASE_BUTTON, useUnmergedTree = true).performScrollTo().performClick()
         composeRule.onNodeWithTag(SettingsTestTags.FONT_INCREASE_BUTTON, useUnmergedTree = true).performScrollTo().performClick()
+        composeRule.onNodeWithTag(SettingsTestTags.MEDIA_VOLUME_CONTROL_SWITCH, useUnmergedTree = true).performScrollTo().performClick()
+        composeRule.onNodeWithTag(SettingsTestTags.MEDIA_VOLUME_GUARD_SWITCH, useUnmergedTree = true).performScrollTo().performClick()
+        composeRule.onNodeWithTag(SettingsTestTags.PLAYBACK_START_VOLUME_DECREASE_BUTTON, useUnmergedTree = true).performScrollTo().performClick()
+        composeRule.onNodeWithTag(SettingsTestTags.PLAYBACK_START_VOLUME_INCREASE_BUTTON, useUnmergedTree = true).performScrollTo().performClick()
         composeRule.onNodeWithTag(SettingsTestTags.ADVANCED_ENTRY, useUnmergedTree = true).performScrollTo().performClick()
         composeRule.onNodeWithTag(SettingsTestTags.CACHE_DECREASE_BUTTON, useUnmergedTree = true).performClick()
         composeRule.onNodeWithTag(SettingsTestTags.CACHE_INCREASE_BUTTON, useUnmergedTree = true).performClick()
@@ -135,6 +155,53 @@ class SettingsScreenTest {
             assertEquals(listOf(768L, 1536L), cacheSelections)
             assertEquals(listOf(12, 16), fontSelections)
             assertEquals(1, themeToggleCount)
+            assertEquals(1, mediaVolumeControlToggleCount)
+            assertEquals(1, mediaVolumeGuardToggleCount)
+            assertEquals(listOf<Int?>(5, 15), playbackStartVolumeSelections)
         }
+    }
+
+    @Test
+    fun settingsScreen_disablesVolumeGuardWhenWheelVolumeIsOff() {
+        composeRule.setWatchContent {
+            SettingsScreen(
+                cacheLimitMb = MutableStateFlow(1024L),
+                cacheUsageMb = MutableStateFlow(256L),
+                readingThemeDark = MutableStateFlow(true),
+                shareUseSystem = MutableStateFlow(false),
+                readingFontSizeSp = MutableStateFlow(14),
+                mediaVolumeControlEnabled = MutableStateFlow(false),
+                mediaVolumeGuardEnabled = MutableStateFlow(true),
+                mediaPlaybackStartVolumeLimitPercent = MutableStateFlow<Int?>(10),
+                rssInlineImagePrefetchMode = MutableStateFlow(DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE),
+                llmFeatureEnabled = MutableStateFlow(false),
+                llmAutoSummarize = MutableStateFlow(false),
+                llmShowTokenUsage = MutableStateFlow(false),
+                llmPromptPreset = MutableStateFlow(0),
+                showPerformanceTools = false,
+                onSelectCacheLimit = {},
+                onToggleReadingTheme = {},
+                onToggleShareMode = {},
+                onSelectFontSize = {},
+                onToggleMediaVolumeControl = {},
+                onToggleMediaVolumeGuard = {},
+                onSelectMediaPlaybackStartVolumeLimit = {},
+                onSelectRssInlineImagePrefetchMode = {},
+                onToggleLlmFeatureEnabled = {},
+                onToggleLlmAutoSummarize = {},
+                onToggleLlmShowTokenUsage = {},
+                onOpenOobe = {},
+                onOpenPerfLargeList = {},
+                onOpenPerfLargeArticle = {},
+                onOpenDouyinCookieInput = {},
+                onOpenLlmConnectivity = {},
+                onOpenLlmPromptPreset = {},
+                onBeianClick = {}
+            )
+        }
+
+        composeRule.onNodeWithTag(SettingsTestTags.MEDIA_VOLUME_GUARD_SWITCH, useUnmergedTree = true)
+            .performScrollTo()
+            .assertExists()
     }
 }

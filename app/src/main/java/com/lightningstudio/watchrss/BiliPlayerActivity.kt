@@ -8,16 +8,24 @@ import androidx.activity.viewModels
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
+import com.lightningstudio.watchrss.data.network.InternetAvailabilityStatus
+import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
+import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT
+import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED
+import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
 import com.lightningstudio.watchrss.ui.screen.bili.BiliPlayerScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.BiliPlayerViewModel
 import com.lightningstudio.watchrss.ui.viewmodel.BiliViewModelFactory
+import kotlinx.coroutines.flow.map
 
 class BiliPlayerActivity : BaseWatchActivity() {
     private val container by lazy { (application as WatchRssApplication).container }
     private val repository by lazy { container.biliRepository }
+    private val rssRepository by lazy { container.rssRepository }
     private val playbackCacheManager by lazy { container.biliPlaybackCacheManager }
     private val settingsRepository by lazy { container.settingsRepository }
     private val viewModel: BiliPlayerViewModel by viewModels {
@@ -45,6 +53,24 @@ class BiliPlayerActivity : BaseWatchActivity() {
                 val baseDensity = LocalDensity.current
                 CompositionLocalProvider(LocalDensity provides Density(2f, baseDensity.fontScale)) {
                     val uiState by viewModel.uiState.collectAsState()
+                    val volumeGuardEnabled by settingsRepository.mediaVolumeGuardEnabled.collectAsState(
+                        initial = DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
+                    )
+                    val volumeControlEnabled by settingsRepository.mediaVolumeControlEnabled.collectAsState(
+                        initial = DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED
+                    )
+                    val playbackStartVolumeLimitPercent by settingsRepository.mediaPlaybackStartVolumeLimitPercent.collectAsState(
+                        initial = DEFAULT_MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT
+                    )
+                    val internetAvailabilityStatus by container.internetAvailabilityMonitor.internetAvailability.collectAsState(
+                        initial = InternetAvailabilityStatus.Checking
+                    )
+                    val continuePlaybackInBackground by remember(rssRepository) {
+                        rssRepository.observeChannels().map { channels ->
+                            channels.firstOrNull { it.url == BuiltinChannelType.BILI.url }
+                                ?.continuePlaybackInBackground ?: false
+                        }
+                    }.collectAsState(initial = false)
                     BiliPlayerScreen(
                         uiState = uiState,
                         onRetry = viewModel::loadPlayUrl,
@@ -53,6 +79,7 @@ class BiliPlayerActivity : BaseWatchActivity() {
                             val safeLink = link ?: return@BiliPlayerScreen
                             WebViewActivity.open(this, safeLink)
                         },
+                        internetAvailabilityStatus = internetAvailabilityStatus,
                         onPlaybackReady = viewModel::onPlaybackReady,
                         onPlaybackProgress = { positionMs, durationMs ->
                             viewModel.onPlaybackProgress(positionMs, durationMs)
@@ -66,7 +93,11 @@ class BiliPlayerActivity : BaseWatchActivity() {
                         onPanStateChange = { offsetX, rangeX ->
                             panOffsetX = offsetX
                             panRangeX = rangeX
-                        }
+                        },
+                        digitalCrownVolumeEnabled = volumeControlEnabled,
+                        volumeGuardEnabled = volumeGuardEnabled,
+                        playbackStartVolumeLimitPercent = playbackStartVolumeLimitPercent,
+                        continuePlaybackInBackground = continuePlaybackInBackground
                     )
                 }
             }

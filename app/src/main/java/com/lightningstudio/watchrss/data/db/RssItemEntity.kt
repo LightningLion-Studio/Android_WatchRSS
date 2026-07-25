@@ -19,7 +19,8 @@ import androidx.room.PrimaryKey
         Index(value = ["channelId"]),
         Index(value = ["channelId", "dedupKey"], unique = true),
         Index(value = ["channelId", "fetchedAt"]),
-        Index(value = ["isRead", "channelId"])
+        Index(value = ["isRead", "channelId"]),
+        Index(value = ["syncBodyHash"])
     ]
 )
 data class RssItemEntity(
@@ -43,5 +44,10 @@ data class RssItemEntity(
     val readingProgress: Float,
     val dedupKey: String,
     val fetchedAt: Long,
-    val contentSizeBytes: Long
+    val contentSizeBytes: Long,
+    val syncBodyHash: String = "",
+    val syncBodyByteCount: Long = 0L,
+    val syncChunkSize: Int = 0,
+    val syncChunkHashesJson: String = "",
+    val syncMetadataHash: String = ""
 )

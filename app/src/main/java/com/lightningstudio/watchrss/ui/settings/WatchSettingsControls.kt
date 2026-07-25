@@ -61,7 +61,7 @@ fun WatchReadingThemeToggle(
                 value = isDark,
                 role = Role.Switch,
                 interactionSource = interactionSource,
-                indication = LocalIndication.current,
+                indication = null,
                 onValueChange = { onToggle() }
             ),
         contentAlignment = Alignment.Center

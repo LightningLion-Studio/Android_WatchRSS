@@ -7,6 +7,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Base64
+import android.util.Log
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -48,6 +50,7 @@ import com.lightningstudio.watchrss.ui.settings.WatchSettingsPillRow
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.json.JSONArray
@@ -58,7 +61,7 @@ class AcousticConnectionActivity : BaseWatchActivity() {
     private val acousticReceiver = AcousticAudioReceiver()
     private val guidedWifiClient by lazy { WatchGuidedWifiClient(this) }
 
-    private var mode: PhoneConnectionMode = PhoneConnectionMode.PURE_SOUND
+    private var mode: PhoneConnectionMode = PhoneConnectionMode.SOUND_GUIDED_WIFI
     private var preferredAbility: PhoneConnectionAbility? = null
     private var returnRemoteUrl: Boolean = false
 
@@ -99,7 +102,7 @@ class AcousticConnectionActivity : BaseWatchActivity() {
         setupSystemBars()
 
         mode = PhoneConnectionMode.valueOf(
-            intent.getStringExtra(EXTRA_MODE) ?: PhoneConnectionMode.PURE_SOUND.name
+            intent.getStringExtra(EXTRA_MODE) ?: PhoneConnectionMode.SOUND_GUIDED_WIFI.name
         )
         preferredAbility = PhoneConnectionAbility.fromNameOrNull(intent.getStringExtra(EXTRA_PREFERRED_ABILITY))
         returnRemoteUrl = intent.getBooleanExtra(EXTRA_RETURN_REMOTE_URL, false)
@@ -126,6 +129,23 @@ class AcousticConnectionActivity : BaseWatchActivity() {
                 )
             }
         }
+
+        val debugPayload = intent.getStringExtra(EXTRA_DEBUG_GUIDED_PAYLOAD_BASE64)?.takeIf { it.isNotBlank() }
+        when {
+            debugPayload != null -> {
+                mode = PhoneConnectionMode.SOUND_GUIDED_WIFI
+                startGuidedWifiDebugPayload(debugPayload)
+            }
+
+            intent.getBooleanExtra(EXTRA_DEBUG_AUTO_LISTEN, false) -> {
+                mode = PhoneConnectionMode.SOUND_GUIDED_WIFI
+                ability = preferredAbility ?: PhoneConnectionAbility.REMOTE_INPUT
+                requestPermissionsAndRun(
+                    PendingPermissionAction.LISTEN_GUIDED_WIFI,
+                    guidedWifiPermissions()
+                )
+            }
+        }
     }
 
     private fun refreshUi() {
@@ -136,6 +156,7 @@ class AcousticConnectionActivity : BaseWatchActivity() {
         when (val currentAbility = ability) {
             null -> {
                 statusMessage = when (mode) {
+                    PhoneConnectionMode.BLUETOOTH -> "请选择蓝牙连接"
                     PhoneConnectionMode.PURE_SOUND -> "选择要通过纯声波完成的操作"
                     PhoneConnectionMode.SOUND_GUIDED_WIFI -> "选择要通过声波引导 WiFi 完成的操作"
                     PhoneConnectionMode.MANUAL_WIFI -> "请选择手动 WiFi 连接"
@@ -147,16 +168,19 @@ class AcousticConnectionActivity : BaseWatchActivity() {
 
             PhoneConnectionAbility.REMOTE_INPUT -> {
                 statusMessage = when (mode) {
+                    PhoneConnectionMode.BLUETOOTH -> ""
                     PhoneConnectionMode.PURE_SOUND -> "请在手机上选择“纯声波 > 发送 RSS 到手表”"
                     PhoneConnectionMode.SOUND_GUIDED_WIFI -> "请在手机上选择“声波引导 WiFi 连接 > 引导手表接收 RSS”"
                     PhoneConnectionMode.MANUAL_WIFI -> ""
                 }
                 detailMessage = when (mode) {
+                    PhoneConnectionMode.BLUETOOTH -> null
                     PhoneConnectionMode.PURE_SOUND -> "手表会开始监听手机播出的 RSS 地址"
-                    PhoneConnectionMode.SOUND_GUIDED_WIFI -> "手表会先听取热点信息，再连接手机并拉取 RSS"
+                    PhoneConnectionMode.SOUND_GUIDED_WIFI -> "手表会先听取连接信息，再通过 WiFi 拉取 RSS"
                     PhoneConnectionMode.MANUAL_WIFI -> null
                 }
                 primaryButtonLabel = when (mode) {
+                    PhoneConnectionMode.BLUETOOTH -> null
                     PhoneConnectionMode.PURE_SOUND -> "开始监听"
                     PhoneConnectionMode.SOUND_GUIDED_WIFI -> "开始监听并连接"
                     PhoneConnectionMode.MANUAL_WIFI -> null
@@ -167,6 +191,7 @@ class AcousticConnectionActivity : BaseWatchActivity() {
             PhoneConnectionAbility.SYNC_FAVORITES,
             PhoneConnectionAbility.SYNC_WATCH_LATER -> {
                 when (mode) {
+                    PhoneConnectionMode.BLUETOOTH -> Unit
                     PhoneConnectionMode.PURE_SOUND -> preparePureSoundSync(currentAbility)
                     PhoneConnectionMode.SOUND_GUIDED_WIFI -> {
                         statusMessage = when (currentAbility) {
@@ -174,7 +199,7 @@ class AcousticConnectionActivity : BaseWatchActivity() {
                             PhoneConnectionAbility.SYNC_WATCH_LATER -> "请在手机上选择”引导同步稍后再看"
                             else -> ""
                         }
-                        detailMessage = "手表会先听取手机热点信息，连入后再通过局域网上传数据"
+                        detailMessage = "手表会先听取手机连接信息，再通过局域网同步数据"
                         primaryButtonLabel = "开始监听并连接"
                         isBusy = false
                     }
@@ -197,12 +222,6 @@ class AcousticConnectionActivity : BaseWatchActivity() {
                 isBusy = false
             }
 
-            PhoneConnectionAbility.READ_ALOUD_CONFIG -> {
-                statusMessage = "朗读配置不支持声波连接"
-                detailMessage = "请使用 WiFi 扫码方式配置朗读服务"
-                primaryButtonLabel = null
-                isBusy = false
-            }
         }
     }
 
@@ -251,6 +270,7 @@ class AcousticConnectionActivity : BaseWatchActivity() {
 
     private fun handlePrimaryAction() {
         when (mode) {
+            PhoneConnectionMode.BLUETOOTH -> Unit
             PhoneConnectionMode.PURE_SOUND -> when (ability) {
                 PhoneConnectionAbility.REMOTE_INPUT -> requestPermissionsAndRun(
                     PendingPermissionAction.LISTEN_PURE_SOUND,
@@ -261,7 +281,6 @@ class AcousticConnectionActivity : BaseWatchActivity() {
                 PhoneConnectionAbility.SYNC_WATCH_LATER -> startPureSoundPlayback()
                 PhoneConnectionAbility.SYNC_BILI_WATCH_RECORDS,
                 PhoneConnectionAbility.LLM_SUMMARY_CONFIG -> Unit
-                PhoneConnectionAbility.READ_ALOUD_CONFIG -> Unit
                 null -> Unit
             }
 
@@ -322,65 +341,101 @@ class AcousticConnectionActivity : BaseWatchActivity() {
     private fun startGuidedWifiListening() {
         lifecycleScope.launch {
             isBusy = true
-            statusMessage = "正在听取手机热点信息…"
+            statusMessage = "正在听取手机连接信息…"
             detailMessage = "请把手表麦克风靠近手机扬声器"
             primaryButtonLabel = null
 
             runCatching {
                 val bytes = acousticReceiver.listen(timeoutMs = 120_000L)
                     ?: error("未收到有效的引导声波")
-                val envelope = AcousticConnectionProtocol.parseGuidedWifi(bytes)
-                val currentAbility = ability ?: envelope.ability
-                require(currentAbility == envelope.ability) { "手机端引导的能力与当前操作不一致" }
-
-                statusMessage = "正在连接手机热点 ${envelope.ssid}…"
-                val connection = guidedWifiClient.connectToHotspot(envelope.ssid, envelope.passphrase)
-                connection.use {
-                    when (currentAbility) {
-                        PhoneConnectionAbility.REMOTE_INPUT -> {
-                            statusMessage = "正在从手机拉取 RSS…"
-                            val url = guidedWifiClient.fetchRemoteUrl(
-                                connection = it,
-                                host = envelope.host,
-                                port = envelope.port,
-                                token = envelope.token
-                            )
-                            handleRemoteInput(url)
-                        }
-
-                        PhoneConnectionAbility.LLM_SUMMARY_CONFIG -> Unit
-                        PhoneConnectionAbility.SYNC_BILI_WATCH_RECORDS -> Unit
-                        PhoneConnectionAbility.READ_ALOUD_CONFIG -> Unit
-
-                        PhoneConnectionAbility.SYNC_FAVORITES,
-                        PhoneConnectionAbility.SYNC_WATCH_LATER -> {
-                            statusMessage = "正在通过局域网同步到手机…"
-                            val items = loadSavedItemsJson(currentAbility)
-                            val path = when (currentAbility) {
-                                PhoneConnectionAbility.SYNC_FAVORITES -> "pushFavorites"
-                                PhoneConnectionAbility.SYNC_WATCH_LATER -> "pushWatchLater"
-                                else -> error("不支持的同步能力")
-                            }
-                            guidedWifiClient.uploadSavedItems(
-                                connection = it,
-                                host = envelope.host,
-                                port = envelope.port,
-                                token = envelope.token,
-                                path = path,
-                                items = items
-                            )
-                            statusMessage = "已同步至手机"
-                            detailMessage = "手机 companion 中已经可以看到最新数据"
-                            isBusy = false
-                            primaryButtonLabel = null
-                        }
-                    }
-                }
+                runGuidedWifiPayload(bytes)
             }.onFailure { throwable ->
                 statusMessage = throwable.message ?: "声波引导 WiFi 连接失败"
                 detailMessage = null
                 primaryButtonLabel = "重新开始"
                 isBusy = false
+            }
+        }
+    }
+
+    private fun startGuidedWifiDebugPayload(payloadBase64: String) {
+        lifecycleScope.launch {
+            isBusy = true
+            statusMessage = "正在使用调试连接信息…"
+            detailMessage = "跳过声波接收，直接验证 WiFi 与 HTTP 会话"
+            primaryButtonLabel = null
+
+            runCatching {
+                val bytes = Base64.decode(payloadBase64, Base64.NO_WRAP)
+                Log.i(TAG, "debug guided payload bytes=${bytes.size} json=${bytes.toString(Charsets.UTF_8)}")
+                runGuidedWifiPayload(bytes)
+            }.onFailure { throwable ->
+                Log.e(TAG, "debug guided payload failed", throwable)
+                statusMessage = throwable.message ?: "调试连接失败"
+                detailMessage = null
+                primaryButtonLabel = "重新开始"
+                isBusy = false
+            }
+        }
+    }
+
+    private suspend fun runGuidedWifiPayload(bytes: ByteArray) {
+        val envelope = AcousticConnectionProtocol.parseGuidedWifi(bytes)
+        val currentAbility = ability ?: envelope.ability
+        require(currentAbility == envelope.ability) { "手机端引导的能力与当前操作不一致" }
+
+        Log.i(TAG, "guided payload ability=${envelope.ability.name} ssid=${envelope.ssid} host=${envelope.host} port=${envelope.port}")
+        statusMessage = "已收到连接信息"
+        detailMessage = if (envelope.passphrase.isBlank()) {
+            "正在通过当前 WiFi 连接手机…"
+        } else {
+            "正在连接手机热点 ${envelope.ssid}…"
+        }
+        val connection = guidedWifiClient.connectToHotspot(envelope.ssid, envelope.passphrase)
+        statusMessage = "已连接手机"
+        detailMessage = "正在通过 WiFi 与手机交换数据…"
+        delay(CONNECTION_STATUS_VISIBLE_MS)
+        connection.use {
+            when (currentAbility) {
+                PhoneConnectionAbility.REMOTE_INPUT -> {
+                    statusMessage = "已连接手机，正在拉取 RSS…"
+                    val url = guidedWifiClient.fetchRemoteUrl(
+                        connection = it,
+                        host = envelope.host,
+                        port = envelope.port,
+                        token = envelope.token
+                    )
+                    statusMessage = "已从手机取得 RSS"
+                    detailMessage = "正在打开添加页面…"
+                    delay(CONNECTION_STATUS_VISIBLE_MS)
+                    handleRemoteInput(url)
+                }
+
+                PhoneConnectionAbility.LLM_SUMMARY_CONFIG -> Unit
+                PhoneConnectionAbility.SYNC_BILI_WATCH_RECORDS -> Unit
+
+                PhoneConnectionAbility.SYNC_FAVORITES,
+                PhoneConnectionAbility.SYNC_WATCH_LATER -> {
+                    statusMessage = "已连接手机，正在同步到手机…"
+                    val items = loadSavedItemsJson(currentAbility)
+                    val path = when (currentAbility) {
+                        PhoneConnectionAbility.SYNC_FAVORITES -> "pushFavorites"
+                        PhoneConnectionAbility.SYNC_WATCH_LATER -> "pushWatchLater"
+                        else -> error("不支持的同步能力")
+                    }
+                    guidedWifiClient.uploadSavedItems(
+                        connection = it,
+                        host = envelope.host,
+                        port = envelope.port,
+                        token = envelope.token,
+                        path = path,
+                        items = items
+                    )
+                    statusMessage = "已同步至手机"
+                    detailMessage = "手机 companion 中已经可以看到最新数据"
+                    isBusy = false
+                    primaryButtonLabel = null
+                }
             }
         }
     }
@@ -446,6 +501,10 @@ class AcousticConnectionActivity : BaseWatchActivity() {
         private const val EXTRA_MODE = "mode"
         private const val EXTRA_PREFERRED_ABILITY = "preferred_ability"
         private const val EXTRA_RETURN_REMOTE_URL = "return_remote_url"
+        private const val EXTRA_DEBUG_GUIDED_PAYLOAD_BASE64 = "debug_guided_payload_base64"
+        private const val EXTRA_DEBUG_AUTO_LISTEN = "debug_auto_listen"
+        private const val CONNECTION_STATUS_VISIBLE_MS = 450L
+        private const val TAG = "WatchRSS_AcousticConnection"
 
         fun createIntent(
             context: Context,
@@ -496,6 +555,7 @@ private fun AcousticConnectionScreen(
         ) {
             Text(
                 text = when (mode) {
+                    PhoneConnectionMode.BLUETOOTH -> "蓝牙同步"
                     PhoneConnectionMode.PURE_SOUND -> "纯声波"
                     PhoneConnectionMode.SOUND_GUIDED_WIFI -> "声波引导 WiFi"
                     PhoneConnectionMode.MANUAL_WIFI -> "连接手机"

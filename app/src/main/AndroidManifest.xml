@@ -4,13 +4,27 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission
+        android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission
         android:name="android.permission.NEARBY_WIFI_DEVICES"
         android:usesPermissionFlags="neverForLocation" />
+
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
 
     <application
         android:name=".WatchRssApplication"
@@ -52,226 +66,242 @@
         </activity>
         <activity
             android:name=".HomeFeedListActivity"
-            android:exported="false" />
+            android:exported="${debugActivityExported}" />
         <activity
             android:name=".AddRssActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".RssRecommendActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".RssRecommendGroupActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".OobeActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".FeedActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".ChannelActionsActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".ItemActionsActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".DetailActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".ShareQrActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".WebViewActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".ChannelDetailActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".RssSearchActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".ChannelSettingsActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".SettingsActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
+            android:theme="@style/Theme.WatchRSS.Translucent" />
+        <activity
+            android:name=".AdvancedSettingsActivity"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".LlmConnectivityActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".LlmPromptPresetActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".LlmSummaryActivity"
-            android:exported="false"
-            android:theme="@style/Theme.WatchRSS.Translucent" />
-        <activity
-            android:name=".ReadAloudApiSettingsActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".ReadAloudPlaybackActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".ProfileActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
+            android:theme="@style/Theme.WatchRSS.Translucent" />
+        <activity
+            android:name=".AccountStatusActivity"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".PhoneConnectionActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
+            android:theme="@style/Theme.WatchRSS.Translucent" />
+        <activity
+            android:name=".BluetoothConnectionActivity"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".AcousticConnectionActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
+            android:theme="@style/Theme.WatchRSS.Translucent" />
+        <activity
+            android:name=".DebugAcousticConnectionActivity"
+            android:exported="${debugActivityExported}"
+            android:theme="@style/Theme.WatchRSS.Translucent" />
+        <activity
+            android:name=".DebugBluetoothSyncActivity"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".PhoneConnectionUnavailableActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".SavedItemsActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".AboutActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".CollaboratorsActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".InfoActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".BiliDetailActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".BiliChannelInfoActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".BiliSettingsActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".BiliListActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".BiliLoginActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".BiliPlayerActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".BiliVideoActionsActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".ImagePreviewActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".RssPlayerActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".BiliEntryActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".BiliCommentActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".BiliReplyDetailActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".BiliSearchActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".DouyinEntryActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".DouyinChannelInfoActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".DouyinHistoryActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".DouyinSettingsActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".DouyinLoginActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".DouyinPlayerActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".DouyinVideoActionsActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".DouyinDetailActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".ContactDeveloperActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".JoinGroupActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".LogUploadPrivacyActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".LogUploadActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".ServerActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".BeianActivity"
-            android:exported="false"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".debug.PerfLargeListActivity"
-            android:exported="true"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent">
             <intent-filter>
                 <action android:name="com.lightningstudio.watchrss.action.OPEN_PERF" />
@@ -280,7 +310,7 @@
         </activity>
         <activity
             android:name=".debug.PerfLargeArticleActivity"
-            android:exported="true"
+            android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
     </application>
 

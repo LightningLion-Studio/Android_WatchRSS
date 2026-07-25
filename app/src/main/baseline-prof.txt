@@ -2,6 +2,7 @@
 Lcom/lightningstudio/watchrss/WatchRssApplication;
 Lcom/lightningstudio/watchrss/BaseWatchActivity;
 Lcom/lightningstudio/watchrss/MainActivity;
+Lcom/lightningstudio/watchrss/HomeFeedListActivity;
 Lcom/lightningstudio/watchrss/AppResumeStateStore;
 Lcom/lightningstudio/watchrss/util/AppLogger;
 
@@ -24,14 +25,19 @@ Lcom/lightningstudio/watchrss/data/rss/RssOfflineStore;
 # Home screen composition and gesture path.
 Lcom/lightningstudio/watchrss/ui/viewmodel/AppViewModelFactory;
 Lcom/lightningstudio/watchrss/ui/viewmodel/HomeViewModel;
-Lcom/lightningstudio/watchrss/ui/screen/home/HomeComposeScreenKt;
+Lcom/lightningstudio/watchrss/ui/screen/home/**;
 Lcom/lightningstudio/watchrss/ui/components/PullRefreshBoxKt;
 Lcom/lightningstudio/watchrss/ui/input/DigitalCrownInputKt;
-Lcom/lightningstudio/watchrss/ui/theme/ThemeKt;
+Lcom/lightningstudio/watchrss/ui/theme/**;
+Landroidx/collection/ScatterMap;
+Landroidx/collection/MutableObjectIntMap;
+Lkotlin/coroutines/CombinedContext;
+Lkotlin/coroutines/jvm/internal/ContinuationImpl;
 
 # Critical activity and touch methods.
 HSPLcom/lightningstudio/watchrss/MainActivity;->onCreate(Landroid/os/Bundle;)V
 HSPLcom/lightningstudio/watchrss/MainActivity;->renderHomeContent()V
+HSPLcom/lightningstudio/watchrss/HomeFeedListActivity**->**(**)**
 HSPLcom/lightningstudio/watchrss/WatchRssApplication;->onCreate()V
 HSPLcom/lightningstudio/watchrss/WatchRssApplication;->getContainer()Lcom/lightningstudio/watchrss/data/AppContainer;
 HSPLcom/lightningstudio/watchrss/BaseWatchActivity;->onCreate(Landroid/os/Bundle;)V
@@ -41,10 +47,33 @@ HSPLcom/lightningstudio/watchrss/data/DefaultAppContainer;->getRssRepository()Lc
 HSPLcom/lightningstudio/watchrss/data/settings/SettingsRepository;->getOobeSeenVersion()Lkotlinx/coroutines/flow/Flow;
 HSPLcom/lightningstudio/watchrss/ui/viewmodel/AppViewModelFactory;->create(Ljava/lang/Class;Landroidx/lifecycle/viewmodel/CreationExtras;)Landroidx/lifecycle/ViewModel;
 HSPLcom/lightningstudio/watchrss/ui/viewmodel/HomeViewModel;-><init>(Lcom/lightningstudio/watchrss/data/rss/RssRepository;Lkotlin/jvm/functions/Function1;Lkotlin/jvm/functions/Function1;)V
+HSPLcom/lightningstudio/watchrss/ui/viewmodel/HomeViewModel**->**(**)**
 HSPLcom/lightningstudio/watchrss/data/rss/DefaultRssRepository;->observeChannels()Lkotlinx/coroutines/flow/Flow;
+HSPLcom/lightningstudio/watchrss/data/rss/DefaultRssRepository$observeChannels$**->**(**)**
 HSPLcom/lightningstudio/watchrss/ui/screen/home/HomeComposeScreenKt;->buildHomeEntries(Ljava/util/List;Z)Ljava/util/List;
+HSPLcom/lightningstudio/watchrss/ui/screen/home/**->**(**)**
+HSPLcom/lightningstudio/watchrss/ui/components/PullRefreshBoxKt**->**(**)**
+HSPLcom/lightningstudio/watchrss/ui/input/DigitalCrownInputKt**->**(**)**
+HSPLcom/lightningstudio/watchrss/ui/theme/**->**(**)**
+HSPLandroidx/collection/ScatterMap**->**(**)**
+HSPLandroidx/collection/MutableObjectIntMap**->**(**)**
+HSPLandroidx/compose/runtime/snapshots/GlobalSnapshot**->**(**)**
+HSPLandroidx/compose/runtime/snapshots/StateObjectImpl**->**(**)**
+HSPLandroidx/compose/ui/platform/GraphicsLayerOwnerLayer**->**(**)**
+HSPLandroidx/compose/ui/input/key/KeyEvent_androidKt**->**(**)**
+HSPLkotlin/coroutines/CombinedContext**->**(**)**
+HSPLkotlin/coroutines/jvm/internal/BaseContinuationImpl**->**(**)**
+HSPLkotlin/coroutines/jvm/internal/ContinuationImpl**->**(**)**
+HSPLkotlinx/coroutines/CancellableContinuationImpl**->**(**)**
+HSPLkotlinx/coroutines/DebugStringsKt**->**(**)**
+HSPLkotlinx/coroutines/JobSupport**->**(**)**
+HSPLkotlinx/coroutines/channels/BufferedChannel**->**(**)**
+HSPLkotlinx/coroutines/internal/ConcurrentLinkedListKt**->**(**)**
+HSPLkotlinx/coroutines/scheduling/CoroutineScheduler$Worker;->**(**)**
 HSPLcom/lightningstudio/watchrss/data/db/WatchRssDatabase_Impl;->createOpenHelper(Landroidx/room/DatabaseConfiguration;)Landroidx/sqlite/db/SupportSQLiteOpenHelper;
 HSPLcom/lightningstudio/watchrss/data/db/WatchRssDatabase_Impl;->rssChannelDao()Lcom/lightningstudio/watchrss/data/db/RssChannelDao;
 HSPLcom/lightningstudio/watchrss/data/db/WatchRssDatabase_Impl;->rssItemDao()Lcom/lightningstudio/watchrss/data/db/RssItemDao;
 HSPLcom/lightningstudio/watchrss/data/db/RssChannelDao_Impl;->observeChannels()Lkotlinx/coroutines/flow/Flow;
+HSPLcom/lightningstudio/watchrss/data/db/RssChannelDao_Impl**->**(**)**
 HSPLcom/lightningstudio/watchrss/data/db/RssItemDao_Impl;->observeUnreadCounts()Lkotlinx/coroutines/flow/Flow;
+HSPLcom/lightningstudio/watchrss/data/db/RssItemDao_Impl**->**(**)**

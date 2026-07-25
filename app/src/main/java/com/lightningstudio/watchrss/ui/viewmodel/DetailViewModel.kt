@@ -3,9 +3,11 @@ package com.lightningstudio.watchrss.ui.viewmodel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.lightningstudio.watchrss.data.rss.ImportedContentIds
 import com.lightningstudio.watchrss.data.rss.RssRepository
 import com.lightningstudio.watchrss.data.rss.SavedState
 import com.lightningstudio.watchrss.data.rss.effectiveContent
+import com.lightningstudio.watchrss.data.rss.isArticleContentMarker
 import com.lightningstudio.watchrss.data.rss.isOriginalContentMissing
 import com.lightningstudio.watchrss.data.settings.DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE
 import com.lightningstudio.watchrss.data.settings.SettingsRepository
@@ -14,13 +16,16 @@ import com.lightningstudio.watchrss.ui.util.RssContentCache
 import com.lightningstudio.watchrss.ui.util.buildContentBlocks
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -51,16 +56,35 @@ class DetailViewModel(
         override ?: (currentChannel?.useOriginalContent ?: false)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
-    val contentBlocks = combine(item, effectiveUseOriginalContent) { current, useOriginalContent ->
-        current to useOriginalContent
-    }.mapLatest { (current, useOriginalContent) ->
+    val importedTextReader = item.mapLatest { current ->
+        if (current == null || !ImportedContentIds.isImportedTextItemUrl(current.link)) {
+            null
+        } else {
+            repository.getImportedTextReader(current.id)
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val contentBlocks = combine(item, effectiveUseOriginalContent, importedTextReader) { current, useOriginalContent, reader ->
+        Triple(current, useOriginalContent, reader)
+    }.mapLatest { (current, useOriginalContent, reader) ->
             if (current == null) return@mapLatest emptyList()
+            if (ImportedContentIds.isImportedTextItemUrl(current.link) &&
+                (reader != null ||
+                    isArticleContentMarker(current.content) ||
+                    isArticleContentMarker(current.originalContent))
+            ) {
+                return@mapLatest emptyList()
+            }
             val raw = current.effectiveContent(useOriginalContent)
             if (raw.isNullOrBlank()) return@mapLatest emptyList()
             val contentHash = 31 * raw.hashCode() + if (useOriginalContent) 1 else 0
             withContext(Dispatchers.Default) {
-                RssContentCache.getOrPut(current.id, contentHash) {
+                if (raw.length > LARGE_CONTENT_CACHE_LIMIT_CHARS) {
                     buildContentBlocks(current, useOriginalContent)
+                } else {
+                    RssContentCache.getOrPut(current.id, contentHash) {
+                        buildContentBlocks(current, useOriginalContent)
+                    }
                 }
             }
         }
@@ -112,7 +136,8 @@ class DetailViewModel(
                 currentItem to currentChannel
             }.collect { (currentItem, currentChannel) ->
                 val id = currentItem?.id ?: return@collect
-                if (currentChannel?.useOriginalContent == true &&
+                if (!ImportedContentIds.isImportedTextItemUrl(currentItem.link) &&
+                    currentChannel?.useOriginalContent == true &&
                     currentItem.isOriginalContentMissing() &&
                     requestedOriginalIds.add(id)
                 ) {
@@ -124,6 +149,7 @@ class DetailViewModel(
 
     fun toggleOriginalContent() {
         val currentItem = item.value ?: return
+        if (ImportedContentIds.isImportedTextItemUrl(currentItem.link)) return
         val channelOriginalEnabled = channel.value?.useOriginalContent == true
         val next = !effectiveUseOriginalContent.value
         setTemporaryOriginalContentOverride(
@@ -142,6 +168,22 @@ class DetailViewModel(
                 settingsRepository.recordTemporaryOriginalContentEnableAndShouldShowHint(currentItem.channelId)
             ) {
                 _message.value = ORIGINAL_CONTENT_MODE_HINT_MESSAGE
+            }
+        }
+    }
+
+    fun setOriginalContentEnabled(enabled: Boolean) {
+        if (itemId <= 0L) return
+
+        viewModelScope.launch {
+            val currentItem = item.value ?: item.filterNotNull().first()
+            if (ImportedContentIds.isImportedTextItemUrl(currentItem.link)) return@launch
+
+            setTemporaryOriginalContentOverride(enabled)
+            if (!enabled) return@launch
+
+            if (currentItem.isOriginalContentMissing()) {
+                repository.requestOriginalContent(currentItem.id, force = true)
             }
         }
     }
@@ -174,9 +216,20 @@ class DetailViewModel(
 
     fun updateReadingProgress(progress: Float) {
         if (itemId <= 0L) return
-        viewModelScope.launch {
+        viewModelScope.launch(NonCancellable) {
+            saveReadingProgress(progress)
+        }
+    }
+
+    suspend fun saveReadingProgress(progress: Float) {
+        if (itemId <= 0L) return
+        withContext(NonCancellable + Dispatchers.IO) {
             repository.updateItemReadingProgress(itemId, progress)
         }
+    }
+
+    suspend fun loadImportedTextChunk(marker: String, chunkIndex: Int): String? {
+        return repository.loadImportedTextChunk(marker, chunkIndex)
     }
 
     fun clearMessage() {
@@ -193,3 +246,5 @@ class DetailViewModel(
         const val ORIGINAL_CONTENT_MODE_HINT_MESSAGE = "点击频道标题，可在频道设置中开启原文阅读模式"
     }
 }
+
+private const val LARGE_CONTENT_CACHE_LIMIT_CHARS = 500_000

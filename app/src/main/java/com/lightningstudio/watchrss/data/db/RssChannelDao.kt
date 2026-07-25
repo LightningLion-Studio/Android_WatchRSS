@@ -21,6 +21,9 @@ interface RssChannelDao {
     @Query("SELECT * FROM rss_channels WHERE url = :url LIMIT 1")
     suspend fun getChannelByUrl(url: String): RssChannelEntity?
 
+    @Query("SELECT * FROM rss_channels ORDER BY isPinned DESC, sortOrder DESC, createdAt DESC")
+    suspend fun getAllChannels(): List<RssChannelEntity>
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertChannel(channel: RssChannelEntity): Long
 

@@ -45,5 +45,12 @@ class ChannelActionsViewModel(
         }
     }
 
+    fun clearLocalContent() {
+        if (channelId <= 0L) return
+        viewModelScope.launch {
+            repository.clearLocalContentChannel(channelId)
+        }
+    }
+
     fun isValid(): Boolean = channelId > 0L
 }

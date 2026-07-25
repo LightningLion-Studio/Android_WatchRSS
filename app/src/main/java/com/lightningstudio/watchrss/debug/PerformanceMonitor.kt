@@ -26,7 +26,7 @@ object PerformanceMonitor {
     private val statsMap = Collections.synchronizedMap(WeakHashMap<ComponentActivity, FrameStats>())
 
     fun attach(activity: ComponentActivity) {
-        if (!BuildConfig.DEBUG) return
+        if (!BuildConfig.ENABLE_RUNTIME_PERF_MONITOR) return
         val window = activity.window
         val stateHolder = PerformanceMetricsState.getHolderForHierarchy(window.decorView).state
         stateHolder?.putState("screen", activity.javaClass.simpleName)
@@ -63,7 +63,7 @@ object PerformanceMonitor {
     }
 
     fun setScenario(activity: ComponentActivity, scenario: String) {
-        if (!BuildConfig.DEBUG) return
+        if (!BuildConfig.ENABLE_RUNTIME_PERF_MONITOR) return
         val stateHolder = PerformanceMetricsState.getHolderForHierarchy(activity.window.decorView).state
         stateHolder?.putState("scenario", scenario)
         statsMap[activity]?.updateScenario(scenario)
@@ -88,7 +88,7 @@ object PerformanceMonitor {
     }
 
     private fun shouldCaptureDetailedFrames(activity: ComponentActivity): Boolean {
-        if (!BuildConfig.DEBUG) return false
+        if (!BuildConfig.ENABLE_RUNTIME_PERF_MONITOR) return false
         if (activity.intent?.getBooleanExtra(EXTRA_ENABLE_FRAME_METRICS_LOGGING, false) == true) {
             return true
         }

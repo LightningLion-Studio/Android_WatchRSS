@@ -5,16 +5,7 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
-import com.lightningstudio.watchrss.phoneconnection.PhoneConnectionAbility
-import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.screen.rss.LlmConnectivityScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
@@ -29,14 +20,6 @@ class LlmConnectivityActivity : BaseWatchActivity() {
     }
     private var llmSummaryItemId: Long = 0L
     private var llmSummaryNavigationHandled: Boolean = false
-    private var isNavigating by mutableStateOf(false)
-
-    override fun onWindowFocusChanged(hasFocus: Boolean) {
-        super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) {
-            isNavigating = false
-        }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -45,30 +28,7 @@ class LlmConnectivityActivity : BaseWatchActivity() {
 
         setContent {
             WatchRSSTheme {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    LlmConnectivityScreen(
-                        viewModel = viewModel,
-                        onOpenPhoneConfig = {
-                            isNavigating = true
-                            startActivity(
-                                PhoneConnectionActivity.createIntent(
-                                    context = this@LlmConnectivityActivity,
-                                    preferredAbility = PhoneConnectionAbility.LLM_SUMMARY_CONFIG,
-                                    llmSummaryItemId = llmSummaryItemId
-                                )
-                            )
-                        }
-                    )
-
-                    if (isNavigating) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            WatchCircularProgressIndicator()
-                        }
-                    }
-                }
+                LlmConnectivityScreen(viewModel = viewModel)
             }
         }
     }
@@ -87,7 +47,6 @@ class LlmConnectivityActivity : BaseWatchActivity() {
             if (!isConfigured) return@launch
 
             llmSummaryNavigationHandled = true
-            isNavigating = true
             startActivity(LlmSummaryActivity.createIntent(this@LlmConnectivityActivity, llmSummaryItemId))
             finish()
         }

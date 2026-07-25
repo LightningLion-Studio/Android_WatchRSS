@@ -14,6 +14,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
+import com.lightningstudio.watchrss.data.rss.ImportedContentIds
 import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.screen.DeleteConfirmDialog
 import com.lightningstudio.watchrss.ui.screen.rss.ChannelSettingsScreen
@@ -44,7 +45,14 @@ class ChannelSettingsActivity : BaseWatchActivity() {
                 val isBuiltin = channel?.let { BuiltinChannelType.fromUrl(it.url) != null } ?: false
                 val showOriginalContent = channel != null && !isBuiltin
                 val originalContentEnabled = channel?.useOriginalContent ?: false
+                val hasPlayableMedia by viewModel.hasPlayableMedia.collectAsState()
+                val showContinuePlaybackInBackground = channel != null && !isBuiltin && hasPlayableMedia
+                val continuePlaybackInBackgroundEnabled =
+                    channel?.continuePlaybackInBackground ?: false
+                val clearEnabled = channel?.url
+                    ?.let(ImportedContentIds::isDeletableLocalContentChannel) == true
                 val deleteEnabled = channel != null
+                var showClearConfirm by remember { mutableStateOf(false) }
                 var showDeleteConfirm by remember { mutableStateOf(false) }
 
                 Box(modifier = Modifier.fillMaxSize()) {
@@ -56,6 +64,21 @@ class ChannelSettingsActivity : BaseWatchActivity() {
                                 viewModel.setOriginalContentEnabled(!originalContentEnabled)
                             }
                         },
+                        showContinuePlaybackInBackground = showContinuePlaybackInBackground,
+                        continuePlaybackInBackgroundEnabled = continuePlaybackInBackgroundEnabled,
+                        onToggleContinuePlaybackInBackground = {
+                            if (showContinuePlaybackInBackground) {
+                                viewModel.setContinuePlaybackInBackgroundEnabled(
+                                    !continuePlaybackInBackgroundEnabled
+                                )
+                            }
+                        },
+                        clearEnabled = clearEnabled,
+                        onClear = {
+                            if (clearEnabled) {
+                                showClearConfirm = true
+                            }
+                        },
                         deleteEnabled = deleteEnabled,
                         onDelete = {
                             if (deleteEnabled) {
@@ -63,6 +86,18 @@ class ChannelSettingsActivity : BaseWatchActivity() {
                             }
                         }
                     )
+
+                    if (showClearConfirm) {
+                        DeleteConfirmDialog(
+                            title = "清空内容",
+                            message = "清空后将移除这个频道内的本地条目",
+                            onConfirm = {
+                                showClearConfirm = false
+                                viewModel.clearLocalContent()
+                            },
+                            onCancel = { showClearConfirm = false }
+                        )
+                    }
 
                     if (showDeleteConfirm) {
                         DeleteConfirmDialog(

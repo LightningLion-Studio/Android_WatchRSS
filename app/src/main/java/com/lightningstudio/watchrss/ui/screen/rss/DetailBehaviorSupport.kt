@@ -24,6 +24,8 @@ import com.lightningstudio.watchrss.data.douyin.parseDouyinAwemeId
 import com.lightningstudio.watchrss.ui.util.showAppToast
 import java.io.File
 import kotlin.math.abs
+import kotlin.math.floor
+import kotlin.math.roundToLong
 
 private const val DETAIL_SHARE_QR_WIDTH_RATIO = 0.7f
 
@@ -56,6 +58,106 @@ internal fun calculateReadingProgress(listState: androidx.compose.foundation.laz
         Trace.endSection()
     }
     return clamped
+}
+
+internal fun calculateImportedTextReadingProgress(
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    firstChunkItemIndex: Int,
+    chunkCount: Int
+): Float {
+    if (chunkCount <= 0) return calculateReadingProgress(listState)
+    val firstVisibleChunkIndex = listState.firstVisibleItemIndex - firstChunkItemIndex
+    if (firstVisibleChunkIndex < 0) return 0f
+    if (listState.layoutInfo.visibleItemsInfo.isNotEmpty() && !listState.canScrollForward) return 1f
+
+    val firstSize = listState.layoutInfo.visibleItemsInfo.firstOrNull()?.size ?: 0
+    val offsetProgress = if (firstSize > 0) {
+        listState.firstVisibleItemScrollOffset.toFloat() / firstSize.toFloat()
+    } else {
+        0f
+    }
+    return calculateImportedTextReadingProgressFromPosition(
+        firstVisibleChunkIndex = firstVisibleChunkIndex,
+        firstVisibleItemScrollOffsetProgress = offsetProgress,
+        chunkCount = chunkCount
+    )
+}
+
+internal fun calculateImportedTextReadingProgressFromPosition(
+    firstVisibleChunkIndex: Int,
+    firstVisibleItemScrollOffsetProgress: Float,
+    chunkCount: Int
+): Float {
+    if (chunkCount <= 0) return 1f
+    if (firstVisibleChunkIndex < 0) return 0f
+    if (firstVisibleChunkIndex >= chunkCount) return 1f
+    val denominator = (chunkCount - 1).coerceAtLeast(1)
+    return ((firstVisibleChunkIndex + firstVisibleItemScrollOffsetProgress) / denominator.toFloat()).coerceIn(0f, 1f)
+}
+
+internal data class ImportedTextRestoreTarget(
+    val itemIndex: Int,
+    val itemScrollOffsetProgress: Float
+)
+
+internal data class ImportedTextByteRestoreTarget(
+    val itemIndex: Int,
+    val chunkIndex: Int,
+    val byteOffsetInChunk: Int
+)
+
+internal fun importedTextRestoreTarget(
+    progress: Float,
+    firstChunkItemIndex: Int,
+    chunkCount: Int
+): ImportedTextRestoreTarget {
+    if (chunkCount <= 0) {
+        return ImportedTextRestoreTarget(firstChunkItemIndex.coerceAtLeast(0), 0f)
+    }
+    val denominator = (chunkCount - 1).coerceAtLeast(1)
+    val scaled = denominator * progress.coerceIn(0f, 1f)
+    val chunkIndex = floor(scaled.toDouble()).toInt()
+        .coerceIn(0, chunkCount - 1)
+    val offsetProgress = if (chunkIndex >= chunkCount - 1) {
+        0f
+    } else {
+        (scaled - chunkIndex).coerceIn(0f, 1f)
+    }
+    return ImportedTextRestoreTarget(
+        itemIndex = firstChunkItemIndex + chunkIndex,
+        itemScrollOffsetProgress = offsetProgress
+    )
+}
+
+internal fun importedTextByteRestoreTarget(
+    progress: Float,
+    firstChunkItemIndex: Int,
+    byteLength: Long,
+    chunkCount: Int,
+    chunkBytes: Int
+): ImportedTextByteRestoreTarget {
+    if (byteLength <= 0L || chunkCount <= 0 || chunkBytes <= 0) {
+        return ImportedTextByteRestoreTarget(
+            itemIndex = firstChunkItemIndex.coerceAtLeast(0),
+            chunkIndex = 0,
+            byteOffsetInChunk = 0
+        )
+    }
+    val maxByte = (byteLength - 1L).coerceAtLeast(0L)
+    val absoluteByte = (byteLength.toDouble() * progress.coerceIn(0f, 1f).toDouble())
+        .roundToLong()
+        .coerceIn(0L, maxByte)
+    val chunkIndex = (absoluteByte / chunkBytes.toLong())
+        .toInt()
+        .coerceIn(0, chunkCount - 1)
+    val byteOffsetInChunk = (absoluteByte - chunkIndex.toLong() * chunkBytes.toLong())
+        .toInt()
+        .coerceAtLeast(0)
+    return ImportedTextByteRestoreTarget(
+        itemIndex = firstChunkItemIndex + chunkIndex,
+        chunkIndex = chunkIndex,
+        byteOffsetInChunk = byteOffsetInChunk
+    )
 }
 
 internal fun Modifier.debugTraceLayout(name: String): Modifier {
@@ -116,14 +218,14 @@ internal fun isReachedBottom(
         bottom >= layoutInfo.viewportEndOffset - thresholdPx
 }
 
-internal fun maybeSaveReadingProgress(
+internal suspend fun maybeSaveReadingProgress(
     readingProgress: Float,
     force: Boolean,
     lastSavedProgress: () -> Float,
     lastProgressSavedAt: () -> Long,
     updateLastSavedProgress: (Float) -> Unit,
     updateLastProgressSavedAt: (Long) -> Unit,
-    onSave: (Float) -> Unit
+    onSave: suspend (Float) -> Unit
 ) {
     val clamped = readingProgress.coerceIn(0f, 1f)
     val now = SystemClock.elapsedRealtime()
@@ -187,7 +289,7 @@ internal fun openImagePreview(context: Context, url: String, alt: String?) {
     context.startActivity(ImagePreviewActivity.createIntent(context, trimmed, alt))
 }
 
-internal fun openRssVideo(context: Context, playUrl: String, webUrl: String?) {
+internal fun openRssVideo(context: Context, playUrl: String, webUrl: String?, channelId: Long = 0L) {
     val trimmed = playUrl.trim()
     if (trimmed.isEmpty()) return
     val trimmedWebUrl = webUrl?.trim()?.takeIf { it.isNotEmpty() }
@@ -197,7 +299,8 @@ internal fun openRssVideo(context: Context, playUrl: String, webUrl: String?) {
             context = context,
             playUrl = trimmed,
             webUrl = trimmedWebUrl,
-            awemeId = awemeId
+            awemeId = awemeId,
+            channelId = channelId
         )
     )
 }

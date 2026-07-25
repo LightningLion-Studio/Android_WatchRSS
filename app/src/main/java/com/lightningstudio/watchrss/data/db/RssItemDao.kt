@@ -10,7 +10,33 @@ import kotlinx.coroutines.flow.Flow
 interface RssItemDao {
     @Query(
         """
-        SELECT * FROM rss_items
+        SELECT
+            id,
+            channelId,
+            title,
+            description,
+            NULL AS content,
+            NULL AS originalContent,
+            link,
+            guid,
+            pubDate,
+            imageUrl,
+            audioUrl,
+            videoUrl,
+            summary,
+            previewImageUrl,
+            isRead,
+            isLiked,
+            readingProgress,
+            dedupKey,
+            fetchedAt,
+            contentSizeBytes,
+            syncBodyHash,
+            syncBodyByteCount,
+            syncChunkSize,
+            syncChunkHashesJson,
+            syncMetadataHash
+        FROM rss_items
         WHERE channelId = :channelId
         ORDER BY fetchedAt DESC, id DESC
         LIMIT :limit
@@ -30,6 +56,78 @@ interface RssItemDao {
     @Query(
         """
         SELECT * FROM rss_items
+        WHERE channelId = :channelId
+        ORDER BY fetchedAt DESC, id DESC
+        LIMIT :limit
+        """
+    )
+    suspend fun getItemsForChannelSync(channelId: Long, limit: Int): List<RssItemEntity>
+
+    @Query(
+        """
+        SELECT
+            id,
+            channelId,
+            title,
+            description,
+            NULL AS content,
+            NULL AS originalContent,
+            link,
+            guid,
+            pubDate,
+            imageUrl,
+            audioUrl,
+            videoUrl,
+            summary,
+            previewImageUrl,
+            isRead,
+            isLiked,
+            readingProgress,
+            dedupKey,
+            fetchedAt,
+            contentSizeBytes,
+            syncBodyHash,
+            syncBodyByteCount,
+            syncChunkSize,
+            syncChunkHashesJson,
+            syncMetadataHash
+        FROM rss_items
+        WHERE channelId = :channelId
+        ORDER BY fetchedAt DESC, id DESC
+        LIMIT :limit
+        """
+    )
+    suspend fun getItemsForChannelSyncManifest(channelId: Long, limit: Int): List<RssItemEntity>
+
+    @Query(
+        """
+        SELECT
+            id,
+            channelId,
+            title,
+            description,
+            NULL AS content,
+            NULL AS originalContent,
+            link,
+            guid,
+            pubDate,
+            imageUrl,
+            audioUrl,
+            videoUrl,
+            summary,
+            previewImageUrl,
+            isRead,
+            isLiked,
+            readingProgress,
+            dedupKey,
+            fetchedAt,
+            contentSizeBytes,
+            syncBodyHash,
+            syncBodyByteCount,
+            syncChunkSize,
+            syncChunkHashesJson,
+            syncMetadataHash
+        FROM rss_items
         WHERE channelId = :channelId AND (
             title LIKE :keyword ESCAPE '\' OR
             description LIKE :keyword ESCAPE '\' OR
@@ -58,6 +156,9 @@ interface RssItemDao {
     @Query("UPDATE rss_items SET readingProgress = :progress WHERE id = :id")
     suspend fun updateReadingProgress(id: Long, progress: Float)
 
+    @Query("DELETE FROM rss_items WHERE id = :id")
+    suspend fun deleteItem(id: Long)
+
     @Query(
         """
         UPDATE rss_items SET
@@ -69,7 +170,12 @@ interface RssItemDao {
             videoUrl = :videoUrl,
             summary = :summary,
             previewImageUrl = :previewImageUrl,
-            contentSizeBytes = :contentSizeBytes
+            contentSizeBytes = :contentSizeBytes,
+            syncBodyHash = '',
+            syncBodyByteCount = 0,
+            syncChunkSize = 0,
+            syncChunkHashesJson = '',
+            syncMetadataHash = ''
         WHERE channelId = :channelId AND dedupKey = :dedupKey
         """
     )
@@ -106,7 +212,12 @@ interface RssItemDao {
         """
         UPDATE rss_items SET
             originalContent = :content,
-            contentSizeBytes = :contentSizeBytes
+            contentSizeBytes = :contentSizeBytes,
+            syncBodyHash = '',
+            syncBodyByteCount = 0,
+            syncChunkSize = 0,
+            syncChunkHashesJson = '',
+            syncMetadataHash = ''
         WHERE channelId = :channelId AND dedupKey = :dedupKey
         """
     )
@@ -117,8 +228,83 @@ interface RssItemDao {
         contentSizeBytes: Long
     )
 
+    @Query(
+        """
+        UPDATE rss_items SET
+            title = :title,
+            description = :description,
+            content = :content,
+            originalContent = :originalContent,
+            link = :link,
+            imageUrl = :imageUrl,
+            summary = :summary,
+            previewImageUrl = :previewImageUrl,
+            fetchedAt = :fetchedAt,
+            contentSizeBytes = :contentSizeBytes,
+            syncBodyHash = :syncBodyHash,
+            syncBodyByteCount = :syncBodyByteCount,
+            syncChunkSize = :syncChunkSize,
+            syncChunkHashesJson = :syncChunkHashesJson,
+            syncMetadataHash = :syncMetadataHash,
+            readingProgress = :readingProgress
+        WHERE id = :id
+        """
+    )
+    suspend fun updateSyncedArticle(
+        id: Long,
+        title: String,
+        description: String?,
+        content: String?,
+        originalContent: String?,
+        link: String?,
+        imageUrl: String?,
+        summary: String?,
+        previewImageUrl: String?,
+        fetchedAt: Long,
+        contentSizeBytes: Long,
+        syncBodyHash: String,
+        syncBodyByteCount: Long,
+        syncChunkSize: Int,
+        syncChunkHashesJson: String,
+        syncMetadataHash: String,
+        readingProgress: Float
+    )
+
+    @Query(
+        """
+        UPDATE rss_items SET
+            syncBodyHash = :syncBodyHash,
+            syncBodyByteCount = :syncBodyByteCount,
+            syncChunkSize = :syncChunkSize,
+            syncChunkHashesJson = :syncChunkHashesJson,
+            syncMetadataHash = :syncMetadataHash
+        WHERE id = :id
+        """
+    )
+    suspend fun updateSyncMetadata(
+        id: Long,
+        syncBodyHash: String,
+        syncBodyByteCount: Long,
+        syncChunkSize: Int,
+        syncChunkHashesJson: String,
+        syncMetadataHash: String
+    )
+
     @Query("SELECT COUNT(*) FROM rss_items WHERE channelId = :channelId")
     fun observeItemCount(channelId: Long): Flow<Int>
+
+    @Query(
+        """
+        SELECT EXISTS(
+            SELECT 1 FROM rss_items
+            WHERE channelId = :channelId AND (
+                (audioUrl IS NOT NULL AND audioUrl != '') OR
+                (videoUrl IS NOT NULL AND videoUrl != '')
+            )
+        )
+        """
+    )
+    fun observeChannelHasPlayableMedia(channelId: Long): Flow<Boolean>
 
     @Query("SELECT channelId, COUNT(*) as unreadCount FROM rss_items WHERE isRead = 0 GROUP BY channelId")
     fun observeUnreadCounts(): Flow<List<RssChannelUnreadCount>>

@@ -61,6 +61,9 @@ object RssContentParser {
         if (raw.isBlank()) {
             return emptyList()
         }
+        if (!raw.mayContainHtml()) {
+            return parsePlainText(raw)
+        }
         val doc = Jsoup.parseBodyFragment(raw)
         doc.outputSettings().prettyPrint(false)
         doc.select(NON_CONTENT_SELECTORS).remove()
@@ -71,6 +74,60 @@ object RssContentParser {
             appendNode(node, blocks)
         }
         return mergeAdjacentTextBlocks(splitLongTextBlocks(blocks))
+    }
+
+    fun parsePlainText(raw: String): List<ContentBlock> {
+        if (raw.isBlank()) return emptyList()
+        return splitPlainText(raw)
+    }
+
+    private fun String.mayContainHtml(): Boolean {
+        val sample = if (length > HTML_DETECTION_SAMPLE_CHARS) {
+            substring(0, HTML_DETECTION_SAMPLE_CHARS)
+        } else {
+            this
+        }
+        return HTML_TAG_PATTERN.containsMatchIn(sample)
+    }
+
+    private fun splitPlainText(raw: String): List<ContentBlock> {
+        val result = mutableListOf<ContentBlock.Text>()
+        raw.lineSequence().forEach { line ->
+            val startIndex = line.indexOfFirst { !it.isWhitespace() }
+            if (startIndex < 0) return@forEach
+            val endExclusive = line.indexOfLast { !it.isWhitespace() } + 1
+            if (endExclusive - startIndex <= MAX_TEXT_BLOCK_CHARS) {
+                result += ContentBlock.Text(line.substring(startIndex, endExclusive), TextStyle.BODY)
+                return@forEach
+            }
+            var chunkStart = startIndex
+            while (chunkStart < endExclusive) {
+                val chunkEnd = (chunkStart + MAX_TEXT_BLOCK_CHARS).coerceAtMost(endExclusive)
+                val sliceStart = line.nextNonWhitespaceIndex(chunkStart, chunkEnd)
+                val sliceEnd = line.previousNonWhitespaceIndex(sliceStart, chunkEnd)
+                if (sliceStart < sliceEnd) {
+                    result += ContentBlock.Text(line.substring(sliceStart, sliceEnd), TextStyle.BODY)
+                }
+                chunkStart = chunkEnd
+            }
+        }
+        return mergeAdjacentTextBlocks(result)
+    }
+
+    private fun String.nextNonWhitespaceIndex(start: Int, endExclusive: Int): Int {
+        var index = start
+        while (index < endExclusive && this[index].isWhitespace()) {
+            index += 1
+        }
+        return index
+    }
+
+    private fun String.previousNonWhitespaceIndex(start: Int, endExclusive: Int): Int {
+        var index = endExclusive
+        while (index > start && this[index - 1].isWhitespace()) {
+            index -= 1
+        }
+        return index
     }
 
     private fun selectContentRoot(body: Element): Element {
@@ -281,3 +338,9 @@ object RssContentParser {
         return result
     }
 }
+
+private const val HTML_DETECTION_SAMPLE_CHARS = 4_096
+private val HTML_TAG_PATTERN = Regex(
+    """<\s*/?\s*(html|head|body|article|section|main|div|p|br|h[1-6]|ul|ol|li|span|table|blockquote|pre|code|img|video|iframe)\b""",
+    RegexOption.IGNORE_CASE
+)

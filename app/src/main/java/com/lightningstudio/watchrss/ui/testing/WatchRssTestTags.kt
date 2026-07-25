@@ -6,6 +6,9 @@ object OobeTestTags {
     const val CUSTOM_PAGE = "oobe/custom_page"
     const val CUSTOM_THEME_TOGGLE = "oobe/custom_theme_toggle"
     const val CUSTOM_FONT_VALUE = "oobe/custom_font_value"
+    const val CUSTOM_MEDIA_VOLUME_CONTROL_SWITCH = "oobe/custom_media_volume_control_switch"
+    const val CUSTOM_MEDIA_GUARD_SWITCH = "oobe/custom_media_guard_switch"
+    const val CUSTOM_PLAYBACK_START_VOLUME_VALUE = "oobe/custom_playback_start_volume_value"
     const val INTERNET_PAGE = "oobe/internet_page"
     const val AGREEMENT_CHECKBOX = "oobe/agreement_checkbox"
     const val LEGAL_TEXT = "oobe/legal_text"
@@ -14,6 +17,7 @@ object OobeTestTags {
     const val ERROR_TEXT = "oobe/error_text"
     const val INTERNET_STATUS_CHECKING = "oobe/internet_status_checking"
     const val INTERNET_STATUS_UNAVAILABLE = "oobe/internet_status_unavailable"
+    const val INTERNET_STATUS_BLUETOOTH = "oobe/internet_status_bluetooth"
     const val INTERNET_STATUS_AVAILABLE = "oobe/internet_status_available"
     const val OFFLINE_WARNING_DIALOG = "oobe/offline_warning_dialog"
     const val OFFLINE_WARNING_CONFIRM_BUTTON = "oobe/offline_warning_confirm_button"
@@ -46,6 +50,7 @@ object DouyinChannelInfoTestTags {
 
 object ProfileTestTags {
     const val ROOT = "profile/root"
+    const val ACCOUNT_ENTRY = "profile/account_entry"
     const val FAVORITES_ENTRY = "profile/favorites_entry"
     const val WATCH_LATER_ENTRY = "profile/watch_later_entry"
     const val PHONE_CONNECTION_ENTRY = "profile/phone_connection_entry"
@@ -57,6 +62,7 @@ object ProfileTestTags {
 
 object PhoneConnectionTestTags {
     const val ROOT = "phone_connection/root"
+    const val BLUETOOTH_ENTRY = "phone_connection/bluetooth_entry"
     const val PURE_SOUND_ENTRY = "phone_connection/pure_sound_entry"
     const val SOUND_GUIDED_WIFI_ENTRY = "phone_connection/sound_guided_wifi_entry"
     const val MANUAL_WIFI_ENTRY = "phone_connection/manual_wifi_entry"
@@ -91,6 +97,12 @@ object SettingsTestTags {
     const val FONT_DECREASE_BUTTON = "settings/font_decrease_button"
     const val FONT_VALUE = "settings/font_value"
     const val FONT_INCREASE_BUTTON = "settings/font_increase_button"
+    const val MEDIA_VOLUME_CONTROL_SWITCH = "settings/media_volume_control_switch"
+    const val MEDIA_VOLUME_GUARD_ROW = "settings/media_volume_guard_row"
+    const val MEDIA_VOLUME_GUARD_SWITCH = "settings/media_volume_guard_switch"
+    const val PLAYBACK_START_VOLUME_DECREASE_BUTTON = "settings/playback_start_volume_decrease_button"
+    const val PLAYBACK_START_VOLUME_VALUE = "settings/playback_start_volume_value"
+    const val PLAYBACK_START_VOLUME_INCREASE_BUTTON = "settings/playback_start_volume_increase_button"
     const val OPEN_OOBE_ENTRY = "settings/open_oobe_entry"
     const val PHONE_CONNECTION_SWITCH = "settings/phone_connection_switch"
     const val DOUYIN_COOKIE_ENTRY = "settings/douyin_cookie_entry"

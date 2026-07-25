@@ -16,7 +16,12 @@ class ProfileActivity : BaseWatchActivity() {
         setContent {
             WatchRSSTheme {
                 ProfileScreen(
-                    showPhoneConnectionEntry = PhoneConnectionFeature.isDebugBuild,
+                    showAccountEntry = BuildConfig.DEBUG,
+                    showPhoneConnectionEntry = PhoneConnectionFeature.isAvailable,
+                    onAccountClick = {
+                        if (!allowNavigation()) return@ProfileScreen
+                        startActivity(Intent(this, AccountStatusActivity::class.java))
+                    },
                     onFavoritesClick = {
                         if (!allowNavigation()) return@ProfileScreen
                         val intent = Intent(this, SavedItemsActivity::class.java)
@@ -38,7 +43,7 @@ class ProfileActivity : BaseWatchActivity() {
                     onPhoneConnectionClick = {
                         Toast.makeText(
                             this,
-                            "您可以在App的以下各处使用手机互联功能：添加RSS源、我的收藏、稍后再看",
+                            "请在与手表蓝牙配对了的手机上下载并打开腕上RSS手机端后操作",
                             Toast.LENGTH_LONG
                         ).show()
                     },

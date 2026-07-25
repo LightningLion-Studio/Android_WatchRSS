@@ -7,11 +7,10 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import com.lightningstudio.watchrss.ui.theme.WatchBackground
@@ -56,8 +55,9 @@ fun WatchSurface(
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(1f)
-                        .clip(CircleShape)
-                        .background(innerGradient)
+                        .drawBehind {
+                            drawCircle(brush = innerGradient)
+                        }
                 ) {
                     content()
                 }

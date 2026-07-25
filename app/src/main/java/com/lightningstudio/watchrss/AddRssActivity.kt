@@ -4,13 +4,11 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
-import com.lightningstudio.watchrss.phoneconnection.PhoneConnectionFeature
 import com.lightningstudio.watchrss.ui.screen.rss.AddRssScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.util.offlineToastMessageOrNull
@@ -23,20 +21,9 @@ class AddRssActivity : BaseWatchActivity() {
         AppViewModelFactory((application as WatchRssApplication).container)
     }
 
-    private val remoteInputLauncher =
-        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            if (result.resultCode == RESULT_OK) {
-                val url = result.data?.getStringExtra(ServerActivity.EXTRA_REMOTE_URL)
-                if (!url.isNullOrBlank()) {
-                    viewModel.updateUrl(url)
-                }
-            }
-        }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setupSystemBars()
-        val settingsRepository = (application as WatchRssApplication).container.settingsRepository
 
         val presetUrl = intent.getStringExtra(EXTRA_URL)?.trim().orEmpty()
         if (presetUrl.isNotEmpty()) {
@@ -47,9 +34,6 @@ class AddRssActivity : BaseWatchActivity() {
             WatchRSSTheme {
                 val context = LocalContext.current
                 val uiState by viewModel.uiState.collectAsState()
-                val phoneConnectionEnabled by settingsRepository.phoneConnectionEnabled.collectAsState(
-                    initial = PhoneConnectionFeature.isDebugBuild
-                )
 
                 LaunchedEffect(uiState.errorMessage) {
                     offlineToastMessageOrNull(context, uiState.errorMessage)?.let { message ->
@@ -59,7 +43,6 @@ class AddRssActivity : BaseWatchActivity() {
 
                 AddRssScreen(
                     uiState = viewModel.uiState,
-                    showRemoteInputButton = PhoneConnectionFeature.isEnabled(phoneConnectionEnabled),
                     onUrlChange = viewModel::updateUrl,
                     onSubmit = viewModel::submit,
                     onConfirm = viewModel::confirmAdd,
@@ -72,23 +55,10 @@ class AddRssActivity : BaseWatchActivity() {
                         openChannel(url, channelId)
                     },
                     onConsumed = viewModel::consumeCreatedChannel,
-                    onClearError = viewModel::clearError,
-                    onRemoteInput = { startRemoteInput() }
+                    onClearError = viewModel::clearError
                 )
             }
         }
-    }
-
-    private fun startRemoteInput() {
-        if (!PhoneConnectionFeature.isDebugBuild) return
-        if (!allowNavigation()) return
-        remoteInputLauncher.launch(
-            PhoneConnectionActivity.createIntent(
-                context = this,
-                preferredAbility = com.lightningstudio.watchrss.phoneconnection.PhoneConnectionAbility.REMOTE_INPUT,
-                returnRemoteUrl = true
-            )
-        )
     }
 
     private fun openChannel(url: String?, channelId: Long) {

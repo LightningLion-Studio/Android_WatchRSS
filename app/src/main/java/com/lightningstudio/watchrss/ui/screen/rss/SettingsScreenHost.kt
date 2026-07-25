@@ -21,13 +21,12 @@ fun SettingsScreenHost(
     douyinRepository: DouyinRepositoryContract,
     rssRepository: RssRepository,
     showPerformanceTools: Boolean,
+    onOpenAdvanced: () -> Unit,
     onOpenOobe: () -> Unit,
     onOpenPerfLargeList: () -> Unit,
     onOpenPerfLargeArticle: () -> Unit,
     onOpenLlmConnectivity: () -> Unit,
-    onOpenLlmPhoneConfig: () -> Unit,
     onOpenLlmPromptPreset: () -> Unit,
-    onOpenReadAloudSettings: () -> Unit,
     onBeianClick: () -> Unit
 ) {
     val context = LocalContext.current
@@ -42,7 +41,9 @@ fun SettingsScreenHost(
         readingThemeDark = viewModel.readingThemeDark,
         shareUseSystem = viewModel.shareUseSystem,
         readingFontSizeSp = viewModel.readingFontSizeSp,
-        phoneConnectionEnabled = viewModel.phoneConnectionEnabled,
+        mediaVolumeControlEnabled = viewModel.mediaVolumeControlEnabled,
+        mediaVolumeGuardEnabled = viewModel.mediaVolumeGuardEnabled,
+        mediaPlaybackStartVolumeLimitPercent = viewModel.mediaPlaybackStartVolumeLimitPercent,
         rssInlineImagePrefetchMode = viewModel.rssInlineImagePrefetchMode,
         llmFeatureEnabled = viewModel.llmFeatureEnabled,
         llmAutoSummarize = viewModel.llmAutoSummarize,
@@ -53,11 +54,14 @@ fun SettingsScreenHost(
         onToggleReadingTheme = viewModel::toggleReadingTheme,
         onToggleShareMode = viewModel::toggleShareUseSystem,
         onSelectFontSize = viewModel::updateReadingFontSizeSp,
-        onTogglePhoneConnection = viewModel::togglePhoneConnection,
+        onToggleMediaVolumeControl = viewModel::toggleMediaVolumeControl,
+        onToggleMediaVolumeGuard = viewModel::toggleMediaVolumeGuard,
+        onSelectMediaPlaybackStartVolumeLimit = viewModel::updateMediaPlaybackStartVolumeLimitPercent,
         onSelectRssInlineImagePrefetchMode = viewModel::updateRssInlineImagePrefetchMode,
         onToggleLlmFeatureEnabled = viewModel::toggleLlmFeatureEnabled,
         onToggleLlmAutoSummarize = viewModel::toggleLlmAutoSummarize,
         onToggleLlmShowTokenUsage = viewModel::toggleLlmShowTokenUsage,
+        onOpenAdvanced = onOpenAdvanced,
         onOpenOobe = onOpenOobe,
         onOpenPerfLargeList = onOpenPerfLargeList,
         onOpenPerfLargeArticle = onOpenPerfLargeArticle,
@@ -66,9 +70,7 @@ fun SettingsScreenHost(
             showManualCookieDialog = true
         },
         onOpenLlmConnectivity = onOpenLlmConnectivity,
-        onOpenLlmPhoneConfig = onOpenLlmPhoneConfig,
         onOpenLlmPromptPreset = onOpenLlmPromptPreset,
-        onOpenReadAloudSettings = onOpenReadAloudSettings,
         onBeianClick = onBeianClick
     )
 

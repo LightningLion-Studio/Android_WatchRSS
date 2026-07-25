@@ -125,6 +125,13 @@ class BiliDetailViewModel(
                         state = resolvedInteractionState
                     )
                 }
+                if (resolvedInteractionState.isFavorited) {
+                    syncLocalSaved(
+                        saveType = SaveType.FAVORITE,
+                        saved = true,
+                        updatePreviewCache = false
+                    )
+                }
                 scheduleWarmupForSelection()
             } else {
                 _uiState.update {
@@ -246,9 +253,14 @@ class BiliDetailViewModel(
         }
     }
 
-    private suspend fun syncLocalSaved(saveType: SaveType, saved: Boolean) {
+    private suspend fun syncLocalSaved(
+        saveType: SaveType,
+        saved: Boolean,
+        updatePreviewCache: Boolean = true
+    ) {
         val external = buildExternalSavedItem() ?: return
         rssRepository.syncExternalSavedItem(external, saveType, saved)
+        if (!updatePreviewCache) return
         val target = currentInteractionTarget()
         if (saved) {
             repository.cachePreviewClip(aid = target?.aid ?: aid, bvid = target?.bvid ?: bvid, cid = target?.cid)
