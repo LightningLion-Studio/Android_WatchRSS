@@ -1,5 +1,9 @@
 package com.lightningstudio.watchrss.data
 
+import com.lightningstudio.watchrss.data.telemetry.OpenPanelAnalytics
+import com.lightningstudio.watchrss.data.telemetry.WatchInstallationIdentity
+import com.lightningstudio.watchrss.data.telemetry.WatchUsageTelemetry
+
 import android.content.Context
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.preferencesDataStoreFile
@@ -44,6 +48,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 
 interface AppContainer {
+    val openPanelAnalytics: OpenPanelAnalytics
+    val watchUsageTelemetry: WatchUsageTelemetry
     val rssRepository: RssRepository
     val settingsRepository: SettingsRepository
     val llmApiKeyStore: LlmApiKeyStore
@@ -88,6 +94,23 @@ class DefaultAppContainer(context: Context) : AppContainer {
         )
             .addCallback(BuiltinChannelSeed.callback)
             .build()
+    }
+
+    private val installationIdentity: WatchInstallationIdentity by lazy {
+        WatchInstallationIdentity(appContext)
+    }
+
+    override val openPanelAnalytics: OpenPanelAnalytics by lazy {
+        OpenPanelAnalytics(appContext, appScope)
+    }
+
+    override val watchUsageTelemetry: WatchUsageTelemetry by lazy {
+        WatchUsageTelemetry(
+            context = appContext,
+            installationIdentity = installationIdentity,
+            appScope = appScope,
+            openPanelAnalytics = openPanelAnalytics
+        )
     }
 
     override val settingsRepository: SettingsRepository by lazy {

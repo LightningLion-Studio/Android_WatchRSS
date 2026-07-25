@@ -10,7 +10,7 @@
 - **目标用户**：可穿戴设备用户、内容爱好者、碎片化阅读需求人群
 - **产品slogan**：腕间方寸，尽览万象
 
-### 腕上RRS会上架应用商店吗？
+### 腕上RSS会上架应用商店吗？
 - [x] 会上架应用商店
 
 ---
@@ -37,6 +37,16 @@
 cp gradle.properties.example gradle.properties
 ```
 - 如需配置本机路径（如 `org.gradle.java.home`、临时目录等），请仅修改本地 `gradle.properties`。
+
+## 📸 截图测试
+```bash
+# 录制/更新基线
+./gradlew :app:executeScreenshotTests -Precord
+
+# 验证当前 UI 与基线一致
+./gradlew :app:executeScreenshotTests
+```
+截图测试使用真实 `HomeFeedListActivity` 与真实 Room 数据库，通过 `ComposeTestRule` 断言关键 UI 元素，并用 AndroidX Test `Screenshot` + Shot 生成 HTML 报告。基线文件保存在 `app/screenshots/debug/`，需要提交到版本库用于 CI 回归比对。
 
 ## 📦 Profileable Release 打包
 - 执行 `scripts/build_profileable_release.sh` 可构建 `profileableRelease`，并将 APK、`mapping.txt`、`output-metadata.json` 收集到 `app/build/outputs/dist/profileableRelease/`。

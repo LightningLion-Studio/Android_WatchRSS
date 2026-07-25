@@ -31,6 +31,7 @@ class WatchRssApplication : Application() {
         val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
         AppLogger.log("Application", "应用启动 - ${dateFormat.format(Date())}")
         StartupDurationTracker.markApplicationCreated()
+        container.watchUsageTelemetry.recordAppLaunch()
 
         val debuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
         DebugLogBuffer.setEnabled(debuggable)

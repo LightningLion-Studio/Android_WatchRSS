@@ -32,6 +32,12 @@ class BiliPlayerActivity : BaseWatchActivity() {
 
         val aid = intent.getStringExtra(EXTRA_AID)?.toLongOrNull()
         val bvid = intent.getStringExtra(EXTRA_BVID)
+        val title = intent.getStringExtra(EXTRA_TITLE)
+        container.watchUsageTelemetry.recordVideoPlayed(
+            source = "bilibili",
+            id = bvid ?: aid?.toString() ?: "",
+            title = title
+        )
         val link = repository.shareLink(bvid, aid)
 
         setContent {

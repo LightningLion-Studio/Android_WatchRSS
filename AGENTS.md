@@ -12,6 +12,8 @@
 - `./gradlew test`: Run JVM unit tests (see `app/src/test`).
 - `./gradlew connectedAndroidTest`: Run instrumentation tests on a device (see `app/src/androidTest`).
 - `./gradlew lint`: Run Android Lint for common issues.
+- `./gradlew :app:executeScreenshotTests -Precord`: Record/update screenshot baselines.
+- `./gradlew :app:executeScreenshotTests`: Verify screenshots against baselines.
 - 在任何交付前请用 `gradlew` 与 `adb` 做开发和验证：优先用 `./gradlew :app:installDebug` 构建并安装调试 APK，安装完成后用 `adb shell am start -n com.lightningstudio.watchrss/.MainActivity` 打开应用，最后通过 `adb logcat` 检查日志并定位问题直到应用不报错。
 - 当 `adb` 未连接或设备不可用时，必须执行 `./gradlew assembleDebug` 并确保编译通过后再继续其他工作。
 

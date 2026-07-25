@@ -41,6 +41,14 @@ class DouyinPlayerActivity : BaseWatchActivity() {
         val items = parseItems(intent)
         val startIndex = intent.getIntExtra(EXTRA_INDEX, 0).coerceIn(0, (items.size - 1).coerceAtLeast(0))
         currentPageIndex = startIndex
+        if (items.isNotEmpty()) {
+            val first = items[startIndex]
+            container.watchUsageTelemetry.recordVideoPlayed(
+                source = "douyin",
+                id = first.awemeId.orEmpty(),
+                title = first.title
+            )
+        }
 
         setContent {
             WatchRSSTheme {

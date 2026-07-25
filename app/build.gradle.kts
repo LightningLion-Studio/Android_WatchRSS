@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
+    id("shot") version "6.1.0"
 }
 
 val keystorePropertiesFile = rootProject.file("keystore.properties")
@@ -36,8 +37,11 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
+        buildConfigField("String", "WATCHRSS_OPENPANEL_CLIENT_ID", "\"3b151c92-b189-48a3-ae77-148db3235ca1\"")
+        buildConfigField("String", "WATCHRSS_OPENPANEL_CLIENT_SECRET", "\"\"")
+        buildConfigField("String", "WATCHRSS_OPENPANEL_API_URL", "\"http://10.0.2.2:3001\"")
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "com.karumi.shot.ShotTestRunner"
         if (clearPackageDataForInstrumentation) {
             testInstrumentationRunnerArguments["clearPackageData"] = "true"
         }
@@ -98,6 +102,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":openpanel"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -145,7 +150,12 @@ dependencies {
     testImplementation(libs.mockito.inline)
     testImplementation("org.json:json:20240303")
     androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.junit.ktx)
     androidTestImplementation(libs.androidx.espresso.core)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.rules)
+    androidTestImplementation(libs.shot.android)
+    androidTestImplementation(libs.androidx.test.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     if (useIsolatedInstrumentation) {

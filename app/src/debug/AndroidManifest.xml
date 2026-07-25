@@ -1,21 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application>
-        <activity
-            android:name=".DouyinEntryActivity"
-            android:launchMode="singleTask" />
-        <activity-alias
-            android:name=".DouyinDebugEntryActivity"
-            android:enabled="true"
-            android:exported="true"
-            android:targetActivity=".DouyinEntryActivity">
-            <intent-filter>
-                <action android:name="com.lightningstudio.watchrss.debug.action.OPEN_DOUYIN" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-        </activity-alias>
-        <receiver
-            android:name=".debug.DouyinPlaybackDebugReceiver"
-            android:exported="true" />
-    </application>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.lightningstudio.watchrss">
+
+    <application />
 </manifest>

@@ -1,5 +1,7 @@
 package com.lightningstudio.watchrss.ui.viewmodel
 
+import com.lightningstudio.watchrss.data.telemetry.WatchUsageTelemetry
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
@@ -24,7 +26,8 @@ data class HomePlatformLoginState(
 class HomeViewModel(
     private val repository: RssRepository,
     private val isBiliLoggedIn: suspend () -> Boolean,
-    private val isDouyinLoggedIn: suspend () -> Boolean
+    private val isDouyinLoggedIn: suspend () -> Boolean,
+    private val usageTelemetry: WatchUsageTelemetry
 ) : ViewModel() {
     private val _hasLoadedChannels = MutableStateFlow(false)
     val hasLoadedChannels: StateFlow<Boolean> = _hasLoadedChannels.asStateFlow()
@@ -60,6 +63,11 @@ class HomeViewModel(
         viewModelScope.launch {
             _isRefreshing.value = true
             val result = repository.refreshChannel(channel.id)
+            usageTelemetry.recordFeedRefreshed(
+                channelId = channel.id.toString(),
+                channelTitle = channel.title,
+                success = result.isSuccess
+            )
             if (result.isFailure) {
                 _message.value = result.exceptionOrNull()?.message ?: "刷新失败"
             }
@@ -75,12 +83,19 @@ class HomeViewModel(
                 BuiltinChannelType.fromUrl(channel.url) == null
             }
             var errorMessage: String? = null
+            var successCount = 0
             for (channel in snapshot) {
                 val result = repository.refreshChannel(channel.id)
+                if (result.isSuccess) successCount++
                 if (result.isFailure && errorMessage == null) {
                     errorMessage = result.exceptionOrNull()?.message ?: "刷新失败"
                 }
             }
+            usageTelemetry.recordFeedRefreshed(
+                channelId = "all",
+                channelTitle = "all",
+                success = errorMessage == null
+            )
             if (errorMessage != null) {
                 _message.value = errorMessage
             }

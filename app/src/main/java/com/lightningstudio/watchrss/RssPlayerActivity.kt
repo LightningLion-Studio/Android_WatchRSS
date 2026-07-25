@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.lifecycle.lifecycleScope
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.core.content.FileProvider
@@ -14,6 +15,7 @@ import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
 import com.lightningstudio.watchrss.ui.viewmodel.RssPlayerViewModel
 import java.io.File
+import kotlinx.coroutines.launch
 
 class RssPlayerActivity : BaseWatchActivity() {
     private val container by lazy { (application as WatchRssApplication).container }
@@ -27,6 +29,18 @@ class RssPlayerActivity : BaseWatchActivity() {
         super.onCreate(savedInstanceState)
         setupSystemBars()
 
+        val awemeId = intent.getStringExtra(RssPlayerViewModel.KEY_AWEME_ID)
+        lifecycleScope.launch {
+            viewModel.uiState.collect { state ->
+                if (state.initialSource != null) {
+                    container.watchUsageTelemetry.recordVideoPlayed(
+                        source = if (awemeId.isNullOrBlank()) "rss" else "douyin",
+                        id = awemeId ?: viewModel.currentPlayUrl()?.takeLast(40) ?: "",
+                        title = state.title
+                    )
+                }
+            }
+        }
         setContent {
             WatchRSSTheme {
                 val uiState by viewModel.uiState.collectAsState()
