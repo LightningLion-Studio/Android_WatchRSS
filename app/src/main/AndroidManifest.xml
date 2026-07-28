@@ -140,6 +140,10 @@
             android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
+            android:name=".LlmTokenUsageActivity"
+            android:exported="${debugActivityExported}"
+            android:theme="@style/Theme.WatchRSS.Translucent" />
+        <activity
             android:name=".ReadAloudPlaybackActivity"
             android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />

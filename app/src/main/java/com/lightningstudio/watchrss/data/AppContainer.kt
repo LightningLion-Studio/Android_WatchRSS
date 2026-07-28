@@ -29,6 +29,7 @@ import com.lightningstudio.watchrss.data.douyin.DouyinRepositoryContract
 import com.lightningstudio.watchrss.data.douyin.DouyinWatchHistoryStore
 import com.lightningstudio.watchrss.data.douyin.DouyinWatchHistoryStoreContract
 import com.lightningstudio.watchrss.data.db.WatchRssDatabase
+import com.lightningstudio.watchrss.data.llm.LlmTokenUsageRepository
 import com.lightningstudio.watchrss.data.media.AudioManagerMediaPlaybackStartVolumeLimiter
 import com.lightningstudio.watchrss.data.network.DefaultInternetAvailabilityMonitor
 import com.lightningstudio.watchrss.data.network.InternetAvailabilityMonitor
@@ -67,6 +68,7 @@ interface AppContainer {
     val douyinRecentWindowStore: DouyinRecentWindowStoreContract
     val douyinRecentWindowCacheCoordinator: DouyinRecentWindowCacheCoordinatorContract
     val internetAvailabilityMonitor: InternetAvailabilityMonitor
+    val llmTokenUsageRepository: LlmTokenUsageRepository
 }
 
 class DefaultAppContainer(context: Context) : AppContainer {
@@ -98,7 +100,8 @@ class DefaultAppContainer(context: Context) : AppContainer {
             WatchRssDatabase.MIGRATION_10_11,
             WatchRssDatabase.MIGRATION_11_12,
             WatchRssDatabase.MIGRATION_12_13,
-            WatchRssDatabase.MIGRATION_13_14
+            WatchRssDatabase.MIGRATION_13_14,
+            WatchRssDatabase.MIGRATION_14_15
         )
             .addCallback(BuiltinChannelSeed.callback)
             .build()
@@ -224,6 +227,10 @@ class DefaultAppContainer(context: Context) : AppContainer {
         )
     }
 
+    override val llmTokenUsageRepository: LlmTokenUsageRepository by lazy {
+        LlmTokenUsageRepository(database.llmTokenUsageDao())
+    }
+
     override val readAloudController: ReadAloudController by lazy {
         ReadAloudController(
             context = appContext,
@@ -231,7 +238,7 @@ class DefaultAppContainer(context: Context) : AppContainer {
             rssRepository = rssRepository,
             playbackStartVolumeLimiter = AudioManagerMediaPlaybackStartVolumeLimiter(appContext),
             playbackStartVolumeLimitPercentProvider = {
-                settingsRepository.mediaPlaybackStartVolumeLimitPercent.first()
+                kotlinx.coroutines.runBlocking { settingsRepository.mediaPlaybackStartVolumeLimitPercent.first() }
             }
         )
     }

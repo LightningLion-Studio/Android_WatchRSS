@@ -38,22 +38,32 @@ import com.lightningstudio.watchrss.ui.screen.home.HomeComposeScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
 import com.lightningstudio.watchrss.ui.viewmodel.HomeViewModel
+import com.lightningstudio.watchrss.data.push.PushNotificationRepository
+import com.lightningstudio.watchrss.data.announcement.AnnouncementRepository
+import androidx.compose.material3.Text as M3Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.AlertDialog
 import com.lightningstudio.watchrss.util.AppLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class HomeFeedListActivity : BaseWatchActivity() {
     private val viewModel: HomeViewModel by viewModels {
         AppViewModelFactory((application as WatchRssApplication).container)
     }
+    private val announcementRepository by lazy { AnnouncementRepository(this) }
+    private val pushNotificationRepository by lazy { PushNotificationRepository(this) }
 
     private val closeOpenSwipeBackCallback = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() {
             closeOpenSwipe()
         }
     }
+    private val pendingAnnouncement = mutableStateOf<AnnouncementRepository.Announcement?>(null)
+    private val pendingPushMessages = mutableStateOf<List<PushNotificationRepository.PushMessage>>(emptyList())
     private val openSwipeKeyState = mutableStateOf<Long?>(null)
     private var openSwipeKey: Long?
         get() = openSwipeKeyState.value
@@ -116,6 +126,7 @@ class HomeFeedListActivity : BaseWatchActivity() {
         setupSystemBars()
         renderHomeContent()
         initialStartupCompleted = true
+        checkAnnouncementAndPushNotifications()
         restorePinnedDouyinPreviewsOnHome()
 
         if (intent.getBooleanExtra(EXTRA_LAUNCHER_ENTRY, false)) {
@@ -156,6 +167,37 @@ class HomeFeedListActivity : BaseWatchActivity() {
                 }
 
                 Box(modifier = Modifier.fillMaxSize()) {
+                    val announcement by pendingAnnouncement
+                    val pushMessages by pendingPushMessages
+
+                    val ann = announcement
+                    if (ann != null) {
+                        AlertDialog(
+                            onDismissRequest = { announcementRepository.markDismissed(ann.version); pendingAnnouncement.value = null },
+                            confirmButton = {
+                                TextButton(onClick = { announcementRepository.markDismissed(ann.version); pendingAnnouncement.value = null }) {
+                                    M3Text("关闭")
+                                }
+                            },
+                            title = { M3Text("发现新版本 " + ann.version) },
+                            text = { M3Text(markdownToPlainText(ann.changelogMarkdown)) }
+                        )
+                    }
+
+                    if (pushMessages.isNotEmpty()) {
+                        val first = pushMessages.first()
+                        AlertDialog(
+                            onDismissRequest = { pendingPushMessages.value = emptyList() },
+                            confirmButton = {
+                                TextButton(onClick = { pendingPushMessages.value = emptyList() }) {
+                                    M3Text("知道了")
+                                }
+                            },
+                            title = { M3Text(first.title) },
+                            text = { M3Text(first.body) }
+                        )
+                    }
+
                     HomeComposeScreen(
                         channels = channels,
                         hasLoadedChannels = hasLoadedChannels,
@@ -224,6 +266,33 @@ class HomeFeedListActivity : BaseWatchActivity() {
                 }
             }
         }
+    }
+
+    private fun checkAnnouncementAndPushNotifications() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val announcement = announcementRepository.checkAnnouncement()
+                if (announcement != null) {
+                    withContext(Dispatchers.Main) { pendingAnnouncement.value = announcement }
+                    return@launch
+                }
+                val messages = pushNotificationRepository.fetchNewMessages()
+                if (messages.isNotEmpty()) {
+                    withContext(Dispatchers.Main) { pendingPushMessages.value = messages }
+                }
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    private fun markdownToPlainText(markdown: String): String {
+        return markdown
+            .replace(Regex("""#+\s+"""), "")
+            .replace(Regex("""\*\*([^\*]+)\*\*"""), "$1")
+            .replace(Regex("""\*([^\*]+)\*"""), "$1")
+            .replace(Regex("""`([^`]+)`"""), "$1")
+            .replace(Regex("""\[(.*?)]\(.*?\)"""), "$1")
+            .trim()
     }
 
     private fun closeOpenSwipe(): Boolean {

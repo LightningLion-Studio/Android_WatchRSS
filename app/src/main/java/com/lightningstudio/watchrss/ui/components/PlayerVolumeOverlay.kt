@@ -64,7 +64,7 @@ class PlayerVolumeState internal constructor(
         maxVolume = maxVolume
     )
     private var hideJob: Job? = null
-    private var digitalCrownGuardState by mutableStateOf(DigitalCrownVolumeGuardState())
+    private var digitalCrownGuardState by mutableStateOf(DigitalCrownVolumeGuardState.IDLE)
     private var playbackStartGuardDismissedByUser by mutableStateOf(false)
     // 浮点虚拟音量，保留 delta 累积精度，仅在提交给 AudioManager 时 roundToInt
     // 用 mutableFloatStateOf 使 UI 直接观察连续值，而非离散的 AudioManager 整数
@@ -147,7 +147,7 @@ class PlayerVolumeState internal constructor(
             "apply playback start guard current=$current target=$targetVolume limitPercent=$playbackStartVolumeLimitPercent"
         )
         val previousVirtualVolume = virtualVolume
-        virtualVolume = targetVolume ?: current.toFloat()
+        virtualVolume = targetVolume?.toFloat() ?: current.toFloat()
         setVolume(virtualVolume.roundToInt())
         if (currentVolume != current || virtualVolume != previousVirtualVolume) {
             show()
@@ -168,7 +168,7 @@ class PlayerVolumeState internal constructor(
             "dismiss playback start guard after external volume change observed=$currentVolume actual=$actual"
         )
         playbackStartGuardDismissedByUser = true
-        digitalCrownGuardState = DigitalCrownVolumeGuardState()
+        digitalCrownGuardState = DigitalCrownVolumeGuardState.IDLE
         currentVolume = actual
         virtualVolume = actual.toFloat()
     }

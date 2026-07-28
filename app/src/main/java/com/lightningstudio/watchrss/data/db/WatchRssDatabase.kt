@@ -15,9 +15,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         OfflineMediaEntity::class,
         SyncChangeLogEntity::class,
         SyncPeerStateEntity::class,
-        RssSourceSyncStateEntity::class
+        RssSourceSyncStateEntity::class,
+        LlmTokenUsageEntity::class
     ],
-    version = 14,
+    version = 15,
     exportSchema = false
 )
 @SkipQueryVerification
@@ -30,6 +31,7 @@ abstract class WatchRssDatabase : RoomDatabase() {
     abstract fun syncChangeLogDao(): SyncChangeLogDao
     abstract fun syncPeerStateDao(): SyncPeerStateDao
     abstract fun rssSourceSyncStateDao(): RssSourceSyncStateDao
+    abstract fun llmTokenUsageDao(): LlmTokenUsageDao
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -263,6 +265,34 @@ abstract class WatchRssDatabase : RoomDatabase() {
                     )
                     """.trimIndent()
                 )
+            }
+        }
+
+        val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS llm_token_usage (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        provider TEXT NOT NULL,
+                        model TEXT NOT NULL,
+                        requestId TEXT NOT NULL,
+                        promptTokens INTEGER,
+                        completionTokens INTEGER,
+                        totalTokens INTEGER,
+                        reasoningTokens INTEGER,
+                        cachedPromptTokens INTEGER,
+                        inputTokens INTEGER,
+                        outputTokens INTEGER,
+                        promptTokenCount INTEGER,
+                        candidatesTokenCount INTEGER,
+                        totalTokenCount INTEGER,
+                        createdAt INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_llm_token_usage_provider_createdAt ON llm_token_usage(provider, createdAt)")
+                database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_llm_token_usage_requestId ON llm_token_usage(requestId)")
             }
         }
     }

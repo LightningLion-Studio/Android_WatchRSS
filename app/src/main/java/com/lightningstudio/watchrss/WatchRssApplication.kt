@@ -4,6 +4,7 @@ import android.app.Application
 import com.lightningstudio.watchrss.data.AppContainer
 import com.lightningstudio.watchrss.data.DefaultAppContainer
 import com.lightningstudio.watchrss.data.account.WatchAccountStore
+import com.lightningstudio.watchrss.data.telemetry.WatchInstallationIdentity
 import com.lightningstudio.watchrss.data.telemetry.WatchUsageTelemetry
 import com.lightningstudio.watchrss.debug.DebugLogBuffer
 import com.lightningstudio.watchrss.debug.StartupDurationTracker
@@ -40,9 +41,9 @@ class WatchRssApplication : Application() {
     val usageTelemetry: WatchUsageTelemetry by lazy {
         WatchUsageTelemetry(
             context = this,
-            accountStore = accountStore,
-            deviceIdentity = WatchDeviceIdentity(this),
-            appScope = appScope
+            installationIdentity = WatchInstallationIdentity(this),
+            appScope = appScope,
+            openPanelAnalytics = (container as DefaultAppContainer).openPanelAnalytics
         )
     }
 

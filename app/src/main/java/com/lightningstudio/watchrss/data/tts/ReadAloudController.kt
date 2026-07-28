@@ -12,6 +12,7 @@ import android.speech.tts.UtteranceProgressListener
 import android.speech.tts.Voice
 import com.lightningstudio.watchrss.BuildConfig
 import com.lightningstudio.watchrss.data.media.MediaPlaybackStartVolumeLimiter
+import com.lightningstudio.watchrss.data.media.ReadAloudAudioSpectrumAnalyzer
 import com.lightningstudio.watchrss.data.rss.ImportedContentIds
 import com.lightningstudio.watchrss.data.rss.ImportedTextReader
 import com.lightningstudio.watchrss.data.rss.RssChannel
@@ -288,7 +289,7 @@ class ReadAloudController(
             null
         }
         try {
-            limiter.enforcePlaybackStartVolumeLimit(limitPercent)
+            limiter.enforcePlaybackStartVolumeLimit()
         } catch (error: CancellationException) {
             throw error
         } catch (error: Throwable) {

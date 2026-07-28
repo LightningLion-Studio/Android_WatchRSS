@@ -40,6 +40,9 @@ android {
         buildConfigField("String", "WATCHRSS_OPENPANEL_CLIENT_ID", "\"3b151c92-b189-48a3-ae77-148db3235ca1\"")
         buildConfigField("String", "WATCHRSS_OPENPANEL_CLIENT_SECRET", "\"\"")
         buildConfigField("String", "WATCHRSS_OPENPANEL_API_URL", "\"http://10.0.2.2:3001\"")
+        buildConfigField("boolean", "ENABLE_RUNTIME_PERF_MONITOR", "false")
+        buildConfigField("boolean", "ENABLE_WATCH_DEBUG_MASK", "false")
+        buildConfigField("String", "WATCHRSS_LOCAL_BACKEND_URL", "\"http://10.0.2.2:8765\"")
 
         testInstrumentationRunner = "com.karumi.shot.ShotTestRunner"
         if (clearPackageDataForInstrumentation) {
@@ -59,11 +62,13 @@ android {
     }
     buildTypes {
         debug {
+            manifestPlaceholders += mapOf("debugActivityExported" to "false")
             if (hasKeystoreProperties) {
                 signingConfig = signingConfigs.getByName("release")
             }
         }
         release {
+            manifestPlaceholders += mapOf("debugActivityExported" to "false")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

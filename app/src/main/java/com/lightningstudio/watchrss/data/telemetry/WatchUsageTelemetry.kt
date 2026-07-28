@@ -111,6 +111,12 @@ class WatchUsageTelemetry(
         )
     }
 
+    fun recordSyncAccount() {
+        capture("sync_account")
+    }
+
+    fun backlogCount(): Int = 0
+
     private fun capture(event: String, properties: Map<String, Any> = emptyMap()) {
         appScope.launch(Dispatchers.IO) {
             openPanelAnalytics.track(event, properties)
