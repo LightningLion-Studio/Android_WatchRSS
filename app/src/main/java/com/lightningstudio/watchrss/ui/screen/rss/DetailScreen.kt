@@ -237,10 +237,11 @@ internal fun DetailContent(
     }
     val listState = rememberLazyListState()
     InstallDigitalCrownLazyListHandler(listState)
-    val safePadding = WatchDimens.watch_safe_padding
-    val pagePadding = WatchDimens.detail_page_horizontal_padding
-    val blockSpacing = WatchDimens.detail_block_spacing
-    val titlePadding = WatchDimens.detail_title_safe_padding
+    val safePadding = com.lightningstudio.watchrss.ui.reader.ReaderPageLayout.topSafePadding
+    val pagePadding = com.lightningstudio.watchrss.ui.reader.ReaderPageLayout.horizontalPadding
+    val blockSpacing = com.lightningstudio.watchrss.ui.reader.ReaderPageLayout.blockSpacing
+    val titlePadding =
+        com.lightningstudio.watchrss.ui.reader.ReaderPageLayout.titleHorizontalPadding
     val actionVerticalSpacing = 15.dp
     val actionHorizontalSpacing = 12.dp
     val actionIconSize = 32.dp
@@ -1094,7 +1095,9 @@ internal fun DetailContent(
                 Spacer(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(watchDimensionResource(R.dimen.hey_distance_4dp))
+                        .height(
+                            com.lightningstudio.watchrss.ui.reader.ReaderPageLayout.titleGap
+                        )
                         .readAloudLongPressTarget(::openReadAloudFromBeginning)
                 )
             }

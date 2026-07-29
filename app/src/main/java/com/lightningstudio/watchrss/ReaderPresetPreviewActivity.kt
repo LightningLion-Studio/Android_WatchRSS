@@ -28,7 +28,6 @@ import com.lightningstudio.watchrss.ui.reader.ReaderPresetRuntime
 import com.lightningstudio.watchrss.ui.reader.ReaderTextRole
 import com.lightningstudio.watchrss.ui.reader.readerTextStyle
 import com.lightningstudio.watchrss.ui.screen.rss.DetailTitle
-import com.lightningstudio.watchrss.ui.theme.WatchDimens
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 
 class ReaderPresetPreviewActivity : BaseWatchActivity() {
@@ -118,7 +117,7 @@ private fun WatchReaderPresetLivePreview(
             ) {
                 DetailTitle(
                     title = "阅读，让时间慢下来",
-                    titlePadding = WatchDimens.detail_title_safe_padding,
+                    titlePadding = ReaderPageLayout.titleHorizontalPadding,
                     textColor = androidx.compose.ui.graphics.Color(preview.preset.body.colorArgb)
                 )
                 Text("标题、副标题与正文会分别使用分类样式", style = readerTextStyle(ReaderTextRole.SUBTITLE))

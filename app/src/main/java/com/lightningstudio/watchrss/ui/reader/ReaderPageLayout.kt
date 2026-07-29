@@ -9,8 +9,17 @@ object ReaderPageLayout {
     val horizontalPadding: Dp
         @Composable get() = WatchDimens.detail_page_horizontal_padding
 
+    val topSafePadding: Dp
+        @Composable get() = WatchDimens.watch_safe_padding
+
+    val titleGap: Dp
+        @Composable get() = WatchDimens.hey_distance_4dp
+
     val titleTopPadding: Dp
-        @Composable get() = WatchDimens.watch_safe_padding + WatchDimens.hey_distance_4dp
+        @Composable get() = topSafePadding + titleGap
+
+    val titleHorizontalPadding: Dp
+        @Composable get() = WatchDimens.detail_title_safe_padding
 
     val blockSpacing: Dp
         @Composable get() = WatchDimens.detail_block_spacing
