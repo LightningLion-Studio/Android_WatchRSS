@@ -25,9 +25,9 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun WatchSwitch(
     checked: Boolean,
-    enabled: Boolean = true,
+    onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
-    onCheckedChange: (Boolean) -> Unit
+    enabled: Boolean = true
 ) {
     val density = LocalDensity.current
     val trackWidth = with(density) { 60f.toDp() }

@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss.ui.screen.rss
 
+import android.annotation.SuppressLint
 import android.os.Trace
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -51,6 +52,8 @@ import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import com.lightningstudio.watchrss.ui.util.RssImageLoader
 import com.lightningstudio.watchrss.ui.util.RssInlineImageLoader
 import com.lightningstudio.watchrss.ui.util.TextStyle as ContentTextStyle
+import com.lightningstudio.watchrss.ui.reader.ReaderTextRole
+import com.lightningstudio.watchrss.ui.reader.readerTextStyle
 import kotlinx.coroutines.delay
 
 internal data class DetailTextHighlightRange(
@@ -59,6 +62,7 @@ internal data class DetailTextHighlightRange(
 )
 
 @Composable
+@SuppressLint("UnclosedTrace")
 internal fun DetailTextBlock(
     text: String,
     style: ContentTextStyle,
@@ -77,9 +81,15 @@ internal fun DetailTextBlock(
     if (isDetailTracingEnabled()) {
         Trace.beginSection("DetailTextBlock:${style.name}")
     }
-    val lineHeight = fontSizeSp * 1.2f
-    val fontFamily = if (style == ContentTextStyle.CODE) FontFamily.Monospace else null
-    val color = if (style == ContentTextStyle.QUOTE) textColor.copy(alpha = 0.8f) else textColor
+    val presetStyle = readerTextStyle(
+        when (style) {
+            ContentTextStyle.TITLE -> ReaderTextRole.TITLE
+            ContentTextStyle.SUBTITLE -> ReaderTextRole.SUBTITLE
+            ContentTextStyle.QUOTE -> ReaderTextRole.QUOTE
+            ContentTextStyle.CODE -> ReaderTextRole.CODE
+            else -> ReaderTextRole.BODY
+        }
+    )
     val annotatedText = remember(
         text,
         inlineActionText,
@@ -110,12 +120,8 @@ internal fun DetailTextBlock(
     }
     Text(
         text = annotatedText,
-        color = color,
-        fontSize = fontSizeSp,
-        lineHeight = lineHeight,
-        fontFamily = fontFamily,
+        style = presetStyle,
         onTextLayout = { result -> onTextLayout?.invoke(result) },
-        style = TextStyle(textAlign = TextAlign.Start),
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = topPadding)
@@ -198,6 +204,7 @@ internal fun buildHighlightedPlainText(
 }
 
 @Composable
+@SuppressLint("UnclosedTrace")
 internal fun DetailImageBlock(
     url: String,
     alt: String?,
@@ -287,6 +294,7 @@ internal fun DetailImageBlock(
 }
 
 @Composable
+@SuppressLint("UnclosedTrace")
 internal fun DetailVideoBlock(
     poster: String?,
     videoUrl: String,

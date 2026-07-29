@@ -1,5 +1,8 @@
+@file:androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+
 package com.lightningstudio.watchrss.ui.screen.douyin
 
+import androidx.core.graphics.createBitmap
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -101,6 +104,8 @@ import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.douyin.DOUYIN_PLAYBACK_PREVIEW_ENTRY_LIMIT
 import com.lightningstudio.watchrss.data.douyin.DouyinCodecRuntimePolicy
 import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackPreviewCache
+import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackRefreshOutcome
+import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackRefreshTrigger
 import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackSourceKind
 import com.lightningstudio.watchrss.data.douyin.DouyinStreamItem
 import com.lightningstudio.watchrss.data.douyin.resolveDouyinLookaheadItemIndices
@@ -582,7 +587,11 @@ internal fun DouyinImmersiveScreen(
     onPageSettled: (Int) -> Unit,
     onEnterFlow: () -> Unit,
     onItemLongPress: (DouyinStreamItem) -> Unit,
-    onRequestPlaybackRefresh: (String, DouyinPlaybackSourceKind) -> Unit,
+    onRequestPlaybackRefresh: (
+        String,
+        DouyinPlaybackSourceKind,
+        DouyinPlaybackRefreshTrigger
+    ) -> Unit,
     onDiscardPlaybackItem: (String) -> Unit,
     onMessageShown: () -> Unit,
     onHeaderClick: () -> Unit
@@ -662,6 +671,8 @@ internal fun DouyinImmersiveScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val poisonedAwemeIds by DouyinPlaybackDebugController.poisonedAwemeIds.collectAsState()
     val quarantinedPlaybackRecords = remember { mutableStateMapOf<String, DouyinPlaybackQuarantineRecord>() }
+    val automatic403RefreshSources = remember { mutableStateMapOf<String, String>() }
+    val handledRefreshFailureEventIds = remember { linkedSetOf<Long>() }
     val playbackAnchorPagerPage = resolveDouyinPlaybackAnchorPagerPage(
         isScrollInProgress = pagerState.isScrollInProgress,
         pagerPage = pagerState.currentPage,
@@ -1125,6 +1136,11 @@ internal fun DouyinImmersiveScreen(
             }
             return
         }
+        val rebindStartPositionMs = resolveDouyinRebindStartPositionMs(
+            boundAwemeId = slot.boundAwemeId,
+            targetAwemeId = awemeId,
+            currentPositionMs = slot.player.currentPosition
+        )
         if (slot.preparedSourceKey != null || slot.mediaUri != null) {
             resetSlotPlayerMedia(slot)
         }
@@ -1152,7 +1168,16 @@ internal fun DouyinImmersiveScreen(
             )
         }
         slot.player.playWhenReady = shouldPlay
-        slot.player.setMediaItem(MediaItem.fromUri(targetUri))
+        val mediaItem = MediaItem.fromUri(targetUri)
+        if (rebindStartPositionMs != null) {
+            slot.player.setMediaItem(mediaItem, rebindStartPositionMs)
+            AppLogger.d(
+                TAG,
+                "TEST_EVENT playback_source_rebind awemeId=$awemeId positionMs=$rebindStartPositionMs"
+            )
+        } else {
+            slot.player.setMediaItem(mediaItem)
+        }
         slot.player.prepare()
         if (shouldPlay) {
             enforceEntryPlaybackStartVolumeLimit()
@@ -1243,7 +1268,14 @@ internal fun DouyinImmersiveScreen(
         }
     }
 
-    fun requestActivePlaybackRefresh(resetRetryCount: Boolean = false) {
+    fun requestActivePlaybackRefresh(
+        resetRetryCount: Boolean = false,
+        trigger: DouyinPlaybackRefreshTrigger = if (resetRetryCount) {
+            DouyinPlaybackRefreshTrigger.MANUAL
+        } else {
+            DouyinPlaybackRefreshTrigger.PLAYBACK_ERROR
+        }
+    ) {
         val item = activeItem ?: return
         if (activeIsPoisoned) {
             if (resetRetryCount) {
@@ -1285,12 +1317,14 @@ internal fun DouyinImmersiveScreen(
         foregroundSlot.clearRenderedFirstFrame()
         activePausedByGesture = false
         activeAutoplayEnabled = false
-        activePrepareAttemptNonce += 1
+        if (trigger != DouyinPlaybackRefreshTrigger.FOREGROUND_HTTP_403) {
+            activePrepareAttemptNonce += 1
+        }
         if (sourceKind == DouyinPlaybackSourceKind.LOCAL && !preparedPlaybackTargetMediaUri.isNullOrBlank()) {
             activeMediaUri = preparedPlaybackTargetMediaUri
             activeRemoteResolvedAtMs = item.playUrlResolvedAtMs
         }
-        onRequestPlaybackRefresh(item.awemeId, sourceKind)
+        onRequestPlaybackRefresh(item.awemeId, sourceKind, trigger)
     }
 
     fun quarantinePlaybackItem(
@@ -1552,11 +1586,45 @@ internal fun DouyinImmersiveScreen(
         DouyinPlaybackPreviewCache.prefetchHttpFailures.collect { failure ->
             if (latestItems.value.none { it.awemeId == failure.awemeId }) return@collect
             val isForegroundAweme = latestActiveAwemeId.value == failure.awemeId && !latestShowTitlePage.value
-            if (!shouldQuarantineDouyinPrefetchHttpFailure(isForegroundAweme, failure.httpStatusCode)) {
+            val currentProxyUri = latestProxyPlayUris.value[failure.awemeId]
+            val action = resolveDouyinHttpFailureAction(
+                httpStatusCode = failure.httpStatusCode,
+                isCurrentSource = failure.mediaUri == currentProxyUri,
+                hasAutomaticRefreshAttempt = automatic403RefreshSources.containsKey(failure.awemeId)
+            )
+            when (action) {
+                DouyinHttpFailureAction.Ignore -> {
+                    AppLogger.d(
+                        TAG,
+                        "ignore prefetch http failure awemeId=${failure.awemeId} " +
+                            "code=${failure.httpStatusCode} foreground=$isForegroundAweme " +
+                            "current=${failure.mediaUri == currentProxyUri} reason=${failure.reason}"
+                    )
+                    return@collect
+                }
+
+                DouyinHttpFailureAction.RefreshSource -> {
+                    automatic403RefreshSources[failure.awemeId] = failure.mediaUri
+                    AppLogger.d(
+                        TAG,
+                        "TEST_EVENT playback_source_refresh_requested awemeId=${failure.awemeId} " +
+                            "trigger=${DouyinPlaybackRefreshTrigger.PREFETCH_HTTP_403.name}"
+                    )
+                    onRequestPlaybackRefresh(
+                        failure.awemeId,
+                        DouyinPlaybackSourceKind.REMOTE,
+                        DouyinPlaybackRefreshTrigger.PREFETCH_HTTP_403
+                    )
+                    return@collect
+                }
+
+                DouyinHttpFailureAction.Quarantine -> Unit
+            }
+            if (isForegroundAweme) {
                 AppLogger.d(
                     TAG,
-                    "ignore prefetch http failure awemeId=${failure.awemeId} " +
-                        "code=${failure.httpStatusCode} foreground=$isForegroundAweme reason=${failure.reason}"
+                    "defer foreground prefetch http quarantine awemeId=${failure.awemeId} " +
+                        "code=${failure.httpStatusCode}"
                 )
                 return@collect
             }
@@ -1567,6 +1635,35 @@ internal fun DouyinImmersiveScreen(
                 detail = failure.httpStatusCode.toString(),
                 slot = boundSlot,
                 autoSkipCurrent = false
+            )
+        }
+    }
+    LaunchedEffect(uiState.playbackRefreshEvents) {
+        uiState.playbackRefreshEvents.values.forEach { event ->
+            if (
+                event.eventId <= 0L ||
+                event.outcome != DouyinPlaybackRefreshOutcome.FAILURE ||
+                event.trigger !in setOf(
+                    DouyinPlaybackRefreshTrigger.FOREGROUND_HTTP_403,
+                    DouyinPlaybackRefreshTrigger.PREFETCH_HTTP_403
+                ) ||
+                !handledRefreshFailureEventIds.add(event.eventId)
+            ) {
+                return@forEach
+            }
+            val isForegroundAweme = activeItem?.awemeId == event.awemeId && !uiState.showTitlePage
+            val boundSlot = allSlots.firstOrNull { it.boundAwemeId == event.awemeId }
+            AppLogger.d(
+                TAG,
+                "TEST_EVENT playback_source_refresh_failed awemeId=${event.awemeId} " +
+                    "trigger=${event.trigger.name} foreground=$isForegroundAweme"
+            )
+            quarantinePlaybackItem(
+                awemeId = event.awemeId,
+                reason = DouyinPlaybackQuarantineReason.PrefetchHttpStatusError,
+                detail = event.errorCode?.toString() ?: event.message,
+                slot = boundSlot,
+                autoSkipCurrent = isForegroundAweme
             )
         }
     }
@@ -1908,6 +2005,57 @@ internal fun DouyinImmersiveScreen(
         )
         return true
     }
+
+    fun handleForegroundHttp403(
+        slot: DouyinPlayerSlotState,
+        awemeId: String?,
+        error: PlaybackException
+    ): Boolean {
+        val normalizedAwemeId = awemeId?.trim().orEmpty()
+        val httpStatusCode = findDouyinHttpStatusCode(error)
+        if (normalizedAwemeId.isEmpty() || httpStatusCode != HTTP_STATUS_FORBIDDEN) {
+            return false
+        }
+        return when (
+            resolveDouyinHttpFailureAction(
+                httpStatusCode = httpStatusCode,
+                isCurrentSource = true,
+                hasAutomaticRefreshAttempt = automatic403RefreshSources.containsKey(normalizedAwemeId)
+            )
+        ) {
+            DouyinHttpFailureAction.RefreshSource -> {
+                automatic403RefreshSources[normalizedAwemeId] =
+                    slot.preparedSourceKey ?: slot.mediaUri.orEmpty()
+                slot.isBuffering = true
+                slot.hasError = true
+                AppLogger.d(
+                    TAG,
+                    "TEST_EVENT playback_source_refresh_requested awemeId=$normalizedAwemeId " +
+                        "trigger=${DouyinPlaybackRefreshTrigger.FOREGROUND_HTTP_403.name}"
+                )
+                onRequestPlaybackRefresh(
+                    normalizedAwemeId,
+                    currentDouyinPlaybackSourceKind(slot.mediaUri),
+                    DouyinPlaybackRefreshTrigger.FOREGROUND_HTTP_403
+                )
+                true
+            }
+
+            DouyinHttpFailureAction.Quarantine -> {
+                quarantinePlaybackItem(
+                    awemeId = normalizedAwemeId,
+                    reason = DouyinPlaybackQuarantineReason.PrefetchHttpStatusError,
+                    detail = httpStatusCode.toString(),
+                    slot = slot,
+                    autoSkipCurrent = true
+                )
+                true
+            }
+
+            DouyinHttpFailureAction.Ignore -> true
+        }
+    }
+
     fun logPlaybackStarted(
         slot: DouyinPlayerSlotState,
         mode: String,
@@ -1996,6 +2144,9 @@ internal fun DouyinImmersiveScreen(
                     return
                 }
                 if (applyH264FallbackIfAvailable(primarySlot, error, isForegroundCurrentSlot)) {
+                    return
+                }
+                if (handleForegroundHttp403(primarySlot, currentAwemeId, error)) {
                     return
                 }
                 if (isLikelyDouyinCodecFailure(error)) {
@@ -2110,6 +2261,9 @@ internal fun DouyinImmersiveScreen(
                     return
                 }
                 if (applyH264FallbackIfAvailable(secondarySlot, error, isForegroundCurrentSlot)) {
+                    return
+                }
+                if (handleForegroundHttp403(secondarySlot, currentAwemeId, error)) {
                     return
                 }
                 if (isLikelyDouyinCodecFailure(error)) {
@@ -3293,7 +3447,7 @@ private fun renderDouyinPosterBitmap(
     if (bitmap.width <= 0 || bitmap.height <= 0 || viewSize.width <= 0 || viewSize.height <= 0) {
         return null
     }
-    val output = Bitmap.createBitmap(viewSize.width, viewSize.height, Bitmap.Config.ARGB_8888)
+    val output = createBitmap(viewSize.width, viewSize.height)
     Canvas(output).apply {
         drawColor(android.graphics.Color.BLACK)
         if (bitmap.width != viewSize.width || bitmap.height != viewSize.height) {
@@ -3580,15 +3734,6 @@ internal fun shouldUpdateDouyinPlaybackWindow(
     }
 }
 
-internal fun shouldQuarantineDouyinPrefetchHttpFailure(
-    isForegroundAweme: Boolean,
-    httpStatusCode: Int
-): Boolean {
-    if (isForegroundAweme) return false
-    if (httpStatusCode == HTTP_STATUS_RANGE_NOT_SATISFIABLE) return false
-    return true
-}
-
 internal fun shouldShowDouyinPosterFallback(
     pagerPage: Int,
     currentPagerPage: Int,
@@ -3760,7 +3905,7 @@ private const val DOUYIN_LOOKAHEAD_PREWARM_TIMEOUT_MS = 10_000L
 private const val DOUYIN_PAGER_SNAP_POSITIONAL_THRESHOLD = 0.18f
 private const val DOUYIN_NETWORK_BANDWIDTH_REFRESH_MS = 5_000L
 private const val DOUYIN_PLAYER_AUDIBLE_VOLUME = 1f
-private const val HTTP_STATUS_RANGE_NOT_SATISFIABLE = 416
+private const val HTTP_STATUS_FORBIDDEN = 403
 private const val DOUYIN_INJECTED_FAILURE_URI_PREFIX = "watchrss-debug://douyin/force-fail/"
 private const val DOUYIN_CACHE_PLAYBACK_URI_PREFIX = "watchrss-douyin-cache://"
 private const val DOUYIN_PLAYER_RECENT_HISTORY_SIZE = DOUYIN_PLAYBACK_PREVIEW_ENTRY_LIMIT

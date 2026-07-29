@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss.ui.viewmodel
 
+import androidx.core.net.toUri
 import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -475,7 +476,7 @@ class BiliDetailViewModel(
 
     private fun parseBiliTarget(link: String?): BiliTarget? {
         if (link.isNullOrBlank()) return null
-        val uri = runCatching { Uri.parse(link) }.getOrNull() ?: return null
+        val uri = runCatching { link.toUri() }.getOrNull() ?: return null
         val host = uri.host?.lowercase() ?: return null
         if (!host.contains("bilibili.com")) return null
         val segments = uri.pathSegments

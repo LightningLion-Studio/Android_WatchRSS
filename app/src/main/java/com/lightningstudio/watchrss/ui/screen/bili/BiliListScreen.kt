@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss.ui.screen.bili
 
+import java.util.Locale
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -167,5 +168,5 @@ private fun formatDuration(seconds: Int?): String? {
     if (seconds == null || seconds <= 0) return null
     val minutes = seconds / 60
     val remain = seconds % 60
-    return String.format("%02d:%02d", minutes, remain)
+    return String.format(Locale.getDefault(), "%02d:%02d", minutes, remain)
 }

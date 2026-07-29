@@ -51,8 +51,7 @@ class WatchMaskLayout @JvmOverloads constructor(
         maskPath.addRect(0f, 0f, w.toFloat(), h.toFloat(), Path.Direction.CW)
         maskPath.addCircle(centerX, centerY, radius, Path.Direction.CW)
         maskPath.fillType = Path.FillType.EVEN_ODD
-        val canUseOutlineClip = watchIsRound(resources.configuration) &&
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP
+        val canUseOutlineClip = watchIsRound(resources.configuration)
         if (canUseOutlineClip) {
             clipToOutline = true
             outlineProvider = roundOutlineProvider

@@ -8,6 +8,7 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission
         android:name="android.permission.BLUETOOTH"
@@ -18,7 +19,8 @@
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission
         android:name="android.permission.NEARBY_WIFI_DEVICES"
-        android:usesPermissionFlags="neverForLocation" />
+        android:usesPermissionFlags="neverForLocation"
+        tools:targetApi="s" />
 
     <queries>
         <intent>
@@ -56,7 +58,7 @@
             android:alwaysRetainTaskState="true"
             android:enableOnBackInvokedCallback="true"
             android:exported="true"
-            android:label="@string/app_name"
+            tools:targetApi="tiramisu"
             android:theme="@style/Theme.WatchRSS.Splash">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -121,6 +123,10 @@
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".SettingsActivity"
+            android:exported="${debugActivityExported}"
+            android:theme="@style/Theme.WatchRSS.Translucent" />
+        <activity
+            android:name=".ReaderPresetActivity"
             android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity

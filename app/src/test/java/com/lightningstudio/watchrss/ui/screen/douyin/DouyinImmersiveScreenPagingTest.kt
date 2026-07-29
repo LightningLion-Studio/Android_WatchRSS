@@ -456,38 +456,6 @@ class DouyinImmersiveScreenPagingTest {
     }
 
     @Test
-    fun shouldQuarantineDouyinPrefetchHttpFailure_keepsForegroundPlaybackAlive() {
-        assertEquals(
-            false,
-            shouldQuarantineDouyinPrefetchHttpFailure(
-                isForegroundAweme = true,
-                httpStatusCode = 416
-            )
-        )
-        assertEquals(
-            false,
-            shouldQuarantineDouyinPrefetchHttpFailure(
-                isForegroundAweme = true,
-                httpStatusCode = 403
-            )
-        )
-        assertEquals(
-            false,
-            shouldQuarantineDouyinPrefetchHttpFailure(
-                isForegroundAweme = false,
-                httpStatusCode = 416
-            )
-        )
-        assertEquals(
-            true,
-            shouldQuarantineDouyinPrefetchHttpFailure(
-                isForegroundAweme = false,
-                httpStatusCode = 403
-            )
-        )
-    }
-
-    @Test
     fun shouldShowDouyinPosterFallback_showsForTargetPageAndNearbyScrollPagesWithoutFrame() {
         assertEquals(
             true,

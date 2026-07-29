@@ -18,10 +18,12 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.screen.InfoScreen
+import com.lightningstudio.watchrss.ui.reader.ProvideReaderPreset
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 
 class InfoActivity : BaseWatchActivity() {
     private val settingsRepository by lazy { (application as WatchRssApplication).container.settingsRepository }
+    private val readerPresetRepository by lazy { (application as WatchRssApplication).container.readerPresetRepository }
     private var isNavigating by mutableStateOf(false)
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -40,6 +42,7 @@ class InfoActivity : BaseWatchActivity() {
 
         setContent {
             WatchRSSTheme {
+                ProvideReaderPreset(readerPresetRepository) {
                 val baseDensity = LocalDensity.current
                 val readingThemeDark by settingsRepository.readingThemeDark.collectAsState(initial = true)
                 val readingFontSizeSp by settingsRepository.readingFontSizeSp.collectAsState(initial = 14)
@@ -66,6 +69,7 @@ class InfoActivity : BaseWatchActivity() {
                             }
                         }
                     }
+                }
                 }
             }
         }

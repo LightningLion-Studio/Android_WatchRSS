@@ -43,6 +43,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.util.RssImageLoader
+import java.util.Locale
 import androidx.compose.ui.layout.ContentScale
 
 @Composable
@@ -177,9 +178,9 @@ fun BiliFeedCard(
     summary: String,
     coverUrl: String?,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
     onLongClick: (() -> Unit)? = null,
-    interactionSource: MutableInteractionSource? = null,
-    modifier: Modifier = Modifier
+    interactionSource: MutableInteractionSource? = null
 ) {
     val background = MaterialTheme.colorScheme.surface
     val shape = RoundedCornerShape(watchDimensionResource(R.dimen.hey_card_normal_bg_radius))
@@ -347,13 +348,13 @@ private fun formatDuration(seconds: Int?): String? {
     if (seconds == null || seconds <= 0) return null
     val minutes = seconds / 60
     val remain = seconds % 60
-    return String.format("%02d:%02d", minutes, remain)
+    return String.format(Locale.getDefault(), "%02d:%02d", minutes, remain)
 }
 
 fun formatBiliCount(value: Long): String {
     return when {
-        value >= 100_000_000L -> String.format("%.1f亿", value / 100_000_000.0)
-        value >= 10_000L -> String.format("%.1f万", value / 10_000.0)
+        value >= 100_000_000L -> String.format(Locale.getDefault(), "%.1f亿", value / 100_000_000.0)
+        value >= 10_000L -> String.format(Locale.getDefault(), "%.1f万", value / 10_000.0)
         else -> value.toString()
     }
 }

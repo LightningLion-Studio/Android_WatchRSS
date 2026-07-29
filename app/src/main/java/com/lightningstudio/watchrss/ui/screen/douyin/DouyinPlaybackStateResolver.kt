@@ -1,5 +1,7 @@
 package com.lightningstudio.watchrss.ui.screen.douyin
 
+import androidx.media3.datasource.HttpDataSource
+
 internal data class DouyinResolvedPlaybackState(
     val mediaUri: String?,
     val remoteResolvedAtMs: Long
@@ -8,6 +10,12 @@ internal data class DouyinResolvedPlaybackState(
 internal enum class DouyinPlaybackFailureAction {
     Retry,
     AutoSkip
+}
+
+internal enum class DouyinHttpFailureAction {
+    Ignore,
+    RefreshSource,
+    Quarantine
 }
 
 internal data class DouyinPlaybackFailureBurst(
@@ -69,6 +77,42 @@ internal fun resolveDouyinPlaybackFailureAction(
         retryCount < maxAutoRetryCount -> DouyinPlaybackFailureAction.Retry
         else -> DouyinPlaybackFailureAction.AutoSkip
     }
+}
+
+internal fun resolveDouyinHttpFailureAction(
+    httpStatusCode: Int,
+    isCurrentSource: Boolean,
+    hasAutomaticRefreshAttempt: Boolean
+): DouyinHttpFailureAction {
+    return when {
+        !isCurrentSource -> DouyinHttpFailureAction.Ignore
+        httpStatusCode == 416 -> DouyinHttpFailureAction.Ignore
+        httpStatusCode == 403 && !hasAutomaticRefreshAttempt -> {
+            DouyinHttpFailureAction.RefreshSource
+        }
+        else -> DouyinHttpFailureAction.Quarantine
+    }
+}
+
+internal fun findDouyinHttpStatusCode(error: Throwable): Int? {
+    var current: Throwable? = error
+    val visited = linkedSetOf<Throwable>()
+    while (current != null && visited.add(current)) {
+        if (current is HttpDataSource.InvalidResponseCodeException) {
+            return current.responseCode
+        }
+        current = current.cause
+    }
+    return null
+}
+
+internal fun resolveDouyinRebindStartPositionMs(
+    boundAwemeId: String?,
+    targetAwemeId: String,
+    currentPositionMs: Long
+): Long? {
+    return currentPositionMs
+        .takeIf { boundAwemeId == targetAwemeId && it > 0L }
 }
 
 internal fun recordDouyinPlaybackFailureBurst(

@@ -72,7 +72,7 @@ object AppLogger {
     private const val FLUSH_TIMEOUT_MS = 1500L
 
     private var logFile: File? = null
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault())
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US)
     private val fileIoExecutor = Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "AppLogger-IO").apply {
             isDaemon = true

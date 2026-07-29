@@ -3,6 +3,7 @@ package com.lightningstudio.watchrss.sdk.douyin
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
+import androidx.core.content.edit
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import kotlinx.coroutines.Dispatchers
@@ -30,9 +31,9 @@ class EncryptedDouyinCookieStore(
     suspend fun writeCookie(cookie: String?) = withContext(Dispatchers.IO) {
         withPrefs { prefs ->
             if (cookie.isNullOrBlank()) {
-                prefs.edit().remove(KEY_COOKIE).apply()
+                prefs.edit { remove(KEY_COOKIE) }
             } else {
-                prefs.edit().putString(KEY_COOKIE, cookie).apply()
+                prefs.edit { putString(KEY_COOKIE, cookie) }
             }
         }
     }

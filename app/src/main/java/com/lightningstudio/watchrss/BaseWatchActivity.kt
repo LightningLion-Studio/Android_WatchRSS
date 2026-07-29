@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -170,6 +171,7 @@ open class BaseWatchActivity : ComponentActivity() {
         return super.dispatchGenericMotionEvent(ev)
     }
 
+    @SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (shouldMapHardwareBackKey(event)) {
             return handleHardwareBackKeyEvent(event)

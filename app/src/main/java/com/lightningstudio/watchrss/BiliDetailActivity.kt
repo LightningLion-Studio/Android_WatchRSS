@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.Density
 import com.lightningstudio.watchrss.ShareQrActivity
 import com.lightningstudio.watchrss.ui.screen.bili.BiliDetailScreen
 import com.lightningstudio.watchrss.ui.screen.bili.BiliRssDetailScreen
+import com.lightningstudio.watchrss.ui.reader.ProvideReaderPreset
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.util.isSystemShareSettingSupported
 import com.lightningstudio.watchrss.ui.viewmodel.BiliDetailViewModel
@@ -25,6 +26,7 @@ class BiliDetailActivity : BaseWatchActivity() {
     private val repository by lazy { (application as WatchRssApplication).container.biliRepository }
     private val rssRepository by lazy { (application as WatchRssApplication).container.rssRepository }
     private val settingsRepository by lazy { (application as WatchRssApplication).container.settingsRepository }
+    private val readerPresetRepository by lazy { (application as WatchRssApplication).container.readerPresetRepository }
     private val viewModel: BiliDetailViewModel by viewModels {
         BiliViewModelFactory(repository, rssRepository)
     }
@@ -36,6 +38,7 @@ class BiliDetailActivity : BaseWatchActivity() {
 
         setContent {
             WatchRSSTheme {
+                ProvideReaderPreset(readerPresetRepository) {
                 val baseDensity = LocalDensity.current
                 CompositionLocalProvider(LocalDensity provides Density(2f, baseDensity.fontScale)) {
                     val context = LocalContext.current
@@ -120,6 +123,7 @@ class BiliDetailActivity : BaseWatchActivity() {
                             showCommentEntry = false
                         )
                     }
+                }
                 }
             }
         }

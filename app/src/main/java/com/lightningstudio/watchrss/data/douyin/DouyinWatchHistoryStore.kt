@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss.data.douyin
 
+import androidx.core.content.edit
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
@@ -67,10 +68,10 @@ class DouyinWatchHistoryStore(context: Context) : DouyinWatchHistoryStoreContrac
     override fun readHistory(): List<DouyinWatchHistoryEntry> = readHistoryInternal()
 
     override fun clear() {
-        prefs.edit()
-            .remove(KEY_WATCHED_IDS)
-            .remove(KEY_HISTORY_JSON)
-            .apply()
+        prefs.edit {
+                remove(KEY_WATCHED_IDS)
+                .remove(KEY_HISTORY_JSON)
+            }
     }
 
     private fun updatedWatchedIds(awemeId: String): Set<String> {
@@ -88,10 +89,10 @@ class DouyinWatchHistoryStore(context: Context) : DouyinWatchHistoryStoreContrac
         watchedIds: Set<String>,
         history: List<DouyinWatchHistoryEntry>
     ) {
-        prefs.edit()
-            .putStringSet(KEY_WATCHED_IDS, watchedIds)
-            .putString(KEY_HISTORY_JSON, encodeHistory(history))
-            .apply()
+        prefs.edit {
+                putStringSet(KEY_WATCHED_IDS, watchedIds)
+                .putString(KEY_HISTORY_JSON, encodeHistory(history))
+            }
     }
 
     private fun readHistoryInternal(): List<DouyinWatchHistoryEntry> {

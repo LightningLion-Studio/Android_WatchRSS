@@ -6,6 +6,10 @@ import com.lightningstudio.watchrss.data.douyin.DouyinErrorCodes
 import com.lightningstudio.watchrss.data.douyin.DouyinFeedCacheStoreContract
 import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackPreviewCache
 import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackSourceKind
+import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackRefreshOutcome
+import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackRefreshTrigger
+import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackSourceCoordinatorContract
+import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackSourceRefreshEvent
 import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackTransportContract
 import com.lightningstudio.watchrss.data.douyin.DouyinPreloadManagerContract
 import com.lightningstudio.watchrss.data.douyin.DouyinRecentWindowCacheCoordinatorContract
@@ -19,10 +23,13 @@ import com.lightningstudio.watchrss.data.douyin.DOUYIN_RECENT_WINDOW_SIZE
 import com.lightningstudio.watchrss.data.douyin.NoOpDouyinRecentWindowCacheCoordinator
 import com.lightningstudio.watchrss.data.douyin.NoOpDouyinRecentWindowStore
 import com.lightningstudio.watchrss.data.douyin.NoOpDouyinPlaybackTransport
+import com.lightningstudio.watchrss.data.douyin.NoOpDouyinPlaybackSourceCoordinator
 import com.lightningstudio.watchrss.data.douyin.buildDouyinRecentWindow
 import com.lightningstudio.watchrss.data.douyin.dropDouyinItemsBeforeAwemeId
 import com.lightningstudio.watchrss.data.douyin.formatDouyinError
+import com.lightningstudio.watchrss.data.douyin.isDouyinPlayUrlExpired
 import com.lightningstudio.watchrss.data.douyin.mergeDouyinBootstrapItems
+import com.lightningstudio.watchrss.data.douyin.mergeDouyinPrioritizedItems
 import com.lightningstudio.watchrss.data.douyin.resolveDouyinPlaybackAnchorAwemeId
 import com.lightningstudio.watchrss.sdk.douyin.DouyinContent
 import com.lightningstudio.watchrss.util.AppLogger
@@ -32,6 +39,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -45,6 +53,7 @@ data class DouyinFeedUiState(
     val playHeaders: Map<String, String> = emptyMap(),
     val localPlayPaths: Map<String, String> = emptyMap(),
     val proxyPlayUris: Map<String, String> = emptyMap(),
+    val playbackRefreshEvents: Map<String, DouyinPlaybackSourceRefreshEvent> = emptyMap(),
     val message: String? = null,
     val showTitlePage: Boolean = true
 )
@@ -62,6 +71,8 @@ class DouyinFeedViewModel(
     private val repository: DouyinRepositoryContract,
     private val preloadManager: DouyinPreloadManagerContract,
     private val playbackTransport: DouyinPlaybackTransportContract = NoOpDouyinPlaybackTransport,
+    private val playbackSourceCoordinator: DouyinPlaybackSourceCoordinatorContract =
+        NoOpDouyinPlaybackSourceCoordinator,
     private val watchHistoryStore: DouyinWatchHistoryStoreContract,
     private val feedCacheStore: DouyinFeedCacheStoreContract,
     private val recentWindowStore: DouyinRecentWindowStoreContract = NoOpDouyinRecentWindowStore,
@@ -81,8 +92,12 @@ class DouyinFeedViewModel(
     private val awemeIdSet = linkedSetOf<String>()
     private val sessionQuarantinedAwemeIds = linkedSetOf<String>()
     private val playbackRefreshJobs = linkedMapOf<String, Job>()
+    private val handledPlaybackRefreshEventIds = linkedSetOf<Long>()
 
     init {
+        viewModelScope.launch {
+            playbackSourceCoordinator.updates.collect(::applyPlaybackSourceRefreshEvent)
+        }
         viewModelScope.launch {
             val loggedIn = repository.isLoggedIn()
             if (loggedIn) {
@@ -259,7 +274,8 @@ class DouyinFeedViewModel(
 
     fun refreshPlaybackSource(
         awemeId: String,
-        failedSource: DouyinPlaybackSourceKind
+        failedSource: DouyinPlaybackSourceKind,
+        trigger: DouyinPlaybackRefreshTrigger = DouyinPlaybackRefreshTrigger.PLAYBACK_ERROR
     ) {
         val normalizedAwemeId = awemeId.trim()
         if (normalizedAwemeId.isEmpty()) return
@@ -285,55 +301,160 @@ class DouyinFeedViewModel(
                 }
             }
 
-            val result = repository.fetchVideo(normalizedAwemeId)
-            if (result.isSuccess) {
-                when (val content = result.data) {
-                    is DouyinContent.Video -> {
-                        val updated = updatePlaybackSource(normalizedAwemeId, content)
-                        if (updated) {
-                            val currentState = _uiState.value
-                            cacheBootstrapPage(
-                                items = sourceItems,
-                                nextCursorSnapshot = nextCursor,
-                                hasMore = currentState.hasMore
-                            )
-                            schedulePreload(currentState.items, currentState.playHeaders)
-                        }
-                    }
-                    is DouyinContent.Note -> {
-                        _uiState.update {
-                            it.copy(message = "当前内容暂无可播放视频")
-                        }
-                    }
-                    null -> {
-                        _uiState.update {
-                            it.copy(message = "加载失败")
-                        }
-                    }
-                }
-            } else if (result.code == DouyinErrorCodes.NOT_LOGGED_IN) {
-                repository.clearCookie()
-                replaceSourceState(items = emptyList(), localPlayPaths = emptyMap())
-                _uiState.update {
-                    it.copy(
-                        isLoggedIn = false,
-                        items = emptyList(),
-                        localPlayPaths = emptyMap(),
-                        proxyPlayUris = emptyMap(),
-                        message = "需要登录"
+            val currentItem = sourceItems.firstOrNull { it.awemeId == normalizedAwemeId }
+            val coordinatedEvent = currentItem?.let {
+                playbackSourceCoordinator.refresh(item = it, trigger = trigger)
+            }
+            if (coordinatedEvent != null && coordinatedEvent.outcome != DouyinPlaybackRefreshOutcome.SKIPPED) {
+                applyPlaybackSourceRefreshEvent(coordinatedEvent)
+                if (coordinatedEvent.outcome == DouyinPlaybackRefreshOutcome.FAILURE) {
+                    handlePlaybackRefreshFailure(
+                        event = coordinatedEvent,
+                        suppressMessage = failedSource == DouyinPlaybackSourceKind.LOCAL &&
+                            localFallbackAvailable
                     )
                 }
             } else {
-                val shouldSuppressMessage =
-                    failedSource == DouyinPlaybackSourceKind.LOCAL && localFallbackAvailable
-                if (!shouldSuppressMessage) {
-                    _uiState.update {
-                        it.copy(message = formatDouyinError(result.code, result.message))
-                    }
-                }
+                refreshPlaybackSourceDirect(
+                    awemeId = normalizedAwemeId,
+                    failedSource = failedSource,
+                    trigger = trigger,
+                    localFallbackAvailable = localFallbackAvailable
+                )
             }
 
             playbackRefreshJobs.remove(normalizedAwemeId)
+        }
+    }
+
+    private suspend fun refreshPlaybackSourceDirect(
+        awemeId: String,
+        failedSource: DouyinPlaybackSourceKind,
+        trigger: DouyinPlaybackRefreshTrigger,
+        localFallbackAvailable: Boolean
+    ) {
+        val result = repository.fetchVideo(awemeId)
+        val content = result.data
+        val event = when {
+            result.isSuccess && content is DouyinContent.Video -> {
+                val updated = updatePlaybackSource(awemeId, content)
+                val refreshedItem = sourceItems.firstOrNull { it.awemeId == awemeId }
+                if (updated) {
+                    val currentState = _uiState.value
+                    cacheBootstrapPage(
+                        items = sourceItems,
+                        nextCursorSnapshot = nextCursor,
+                        hasMore = currentState.hasMore
+                    )
+                    schedulePreload(currentState.items, currentState.playHeaders)
+                }
+                DouyinPlaybackSourceRefreshEvent(
+                    eventId = System.nanoTime(),
+                    awemeId = awemeId,
+                    trigger = trigger,
+                    outcome = if (updated) {
+                        DouyinPlaybackRefreshOutcome.SUCCESS
+                    } else {
+                        DouyinPlaybackRefreshOutcome.FAILURE
+                    },
+                    item = refreshedItem
+                )
+            }
+
+            result.isSuccess && content is DouyinContent.Note -> {
+                DouyinPlaybackSourceRefreshEvent(
+                    eventId = System.nanoTime(),
+                    awemeId = awemeId,
+                    trigger = trigger,
+                    outcome = DouyinPlaybackRefreshOutcome.FAILURE,
+                    message = "当前内容暂无可播放视频"
+                )
+            }
+
+            else -> {
+                DouyinPlaybackSourceRefreshEvent(
+                    eventId = System.nanoTime(),
+                    awemeId = awemeId,
+                    trigger = trigger,
+                    outcome = DouyinPlaybackRefreshOutcome.FAILURE,
+                    errorCode = result.code,
+                    message = result.message
+                )
+            }
+        }
+        applyPlaybackSourceRefreshEvent(event)
+        if (event.outcome == DouyinPlaybackRefreshOutcome.FAILURE) {
+            handlePlaybackRefreshFailure(
+                event = event,
+                suppressMessage = failedSource == DouyinPlaybackSourceKind.LOCAL &&
+                    localFallbackAvailable
+            )
+        }
+    }
+
+    private suspend fun handlePlaybackRefreshFailure(
+        event: DouyinPlaybackSourceRefreshEvent,
+        suppressMessage: Boolean
+    ) {
+        if (event.errorCode == DouyinErrorCodes.NOT_LOGGED_IN) {
+            repository.clearCookie()
+            replaceSourceState(items = emptyList(), localPlayPaths = emptyMap())
+            _uiState.update {
+                it.copy(
+                    isLoggedIn = false,
+                    items = emptyList(),
+                    localPlayPaths = emptyMap(),
+                    proxyPlayUris = emptyMap(),
+                    message = "需要登录"
+                )
+            }
+            return
+        }
+        if (!suppressMessage) {
+            _uiState.update {
+                it.copy(
+                    message = event.message?.takeIf(String::isNotBlank)
+                        ?: formatDouyinError(event.errorCode ?: -1, event.message)
+                )
+            }
+        }
+    }
+
+    private fun applyPlaybackSourceRefreshEvent(event: DouyinPlaybackSourceRefreshEvent) {
+        if (event.eventId > 0L && !handledPlaybackRefreshEventIds.add(event.eventId)) return
+        if (event.outcome == DouyinPlaybackRefreshOutcome.SUCCESS) {
+            event.item?.let(::updatePlaybackItem)
+        }
+        _uiState.update { state ->
+            state.copy(
+                playbackRefreshEvents = state.playbackRefreshEvents + (event.awemeId to event)
+            )
+        }
+    }
+
+    private fun scheduleStartupPlaybackRefresh(
+        items: List<DouyinStreamItem>,
+        targetPage: Int
+    ) {
+        if (items.isEmpty()) return
+        val preparedIndex = if (targetPage > 0) {
+            (targetPage - 1).coerceIn(0, items.lastIndex)
+        } else {
+            0
+        }
+        val candidates = items
+            .drop(preparedIndex)
+            .take(STARTUP_PLAYBACK_REFRESH_COUNT)
+            .filter(::isDouyinPlayUrlExpired)
+        if (candidates.isEmpty()) return
+        viewModelScope.launch {
+            candidates.forEach { item ->
+                playbackSourceCoordinator.refresh(
+                    item = item,
+                    trigger = DouyinPlaybackRefreshTrigger.STARTUP_TTL
+                ).takeIf { it.outcome != DouyinPlaybackRefreshOutcome.SKIPPED }
+                    ?.let(::applyPlaybackSourceRefreshEvent)
+            }
         }
     }
 
@@ -437,6 +558,10 @@ class DouyinFeedViewModel(
             )
         }
         schedulePreload(visibleBootstrapItems, headers)
+        scheduleStartupPlaybackRefresh(
+            items = visibleBootstrapItems,
+            targetPage = targetPage
+        )
         return hasBootstrapItems
     }
 
@@ -485,19 +610,11 @@ class DouyinFeedViewModel(
         )
         val anchorAwemeId = recentWindowSnapshot.anchorAwemeId
         val mergedWithPinnedItems = if (anchorAwemeId.isNullOrBlank()) {
-            buildList {
-                val seenAwemeIds = linkedSetOf<String>()
-                pinnedSnapshotItems.forEach { item ->
-                    if (seenAwemeIds.add(item.awemeId)) {
-                        add(item)
-                    }
-                }
-                mergedBootstrapItems.forEach { item ->
-                    if (seenAwemeIds.add(item.awemeId)) {
-                        add(item)
-                    }
-                }
-            }
+            mergeDouyinPrioritizedItems(
+                prioritizedItems = pinnedSnapshotItems,
+                remainingItems = mergedBootstrapItems,
+                limit = BOOTSTRAP_ITEMS + DOUYIN_PLAYBACK_SNAPSHOT_STARTUP_COUNT
+            )
         } else {
             dropDouyinItemsBeforeAwemeId(
                 items = mergedBootstrapItems,
@@ -760,41 +877,50 @@ class DouyinFeedViewModel(
         content: DouyinContent.Video
     ): Boolean {
         val resolvedAtMs = System.currentTimeMillis()
+        val current = sourceItems.firstOrNull { it.awemeId == awemeId } ?: return false
+        return updatePlaybackItem(
+            current.copy(
+                playUrl = content.playUrl.trim(),
+                coverUrl = content.coverUrl.takeIf { it.isNotBlank() } ?: current.coverUrl,
+                title = content.desc.takeIf { it.isNotBlank() } ?: current.title,
+                author = content.authorName.takeIf { it.isNotBlank() } ?: current.author,
+                likeCount = content.diggCount,
+                playUrlResolvedAtMs = resolvedAtMs,
+                sourceOrigin = DouyinSourceOrigin.VIDEO_REFRESH,
+                variants = content.variants
+            )
+        )
+    }
+
+    private fun updatePlaybackItem(refreshedItem: DouyinStreamItem): Boolean {
         var updated = false
         sourceItems = sourceItems.map { item ->
-            if (item.awemeId != awemeId) {
-                item
-            } else {
+            if (
+                item.awemeId == refreshedItem.awemeId &&
+                refreshedItem.playUrlResolvedAtMs >= item.playUrlResolvedAtMs
+            ) {
                 updated = true
-                item.copy(
-                    playUrl = content.playUrl.trim(),
-                    coverUrl = content.coverUrl.takeIf { it.isNotBlank() } ?: item.coverUrl,
-                    title = content.desc.takeIf { it.isNotBlank() } ?: item.title,
-                    author = content.authorName.takeIf { it.isNotBlank() } ?: item.author,
-                    likeCount = content.diggCount,
-                    playUrlResolvedAtMs = resolvedAtMs,
-                    sourceOrigin = DouyinSourceOrigin.VIDEO_REFRESH,
-                    variants = content.variants
-                )
+                refreshedItem
+            } else {
+                item
             }
         }
-        if (updated) {
-            val visibleItems = projectVisibleItems()
-            val visibleLocalPaths = projectVisibleLocalPlayPaths(visibleItems)
-            val visibleProxyUris = projectVisibleProxyPlayUris(
-                visibleItems = visibleItems,
-                headers = _uiState.value.playHeaders,
-                reason = "playback_source_update"
+        if (!updated) return false
+        val visibleItems = projectVisibleItems()
+        val visibleLocalPaths = projectVisibleLocalPlayPaths(visibleItems)
+        val visibleProxyUris = projectVisibleProxyPlayUris(
+            visibleItems = visibleItems,
+            headers = _uiState.value.playHeaders,
+            reason = "playback_source_update"
+        )
+        _uiState.update { state ->
+            state.copy(
+                items = visibleItems,
+                localPlayPaths = visibleLocalPaths,
+                proxyPlayUris = visibleProxyUris
             )
-            _uiState.update { state ->
-                state.copy(
-                    items = visibleItems,
-                    localPlayPaths = visibleLocalPaths,
-                    proxyPlayUris = visibleProxyUris
-                )
-            }
         }
-        return updated
+        return true
     }
 
     private fun cacheBootstrapPage(
@@ -971,6 +1097,7 @@ class DouyinFeedViewModel(
         private const val PAGE_SIZE = 16
         private const val BOOTSTRAP_ITEMS = PAGE_SIZE
         private const val DOUYIN_PLAYBACK_SNAPSHOT_STARTUP_COUNT = 6
+        private const val STARTUP_PLAYBACK_REFRESH_COUNT = 2
         private const val MIN_BOOTSTRAP_ITEMS_BEFORE_NETWORK_REFRESH = 3
         private const val MIN_FORWARD_ITEMS_BEFORE_NETWORK_REFRESH = 3
     }

@@ -3,7 +3,6 @@ package com.lightningstudio.watchrss.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -36,7 +35,7 @@ fun WatchSurface(
         return
     }
 
-    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+    Box(modifier = modifier.fillMaxSize()) {
         val outerGradient = Brush.linearGradient(
             colors = listOf(WatchBackground, WatchBackgroundDeep)
         )

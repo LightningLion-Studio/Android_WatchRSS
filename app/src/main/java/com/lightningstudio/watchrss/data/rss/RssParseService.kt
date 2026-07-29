@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss.data.rss
 
+import androidx.core.net.toUri
 import android.net.Uri
 import com.lightningstudio.watchrss.data.db.RssItemEntity
 import com.prof18.rssparser.model.RssChannel as ParsedChannel
@@ -9,7 +10,7 @@ class RssParseService {
     fun channelTitle(parsed: ParsedChannel, url: String): String {
         val title = parsed.title?.trim().orEmpty()
         if (title.isNotEmpty()) return title
-        val host = runCatching { Uri.parse(url).host }.getOrNull().orEmpty()
+        val host = runCatching { url.toUri().host }.getOrNull().orEmpty()
         return host.ifEmpty { url }
     }
 

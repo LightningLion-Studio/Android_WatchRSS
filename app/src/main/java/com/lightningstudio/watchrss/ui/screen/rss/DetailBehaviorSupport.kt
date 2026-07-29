@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss.ui.screen.rss
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -15,6 +16,7 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.semantics.invisibleToUser
 import androidx.compose.ui.semantics.semantics
 import androidx.core.content.FileProvider
+import androidx.core.net.toUri
 import com.lightningstudio.watchrss.BuildConfig
 import com.lightningstudio.watchrss.ImagePreviewActivity
 import com.lightningstudio.watchrss.RssPlayerActivity
@@ -29,35 +31,33 @@ import kotlin.math.roundToLong
 
 private const val DETAIL_SHARE_QR_WIDTH_RATIO = 0.7f
 
+@SuppressLint("UnclosedTrace")
 internal fun calculateReadingProgress(listState: androidx.compose.foundation.lazy.LazyListState): Float {
-    if (isDetailTracingEnabled()) {
+    val tracingEnabled = isDetailTracingEnabled()
+    if (tracingEnabled) {
         Trace.beginSection("ReadingProgress")
     }
-    val layoutInfo = listState.layoutInfo
-    val totalItems = layoutInfo.totalItemsCount
-    if (totalItems == 0) {
-        if (isDetailTracingEnabled()) {
+    return try {
+        val layoutInfo = listState.layoutInfo
+        val totalItems = layoutInfo.totalItemsCount
+        if (totalItems == 0) {
+            return 1f
+        }
+        if (layoutInfo.visibleItemsInfo.isNotEmpty() && !listState.canScrollForward) {
+            return 1f
+        }
+        val firstIndex = listState.firstVisibleItemIndex
+        val firstOffset = listState.firstVisibleItemScrollOffset
+        val firstSize = layoutInfo.visibleItemsInfo.firstOrNull()?.size ?: 0
+        val offsetProgress = if (firstSize > 0) firstOffset.toFloat() / firstSize.toFloat() else 0f
+        val denominator = (totalItems - 1).coerceAtLeast(1)
+        val rawProgress = (firstIndex + offsetProgress) / denominator.toFloat()
+        rawProgress.coerceIn(0f, 1f)
+    } finally {
+        if (tracingEnabled) {
             Trace.endSection()
         }
-        return 1f
     }
-    if (layoutInfo.visibleItemsInfo.isNotEmpty() && !listState.canScrollForward) {
-        if (isDetailTracingEnabled()) {
-            Trace.endSection()
-        }
-        return 1f
-    }
-    val firstIndex = listState.firstVisibleItemIndex
-    val firstOffset = listState.firstVisibleItemScrollOffset
-    val firstSize = layoutInfo.visibleItemsInfo.firstOrNull()?.size ?: 0
-    val offsetProgress = if (firstSize > 0) firstOffset.toFloat() / firstSize.toFloat() else 0f
-    val denominator = (totalItems - 1).coerceAtLeast(1)
-    val rawProgress = (firstIndex + offsetProgress) / denominator.toFloat()
-    val clamped = rawProgress.coerceIn(0f, 1f)
-    if (isDetailTracingEnabled()) {
-        Trace.endSection()
-    }
-    return clamped
 }
 
 internal fun calculateImportedTextReadingProgress(
@@ -203,7 +203,6 @@ internal fun View.captureAccessibilityDelegate(): View.AccessibilityDelegate? {
 
 internal fun isDetailTracingEnabled(): Boolean {
     return BuildConfig.DEBUG &&
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
         Trace.isEnabled()
 }
 
@@ -276,7 +275,7 @@ internal fun openExternalLink(context: Context, link: String) {
     val uri = if (trimmed.startsWith("/")) {
         FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", File(trimmed))
     } else {
-        Uri.parse(trimmed)
+        trimmed.toUri()
     }
     val intent = Intent(Intent.ACTION_VIEW, uri)
     intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)

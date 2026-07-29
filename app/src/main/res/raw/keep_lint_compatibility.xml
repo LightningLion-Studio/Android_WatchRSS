@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@array/demo_number_picker,
+        @color/purple_*,
+        @color/teal_*,
+        @color/white,
+        @color/watch_background*,
+        @dimen/hey_*,
+        @dimen/list_option_text_size,
+        @dimen/profile_entry_text_size,
+        @dimen/settings_detail_text_size,
+        @dimen/watch_action_button_*,
+        @drawable/avatar_circle,
+        @drawable/bg_*,
+        @drawable/ic_launcher_*,
+        @drawable/ic_player_rotate,
+        @drawable/rss_unread_dot,
+        @drawable/space_4dp,
+        @layout/activity_web_view,
+        @string/about_privacy_content,
+        @string/about_user_agreement_content,
+        @style/Theme_WatchRSS_PureBlack" />

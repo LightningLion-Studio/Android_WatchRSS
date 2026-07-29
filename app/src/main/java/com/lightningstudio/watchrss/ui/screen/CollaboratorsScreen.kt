@@ -3,7 +3,6 @@ package com.lightningstudio.watchrss.ui.screen
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -35,13 +34,13 @@ import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 
 @Composable
 fun CollaboratorsScreen(
-    circleMaskEnabled: Boolean = true,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    circleMaskEnabled: Boolean = true
 ) {
     val scrollState = rememberScrollState()
 
     InstallDigitalCrownScrollHandler(scrollState)
-    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+    Box(modifier = modifier.fillMaxSize()) {
         val bgOuter1 = Color.Black
         val bgOuter2 = Color.Black
 

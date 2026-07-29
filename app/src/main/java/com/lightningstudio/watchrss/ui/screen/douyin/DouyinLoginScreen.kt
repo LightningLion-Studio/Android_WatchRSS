@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss.ui.screen.douyin
 
+import android.annotation.SuppressLint
 import android.os.Build
 import android.view.View
 import android.view.WindowManager
@@ -62,6 +63,7 @@ import com.lightningstudio.watchrss.ui.widget.ProgressRingView
 import kotlinx.coroutines.delay
 
 @Composable
+@SuppressLint("SetJavaScriptEnabled")
 fun DouyinLoginScreen(
     initialErrorMessage: String?,
     onWebViewInitFailed: (String) -> Unit,
@@ -375,12 +377,8 @@ fun DouyinLoginScreen(
                             try {
                                 WebView(ctx).apply {
                                     // 为了避免闪白
-                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                                        // 对于 API 21+，需要先允许背景设为透明
-                                        setLayerType(View.LAYER_TYPE_HARDWARE, null)
-                                        // 设置背景色为透明
-                                        setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                                    }
+                                    setLayerType(View.LAYER_TYPE_HARDWARE, null)
+                                    setBackgroundColor(android.graphics.Color.TRANSPARENT)
 
                                     settings.apply {
                                         javaScriptEnabled = true

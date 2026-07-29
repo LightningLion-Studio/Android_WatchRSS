@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss.phoneconnection
 
+import androidx.core.content.edit
 import android.content.Context
 import java.util.UUID
 
@@ -14,7 +15,7 @@ class WatchDeviceIdentity(context: Context) {
             val existing = preferences.getString(KEY_DEVICE_ID, null)
             if (!existing.isNullOrBlank()) return existing
             val created = UUID.randomUUID().toString()
-            preferences.edit().putString(KEY_DEVICE_ID, created).apply()
+            preferences.edit {putString(KEY_DEVICE_ID, created)}
             return created
         }
 

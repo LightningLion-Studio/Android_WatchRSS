@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss
 
+import androidx.core.net.toUri
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -119,7 +120,7 @@ private fun openExternalLink(context: Context, link: String) {
     val uri = if (trimmed.startsWith("/")) {
         FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", File(trimmed))
     } else {
-        Uri.parse(trimmed)
+        trimmed.toUri()
     }
     val intent = Intent(Intent.ACTION_VIEW, uri)
     intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)

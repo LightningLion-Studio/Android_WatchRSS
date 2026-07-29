@@ -12,6 +12,8 @@ import com.lightningstudio.watchrss.data.db.BuiltinChannelSeed
 import com.lightningstudio.watchrss.data.douyin.DouyinFeedCacheStore
 import com.lightningstudio.watchrss.data.douyin.DouyinFeedCacheStoreContract
 import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackPreviewCache
+import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackSourceCoordinator
+import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackSourceCoordinatorContract
 import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackTransport
 import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackTransportContract
 import com.lightningstudio.watchrss.data.douyin.DouyinPreloadManager
@@ -35,6 +37,7 @@ import com.lightningstudio.watchrss.data.rss.RssFetchService
 import com.lightningstudio.watchrss.data.rss.RssOfflineStore
 import com.lightningstudio.watchrss.data.rss.RssParseService
 import com.lightningstudio.watchrss.data.rss.RssRepository
+import com.lightningstudio.watchrss.data.reader.ReaderPresetRepository
 import com.lightningstudio.watchrss.data.settings.LlmApiKeyStore
 import com.lightningstudio.watchrss.data.settings.SettingsRepository
 import com.lightningstudio.watchrss.data.tts.ReadAloudController
@@ -44,6 +47,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 interface AppContainer {
     val rssRepository: RssRepository
@@ -56,11 +60,13 @@ interface AppContainer {
     val douyinRepository: DouyinRepositoryContract
     val douyinPreloadManager: DouyinPreloadManagerContract
     val douyinPlaybackTransport: DouyinPlaybackTransportContract
+    val douyinPlaybackSourceCoordinator: DouyinPlaybackSourceCoordinatorContract
     val douyinFeedCacheStore: DouyinFeedCacheStoreContract
     val douyinWatchHistoryStore: DouyinWatchHistoryStoreContract
     val douyinRecentWindowStore: DouyinRecentWindowStoreContract
     val douyinRecentWindowCacheCoordinator: DouyinRecentWindowCacheCoordinatorContract
     val internetAvailabilityMonitor: InternetAvailabilityMonitor
+    val readerPresetRepository: ReaderPresetRepository
 }
 
 class DefaultAppContainer(context: Context) : AppContainer {
@@ -92,7 +98,8 @@ class DefaultAppContainer(context: Context) : AppContainer {
             WatchRssDatabase.MIGRATION_10_11,
             WatchRssDatabase.MIGRATION_11_12,
             WatchRssDatabase.MIGRATION_12_13,
-            WatchRssDatabase.MIGRATION_13_14
+            WatchRssDatabase.MIGRATION_13_14,
+            WatchRssDatabase.MIGRATION_14_15
         )
             .addCallback(BuiltinChannelSeed.callback)
             .build()
@@ -107,6 +114,23 @@ class DefaultAppContainer(context: Context) : AppContainer {
 
     override val llmApiKeyStore: LlmApiKeyStore by lazy {
         LlmApiKeyStore(appContext)
+    }
+
+    override val readerPresetRepository: ReaderPresetRepository by lazy {
+        ReaderPresetRepository(
+            context = appContext,
+            database = database,
+            dao = database.readerPresetDao(),
+            deviceId = deviceIdentity.deviceId,
+            scope = appScope
+        ).also { repository ->
+            appScope.launch {
+                repository.ensureSeeded(
+                    legacyDark = settingsRepository.readingThemeDark.first(),
+                    legacyFontSizeSp = settingsRepository.readingFontSizeSp.first()
+                )
+            }
+        }
     }
 
     override val managedCacheService: ManagedCacheService by lazy {
@@ -162,6 +186,15 @@ class DefaultAppContainer(context: Context) : AppContainer {
         DouyinRepository(
             context = appContext,
             cacheService = managedCacheService,
+            recentWindowStore = douyinRecentWindowStore
+        )
+    }
+
+    override val douyinPlaybackSourceCoordinator: DouyinPlaybackSourceCoordinatorContract by lazy {
+        DouyinPlaybackSourceCoordinator(
+            appScope = appScope,
+            repository = douyinRepository,
+            feedCacheStore = douyinFeedCacheStore,
             recentWindowStore = douyinRecentWindowStore
         )
     }

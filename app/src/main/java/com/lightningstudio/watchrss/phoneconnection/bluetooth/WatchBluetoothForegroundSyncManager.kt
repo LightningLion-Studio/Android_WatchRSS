@@ -26,7 +26,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class WatchBluetoothForegroundSyncManager(
-    private val application: Application
+    private val application: Application,
+    private val onLibrarySyncCompleted: (() -> Unit)? = null
 ) : Application.ActivityLifecycleCallbacks {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val powerManager = application.getSystemService(PowerManager::class.java)
@@ -152,6 +153,7 @@ class WatchBluetoothForegroundSyncManager(
                         context = application,
                         allowedActions = setOf(
                             BluetoothSyncProtocol.ACTION_SYNC_LIBRARY,
+                            BluetoothSyncProtocol.ACTION_SYNC_READER,
                             BluetoothSyncProtocol.ACTION_PREVIEW_READER,
                             BluetoothSyncProtocol.ACTION_SYNC_ACCOUNT
                         ),
@@ -167,6 +169,12 @@ class WatchBluetoothForegroundSyncManager(
                     TAG,
                     "foreground sync complete remote=${syncResult.remoteName} action=${syncResult.request.optString("action")}"
                 )
+                if (
+                    syncResult.request.optString("action") ==
+                    BluetoothSyncProtocol.ACTION_SYNC_LIBRARY
+                ) {
+                    onLibrarySyncCompleted?.invoke()
+                }
             }.onFailure { throwable ->
                 if (throwable is CancellationException) return
                 if (desiredListening) {

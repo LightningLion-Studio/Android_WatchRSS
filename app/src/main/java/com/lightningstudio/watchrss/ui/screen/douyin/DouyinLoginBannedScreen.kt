@@ -31,9 +31,9 @@ fun DouyinLoginCheckingScreen(
 
 @Composable
 fun DouyinLoginBannedScreen(
-    status: InternetAvailabilityStatus = InternetAvailabilityStatus.Unavailable,
     onBack: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    status: InternetAvailabilityStatus = InternetAvailabilityStatus.Unavailable
 ) {
     val guidanceMessage = when (status) {
         InternetAvailabilityStatus.Bluetooth -> "蓝牙网络较慢\n建议换用 WiFi 或移动网络"

@@ -110,6 +110,7 @@ fun SettingsScreen(
     onOpenLlmConnectivity: () -> Unit,
     onOpenLlmPromptPreset: () -> Unit,
     onBeianClick: () -> Unit,
+    onOpenReaderPresets: () -> Unit = {},
     onOpenAdvanced: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
@@ -162,6 +163,7 @@ fun SettingsScreen(
                     currentPage = SettingsPage.Advanced
                 }
             },
+            onOpenReaderPresets = onOpenReaderPresets,
             onOpenOobe = onOpenOobe,
             onOpenPerfLargeList = onOpenPerfLargeList,
             onOpenPerfLargeArticle = onOpenPerfLargeArticle,
@@ -234,6 +236,7 @@ private fun MainSettingsPage(
     onToggleLlmFeatureEnabled: () -> Unit,
     onToggleLlmAutoSummarize: () -> Unit,
     onToggleLlmShowTokenUsage: () -> Unit,
+    onOpenReaderPresets: () -> Unit,
     onOpenAdvanced: () -> Unit,
     onOpenOobe: () -> Unit,
     onOpenPerfLargeList: () -> Unit,
@@ -285,6 +288,21 @@ private fun MainSettingsPage(
             SettingsHeader(title = "设置")
 
             Spacer(modifier = Modifier.height(sectionSpacing))
+
+            WatchSettingsPillRow(
+                label = "阅读器与预设",
+                onClick = onOpenReaderPresets
+            ) {
+                Text("管理")
+            }
+            Text(
+                text = "字体、排版、纯色与图片背景；视频背景在手表端只读",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+            )
+
+            Spacer(modifier = Modifier.height(entrySpacing))
 
             WatchSettingsPillRow(label = readingThemeInfo.title, endPaddingMultiplier = 1.5f) {
                 ReadingThemeToggle(

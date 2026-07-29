@@ -166,10 +166,9 @@ fun BiliRssDetailScreen(
         (context.resources.displayMetrics.widthPixels - paddingPx * 2).coerceAtLeast(1)
     }
 
-    Box(
+    com.lightningstudio.watchrss.ui.reader.ReaderBackgroundSurface(
         modifier = Modifier
             .fillMaxSize()
-            .background(backgroundColor)
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -195,18 +194,18 @@ fun BiliRssDetailScreen(
             item(key = "author") {
                 Text(
                     text = "作者：${display.owner}",
-                    color = textColor,
-                    fontSize = bodySize,
-                    style = TextStyle(textAlign = TextAlign.Start),
+                    style = com.lightningstudio.watchrss.ui.reader.readerTextStyle(
+                        com.lightningstudio.watchrss.ui.reader.ReaderTextRole.SUBTITLE
+                    ),
                     modifier = Modifier.fillMaxWidth()
                 )
             }
             item(key = "desc") {
                 Text(
                     text = "简介：${display.desc}",
-                    color = textColor,
-                    fontSize = bodySize,
-                    style = TextStyle(textAlign = TextAlign.Start),
+                    style = com.lightningstudio.watchrss.ui.reader.readerTextStyle(
+                        com.lightningstudio.watchrss.ui.reader.ReaderTextRole.BODY
+                    ),
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -469,9 +468,9 @@ private fun BiliRssDetailTitle(
         }
         Text(
             text = formattedTitle,
-            style = titleStyle,
-            color = textColor,
-            textAlign = TextAlign.Center,
+            style = com.lightningstudio.watchrss.ui.reader.readerTextStyle(
+                com.lightningstudio.watchrss.ui.reader.ReaderTextRole.TITLE
+            ),
             modifier = Modifier.fillMaxWidth()
         )
     }

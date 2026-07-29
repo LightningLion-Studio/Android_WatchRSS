@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss
 
+import androidx.core.net.toUri
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -135,7 +136,7 @@ class SavedItemsActivity : BaseWatchActivity() {
 
     private fun parseBiliTarget(link: String?): BiliTarget? {
         if (link.isNullOrBlank()) return null
-        val uri = runCatching { Uri.parse(link) }.getOrNull() ?: return null
+        val uri = runCatching { link.toUri() }.getOrNull() ?: return null
         val host = uri.host?.lowercase() ?: return null
         if (!host.contains("bilibili.com")) return null
         val segments = uri.pathSegments

@@ -49,14 +49,19 @@ class RssFetchService(
 
     companion object {
         private fun buildParser(): RssParser {
-            val client = OkHttpClient.Builder()
-                .callTimeout(20, TimeUnit.SECONDS)
-                .connectTimeout(12, TimeUnit.SECONDS)
-                .readTimeout(12, TimeUnit.SECONDS)
-                .build()
+            val client = buildFeedClient()
             return RssParserBuilder(
                 callFactory = client,
                 charset = Charsets.UTF_8
+            ).build()
+        }
+
+        internal fun buildFeedClient(): OkHttpClient {
+            return RssRemoteRequestPolicy.configure(
+                OkHttpClient.Builder()
+                    .callTimeout(20, TimeUnit.SECONDS)
+                    .connectTimeout(12, TimeUnit.SECONDS)
+                    .readTimeout(12, TimeUnit.SECONDS)
             ).build()
         }
 

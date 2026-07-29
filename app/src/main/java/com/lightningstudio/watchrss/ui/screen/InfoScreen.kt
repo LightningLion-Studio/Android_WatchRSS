@@ -51,10 +51,11 @@ fun InfoScreen(
 
     InstallDigitalCrownLazyListHandler(listState)
 
+    com.lightningstudio.watchrss.ui.reader.ReaderBackgroundSurface(
+        modifier = Modifier.fillMaxSize()
+    ) {
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(backgroundColor),
+        modifier = Modifier.fillMaxSize(),
         state = listState,
         contentPadding = PaddingValues(horizontal = pagePadding)
     ) {
@@ -117,6 +118,7 @@ fun InfoScreen(
         item(key = "bottomSpacer") {
             Spacer(modifier = Modifier.height(safePadding + 40.dp))
         }
+    }
     }
 }
 

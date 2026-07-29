@@ -1,9 +1,11 @@
 package com.lightningstudio.watchrss.phoneconnection.acoustic
 
+import android.Manifest
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.util.Log
+import androidx.annotation.RequiresPermission
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
@@ -11,6 +13,7 @@ import kotlin.math.sqrt
 import kotlin.coroutines.coroutineContext
 
 class AcousticAudioReceiver {
+    @RequiresPermission(Manifest.permission.RECORD_AUDIO)
     suspend fun listen(timeoutMs: Long): ByteArray? = withContext(Dispatchers.IO) {
         val minBufferSize = AudioRecord.getMinBufferSize(
             AcousticCodec.SAMPLE_RATE,

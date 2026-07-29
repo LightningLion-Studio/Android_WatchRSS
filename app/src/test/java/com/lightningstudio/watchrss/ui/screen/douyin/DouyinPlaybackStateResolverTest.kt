@@ -64,6 +64,66 @@ class DouyinPlaybackStateResolverTest {
     }
 
     @Test
+    fun resolveDouyinHttpFailureAction_refreshesFirstCurrent403_thenQuarantines() {
+        assertEquals(
+            DouyinHttpFailureAction.RefreshSource,
+            resolveDouyinHttpFailureAction(
+                httpStatusCode = 403,
+                isCurrentSource = true,
+                hasAutomaticRefreshAttempt = false
+            )
+        )
+        assertEquals(
+            DouyinHttpFailureAction.Quarantine,
+            resolveDouyinHttpFailureAction(
+                httpStatusCode = 403,
+                isCurrentSource = true,
+                hasAutomaticRefreshAttempt = true
+            )
+        )
+    }
+
+    @Test
+    fun resolveDouyinHttpFailureAction_ignoresStaleSourceAndRangeFailure() {
+        assertEquals(
+            DouyinHttpFailureAction.Ignore,
+            resolveDouyinHttpFailureAction(
+                httpStatusCode = 403,
+                isCurrentSource = false,
+                hasAutomaticRefreshAttempt = false
+            )
+        )
+        assertEquals(
+            DouyinHttpFailureAction.Ignore,
+            resolveDouyinHttpFailureAction(
+                httpStatusCode = 416,
+                isCurrentSource = true,
+                hasAutomaticRefreshAttempt = false
+            )
+        )
+    }
+
+    @Test
+    fun resolveDouyinRebindStartPositionMs_preservesOnlySameAwemePosition() {
+        assertEquals(
+            12_345L,
+            resolveDouyinRebindStartPositionMs(
+                boundAwemeId = "aweme-a",
+                targetAwemeId = "aweme-a",
+                currentPositionMs = 12_345L
+            )
+        )
+        assertEquals(
+            null,
+            resolveDouyinRebindStartPositionMs(
+                boundAwemeId = "aweme-a",
+                targetAwemeId = "aweme-b",
+                currentPositionMs = 12_345L
+            )
+        )
+    }
+
+    @Test
     fun resolveDouyinPlaybackFailureAction_retriesWhileBudgetRemains() {
         val action = resolveDouyinPlaybackFailureAction(
             retryCount = 1,

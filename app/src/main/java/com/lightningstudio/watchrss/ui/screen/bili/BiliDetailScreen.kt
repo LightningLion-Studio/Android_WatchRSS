@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss.ui.screen.bili
 
+import java.util.Locale
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
@@ -81,10 +82,9 @@ fun BiliDetailScreen(
     InstallDigitalCrownLazyListHandler(listState)
     val detail = uiState.detail
 
-    Box(
+    com.lightningstudio.watchrss.ui.reader.ReaderBackgroundSurface(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
     ) {
         LazyColumn(
             state = listState,
@@ -247,12 +247,9 @@ private fun BiliMetaCard(
     ) {
         Text(
             text = title,
-            style = MaterialTheme.typography.titleMedium.copy(
-                fontSize = titleSize,
-                lineHeight = titleLineHeight,
-                fontWeight = FontWeight.SemiBold
+            style = com.lightningstudio.watchrss.ui.reader.readerTextStyle(
+                com.lightningstudio.watchrss.ui.reader.ReaderTextRole.TITLE
             ),
-            color = MaterialTheme.colorScheme.onSurface,
             maxLines = 3,
             overflow = TextOverflow.Ellipsis
         )
@@ -447,9 +444,9 @@ private fun BiliDescriptionCard(text: String) {
     ) {
         Text(
             text = text,
-            color = MaterialTheme.colorScheme.onSurface,
-            fontSize = textSize,
-            lineHeight = lineHeight,
+            style = com.lightningstudio.watchrss.ui.reader.readerTextStyle(
+                com.lightningstudio.watchrss.ui.reader.ReaderTextRole.BODY
+            ),
             maxLines = if (expanded) Int.MAX_VALUE else 3,
             overflow = TextOverflow.Ellipsis,
             modifier = if (!expanded && canExpand) {
@@ -591,5 +588,5 @@ private fun formatDuration(seconds: Int?): String? {
     if (seconds == null || seconds <= 0) return null
     val minutes = seconds / 60
     val remain = seconds % 60
-    return String.format("%02d:%02d", minutes, remain)
+    return String.format(Locale.getDefault(), "%02d:%02d", minutes, remain)
 }

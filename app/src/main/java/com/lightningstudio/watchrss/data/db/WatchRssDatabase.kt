@@ -5,6 +5,11 @@ import androidx.room.RoomDatabase
 import androidx.room.SkipQueryVerification
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.lightningstudio.watchrss.data.reader.ReaderBackgroundAssetEntity
+import com.lightningstudio.watchrss.data.reader.ReaderDeletionEntity
+import com.lightningstudio.watchrss.data.reader.ReaderFontAssetEntity
+import com.lightningstudio.watchrss.data.reader.ReaderPresetDao
+import com.lightningstudio.watchrss.data.reader.ReaderPresetEntity
 
 @Database(
     entities = [
@@ -15,9 +20,13 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         OfflineMediaEntity::class,
         SyncChangeLogEntity::class,
         SyncPeerStateEntity::class,
-        RssSourceSyncStateEntity::class
+        RssSourceSyncStateEntity::class,
+        ReaderPresetEntity::class,
+        ReaderFontAssetEntity::class,
+        ReaderBackgroundAssetEntity::class,
+        ReaderDeletionEntity::class
     ],
-    version = 14,
+    version = 15,
     exportSchema = false
 )
 @SkipQueryVerification
@@ -30,6 +39,7 @@ abstract class WatchRssDatabase : RoomDatabase() {
     abstract fun syncChangeLogDao(): SyncChangeLogDao
     abstract fun syncPeerStateDao(): SyncPeerStateDao
     abstract fun rssSourceSyncStateDao(): RssSourceSyncStateDao
+    abstract fun readerPresetDao(): ReaderPresetDao
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -265,5 +275,83 @@ abstract class WatchRssDatabase : RoomDatabase() {
                 )
             }
         }
+
+        val MIGRATION_14_15 = object : Migration(14, 15) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.createReaderPresetTables()
+            }
+        }
     }
+}
+
+private fun SupportSQLiteDatabase.createReaderPresetTables() {
+    execSQL(
+        """
+        CREATE TABLE IF NOT EXISTS reader_presets (
+            id TEXT NOT NULL PRIMARY KEY,
+            name TEXT NOT NULL,
+            payloadJson TEXT NOT NULL,
+            updatedAt INTEGER NOT NULL,
+            modifiedBy TEXT NOT NULL,
+            deleted INTEGER NOT NULL
+        )
+        """.trimIndent()
+    )
+    execSQL("CREATE INDEX IF NOT EXISTS index_reader_presets_deleted_name ON reader_presets(deleted, name)")
+    execSQL("CREATE INDEX IF NOT EXISTS index_reader_presets_updatedAt ON reader_presets(updatedAt)")
+    execSQL(
+        """
+        CREATE TABLE IF NOT EXISTS reader_font_assets (
+            id TEXT NOT NULL PRIMARY KEY,
+            sha256 TEXT NOT NULL,
+            displayName TEXT NOT NULL,
+            familyName TEXT NOT NULL,
+            fileName TEXT NOT NULL,
+            mimeType TEXT NOT NULL,
+            byteCount INTEGER NOT NULL,
+            faceCount INTEGER NOT NULL,
+            metadataJson TEXT NOT NULL,
+            updatedAt INTEGER NOT NULL,
+            modifiedBy TEXT NOT NULL,
+            deleted INTEGER NOT NULL
+        )
+        """.trimIndent()
+    )
+    execSQL("CREATE INDEX IF NOT EXISTS index_reader_font_assets_deleted_displayName ON reader_font_assets(deleted, displayName)")
+    execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_reader_font_assets_sha256 ON reader_font_assets(sha256)")
+    execSQL(
+        """
+        CREATE TABLE IF NOT EXISTS reader_background_assets (
+            id TEXT NOT NULL PRIMARY KEY,
+            sha256 TEXT NOT NULL,
+            displayName TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            mimeType TEXT NOT NULL,
+            masterFileName TEXT NOT NULL,
+            byteCount INTEGER NOT NULL,
+            durationMs INTEGER NOT NULL,
+            width INTEGER NOT NULL,
+            height INTEGER NOT NULL,
+            posterAssetId TEXT,
+            variantsJson TEXT NOT NULL,
+            updatedAt INTEGER NOT NULL,
+            modifiedBy TEXT NOT NULL,
+            deleted INTEGER NOT NULL
+        )
+        """.trimIndent()
+    )
+    execSQL("CREATE INDEX IF NOT EXISTS index_reader_background_assets_deleted_displayName ON reader_background_assets(deleted, displayName)")
+    execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_reader_background_assets_sha256 ON reader_background_assets(sha256)")
+    execSQL(
+        """
+        CREATE TABLE IF NOT EXISTS reader_deletions (
+            kind TEXT NOT NULL,
+            entityId TEXT NOT NULL,
+            deletedAt INTEGER NOT NULL,
+            deletedBy TEXT NOT NULL,
+            PRIMARY KEY(kind, entityId)
+        )
+        """.trimIndent()
+    )
+    execSQL("CREATE INDEX IF NOT EXISTS index_reader_deletions_deletedAt ON reader_deletions(deletedAt)")
 }

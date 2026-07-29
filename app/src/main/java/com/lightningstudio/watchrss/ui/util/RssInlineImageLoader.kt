@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss.ui.util
 
+import androidx.core.net.toUri
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
@@ -96,8 +97,8 @@ object RssInlineImageLoader {
     private fun resolveRequestData(url: String): Any {
         return when {
             url.startsWith("/") -> File(url)
-            url.startsWith("file://") -> Uri.parse(url)
-            url.startsWith("content://") -> Uri.parse(url)
+            url.startsWith("file://") -> url.toUri()
+            url.startsWith("content://") -> url.toUri()
             else -> url
         }
     }

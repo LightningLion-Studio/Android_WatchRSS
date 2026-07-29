@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss.data.telemetry
 
+import androidx.core.content.edit
 import android.content.Context
 import android.os.Build
 import com.lightningstudio.watchrss.BuildConfig
@@ -61,9 +62,9 @@ class WatchUsageTelemetry(
                     })
                 }
                 postJson("${state.posthogHost}/capture/", payload)
-                preferences.edit().putInt(KEY_BACKLOG_COUNT, 0).apply()
+                preferences.edit {putInt(KEY_BACKLOG_COUNT, 0)}
             }.onFailure {
-                preferences.edit().putInt(KEY_BACKLOG_COUNT, backlogCount() + 1).apply()
+                preferences.edit {putInt(KEY_BACKLOG_COUNT, backlogCount() + 1)}
             }
         }
     }
@@ -88,4 +89,3 @@ class WatchUsageTelemetry(
         private const val KEY_BACKLOG_COUNT = "backlog_count"
     }
 }
-

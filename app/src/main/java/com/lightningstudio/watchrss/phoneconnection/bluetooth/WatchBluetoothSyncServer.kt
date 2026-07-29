@@ -887,6 +887,14 @@ class WatchBluetoothSyncServer(
                     )
                 }
 
+                BluetoothSyncProtocol.ACTION_SYNC_READER -> {
+                    val app = context.applicationContext as WatchRssApplication
+                    ReaderPresetSyncPayload.handle(
+                        request = request,
+                        repository = app.container.readerPresetRepository
+                    )
+                }
+
                 BluetoothSyncProtocol.ACTION_PREVIEW_READER -> {
                     val app = context.applicationContext as WatchRssApplication
                     ReaderPresetPreviewPayload.handle(
@@ -910,7 +918,10 @@ class WatchBluetoothSyncServer(
                             event = "request.syncLibrary.probe",
                             fields = mapOf("remoteDeviceId" to request.optString("deviceId"))
                         )
-                        return@runCatching LibrarySyncPayload.buildProbeResponse(localDeviceId)
+                        return@runCatching LibrarySyncPayload.buildProbeResponse(
+                            localDeviceId,
+                            WatchMediaCapabilities.inspect(context)
+                        )
                     }
                     val app = context.applicationContext as WatchRssApplication
                     val remoteDeviceId = request.optString("deviceId").ifBlank { "phone" }

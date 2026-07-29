@@ -246,7 +246,8 @@ interface RssItemDao {
             syncChunkSize = :syncChunkSize,
             syncChunkHashesJson = :syncChunkHashesJson,
             syncMetadataHash = :syncMetadataHash,
-            readingProgress = :readingProgress
+            readingProgress = :readingProgress,
+            isRead = :isRead
         WHERE id = :id
         """
     )
@@ -267,7 +268,8 @@ interface RssItemDao {
         syncChunkSize: Int,
         syncChunkHashesJson: String,
         syncMetadataHash: String,
-        readingProgress: Float
+        readingProgress: Float,
+        isRead: Boolean
     )
 
     @Query(

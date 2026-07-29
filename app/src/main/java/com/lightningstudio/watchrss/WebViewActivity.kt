@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss
 
+import android.annotation.SuppressLint
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
@@ -14,6 +15,7 @@ import android.view.animation.DecelerateInterpolator
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.core.net.toUri
 import androidx.activity.addCallback
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.collectAsState
@@ -190,6 +192,7 @@ class WebViewActivity : BaseWatchActivity() {
         }
     }
 
+    @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView() {
         webView.settings.apply {
             javaScriptEnabled = true
@@ -341,7 +344,7 @@ class WebViewActivity : BaseWatchActivity() {
         private fun requiresInternetConnection(link: String): Boolean {
             val trimmed = link.trim()
             if (trimmed.isEmpty() || trimmed.startsWith("/")) return false
-            return when (Uri.parse(trimmed).scheme?.lowercase()) {
+            return when (trimmed.toUri().scheme?.lowercase()) {
                 "http", "https" -> true
                 else -> false
             }

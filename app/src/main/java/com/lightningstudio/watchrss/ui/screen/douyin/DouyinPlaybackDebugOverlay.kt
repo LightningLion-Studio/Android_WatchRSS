@@ -1,6 +1,7 @@
 package com.lightningstudio.watchrss.ui.screen.douyin
 
 import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackPreviewDebugSnapshot
+import java.util.Locale
 import kotlin.math.roundToInt
 
 internal data class DouyinPlaybackQuarantinedDebugEntry(
@@ -88,8 +89,8 @@ private fun formatDebugProgress(currentBytes: Int, budgetBytes: Int): String {
 private fun formatDebugBytes(bytes: Long): String {
     val absBytes = bytes.coerceAtLeast(0L)
     return when {
-        absBytes >= 1024L * 1024L -> String.format("%.1fMB", absBytes / (1024f * 1024f))
-        absBytes >= 1024L -> String.format("%.0fKB", absBytes / 1024f)
+        absBytes >= 1024L * 1024L -> String.format(Locale.US, "%.1fMB", absBytes / (1024f * 1024f))
+        absBytes >= 1024L -> String.format(Locale.US, "%.0fKB", absBytes / 1024f)
         else -> "${absBytes}B"
     }
 }

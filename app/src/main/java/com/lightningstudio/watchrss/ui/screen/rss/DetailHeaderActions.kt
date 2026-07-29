@@ -187,6 +187,9 @@ internal fun DetailTitle(
     highlightColor: Color = Color.Transparent,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null
 ) {
+    val presetTitleStyle = com.lightningstudio.watchrss.ui.reader.readerTextStyle(
+        com.lightningstudio.watchrss.ui.reader.ReaderTextRole.TITLE
+    )
     val hintSize = textSize(R.dimen.hey_m_title)
     val titleStyle = MaterialTheme.typography.titleMedium.copy(
         fontSize = hintSize,
@@ -233,9 +236,7 @@ internal fun DetailTitle(
         }
         Text(
             text = highlightedTitle,
-            style = titleStyle,
-            color = textColor,
-            textAlign = TextAlign.Center,
+            style = presetTitleStyle,
             onTextLayout = { result -> onTextLayout?.invoke(result) },
             modifier = Modifier.fillMaxWidth()
         )

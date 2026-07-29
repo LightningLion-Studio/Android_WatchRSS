@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss.debug
 
+import android.annotation.SuppressLint
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -96,6 +97,7 @@ object PerformanceMonitor {
     }
 }
 
+@SuppressLint("InlinedApi")
 private class FrameMetricsLogger(private val activity: ComponentActivity) {
     private val handler = Handler(Looper.getMainLooper())
     private var attached = false
@@ -129,13 +131,13 @@ private class FrameMetricsLogger(private val activity: ComponentActivity) {
     }
 
     fun start() {
-        if (attached || Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return
+        if (attached) return
         activity.window.addOnFrameMetricsAvailableListener(listener, handler)
         attached = true
     }
 
     fun stop() {
-        if (!attached || Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return
+        if (!attached) return
         activity.window.removeOnFrameMetricsAvailableListener(listener)
         attached = false
     }

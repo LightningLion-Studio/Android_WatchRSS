@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss.ui.utils
 
+import androidx.core.graphics.toColorInt
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -40,7 +41,7 @@ object BiliFormatUtils {
     fun parseVipColor(color: String?): Color {
         if (color.isNullOrBlank()) return Color.Unspecified
         return try {
-            val colorInt = android.graphics.Color.parseColor(color)
+            val colorInt = color.toColorInt()
             Color(colorInt)
         } catch (e: Exception) {
             Color.Unspecified

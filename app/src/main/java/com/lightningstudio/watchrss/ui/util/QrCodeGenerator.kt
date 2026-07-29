@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss.ui.util
 
+import androidx.core.graphics.createBitmap
 import android.graphics.Bitmap
 import android.util.Base64
 import com.google.zxing.BarcodeFormat
@@ -23,7 +24,7 @@ object QrCodeGenerator {
                     pixels[offset + x] = if (matrix[x, y]) 0xFFFFFFFF.toInt() else 0xFF000000.toInt()
                 }
             }
-            Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888).also { bitmap ->
+            createBitmap(size, size).also { bitmap ->
                 bitmap.setPixels(pixels, 0, size, 0, 0, size, size)
             }
         } catch (_: Exception) {

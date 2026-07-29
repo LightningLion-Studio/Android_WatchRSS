@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss.data.douyin
 
+import androidx.core.content.edit
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
@@ -26,15 +27,15 @@ class DouyinFeedCacheStore(context: Context) : DouyinFeedCacheStoreContract {
     private val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     override fun save(items: List<DouyinStreamItem>, nextCursor: String?, hasMore: Boolean, savedAtMs: Long) {
-        prefs.edit().putString(
-            KEY_CACHE_JSON,
-            serializeDouyinFeedCache(
-                items = items,
-                nextCursor = nextCursor,
-                hasMore = hasMore,
-                savedAtMs = savedAtMs
-            )
-        ).apply()
+        prefs.edit {putString(
+                KEY_CACHE_JSON,
+                serializeDouyinFeedCache(
+                    items = items,
+                    nextCursor = nextCursor,
+                    hasMore = hasMore,
+                    savedAtMs = savedAtMs
+                )
+        )}
     }
 
     override fun read(limit: Int): List<DouyinStreamItem> = readSnapshot(limit).items

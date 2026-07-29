@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss.ui.screen.rss
 
+import androidx.core.net.toUri
 import android.content.Context
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
@@ -175,40 +176,16 @@ private suspend fun loadVideoFrame(
             extractVideoAspectRatio(retriever)?.let { videoRatioCache.put(url, it) }
             val dstWidth = maxWidthPx.coerceAtLeast(1)
             val dstHeight = (maxWidthPx * 2).coerceAtLeast(1)
-            when {
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> {
-                    val params = MediaMetadataRetriever.BitmapParams().apply {
-                        setPreferredConfig(Bitmap.Config.RGB_565)
-                    }
-                    retriever.getScaledFrameAtTime(
-                        0,
-                        MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
-                        dstWidth,
-                        dstHeight,
-                        params
-                    )
-                }
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1 -> {
-                    retriever.getScaledFrameAtTime(
-                        0,
-                        MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
-                        dstWidth,
-                        dstHeight
-                    )
-                }
-                else -> {
-                    val frame = retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
-                        ?: return@withContext null
-                    if (maxWidthPx > 0 && frame.width > maxWidthPx) {
-                        val height = (frame.height * (maxWidthPx.toFloat() / frame.width))
-                            .roundToInt()
-                            .coerceAtLeast(1)
-                        Bitmap.createScaledBitmap(frame, maxWidthPx, height, true)
-                    } else {
-                        frame
-                    }
-                }
+            val params = MediaMetadataRetriever.BitmapParams().apply {
+                setPreferredConfig(Bitmap.Config.RGB_565)
             }
+            retriever.getScaledFrameAtTime(
+                0,
+                MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+                dstWidth,
+                dstHeight,
+                params
+            )
         } catch (_: Exception) {
             null
         } finally {
@@ -256,7 +233,7 @@ private fun setRetrieverDataSource(
     when {
         url.startsWith("file://") -> retriever.setDataSource(url.removePrefix("file://"))
         url.startsWith("/") -> retriever.setDataSource(url)
-        url.startsWith("content://") -> retriever.setDataSource(context, Uri.parse(url))
+        url.startsWith("content://") -> retriever.setDataSource(context, url.toUri())
         else -> retriever.setDataSource(url, videoFrameHeaders)
     }
 }

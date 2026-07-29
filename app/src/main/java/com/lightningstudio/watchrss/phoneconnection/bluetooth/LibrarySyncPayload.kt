@@ -36,7 +36,8 @@ data class ArticleSyncManifestEntry(
     val metadataHash: String = "",
     val bodyAvailable: Boolean = true,
     val bodySyncMode: String = ARTICLE_BODY_SYNC_MODE_FULL,
-    val readingProgress: Float = 0f
+    val readingProgress: Float = 0f,
+    val isRead: Boolean = false
 )
 
 data class LibraryChangeSequence(
@@ -47,7 +48,7 @@ data class LibraryChangeSequence(
 )
 
 object LibrarySyncPayload {
-    const val PROTOCOL_VERSION = 10
+    const val PROTOCOL_VERSION = 11
     const val MIN_SUPPORTED_PHONE_PROTOCOL_VERSION = 10
     const val LEGACY_PROTOCOL_VERSION = 4
     const val MAX_BODY_REQUEST_CHUNKS_PER_SYNC = Int.MAX_VALUE
@@ -60,16 +61,23 @@ object LibrarySyncPayload {
     const val PHASE_COMPLETE = "complete"
     private const val FIELD_SUPPORTS_TRANSFER_BYTE_PROGRESS = "supportsTransferByteProgress"
 
-    fun buildProbeResponse(deviceId: String): JSONObject {
+    fun buildProbeResponse(
+        deviceId: String,
+        capabilities: JSONObject? = null
+    ): JSONObject {
         return JSONObject().apply {
             put("success", true)
             put("version", PROTOCOL_VERSION)
             put("action", BluetoothSyncProtocol.ACTION_SYNC_LIBRARY)
             put("phase", PHASE_PROBE)
+            put("supportsReaderPresets", true)
+            put("supportsReaderAssets", true)
+            put("supportsResourceChunkAck", true)
             put("supportsReaderPresetPreview", true)
             put(FIELD_SUPPORTS_TRANSFER_BYTE_PROGRESS, true)
             put("deviceId", deviceId)
             put("sentAt", System.currentTimeMillis())
+            if (capabilities != null) put("watchCapabilities", capabilities)
         }
     }
 
@@ -125,7 +133,8 @@ object LibrarySyncPayload {
                         bodySyncMode = item.optString("bodySyncMode")
                             .trim()
                             .ifBlank { ARTICLE_BODY_SYNC_MODE_FULL },
-                        readingProgress = item.optFiniteProgress("readingProgress")
+                        readingProgress = item.optFiniteProgress("readingProgress"),
+                        isRead = item.optBoolean("isRead")
                     )
                 )
             }
@@ -159,7 +168,8 @@ object LibrarySyncPayload {
                     remote.watchLaterChangedAt > local.watchLaterChangedAt ||
                     remote.deletedAt > local.deletedAt ||
                     remote.deleted != local.deleted ||
-                    remote.readingProgress.isMeaningfullyAheadOf(local.readingProgress)
+                    remote.readingProgress.isMeaningfullyAheadOf(local.readingProgress) ||
+                    (remote.isRead && !local.isRead)
             }
             val hasReusableLocalBody = local?.canReuseLocalBodyFor(remote) == true
             val shouldRequestMetadataOnlyBody = remote.shouldRequestMetadataOnlyBody(
@@ -287,7 +297,8 @@ object LibrarySyncPayload {
                 article.watchLaterChangedAt > remote.watchLaterChangedAt ||
                 article.deletedAt > remote.deletedAt ||
                 article.deleted != remote.deleted ||
-                article.readingProgress.isMeaningfullyAheadOf(remote.readingProgress)
+                article.readingProgress.isMeaningfullyAheadOf(remote.readingProgress) ||
+                (article.isRead && !remote.isRead)
         }
     }
 
@@ -334,7 +345,8 @@ object LibrarySyncPayload {
                         watchLaterSortOrder = item.optLong("watchLaterSortOrder"),
                         deleted = item.optBoolean("deleted"),
                         deletedAt = item.optLong("deletedAt"),
-                        readingProgress = item.optFiniteProgress("readingProgress")
+                        readingProgress = item.optFiniteProgress("readingProgress"),
+                        isRead = item.optBoolean("isRead")
                     )
                 )
             }
@@ -1008,6 +1020,7 @@ object LibrarySyncPayload {
             put("bodyAvailable", true)
             put("bodySyncMode", bodySyncModeForSync())
             put("readingProgress", readingProgress.coerceIn(0f, 1f))
+            put("isRead", isRead)
         }
     }
 
@@ -1030,6 +1043,7 @@ object LibrarySyncPayload {
             put("bodyAvailable", bodyAvailable)
             put("bodySyncMode", bodySyncMode)
             put("readingProgress", readingProgress.coerceIn(0f, 1f))
+            put("isRead", isRead)
         }
     }
 
@@ -1063,6 +1077,7 @@ object LibrarySyncPayload {
             put("deleted", deleted)
             put("deletedAt", deletedAt)
             put("readingProgress", readingProgress.coerceIn(0f, 1f))
+            put("isRead", isRead)
         }
     }
 

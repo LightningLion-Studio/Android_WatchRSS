@@ -32,4 +32,33 @@ class DouyinPreloadPlannerTest {
             dropped.map { it.awemeId }
         )
     }
+
+    @Test
+    fun mergeDouyinBootstrapItems_keepsRecentOrder_butUsesFreshestPlaybackMetadata() {
+        val staleRecent = sampleDouyinStreamItem(
+            awemeId = "aweme-b",
+            playUrl = "https://example.com/stale.mp4",
+            playUrlResolvedAtMs = 100L
+        )
+        val freshFeed = staleRecent.copy(
+            playUrl = "https://example.com/fresh.mp4",
+            playUrlResolvedAtMs = 200L
+        )
+
+        val merged = mergeDouyinBootstrapItems(
+            feedItems = listOf(
+                sampleDouyinStreamItem(awemeId = "aweme-a"),
+                freshFeed,
+                sampleDouyinStreamItem(awemeId = "aweme-c")
+            ),
+            recentItems = listOf(
+                staleRecent,
+                sampleDouyinStreamItem(awemeId = "aweme-c")
+            )
+        )
+
+        assertEquals(listOf("aweme-a", "aweme-b", "aweme-c"), merged.map { it.awemeId })
+        assertEquals("https://example.com/fresh.mp4", merged[1].playUrl)
+        assertEquals(200L, merged[1].playUrlResolvedAtMs)
+    }
 }

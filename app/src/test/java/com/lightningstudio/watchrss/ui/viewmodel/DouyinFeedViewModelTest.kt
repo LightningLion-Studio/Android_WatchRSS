@@ -3,6 +3,10 @@ package com.lightningstudio.watchrss.ui.viewmodel
 import com.lightningstudio.watchrss.data.douyin.DouyinErrorCodes
 import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackPreviewCache
 import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackSourceKind
+import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackRefreshOutcome
+import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackRefreshTrigger
+import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackSourceCoordinatorContract
+import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackSourceRefreshEvent
 import com.lightningstudio.watchrss.data.douyin.DouyinResult
 import com.lightningstudio.watchrss.data.douyin.DouyinRecentWindowSnapshot
 import com.lightningstudio.watchrss.data.douyin.DouyinRecentWindowCacheCoordinatorContract
@@ -20,6 +24,8 @@ import com.lightningstudio.watchrss.testutil.TestDouyinWatchHistoryStore
 import com.lightningstudio.watchrss.testutil.sampleDouyinStreamItem
 import com.lightningstudio.watchrss.testutil.sampleDouyinVideo
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -43,6 +49,8 @@ class DouyinFeedViewModelTest {
         feedCacheStore: TestDouyinFeedCacheStore,
         recentWindowStore: DouyinRecentWindowStoreContract = com.lightningstudio.watchrss.data.douyin.NoOpDouyinRecentWindowStore,
         recentWindowCacheCoordinator: DouyinRecentWindowCacheCoordinatorContract = com.lightningstudio.watchrss.data.douyin.NoOpDouyinRecentWindowCacheCoordinator,
+        playbackSourceCoordinator: DouyinPlaybackSourceCoordinatorContract =
+            com.lightningstudio.watchrss.data.douyin.NoOpDouyinPlaybackSourceCoordinator,
         resumeToVideoFlowOnEntry: Boolean = false,
         resumeAwemeIdOnEntry: String? = null
     ): DouyinFeedViewModel {
@@ -53,6 +61,7 @@ class DouyinFeedViewModelTest {
             feedCacheStore = feedCacheStore,
             recentWindowStore = recentWindowStore,
             recentWindowCacheCoordinator = recentWindowCacheCoordinator,
+            playbackSourceCoordinator = playbackSourceCoordinator,
             storageDispatcher = mainDispatcherRule.dispatcher,
             resumeToVideoFlowOnEntry = resumeToVideoFlowOnEntry,
             resumeAwemeIdOnEntry = resumeAwemeIdOnEntry
@@ -115,6 +124,47 @@ class DouyinFeedViewModelTest {
         assertEquals(listOf("aweme-b", "aweme-c", "aweme-d"), viewModel.uiState.value.items.map { it.awemeId })
         assertTrue(viewModel.uiState.value.showTitlePage)
         assertEquals(2, viewModel.uiState.value.currentPage)
+    }
+
+    @Test
+    fun init_refreshesExpiredPreparedItemAndOneLookahead_withoutBlockingRestore() = runTest {
+        val cachedItems = listOf(
+            sampleDouyinStreamItem(
+                awemeId = "aweme-a",
+                playUrl = "https://example.com/stale-a.mp4",
+                playUrlResolvedAtMs = 0L
+            ),
+            sampleDouyinStreamItem(
+                awemeId = "aweme-b",
+                playUrl = "https://example.com/stale-b.mp4",
+                playUrlResolvedAtMs = 0L
+            ),
+            sampleDouyinStreamItem(
+                awemeId = "aweme-c",
+                playUrl = "https://example.com/stale-c.mp4",
+                playUrlResolvedAtMs = 0L
+            )
+        )
+        val coordinator = RecordingPlaybackSourceCoordinator()
+        val viewModel = newViewModel(
+            repository = TestDouyinRepository(initialLoggedIn = true),
+            preloadManager = TestDouyinPreloadManager(),
+            watchHistoryStore = TestDouyinWatchHistoryStore(),
+            feedCacheStore = TestDouyinFeedCacheStore(initialItems = cachedItems),
+            playbackSourceCoordinator = coordinator
+        )
+
+        advanceUntilIdle()
+
+        assertEquals(listOf("aweme-a", "aweme-b"), coordinator.refreshCalls)
+        assertEquals(
+            listOf(
+                "https://example.com/refreshed-aweme-a.mp4",
+                "https://example.com/refreshed-aweme-b.mp4",
+                "https://example.com/stale-c.mp4"
+            ),
+            viewModel.uiState.value.items.map { it.playUrl }
+        )
     }
 
     @Test
@@ -1098,5 +1148,29 @@ class DouyinFeedViewModelTest {
         assertEquals(DouyinSourceOrigin.VIDEO_REFRESH, refreshed.sourceOrigin)
         assertTrue(cacheStore.savedSnapshots.isNotEmpty())
         assertEquals(refreshed.playUrlResolvedAtMs, cacheStore.savedSnapshots.last().first().playUrlResolvedAtMs)
+    }
+}
+
+private class RecordingPlaybackSourceCoordinator : DouyinPlaybackSourceCoordinatorContract {
+    private val mutableUpdates = MutableSharedFlow<DouyinPlaybackSourceRefreshEvent>()
+    override val updates: SharedFlow<DouyinPlaybackSourceRefreshEvent> = mutableUpdates
+    val refreshCalls = mutableListOf<String>()
+    private var eventId = 0L
+
+    override suspend fun refresh(
+        item: com.lightningstudio.watchrss.data.douyin.DouyinStreamItem,
+        trigger: DouyinPlaybackRefreshTrigger
+    ): DouyinPlaybackSourceRefreshEvent {
+        refreshCalls += item.awemeId
+        return DouyinPlaybackSourceRefreshEvent(
+            eventId = ++eventId,
+            awemeId = item.awemeId,
+            trigger = trigger,
+            outcome = DouyinPlaybackRefreshOutcome.SUCCESS,
+            item = item.copy(
+                playUrl = "https://example.com/refreshed-${item.awemeId}.mp4",
+                playUrlResolvedAtMs = System.currentTimeMillis()
+            )
+        )
     }
 }

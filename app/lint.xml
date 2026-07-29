@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<lint>
+    <!-- Dependency and toolchain upgrades are handled as compatibility work, not lint cleanup. -->
+    <issue id="AndroidGradlePluginVersion" severity="ignore" />
+    <issue id="GradleDependency" severity="ignore" />
+    <issue id="NewerVersionAvailable" severity="ignore" />
+    <issue id="OldTargetApi" severity="ignore" />
+
+    <!-- Primitive-state migration is optional and would create broad, non-functional churn. -->
+    <issue id="AutoboxingStateCreation" severity="ignore" />
+
+    <!-- Adaptive icons intentionally coexist with legacy bitmap launchers for watch firmware. -->
+    <issue id="IconXmlAndPng" severity="ignore" />
+
+    <!-- Arbitrary RSS sources may be HTTP-only, so cleartext remains a product requirement. -->
+    <issue id="InsecureBaseConfiguration">
+        <ignore path="src/main/res/xml/network_security_config.xml" />
+    </issue>
+
+    <!-- This compatibility fallback preserves an existing accessibility delegate on watch firmware. -->
+    <issue id="DiscouragedPrivateApi">
+        <ignore path="src/main/java/com/lightningstudio/watchrss/ui/screen/rss/DetailBehaviorSupport.kt" />
+    </issue>
+
+    <!-- Debug-only ADB control receiver is intentionally reachable without an app permission. -->
+    <issue id="ExportedReceiver">
+        <ignore path="src/debug/AndroidManifest.xml" />
+    </issue>
+</lint>

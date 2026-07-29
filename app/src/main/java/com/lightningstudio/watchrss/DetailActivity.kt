@@ -12,6 +12,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.lifecycleScope
 import com.lightningstudio.watchrss.data.tts.ReadAloudStartAnchor
 import com.lightningstudio.watchrss.ui.screen.rss.DetailScreen
+import com.lightningstudio.watchrss.ui.reader.ProvideReaderPreset
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.util.showAppToast
 import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
@@ -52,6 +53,7 @@ class DetailActivity : BaseWatchActivity() {
 
         setContent {
             WatchRSSTheme {
+                ProvideReaderPreset(container.readerPresetRepository) {
                 val context = LocalContext.current
                 val llmSummaryState by llmSummaryViewModel.state.collectAsState()
                 val message by viewModel.message.collectAsState()
@@ -74,6 +76,7 @@ class DetailActivity : BaseWatchActivity() {
                         handleBackPress(itemId, reachedBottom, isWatchLater)
                     }
                 )
+                }
             }
         }
     }

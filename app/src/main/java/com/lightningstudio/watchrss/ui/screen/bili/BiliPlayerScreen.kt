@@ -1,3 +1,5 @@
+@file:androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+
 package com.lightningstudio.watchrss.ui.screen.bili
 
 import android.app.Activity
@@ -8,6 +10,7 @@ import android.graphics.SurfaceTexture
 import android.os.SystemClock
 import android.view.TextureView
 import android.view.WindowManager
+import java.util.Locale
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.exponentialDecay
@@ -1119,12 +1122,12 @@ private fun PlayerIconButton(
     contentDescription: String,
     size: androidx.compose.ui.unit.Dp,
     iconSize: androidx.compose.ui.unit.Dp,
-    enabled: Boolean = true,
-    iconModifier: Modifier = Modifier,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true
 ) {
     Box(
-        modifier = Modifier
+        modifier = modifier
             .size(size)
             .alpha(if (enabled) 1f else 0.5f)
             .clickable(enabled = enabled, onClick = onClick)
@@ -1139,7 +1142,7 @@ private fun PlayerIconButton(
             imageVector = icon,
             contentDescription = contentDescription,
             tint = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.size(iconSize).then(iconModifier)
+            modifier = Modifier.size(iconSize)
         )
     }
 }
@@ -1165,9 +1168,9 @@ private fun formatTime(ms: Int): String {
     val minutes = (totalSeconds / 60) % 60
     val hours = totalSeconds / 3600
     return if (hours > 0) {
-        String.format("%d:%02d:%02d", hours, minutes, seconds)
+        String.format(Locale.getDefault(), "%d:%02d:%02d", hours, minutes, seconds)
     } else {
-        String.format("%d:%02d", minutes, seconds)
+        String.format(Locale.getDefault(), "%d:%02d", minutes, seconds)
     }
 }
 

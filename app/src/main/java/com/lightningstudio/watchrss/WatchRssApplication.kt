@@ -1,10 +1,15 @@
 package com.lightningstudio.watchrss
 
 import android.app.Application
+import android.app.Activity
 import android.content.Intent
+import android.os.Bundle
+import android.os.SystemClock
 import com.lightningstudio.watchrss.data.AppContainer
 import com.lightningstudio.watchrss.data.DefaultAppContainer
 import com.lightningstudio.watchrss.data.account.WatchAccountStore
+import com.lightningstudio.watchrss.data.cloud.WatchCloudSyncService
+import com.lightningstudio.watchrss.data.cloud.WatchCloudSyncWorker
 import com.lightningstudio.watchrss.data.reader.WatchReaderPresetPreviewSession
 import com.lightningstudio.watchrss.data.telemetry.WatchUsageTelemetry
 import com.lightningstudio.watchrss.debug.DebugLogBuffer
@@ -15,7 +20,11 @@ import com.lightningstudio.watchrss.sdk.bili.BiliDebugLog
 import com.lightningstudio.watchrss.util.AppLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -29,7 +38,15 @@ class WatchRssApplication : Application() {
     @Volatile
     private var testContainerOverride: AppContainer? = null
     private val bluetoothForegroundSyncManager: WatchBluetoothForegroundSyncManager by lazy {
-        WatchBluetoothForegroundSyncManager(this)
+        WatchBluetoothForegroundSyncManager(this) {
+            appScope.launch { cloudSyncService.syncNow() }
+        }
+    }
+    private var lastCloudForegroundAt = 0L
+    private var pendingCloudChangeSync: Job? = null
+
+    val readerPresetPreviewSession by lazy {
+        WatchReaderPresetPreviewSession(appScope)
     }
 
     val container: AppContainer
@@ -39,16 +56,20 @@ class WatchRssApplication : Application() {
         WatchAccountStore(this)
     }
 
-    val readerPresetPreviewSession by lazy {
-        WatchReaderPresetPreviewSession(appScope)
-    }
-
     val usageTelemetry: WatchUsageTelemetry by lazy {
         WatchUsageTelemetry(
             context = this,
             accountStore = accountStore,
             deviceIdentity = WatchDeviceIdentity(this),
             appScope = appScope
+        )
+    }
+
+    val cloudSyncService: WatchCloudSyncService by lazy {
+        WatchCloudSyncService(
+            context = this,
+            accountStore = accountStore,
+            repository = container.rssRepository
         )
     }
 
@@ -68,7 +89,42 @@ class WatchRssApplication : Application() {
         }
 
         bluetoothForegroundSyncManager.install()
+        WatchCloudSyncWorker.schedule(this)
         usageTelemetry.recordAppLaunch()
+        registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
+            override fun onActivityResumed(activity: Activity) {
+                val now = SystemClock.elapsedRealtime()
+                if (now - lastCloudForegroundAt < 5 * 60 * 1000L) return
+                lastCloudForegroundAt = now
+                appScope.launch { cloudSyncService.syncNow() }
+            }
+
+            override fun onActivityCreated(activity: Activity, state: Bundle?) = Unit
+            override fun onActivityStarted(activity: Activity) = Unit
+            override fun onActivityPaused(activity: Activity) = Unit
+            override fun onActivityStopped(activity: Activity) = Unit
+            override fun onActivitySaveInstanceState(activity: Activity, state: Bundle) = Unit
+            override fun onActivityDestroyed(activity: Activity) = Unit
+        })
+        appScope.launch {
+            if (accountStore.read() != null) {
+                cloudSyncService.syncNow()
+            }
+        }
+        appScope.launch {
+            accountStore.state.drop(1).collect { account ->
+                if (account != null) cloudSyncService.syncNow()
+            }
+        }
+        appScope.launch {
+            container.rssRepository.observeCloudSyncRevision().drop(1).collect {
+                pendingCloudChangeSync?.cancel()
+                pendingCloudChangeSync = launch {
+                    delay(CLOUD_CHANGE_DEBOUNCE_MS)
+                    cloudSyncService.syncNow()
+                }
+            }
+        }
     }
 
     fun setContainerForTesting(container: AppContainer?) {
@@ -86,5 +142,9 @@ class WatchRssApplication : Application() {
                 )
             }
         )
+    }
+
+    private companion object {
+        private const val CLOUD_CHANGE_DEBOUNCE_MS = 10 * 60 * 1000L
     }
 }

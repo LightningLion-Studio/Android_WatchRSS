@@ -286,6 +286,9 @@ internal fun DetailContent(
     }
 
     var pendingRestoreProgress by remember { mutableStateOf<Float?>(null) }
+    val totalItemsCount by remember {
+        derivedStateOf { listState.layoutInfo.totalItemsCount }
+    }
     var hasRestoredPosition by remember { mutableStateOf(false) }
     var lastItemId by remember { mutableStateOf<Long?>(null) }
     var lastSavedProgress by remember { mutableStateOf(-1f) }
@@ -714,14 +717,14 @@ internal fun DetailContent(
 
     LaunchedEffect(
         pendingRestoreProgress,
-        listState.layoutInfo.totalItemsCount,
+        totalItemsCount,
         importedTextFirstItemIndex,
         importedTextChunkCount,
         contentBlockFirstItemIndex,
         contentBlocks
     ) {
         val progress = pendingRestoreProgress ?: return@LaunchedEffect
-        val totalItems = listState.layoutInfo.totalItemsCount
+        val totalItems = totalItemsCount
         if (isImportedText && (importedTextReader == null || importedTextChunkCount <= 0)) {
             return@LaunchedEffect
         }
@@ -922,10 +925,9 @@ internal fun DetailContent(
         onBackState.value(item?.id ?: 0L, reachedBottom, isWatchLaterState.value)
     }
 
-    Box(
+    com.lightningstudio.watchrss.ui.reader.ReaderBackgroundSurface(
         modifier = Modifier
             .fillMaxSize()
-            .background(backgroundColor)
             .semantics {
                 contentDescription = "文章详情页面"
             }

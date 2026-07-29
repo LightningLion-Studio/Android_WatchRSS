@@ -107,10 +107,10 @@ fun ImagePreviewScreen(
             val baseSize = remember(containerSize, imageSize) {
                 calculateBaseSize(containerSize, imageSize)
             }
-    val maxScale = remember(containerSize, imageSize, baseSize) {
-        calculateMaxScale(containerSize, imageSize, baseSize)
-    }
-    val minScale = 0.5f
+            val maxScale = remember(containerSize, imageSize, baseSize) {
+                calculateMaxScale(containerSize, imageSize, baseSize)
+            }
+            val minScale = 0.5f
 
             LaunchedEffect(containerSize, imageSize, minScale) {
                 scale = max(1f, minScale)

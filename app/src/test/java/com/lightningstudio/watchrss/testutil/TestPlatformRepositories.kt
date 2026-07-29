@@ -39,6 +39,7 @@ import com.lightningstudio.watchrss.sdk.bili.WebQrCode
 import com.lightningstudio.watchrss.sdk.douyin.DouyinContent
 import com.lightningstudio.watchrss.sdk.douyin.DouyinFeedPage
 import com.lightningstudio.watchrss.sdk.douyin.DouyinVideo
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 
 data class TestBiliFavoriteRequest(
@@ -459,6 +460,7 @@ class TestDouyinRepository(
     var headers: Map<String, String> = mapOf("User-Agent" to "TestDouyinRepository")
     val fetchVideoCalls = mutableListOf<String>()
     val fetchFeedPageCursors = mutableListOf<String?>()
+    var fetchVideoGate: CompletableDeferred<Unit>? = null
 
     override suspend fun isLoggedIn(): Boolean = loggedIn
 
@@ -490,6 +492,7 @@ class TestDouyinRepository(
 
     override suspend fun fetchVideo(awemeId: String): DouyinResult<DouyinContent> {
         fetchVideoCalls += awemeId
+        fetchVideoGate?.await()
         return videoResults[awemeId] ?: videoResult
     }
 

@@ -1,6 +1,7 @@
 package com.lightningstudio.watchrss.data.rss
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 
 data class ImportedTextReader(
     val marker: String,
@@ -9,6 +10,7 @@ data class ImportedTextReader(
 )
 
 interface RssRepository {
+    fun observeCloudSyncRevision(): Flow<Long> = emptyFlow()
     fun observeHomeChannels(): Flow<List<RssChannel>>
     fun observeChannels(): Flow<List<RssChannel>>
     fun observeChannel(channelId: Long): Flow<RssChannel?>
@@ -42,6 +44,8 @@ interface RssRepository {
         saved: Boolean
     ): Result<SavedState>
     suspend fun exportSyncedSavedArticles(deviceId: String): List<SyncedSavedArticle>
+    suspend fun exportCloudRssStateArticles(deviceId: String): List<SyncedSavedArticle> =
+        exportSyncedSavedArticles(deviceId)
     suspend fun exportSyncedArticleManifests(deviceId: String): List<SyncedArticleManifest>
     suspend fun prepareLibrarySyncWindow(
         peerDeviceId: String,

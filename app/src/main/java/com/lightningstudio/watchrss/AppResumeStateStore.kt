@@ -1,5 +1,7 @@
 package com.lightningstudio.watchrss
 
+import androidx.core.content.edit
+import androidx.core.net.toUri
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -10,9 +12,9 @@ object AppResumeStateStore {
 
     fun save(context: Context, intent: Intent) {
         val normalized = normalizeIntent(context, intent) ?: return
-        prefs(context).edit()
-            .putString(KEY_INTENT_URI, normalized.toUri(Intent.URI_INTENT_SCHEME))
-            .apply()
+        prefs(context).edit {
+                putString(KEY_INTENT_URI, normalized.toUri(Intent.URI_INTENT_SCHEME))
+            }
     }
 
     fun load(context: Context): Intent? {
@@ -30,7 +32,7 @@ object AppResumeStateStore {
     }
 
     fun clear(context: Context) {
-        prefs(context).edit().remove(KEY_INTENT_URI).apply()
+        prefs(context).edit {remove(KEY_INTENT_URI)}
     }
 
     fun clearIfMatches(context: Context, intent: Intent) {

@@ -16,6 +16,7 @@ import com.lightningstudio.watchrss.data.douyin.buildDouyinPlaybackWebUrl
 import com.lightningstudio.watchrss.data.rss.RssItem
 import com.lightningstudio.watchrss.data.settings.DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE
 import com.lightningstudio.watchrss.ui.screen.rss.DetailContent
+import com.lightningstudio.watchrss.ui.reader.ProvideReaderPreset
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.util.ContentBlock
 import com.lightningstudio.watchrss.ui.util.TextStyle as ContentTextStyle
@@ -23,6 +24,7 @@ import kotlin.math.absoluteValue
 
 class DouyinDetailActivity : BaseWatchActivity() {
     private val settingsRepository by lazy { (application as WatchRssApplication).container.settingsRepository }
+    private val readerPresetRepository by lazy { (application as WatchRssApplication).container.readerPresetRepository }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -37,6 +39,7 @@ class DouyinDetailActivity : BaseWatchActivity() {
 
         setContent {
             WatchRSSTheme {
+                ProvideReaderPreset(readerPresetRepository) {
                 val baseDensity = LocalDensity.current
                 CompositionLocalProvider(LocalDensity provides Density(2f, baseDensity.fontScale)) {
                     val readingThemeDark by settingsRepository.readingThemeDark.collectAsState(initial = true)
@@ -91,6 +94,7 @@ class DouyinDetailActivity : BaseWatchActivity() {
                         onSaveReadingProgress = {},
                         onBack = { _, _, _ -> finish() }
                     )
+                }
                 }
             }
         }

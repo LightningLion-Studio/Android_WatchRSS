@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.lightningstudio.watchrss.data.douyin.DouyinFeedCacheStoreContract
 import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackTransportContract
+import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackSourceCoordinatorContract
 import com.lightningstudio.watchrss.data.douyin.DouyinPreloadManagerContract
 import com.lightningstudio.watchrss.data.douyin.DouyinRecentWindowCacheCoordinatorContract
 import com.lightningstudio.watchrss.data.douyin.DouyinRecentWindowStoreContract
@@ -14,6 +15,7 @@ class DouyinViewModelFactory(
     private val repository: DouyinRepositoryContract,
     private val preloadManager: DouyinPreloadManagerContract,
     private val playbackTransport: DouyinPlaybackTransportContract,
+    private val playbackSourceCoordinator: DouyinPlaybackSourceCoordinatorContract,
     private val watchHistoryStore: DouyinWatchHistoryStoreContract,
     private val feedCacheStore: DouyinFeedCacheStoreContract,
     private val recentWindowStore: DouyinRecentWindowStoreContract,
@@ -29,6 +31,7 @@ class DouyinViewModelFactory(
                     repository = repository,
                     preloadManager = preloadManager,
                     playbackTransport = playbackTransport,
+                    playbackSourceCoordinator = playbackSourceCoordinator,
                     watchHistoryStore = watchHistoryStore,
                     feedCacheStore = feedCacheStore,
                     recentWindowStore = recentWindowStore,

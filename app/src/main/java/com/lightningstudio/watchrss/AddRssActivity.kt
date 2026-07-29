@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss
 
+import androidx.core.net.toUri
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -82,7 +83,7 @@ class AddRssActivity : BaseWatchActivity() {
 
     private fun builtinFromInputUrl(url: String?): com.lightningstudio.watchrss.data.rss.BuiltinChannelType? {
         if (url.isNullOrBlank()) return null
-        val host = runCatching { Uri.parse(url).host }.getOrNull()
+        val host = runCatching { url.toUri().host }.getOrNull()
         return com.lightningstudio.watchrss.data.rss.BuiltinChannelType.fromHost(host)
     }
 

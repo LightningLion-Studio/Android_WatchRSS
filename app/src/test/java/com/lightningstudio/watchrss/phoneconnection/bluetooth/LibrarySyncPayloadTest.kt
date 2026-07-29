@@ -26,7 +26,7 @@ class LibrarySyncPayloadTest {
 
         assertTrue(response != null)
         assertFalse(response!!.getBoolean("success"))
-        assertEquals(10, response.getInt("version"))
+        assertEquals(LibrarySyncPayload.PROTOCOL_VERSION, response.getInt("version"))
         assertEquals(10, response.getInt("minimumPhoneProtocolVersion"))
         assertTrue(response.getString("message").contains("升级到最新版"))
     }

@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss
 
+import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.ContextWrapper
@@ -9,6 +10,7 @@ import android.os.Build
 import android.os.linearmotorvibrator.LinearmotorVibrator
 
 class SafeReceiverContextWrapper(base: Context) : ContextWrapper(base) {
+    @SuppressLint("UnspecifiedRegisterReceiverFlag")
     override fun registerReceiver(receiver: BroadcastReceiver?, filter: IntentFilter?): Intent? {
         return if (Build.VERSION.SDK_INT >= 33) {
             super.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)

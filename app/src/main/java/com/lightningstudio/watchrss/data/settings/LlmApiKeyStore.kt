@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss.data.settings
 
+import androidx.core.content.edit
 import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
@@ -28,7 +29,7 @@ class LlmApiKeyStore(context: Context) : LlmApiKeyProvider {
     override fun getApiKey(): String = prefs.getString(KEY_API_KEY, "") ?: ""
 
     fun setApiKey(apiKey: String) {
-        prefs.edit().putString(KEY_API_KEY, apiKey).apply()
+        prefs.edit {putString(KEY_API_KEY, apiKey)}
     }
 
     fun hasApiKey(): Boolean = prefs.getString(KEY_API_KEY, "").orEmpty().isNotEmpty()

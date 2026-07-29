@@ -49,6 +49,7 @@ class DouyinEntryActivity : BaseWatchActivity() {
     private val rssRepository by lazy { container.rssRepository }
     private val preloadManager by lazy { container.douyinPreloadManager }
     private val playbackTransport by lazy { container.douyinPlaybackTransport }
+    private val playbackSourceCoordinator by lazy { container.douyinPlaybackSourceCoordinator }
     private val watchHistoryStore by lazy { container.douyinWatchHistoryStore }
     private val feedCacheStore by lazy { container.douyinFeedCacheStore }
     private val recentWindowStore by lazy { container.douyinRecentWindowStore }
@@ -58,6 +59,7 @@ class DouyinEntryActivity : BaseWatchActivity() {
             repository = repository,
             preloadManager = preloadManager,
             playbackTransport = playbackTransport,
+            playbackSourceCoordinator = playbackSourceCoordinator,
             watchHistoryStore = watchHistoryStore,
             feedCacheStore = feedCacheStore,
             recentWindowStore = recentWindowStore,

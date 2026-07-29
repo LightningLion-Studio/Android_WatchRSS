@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss.data.douyin
 
+import androidx.core.content.edit
 import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
@@ -52,16 +53,16 @@ class DouyinRecentWindowStore(context: Context) : DouyinRecentWindowStoreContrac
             .values
             .take(DOUYIN_RECENT_WINDOW_SIZE)
         val normalizedAnchorAwemeId = anchorAwemeId?.trim()?.takeIf { it.isNotEmpty() }
-        prefs.edit()
-            .putString(
-                KEY_WINDOW_JSON,
-                encodeDouyinRecentWindow(
-                    items = normalizedItems,
-                    anchorAwemeId = normalizedAnchorAwemeId,
-                    savedAtMs = savedAtMs
+        prefs.edit {
+                putString(
+                    KEY_WINDOW_JSON,
+                    encodeDouyinRecentWindow(
+                        items = normalizedItems,
+                        anchorAwemeId = normalizedAnchorAwemeId,
+                        savedAtMs = savedAtMs
+                    )
                 )
-            )
-            .apply()
+            }
     }
 
     override fun readSnapshot(limit: Int): DouyinRecentWindowSnapshot {
@@ -71,7 +72,7 @@ class DouyinRecentWindowStore(context: Context) : DouyinRecentWindowStoreContrac
     }
 
     override fun clear() {
-        prefs.edit().remove(KEY_WINDOW_JSON).apply()
+        prefs.edit {remove(KEY_WINDOW_JSON)}
     }
 
     companion object {

@@ -30,9 +30,9 @@ import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 @Composable
 fun WatchSettingsPillRow(
     label: String,
+    modifier: Modifier = Modifier,
     leadingIcon: androidx.compose.ui.graphics.vector.ImageVector? = null,
     testTag: String? = null,
-    modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
     endPaddingMultiplier: Float = 1f,
     content: @Composable RowScope.() -> Unit = {}

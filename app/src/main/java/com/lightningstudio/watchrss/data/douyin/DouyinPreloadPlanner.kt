@@ -77,18 +77,39 @@ fun mergeDouyinBootstrapItems(
     recentItems: List<DouyinStreamItem>,
     limit: Int = Int.MAX_VALUE
 ): List<DouyinStreamItem> {
+    val freshestByAwemeId = (recentItems + feedItems)
+        .fold(linkedMapOf<String, DouyinStreamItem>()) { acc, item ->
+            val awemeId = item.awemeId.trim()
+            if (awemeId.isNotEmpty()) {
+                val current = acc[awemeId]
+                if (current == null || item.playUrlResolvedAtMs > current.playUrlResolvedAtMs) {
+                    acc[awemeId] = item
+                }
+            }
+            acc
+        }
     val normalizedRecentItems = recentItems
         .fold(linkedMapOf<String, DouyinStreamItem>()) { acc, item ->
             val awemeId = item.awemeId.trim()
             if (awemeId.isNotEmpty()) {
-                acc.putIfAbsent(awemeId, item)
+                acc.putIfAbsent(awemeId, freshestByAwemeId[awemeId] ?: item)
             }
             acc
         }
         .values
         .toList()
     if (normalizedRecentItems.isEmpty()) {
-        return if (limit > 0) feedItems.take(limit) else feedItems
+        val normalizedFeedItems = feedItems
+            .fold(linkedMapOf<String, DouyinStreamItem>()) { acc, item ->
+                val awemeId = item.awemeId.trim()
+                if (awemeId.isNotEmpty()) {
+                    acc.putIfAbsent(awemeId, freshestByAwemeId[awemeId] ?: item)
+                }
+                acc
+            }
+            .values
+            .toList()
+        return if (limit > 0) normalizedFeedItems.take(limit) else normalizedFeedItems
     }
     if (feedItems.isEmpty()) {
         return if (limit > 0) normalizedRecentItems.take(limit) else normalizedRecentItems
@@ -99,13 +120,47 @@ fun mergeDouyinBootstrapItems(
         recentIds.contains(feedItems[index].awemeId)
     }
     val merged = if (overlapIndices.isEmpty()) {
-        normalizedRecentItems + feedItems.filterNot { recentIds.contains(it.awemeId) }
+        normalizedRecentItems + feedItems
+            .filterNot { recentIds.contains(it.awemeId) }
+            .map { freshestByAwemeId[it.awemeId] ?: it }
     } else {
         val firstOverlap = overlapIndices.first()
         val lastOverlap = overlapIndices.last()
-        val prefix = feedItems.take(firstOverlap).filterNot { recentIds.contains(it.awemeId) }
-        val suffix = feedItems.drop(lastOverlap + 1).filterNot { recentIds.contains(it.awemeId) }
+        val prefix = feedItems.take(firstOverlap)
+            .filterNot { recentIds.contains(it.awemeId) }
+            .map { freshestByAwemeId[it.awemeId] ?: it }
+        val suffix = feedItems.drop(lastOverlap + 1)
+            .filterNot { recentIds.contains(it.awemeId) }
+            .map { freshestByAwemeId[it.awemeId] ?: it }
         prefix + normalizedRecentItems + suffix
+    }
+    return if (limit > 0) merged.take(limit) else merged
+}
+
+fun mergeDouyinPrioritizedItems(
+    prioritizedItems: List<DouyinStreamItem>,
+    remainingItems: List<DouyinStreamItem>,
+    limit: Int = Int.MAX_VALUE
+): List<DouyinStreamItem> {
+    val freshestByAwemeId = (prioritizedItems + remainingItems)
+        .fold(linkedMapOf<String, DouyinStreamItem>()) { acc, item ->
+            val awemeId = item.awemeId.trim()
+            if (awemeId.isNotEmpty()) {
+                val current = acc[awemeId]
+                if (current == null || item.playUrlResolvedAtMs > current.playUrlResolvedAtMs) {
+                    acc[awemeId] = item
+                }
+            }
+            acc
+        }
+    val seenAwemeIds = linkedSetOf<String>()
+    val merged = buildList {
+        (prioritizedItems + remainingItems).forEach { item ->
+            val awemeId = item.awemeId.trim()
+            if (awemeId.isNotEmpty() && seenAwemeIds.add(awemeId)) {
+                add(freshestByAwemeId[awemeId] ?: item)
+            }
+        }
     }
     return if (limit > 0) merged.take(limit) else merged
 }

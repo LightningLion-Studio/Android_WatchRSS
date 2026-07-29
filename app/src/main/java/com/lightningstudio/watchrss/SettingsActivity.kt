@@ -32,6 +32,9 @@ class SettingsActivity : BaseWatchActivity() {
                     onOpenAdvanced = {
                         startActivity(Intent(this, AdvancedSettingsActivity::class.java))
                     },
+                    onOpenReaderPresets = {
+                        startActivity(ReaderPresetActivity.createIntent(this))
+                    },
                     onOpenOobe = {
                         startActivity(OobeActivity.createIntent(this, returnHomeOnFinish = false))
                     },

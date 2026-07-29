@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss.data.rss
 
+import androidx.core.net.toUri
 import android.net.Uri
 import com.lightningstudio.watchrss.data.cache.CacheTrimReason
 import com.lightningstudio.watchrss.data.cache.ManagedCacheBucket
@@ -87,6 +88,9 @@ class DefaultRssRepository(
         ConcurrentHashMap()
     private val previewJobs: MutableSet<Long> = ConcurrentHashMap.newKeySet()
     private val previewAttemptKeys = ConcurrentHashMap<Long, String>()
+
+    override fun observeCloudSyncRevision(): Flow<Long> =
+        syncChangeLogDao.observeMaxSeq()
 
     override fun observeHomeChannels(): Flow<List<RssChannel>> =
         channelDao.observeChannels().map { channels ->
@@ -538,14 +542,20 @@ class DefaultRssRepository(
 
     override suspend fun markItemRead(itemId: Long) {
         withContext(Dispatchers.IO) {
+            val item = itemDao.getItem(itemId) ?: return@withContext
+            if (item.isRead) return@withContext
             itemDao.markRead(itemId)
+            recordArticleChange(stableArticleId(item.link ?: item.dedupKey), "read")
         }
     }
 
     override suspend fun updateItemReadingProgress(itemId: Long, progress: Float) {
         withContext(Dispatchers.IO) {
             val clamped = progress.coerceIn(0f, 1f)
+            val item = itemDao.getItem(itemId) ?: return@withContext
+            if (kotlin.math.abs(item.readingProgress - clamped) < 0.001f) return@withContext
             itemDao.updateReadingProgress(itemId, clamped)
+            recordArticleChange(stableArticleId(item.link ?: item.dedupKey), "readingProgress")
         }
     }
 
@@ -625,6 +635,54 @@ class DefaultRssRepository(
     override suspend fun exportSyncedSavedArticles(deviceId: String): List<SyncedSavedArticle> =
         withContext(Dispatchers.IO) {
             exportSyncedSavedArticlesInternal(deviceId = deviceId, requestedArticleIds = null)
+        }
+
+    override suspend fun exportCloudRssStateArticles(deviceId: String): List<SyncedSavedArticle> =
+        withContext(Dispatchers.IO) {
+            val stateByArticleId = exportSyncedSavedArticlesInternal(
+                deviceId = deviceId,
+                requestedArticleIds = null
+            ).associateByTo(linkedMapOf()) { it.articleId }
+            channelDao.getAllChannels()
+                .filter { it.isSyncedRssSource() }
+                .forEach { channel ->
+                    itemDao.getItemsForChannelSyncManifest(channel.id, Int.MAX_VALUE)
+                        .asSequence()
+                        .filter { it.isRead || it.readingProgress > 0f }
+                        .forEach { item ->
+                            val articleId = stableArticleId(item.link ?: item.dedupKey)
+                            if (articleId !in stateByArticleId) {
+                                val url = item.link.orEmpty().ifBlank { item.dedupKey }
+                                stateByArticleId[articleId] = SyncedSavedArticle(
+                                    articleId = articleId,
+                                    sourceDeviceId = deviceId,
+                                    url = url,
+                                    title = item.title.ifBlank { url },
+                                    siteName = channel.title,
+                                    excerpt = item.summary ?: item.description.orEmpty(),
+                                    contentHtml = null,
+                                    contentText = "",
+                                    imageUrl = item.previewImageUrl ?: item.imageUrl,
+                                    contentHash = item.syncBodyHash.ifBlank { sha256(url) },
+                                    importedAt = item.fetchedAt,
+                                    updatedAt = item.fetchedAt,
+                                    rssSourceUrl = channel.url,
+                                    rssSourceTitle = channel.title,
+                                    favoriteSaved = false,
+                                    favoriteChangedAt = 0L,
+                                    favoriteSortOrder = 0L,
+                                    watchLaterSaved = false,
+                                    watchLaterChangedAt = 0L,
+                                    watchLaterSortOrder = 0L,
+                                    deleted = false,
+                                    deletedAt = 0L,
+                                    readingProgress = item.readingProgress,
+                                    isRead = item.isRead
+                                )
+                            }
+                        }
+                }
+            stateByArticleId.values.toList()
         }
 
     override suspend fun exportSyncedArticleManifests(deviceId: String): List<SyncedArticleManifest> =
@@ -1124,7 +1182,17 @@ class DefaultRssRepository(
 
     override suspend fun markChannelRead(channelId: Long) {
         withContext(Dispatchers.IO) {
+            val unreadItems = itemDao.getItemsForChannelSyncManifest(channelId, Int.MAX_VALUE)
+                .filterNot { it.isRead }
             itemDao.markReadByChannel(channelId)
+            val now = System.currentTimeMillis()
+            unreadItems.forEach { item ->
+                recordArticleChange(
+                    stableArticleId(item.link ?: item.dedupKey),
+                    "read",
+                    now
+                )
+            }
         }
     }
 
@@ -1390,7 +1458,7 @@ class DefaultRssRepository(
     private fun isValidUrl(url: String): Boolean {
         if (url.length > 2048) return false
         if (url.any { it.isWhitespace() }) return false
-        val uri = runCatching { Uri.parse(url) }.getOrNull() ?: return false
+        val uri = runCatching { url.toUri() }.getOrNull() ?: return false
         val scheme = uri.scheme?.lowercase()
         if (scheme != "http" && scheme != "https") return false
         return !uri.host.isNullOrBlank()
@@ -1422,7 +1490,7 @@ class DefaultRssRepository(
     }
 
     private fun builtinTypeFromInputUrl(url: String): BuiltinChannelType? {
-        val host = runCatching { Uri.parse(url).host }.getOrNull()
+        val host = runCatching { url.toUri().host }.getOrNull()
         return BuiltinChannelType.fromHost(host)
     }
 
@@ -1559,7 +1627,8 @@ class DefaultRssRepository(
             watchLaterSortOrder = watchLaterSortOrder,
             deleted = false,
             deletedAt = 0L,
-            readingProgress = fullItem.readingProgress
+            readingProgress = fullItem.readingProgress,
+            isRead = fullItem.isRead
         )
         return article.copy(cachedBodyMetadata = fullItem.currentSyncMetadataFor(article))
     }
@@ -1604,7 +1673,8 @@ class DefaultRssRepository(
             watchLaterSortOrder = watchLaterSortOrder,
             deleted = false,
             deletedAt = 0L,
-            readingProgress = item.readingProgress
+            readingProgress = item.readingProgress,
+            isRead = item.isRead
         )
         return article.toManifestFromItem(
             item = item,
@@ -1753,7 +1823,8 @@ class DefaultRssRepository(
             watchLaterSortOrder = 0L,
             deleted = false,
             deletedAt = 0L,
-            readingProgress = fullItem.readingProgress
+            readingProgress = fullItem.readingProgress,
+            isRead = fullItem.isRead
         )
         return article.copy(cachedBodyMetadata = fullItem.currentSyncMetadataFor(article))
     }
@@ -1793,7 +1864,8 @@ class DefaultRssRepository(
             watchLaterSortOrder = 0L,
             deleted = false,
             deletedAt = 0L,
-            readingProgress = readingProgress
+            readingProgress = readingProgress,
+            isRead = isRead
         )
         return article.toManifestFromItem(
             item = this,
@@ -1895,6 +1967,8 @@ class DefaultRssRepository(
         channelId: Long,
         article: SyncedSavedArticle
     ): Long {
+        val hasIncomingBody =
+            !article.contentHtml.isNullOrBlank() || article.contentText.isNotBlank()
         val content = article.contentHtml?.takeIf { it.isNotBlank() }
             ?: article.contentText.takeIf { it.isNotBlank() }
             ?: article.excerpt.takeIf { it.isNotBlank() }
@@ -1917,7 +1991,7 @@ class DefaultRssRepository(
             videoUrl = null,
             summary = article.excerpt.ifBlank { null },
             previewImageUrl = article.imageUrl,
-            isRead = false,
+            isRead = article.isRead,
             isLiked = false,
             readingProgress = incomingReadingProgress,
             dedupKey = article.articleId,
@@ -1940,20 +2014,41 @@ class DefaultRssRepository(
             id = existing.id,
             title = entity.title,
             description = entity.description,
-            content = entity.content,
-            originalContent = entity.originalContent,
+            content = if (hasIncomingBody) entity.content else existing.content,
+            originalContent = if (hasIncomingBody) {
+                entity.originalContent
+            } else {
+                existing.originalContent
+            },
             link = entity.link,
             imageUrl = entity.imageUrl,
             summary = entity.summary,
             previewImageUrl = entity.previewImageUrl,
             fetchedAt = entity.fetchedAt,
-            contentSizeBytes = entity.contentSizeBytes,
-            syncBodyHash = entity.syncBodyHash,
-            syncBodyByteCount = entity.syncBodyByteCount,
-            syncChunkSize = entity.syncChunkSize,
-            syncChunkHashesJson = entity.syncChunkHashesJson,
-            syncMetadataHash = entity.syncMetadataHash,
-            readingProgress = maxOf(existing.readingProgress, incomingReadingProgress)
+            contentSizeBytes = if (hasIncomingBody) {
+                entity.contentSizeBytes
+            } else {
+                existing.contentSizeBytes
+            },
+            syncBodyHash = if (hasIncomingBody) entity.syncBodyHash else existing.syncBodyHash,
+            syncBodyByteCount = if (hasIncomingBody) {
+                entity.syncBodyByteCount
+            } else {
+                existing.syncBodyByteCount
+            },
+            syncChunkSize = if (hasIncomingBody) entity.syncChunkSize else existing.syncChunkSize,
+            syncChunkHashesJson = if (hasIncomingBody) {
+                entity.syncChunkHashesJson
+            } else {
+                existing.syncChunkHashesJson
+            },
+            syncMetadataHash = if (hasIncomingBody) {
+                entity.syncMetadataHash
+            } else {
+                existing.syncMetadataHash
+            },
+            readingProgress = maxOf(existing.readingProgress, incomingReadingProgress),
+            isRead = existing.isRead || article.isRead
         )
         return existing.id
     }
@@ -2008,7 +2103,8 @@ class DefaultRssRepository(
             metadataHash = metadata.metadataHash,
             bodyAvailable = true,
             bodySyncMode = bodySyncModeForSync(),
-            readingProgress = readingProgress
+            readingProgress = readingProgress,
+            isRead = isRead
         )
     }
 
@@ -2043,7 +2139,8 @@ class DefaultRssRepository(
             metadataHash = metadata?.metadataHash.orEmpty(),
             bodyAvailable = bodyAvailable,
             bodySyncMode = bodySyncModeForSync(),
-            readingProgress = readingProgress
+            readingProgress = readingProgress,
+            isRead = isRead
         )
     }
 
@@ -2264,7 +2361,7 @@ class DefaultRssRepository(
     }
 
     private fun parseBiliLink(link: String?): BiliVideoIds? {
-        val uri = runCatching { Uri.parse(link) }.getOrNull() ?: return null
+        val uri = runCatching { link?.toUri() }.getOrNull() ?: return null
         val segments = uri.pathSegments.orEmpty()
         val videoIndex = segments.indexOf("video")
         if (videoIndex >= 0 && videoIndex + 1 < segments.size) {

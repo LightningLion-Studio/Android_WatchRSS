@@ -1,5 +1,7 @@
 package com.lightningstudio.watchrss.sdk.douyin
 
+import java.util.Locale
+
 enum class DouyinVideoCodec {
     H264,
     H265,
@@ -38,6 +40,7 @@ class DouyinVideo {
 
     override fun toString(): String {
         return String.format(
+            Locale.getDefault(),
             "视频[%s]: %s | 作者: %s | 点赞: %d",
             awemeId,
             desc,

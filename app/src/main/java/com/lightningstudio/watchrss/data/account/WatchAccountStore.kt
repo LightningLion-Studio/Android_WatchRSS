@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss.data.account
 
+import androidx.core.content.edit
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
@@ -31,14 +32,14 @@ class WatchAccountStore(
 
     fun save(state: WatchAccountState) = synchronized(lock) {
         withPrefsLocked { prefs ->
-            prefs.edit().putString(KEY_STATE, encodeState(state)).apply()
+            prefs.edit {putString(KEY_STATE, encodeState(state))}
         }
         _state.value = state
     }
 
     fun clear() = synchronized(lock) {
         withPrefsLocked { prefs ->
-            prefs.edit().remove(KEY_STATE).apply()
+            prefs.edit {remove(KEY_STATE)}
         }
         _state.value = null
     }
@@ -175,4 +176,3 @@ class WatchAccountStore(
         private const val KEYSTORE_PROVIDER = "AndroidKeyStore"
     }
 }
-

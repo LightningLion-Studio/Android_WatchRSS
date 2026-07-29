@@ -314,12 +314,27 @@ class AcousticConnectionActivity : BaseWatchActivity() {
     }
 
     private fun startPureSoundListening() {
+        if (!hasRecordAudioPermission()) {
+            statusMessage = "未授予麦克风权限"
+            detailMessage = "请授权麦克风后重试"
+            primaryButtonLabel = "重新监听"
+            isBusy = false
+            return
+        }
         lifecycleScope.launch {
             isBusy = true
             statusMessage = "正在聆听手机发来的声波…"
             detailMessage = "请把手表麦克风靠近手机扬声器"
             primaryButtonLabel = null
             runCatching {
+                if (
+                    ContextCompat.checkSelfPermission(
+                        this@AcousticConnectionActivity,
+                        Manifest.permission.RECORD_AUDIO
+                    ) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    error("麦克风权限已被撤销")
+                }
                 val bytes = acousticReceiver.listen(timeoutMs = 120_000L)
                     ?: error("未收到有效的声波数据")
                 val envelope = AcousticConnectionProtocol.parsePureSound(bytes)
@@ -339,6 +354,13 @@ class AcousticConnectionActivity : BaseWatchActivity() {
     }
 
     private fun startGuidedWifiListening() {
+        if (!hasRecordAudioPermission()) {
+            statusMessage = "未授予麦克风权限"
+            detailMessage = "请授权麦克风后重试"
+            primaryButtonLabel = "重新开始"
+            isBusy = false
+            return
+        }
         lifecycleScope.launch {
             isBusy = true
             statusMessage = "正在听取手机连接信息…"
@@ -346,6 +368,14 @@ class AcousticConnectionActivity : BaseWatchActivity() {
             primaryButtonLabel = null
 
             runCatching {
+                if (
+                    ContextCompat.checkSelfPermission(
+                        this@AcousticConnectionActivity,
+                        Manifest.permission.RECORD_AUDIO
+                    ) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    error("麦克风权限已被撤销")
+                }
                 val bytes = acousticReceiver.listen(timeoutMs = 120_000L)
                     ?: error("未收到有效的引导声波")
                 runGuidedWifiPayload(bytes)
@@ -470,6 +500,11 @@ class AcousticConnectionActivity : BaseWatchActivity() {
     }
 
     private fun pureSoundPermissions(): List<String> = listOf(Manifest.permission.RECORD_AUDIO)
+
+    private fun hasRecordAudioPermission(): Boolean {
+        return ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+    }
 
     private fun guidedWifiPermissions(): List<String> = buildList {
         add(Manifest.permission.RECORD_AUDIO)

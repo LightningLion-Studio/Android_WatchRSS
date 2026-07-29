@@ -3,6 +3,7 @@ package com.lightningstudio.watchrss.sdk.bili
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
+import androidx.core.content.edit
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import kotlinx.coroutines.Dispatchers
@@ -32,7 +33,7 @@ class EncryptedBiliAccountStore(
     override suspend fun write(account: BiliAccount) = withContext(Dispatchers.IO) {
         withPrefs { prefs ->
             val payload = biliJson.encodeToString(BiliAccount.serializer(), account)
-            prefs.edit().putString(KEY_ACCOUNT, payload).apply()
+            prefs.edit { putString(KEY_ACCOUNT, payload) }
         }
     }
 
@@ -46,7 +47,7 @@ class EncryptedBiliAccountStore(
                 } ?: BiliAccount()
                 val updated = transform(current)
                 val payload = biliJson.encodeToString(BiliAccount.serializer(), updated)
-                prefs.edit().putString(KEY_ACCOUNT, payload).apply()
+                prefs.edit { putString(KEY_ACCOUNT, payload) }
             }
         }
     }

@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss.ui.widget
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -45,8 +46,10 @@ class ProgressRingView @JvmOverloads constructor(
         postInvalidateOnAnimation()
     }
 
+    @SuppressLint("UnclosedTrace")
     override fun onDraw(canvas: Canvas) {
-        if (BuildConfig.DEBUG) {
+        val tracingEnabled = BuildConfig.DEBUG
+        if (tracingEnabled) {
             Trace.beginSection("ProgressRingView#onDraw")
         }
         try {
@@ -63,7 +66,7 @@ class ProgressRingView @JvmOverloads constructor(
             arcBounds.set(cx - radius, cy - radius, cx + radius, cy + radius)
             canvas.drawArc(arcBounds, -90f, progress * 360f, false, progressPaint)
         } finally {
-            if (BuildConfig.DEBUG) {
+            if (tracingEnabled) {
                 Trace.endSection()
             }
         }

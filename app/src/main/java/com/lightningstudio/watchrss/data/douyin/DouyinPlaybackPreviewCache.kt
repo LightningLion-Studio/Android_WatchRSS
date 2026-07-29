@@ -1,5 +1,8 @@
+@file:androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
+
 package com.lightningstudio.watchrss.data.douyin
 
+import androidx.core.net.toUri
 import android.content.Context
 import android.graphics.Bitmap
 import android.net.Uri
@@ -1708,6 +1711,9 @@ private class DouyinPlaybackPreviewManager {
         reason: String
     ) {
         synchronized(lock) {
+            if (!downloadControlsByKey.containsKey(key)) {
+                return
+            }
             val existing = prefetchProgressByKey[key]
             prefetchProgressByKey[key] = DouyinPlaybackPrefetchProgress(
                 key = key,
@@ -2138,7 +2144,7 @@ private class DouyinPlaybackPreviewDataSource(
         val upstreamUri = if (remoteTarget.remoteUri == cacheUriString) {
             dataSpec.uri
         } else {
-            Uri.parse(remoteTarget.remoteUri)
+            remoteTarget.remoteUri.toUri()
         }
         val upstreamSpec = dataSpec.buildUpon()
             .setUri(upstreamUri)

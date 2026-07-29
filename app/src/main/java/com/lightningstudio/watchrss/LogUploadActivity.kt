@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss
 
+import android.annotation.SuppressLint
 import android.os.Build
 import android.os.Bundle
 import android.view.View
@@ -80,14 +81,11 @@ class LogUploadActivity : BaseWatchActivity() {
         }
     }
 
+    @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView(webView: WebView, logText: String?) {
         // 为了避免闪白
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            // 对于 API 21+，需要先允许背景设为透明
-            webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
-            // 设置背景色为透明
-            webView.setBackgroundColor(android.graphics.Color.TRANSPARENT)
-        }
+        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+        webView.setBackgroundColor(android.graphics.Color.TRANSPARENT)
 
         webView.settings.apply {
             javaScriptEnabled = true

@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.IntOffset
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.EmptyStateCard
 import com.lightningstudio.watchrss.ui.components.PullRefreshBox
@@ -256,7 +257,7 @@ fun BiliFeedScreen(
                 .fillMaxHeight()
                 .width(menuWidth)
                 .align(Alignment.CenterEnd)
-                .offset(x = menuOffset)
+                .offset { IntOffset(menuOffset.roundToPx(), 0) }
                 .clip(RoundedCornerShape(18.dp))
                 .background(MaterialTheme.colorScheme.surface)
                 .pointerInput(menuOpen) {

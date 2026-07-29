@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.lifecycleScope
 import com.lightningstudio.watchrss.data.cache.CacheTrimReason
 import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackPreviewCache
+import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackRefreshTrigger
 import com.lightningstudio.watchrss.data.douyin.DouyinSourceOrigin
 import com.lightningstudio.watchrss.data.douyin.DouyinStreamItem
 import com.lightningstudio.watchrss.data.douyin.DOUYIN_ACTIVE_PRELOAD_WINDOW_UNWATCHED
@@ -265,17 +266,13 @@ class HomeFeedListActivity : BaseWatchActivity() {
 
             val refreshResult = refreshExpiredDouyinBootstrapPlayUrls(
                 items = cachedItems,
-                repository = container.douyinRepository
+                coordinator = container.douyinPlaybackSourceCoordinator,
+                trigger = DouyinPlaybackRefreshTrigger.STARTUP_TTL
             )
             if (refreshResult.refreshedAwemeIds.isNotEmpty()) {
                 AppLogger.d(
                     "HomeFeedList",
                     "refresh cached douyin playUrls ids=${refreshResult.refreshedAwemeIds.joinToString(",")}"
-                )
-                feedCacheStore.save(
-                    items = refreshResult.items,
-                    nextCursor = cachedSnapshot?.nextCursor,
-                    hasMore = cachedSnapshot?.hasMore ?: false
                 )
             }
             primeDouyinPlaybackWindow(
@@ -310,17 +307,13 @@ class HomeFeedListActivity : BaseWatchActivity() {
             val items = if (cachedItems.isNotEmpty()) {
                 val refreshResult = refreshExpiredDouyinBootstrapPlayUrls(
                     items = cachedItems,
-                    repository = container.douyinRepository
+                    coordinator = container.douyinPlaybackSourceCoordinator,
+                    trigger = DouyinPlaybackRefreshTrigger.STARTUP_TTL
                 )
                 if (refreshResult.refreshedAwemeIds.isNotEmpty()) {
                     AppLogger.d(
                         "HomeFeedList",
                         "refresh cached douyin playUrls ids=${refreshResult.refreshedAwemeIds.joinToString(",")}"
-                    )
-                    feedCacheStore.save(
-                        items = refreshResult.items,
-                        nextCursor = cachedSnapshot?.nextCursor,
-                        hasMore = cachedSnapshot?.hasMore ?: false
                     )
                 }
                 refreshResult.items

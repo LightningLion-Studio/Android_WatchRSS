@@ -30,6 +30,7 @@ data class SyncedSavedArticle(
     val deleted: Boolean,
     val deletedAt: Long,
     val readingProgress: Float = 0f,
+    val isRead: Boolean = false,
     val cachedBodyMetadata: ArticleBodyMetadata? = null
 )
 
@@ -55,7 +56,8 @@ data class SyncedArticleManifest(
     val metadataHash: String,
     val bodyAvailable: Boolean = true,
     val bodySyncMode: String = ARTICLE_BODY_SYNC_MODE_FULL,
-    val readingProgress: Float = 0f
+    val readingProgress: Float = 0f,
+    val isRead: Boolean = false
 )
 
 data class SyncedArticleBodyRequest(

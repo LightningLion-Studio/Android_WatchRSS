@@ -58,3 +58,36 @@ suspend fun refreshExpiredDouyinBootstrapPlayUrls(
         refreshedAwemeIds = refreshedAwemeIds
     )
 }
+
+suspend fun refreshExpiredDouyinBootstrapPlayUrls(
+    items: List<DouyinStreamItem>,
+    coordinator: DouyinPlaybackSourceCoordinatorContract,
+    trigger: DouyinPlaybackRefreshTrigger,
+    nowMs: Long = System.currentTimeMillis(),
+    ttlMs: Long = DOUYIN_PLAY_URL_TTL_MS
+): DouyinBootstrapPlayUrlRefreshResult {
+    if (items.isEmpty()) {
+        return DouyinBootstrapPlayUrlRefreshResult(
+            items = emptyList(),
+            refreshedAwemeIds = emptyList()
+        )
+    }
+    val refreshedAwemeIds = mutableListOf<String>()
+    val refreshedItems = items.map { item ->
+        if (!isDouyinPlayUrlExpired(item = item, nowMs = nowMs, ttlMs = ttlMs)) {
+            return@map item
+        }
+        val event = coordinator.refresh(item = item, trigger = trigger)
+        val refreshedItem = event.item
+        if (event.outcome == DouyinPlaybackRefreshOutcome.SUCCESS && refreshedItem != null) {
+            refreshedAwemeIds += item.awemeId
+            refreshedItem
+        } else {
+            item
+        }
+    }
+    return DouyinBootstrapPlayUrlRefreshResult(
+        items = refreshedItems,
+        refreshedAwemeIds = refreshedAwemeIds
+    )
+}
