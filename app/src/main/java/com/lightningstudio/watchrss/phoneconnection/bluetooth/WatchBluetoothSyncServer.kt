@@ -147,6 +147,23 @@ class WatchBluetoothSyncServer(
                         label = "initialRequest",
                         timeoutMs = INITIAL_REQUEST_READ_TIMEOUT_MS
                     )
+                    if (
+                        request.optString("action") ==
+                        BluetoothSyncProtocol.ACTION_PREVIEW_READER &&
+                        request.optBoolean("stream")
+                    ) {
+                        val response = handleReaderPreviewStream(
+                            client = client,
+                            initialRequest = request,
+                            sessionId = sessionId
+                        )
+                        return@runCatching BluetoothSyncResult(
+                            remoteName = remoteName,
+                            remoteAddress = remoteAddress,
+                            request = request,
+                            response = response
+                        )
+                    }
                     val unsupportedPhoneProtocolResponse =
                         LibrarySyncPayload.buildUnsupportedPhoneProtocolResponse(request)
                     val libraryExchange = if (
@@ -988,6 +1005,42 @@ class WatchBluetoothSyncServer(
         }
     }
 
+    private suspend fun handleReaderPreviewStream(
+        client: BluetoothSocket,
+        initialRequest: JSONObject,
+        sessionId: String
+    ): JSONObject {
+        val app = context.applicationContext as WatchRssApplication
+        var request = initialRequest
+        var lastResponse = JSONObject()
+        while (true) {
+            lastResponse = ReaderPresetPreviewPayload.handle(
+                request = request,
+                session = app.readerPresetPreviewSession
+            )
+            writeFrameLogged(client, sessionId, "previewResponse", lastResponse)
+            if (
+                request.optString("phase") == ReaderPresetPreviewPayload.PHASE_UPDATE &&
+                lastResponse.optBoolean("applied")
+            ) {
+                app.openReaderPresetPreview()
+            }
+            if (request.optString("phase") == ReaderPresetPreviewPayload.PHASE_STOP) {
+                return lastResponse
+            }
+            request = readFrameLoggedWithTimeout(
+                client = client,
+                sessionId = sessionId,
+                label = "previewFrame",
+                timeoutMs = PREVIEW_STREAM_IDLE_TIMEOUT_MS
+            )
+            require(
+                request.optString("action") ==
+                    BluetoothSyncProtocol.ACTION_PREVIEW_READER
+            ) { "实时预览连接收到了其他蓝牙动作" }
+        }
+    }
+
     private fun readFrameLogged(
         client: BluetoothSocket,
         sessionId: String,
@@ -1208,6 +1261,7 @@ class WatchBluetoothSyncServer(
     companion object {
         private const val TAG = "WatchRSS_BtSyncServer"
         private const val DEFAULT_TIMEOUT_MS = 120_000L
+        private const val PREVIEW_STREAM_IDLE_TIMEOUT_MS = 30_000L
         private const val RESPONSE_ACK_TIMEOUT_MS = 10_000L
         private const val APPLIED_ACK_TIMEOUT_MS = 120_000L
         private const val INITIAL_REQUEST_READ_TIMEOUT_MS = 30_000L

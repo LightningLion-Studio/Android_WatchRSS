@@ -3,6 +3,7 @@ package com.lightningstudio.watchrss
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,10 +11,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.lightningstudio.watchrss.data.reader.ReaderPresetRepository
 import com.lightningstudio.watchrss.ui.reader.LocalReaderPresetRuntime
@@ -80,6 +85,19 @@ private fun WatchReaderPresetLivePreview(
         )
     ) {
         ReaderBackgroundSurface(modifier = Modifier.fillMaxSize()) {
+            Text(
+                text = "预设实时预览",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 2.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+                        shape = RoundedCornerShape(50)
+                    )
+                    .padding(horizontal = 7.dp, vertical = 1.dp)
+            )
             val pagePadding = ReaderPageLayout.horizontalPadding
             val blockSpacing = ReaderPageLayout.blockSpacing
             Column(
