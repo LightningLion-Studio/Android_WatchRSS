@@ -40,6 +40,35 @@ class WatchReaderPresetPreviewSessionTest {
     }
 
     @Test
+    fun resourceHandoffKeepsPreviewAliveAcrossSessionReplacement() = runTest {
+        val session = WatchReaderPresetPreviewSession(this, timeoutMs = 1_000L)
+        session.update("old", 9L, ReaderPreset.darkDefault(name = "旧字体"))
+
+        assertTrue(
+            session.update(
+                sessionId = "new",
+                sequence = 0L,
+                preset = ReaderPreset.lightDefault(name = "新字体"),
+                resourceTransferInProgress = true
+            )
+        )
+        assertFalse(session.stop("old"))
+        assertEquals("新字体", session.state.value?.preset?.name)
+        assertTrue(session.state.value?.resourceTransferInProgress == true)
+
+        assertTrue(
+            session.update(
+                sessionId = "new",
+                sequence = 1L,
+                preset = ReaderPreset.lightDefault(name = "新字体"),
+                resourceTransferInProgress = false
+            )
+        )
+        assertFalse(session.state.value?.resourceTransferInProgress == true)
+        assertEquals("新字体", session.state.value?.preset?.name)
+    }
+
+    @Test
     fun rapidDeltasPublishOnlyTheLatestPendingState() = runTest {
         val session = WatchReaderPresetPreviewSession(
             scope = this,

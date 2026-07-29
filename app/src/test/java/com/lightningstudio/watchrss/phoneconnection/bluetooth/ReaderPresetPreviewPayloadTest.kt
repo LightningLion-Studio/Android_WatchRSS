@@ -41,12 +41,29 @@ class ReaderPresetPreviewPayloadTest {
         assertTrue(transferResponse.getBoolean("applied"))
         assertTrue(session.state.value?.resourceTransferInProgress == true)
 
+        val handoffResponse = ReaderPresetPreviewPayload.handle(
+            JSONObject(update.toString())
+                .put("phase", ReaderPresetPreviewPayload.PHASE_RESOURCE_HANDOFF)
+                .put("sessionId", "next-session")
+                .put("sequence", 0L),
+            session
+        )
+        assertTrue(handoffResponse.getBoolean("applied"))
+        assertEquals(
+            ReaderPresetPreviewPayload.PHASE_RESOURCE_HANDOFF,
+            handoffResponse.getString("phase")
+        )
+        assertEquals("next-session", session.state.value?.sessionId)
+        assertTrue(session.state.value?.resourceTransferInProgress == true)
+
         val staleResponse = ReaderPresetPreviewPayload.handle(
-            JSONObject(update.toString()).put("sequence", 4L),
+            JSONObject(update.toString())
+                .put("sessionId", "next-session")
+                .put("sequence", 0L),
             session
         )
         assertFalse(staleResponse.getBoolean("applied"))
-        assertEquals(5L, session.state.value?.sequence)
+        assertEquals(0L, session.state.value?.sequence)
 
         val changedPreset = preset.copy(body = preset.body.copy(fontSizeSp = 28f))
         val deltaResponse = ReaderPresetPreviewPayload.handle(
@@ -54,8 +71,8 @@ class ReaderPresetPreviewPayloadTest {
                 put("version", ReaderPresetPreviewPayload.VERSION)
                 put("action", BluetoothSyncProtocol.ACTION_PREVIEW_READER)
                 put("phase", ReaderPresetPreviewPayload.PHASE_UPDATE)
-                put("sessionId", "session")
-                put("sequence", 6L)
+                put("sessionId", "next-session")
+                put("sequence", 1L)
                 put(
                     "changes",
                     JSONObject().put(
@@ -74,21 +91,21 @@ class ReaderPresetPreviewPayloadTest {
                 put("version", ReaderPresetPreviewPayload.VERSION)
                 put("action", BluetoothSyncProtocol.ACTION_PREVIEW_READER)
                 put("phase", ReaderPresetPreviewPayload.PHASE_HEARTBEAT)
-                put("sessionId", "session")
-                put("sequence", 7L)
+                put("sessionId", "next-session")
+                put("sequence", 2L)
             },
             session
         )
         assertTrue(heartbeatResponse.getBoolean("success"))
-        assertEquals(7L, heartbeatResponse.getLong("appliedSequence"))
-        assertEquals(6L, session.state.value?.sequence)
+        assertEquals(2L, heartbeatResponse.getLong("appliedSequence"))
+        assertEquals(1L, session.state.value?.sequence)
 
         val stopResponse = ReaderPresetPreviewPayload.handle(
             JSONObject().apply {
                 put("version", ReaderPresetPreviewPayload.VERSION)
                 put("action", BluetoothSyncProtocol.ACTION_PREVIEW_READER)
                 put("phase", ReaderPresetPreviewPayload.PHASE_STOP)
-                put("sessionId", "session")
+                put("sessionId", "next-session")
             },
             session
         )

@@ -1092,6 +1092,7 @@ class WatchBluetoothSyncServer(
             val shouldAcknowledge =
                 lastAcknowledgedAt == 0L ||
                     phase == ReaderPresetPreviewPayload.PHASE_STOP ||
+                    phase == ReaderPresetPreviewPayload.PHASE_RESOURCE_HANDOFF ||
                     !lastResponse.optBoolean("applied", true) ||
                     handledAt - lastAcknowledgedAt >= PREVIEW_ACK_INTERVAL_MS
             if (shouldAcknowledge) {
@@ -1117,7 +1118,10 @@ class WatchBluetoothSyncServer(
             ) {
                 app.openReaderPresetPreview()
             }
-            if (phase == ReaderPresetPreviewPayload.PHASE_STOP) {
+            if (
+                phase == ReaderPresetPreviewPayload.PHASE_STOP ||
+                phase == ReaderPresetPreviewPayload.PHASE_RESOURCE_HANDOFF
+            ) {
                 return lastResponse
             }
             val readStartedAt = SystemClock.elapsedRealtime()

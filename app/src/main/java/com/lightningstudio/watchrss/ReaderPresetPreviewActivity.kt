@@ -31,18 +31,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -65,8 +61,6 @@ import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.theme.rememberWatchTitleLineLimitsPx
 import com.lightningstudio.watchrss.ui.util.formatWatchTitleForWidthLimitsWithMeasurer
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.withContext
@@ -115,21 +109,32 @@ private fun WatchReaderPresetLivePreview(
     onExpired: () -> Unit
 ) {
     val session = application.readerPresetPreviewSession
-    var renderedPreview by remember { mutableStateOf(session.state.value) }
+    var backgroundPreview by remember { mutableStateOf(session.state.value) }
     var resourceTransferInProgress by remember {
         mutableStateOf(session.state.value?.resourceTransferInProgress == true)
     }
-    val fastScaleState = remember { mutableFloatStateOf(1f) }
     LaunchedEffect(session) {
         session.state.collect { current ->
             if (current == null) {
                 onExpired()
             } else {
+                val wasTransferring = resourceTransferInProgress
                 resourceTransferInProgress = current.resourceTransferInProgress
+                val previous = backgroundPreview
+                if (
+                    !current.resourceTransferInProgress &&
+                    (
+                        previous == null ||
+                            wasTransferring ||
+                            previous.preset.background != current.preset.background
+                        )
+                ) {
+                    backgroundPreview = current
+                }
             }
         }
     }
-    val preview = renderedPreview ?: return
+    val preview = backgroundPreview ?: return
     val context = LocalContext.current
     val showUnsupportedAction = remember(context) {
         {
@@ -171,22 +176,11 @@ private fun WatchReaderPresetLivePreview(
                 session.state
                     .filterNotNull()
                     .distinctUntilChanged()
-                    .collectLatest { preset ->
-                        val incomingPreset = preset.preset
-                        val current = preparedLayout
-                        if (
-                            current != null &&
-                            incomingPreset.differsOnlyByBodyFontSizeFrom(current.preset)
-                        ) {
-                            fastScaleState.floatValue =
-                                incomingPreset.body.fontSizeSp / current.preset.body.fontSizeSp
-                            delay(FONT_SIZE_SETTLE_MS)
-                        } else {
-                            fastScaleState.floatValue = 1f
-                        }
-                        preparedLayout = withContext(Dispatchers.Default) {
+                    .collect { incoming ->
+                        if (incoming.resourceTransferInProgress) return@collect
+                        val exactLayout = withContext(Dispatchers.Default) {
                             buildNativePreviewLayout(
-                                preset = incomingPreset,
+                                preset = incoming.preset,
                                 fontFile = repository::fontFile,
                                 contentWidthPx = contentWidthPx,
                                 titleFirstLimitPx = titleLimits.first,
@@ -196,8 +190,7 @@ private fun WatchReaderPresetLivePreview(
                                 fontScale = density.fontScale
                             )
                         }
-                        renderedPreview = preset
-                        fastScaleState.floatValue = 1f
+                        preparedLayout = exactLayout
                     }
             }
             val layout = preparedLayout
@@ -215,7 +208,6 @@ private fun WatchReaderPresetLivePreview(
                 layout?.let {
                     NativePreviewCanvas(
                         layout = layout,
-                        scale = fastScaleState,
                         density = density.density
                     )
                 }
@@ -291,19 +283,12 @@ private data class NativePreviewLayout(
 @Composable
 private fun NativePreviewCanvas(
     layout: NativePreviewLayout,
-    scale: State<Float>,
     density: Float
 ) {
     Canvas(
         modifier = Modifier
             .fillMaxWidth()
             .height((layout.heightPx / density).dp)
-            .graphicsLayer {
-                val currentScale = scale.value
-                scaleX = currentScale
-                scaleY = currentScale
-                transformOrigin = TransformOrigin(0.5f, 0f)
-            }
     ) {
         drawIntoCanvas { canvas ->
             val nativeCanvas = canvas.nativeCanvas
@@ -429,15 +414,6 @@ private fun buildNativePreviewLayout(
     )
 }
 
-private fun ReaderPreset.differsOnlyByBodyFontSizeFrom(other: ReaderPreset): Boolean {
-    if (body.fontSizeSp == other.body.fontSizeSp) return false
-    return copy(
-        body = body.copy(fontSizeSp = other.body.fontSizeSp),
-        updatedAt = other.updatedAt,
-        modifiedBy = other.modifiedBy
-    ) == other
-}
-
 private fun ReaderTextStyle.toPreviewTextPaint(
     fontFile: (String?) -> File?,
     density: Float,
@@ -492,5 +468,3 @@ private fun createPreviewStaticLayout(
         }
         .build()
 }
-
-private const val FONT_SIZE_SETTLE_MS = 180L

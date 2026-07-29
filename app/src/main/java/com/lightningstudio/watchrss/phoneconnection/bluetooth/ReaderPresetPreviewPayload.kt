@@ -8,6 +8,7 @@ object ReaderPresetPreviewPayload {
     const val VERSION = 2
     private const val LEGACY_VERSION = 1
     const val PHASE_UPDATE = "update"
+    const val PHASE_RESOURCE_HANDOFF = "resourceHandoff"
     const val PHASE_HEARTBEAT = "heartbeat"
     const val PHASE_STOP = "stop"
 
@@ -20,9 +21,11 @@ object ReaderPresetPreviewPayload {
         val sessionId = request.optString("sessionId").trim()
         require(sessionId.isNotBlank()) { "缺少预览会话 ID" }
         return when (val phase = request.optString("phase")) {
-            PHASE_UPDATE -> {
+            PHASE_UPDATE,
+            PHASE_RESOURCE_HANDOFF -> {
                 val sequence = request.getLong("sequence")
-                val resourceTransfer = request.optBoolean("resourceTransfer")
+                val resourceTransfer =
+                    phase == PHASE_RESOURCE_HANDOFF || request.optBoolean("resourceTransfer")
                 val applied = when {
                     request.has("preset") -> session.update(
                         sessionId = sessionId,
