@@ -1,7 +1,5 @@
 package com.lightningstudio.watchrss.ui.screen.rss
 
-import android.graphics.Paint
-import android.text.TextPaint
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -53,21 +51,22 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.res.ResourcesCompat
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
+import com.lightningstudio.watchrss.ui.theme.rememberIsRoundWatch
 import com.lightningstudio.watchrss.ui.theme.rememberWatchTitleLineLimitsPx
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
-import com.lightningstudio.watchrss.ui.util.formatWatchTitleForWidthLimits
+import com.lightningstudio.watchrss.ui.util.formatWatchTitleForWidthLimitsWithMeasurer
 import com.lightningstudio.watchrss.ui.viewmodel.LlmSummaryUiState
 import com.lightningstudio.watchrss.ui.viewmodel.SummaryStatus
 import kotlinx.coroutines.launch
@@ -190,24 +189,13 @@ internal fun DetailTitle(
     val presetTitleStyle = com.lightningstudio.watchrss.ui.reader.readerTextStyle(
         com.lightningstudio.watchrss.ui.reader.ReaderTextRole.TITLE
     )
-    val hintSize = textSize(R.dimen.hey_m_title)
-    val titleStyle = MaterialTheme.typography.titleMedium.copy(
-        fontSize = hintSize,
-        lineHeight = max(
-            MaterialTheme.typography.titleMedium.lineHeight.value,
-            hintSize.value * 1.24f
-        ).sp
-    )
-    val context = LocalContext.current
-    val density = LocalDensity.current
-    val titleSizePx = with(density) { watchDimensionResource(R.dimen.hey_m_title).toPx() }
-    val typeface = remember(context) { ResourcesCompat.getFont(context, R.font.watch_sans) }
-    val paint = remember(typeface, titleSizePx) {
-        TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            textSize = titleSizePx
-            this.typeface = typeface
-        }
+    val measuredTitleStyle = if (rememberIsRoundWatch()) {
+        presetTitleStyle.copy(textAlign = TextAlign.Center)
+    } else {
+        presetTitleStyle
     }
+    val density = LocalDensity.current
+    val textMeasurer = rememberTextMeasurer()
 
     BoxWithConstraints(
         modifier = Modifier
@@ -218,13 +206,27 @@ internal fun DetailTitle(
         val (firstLimitPx, secondLimitPx) = remember(availableWidthPx, density) {
             rememberWatchTitleLineLimitsPx(availableWidthPx, density)
         }
-        val formattedTitle = remember(title, availableWidthPx, paint) {
-            formatWatchTitleForWidthLimits(
+        val formattedTitle = remember(
+            title,
+            availableWidthPx,
+            firstLimitPx,
+            secondLimitPx,
+            measuredTitleStyle,
+            textMeasurer
+        ) {
+            formatWatchTitleForWidthLimitsWithMeasurer(
                 title = title,
-                paint = paint,
                 availableWidthPx = availableWidthPx,
                 firstLimitPx = firstLimitPx,
-                secondLimitPx = secondLimitPx
+                secondLimitPx = secondLimitPx,
+                measureText = { candidate ->
+                    textMeasurer.measure(
+                        text = AnnotatedString(candidate),
+                        style = measuredTitleStyle,
+                        softWrap = false,
+                        maxLines = 1
+                    ).size.width.toFloat()
+                }
             )
         }
         val highlightedTitle = remember(formattedTitle, highlightRange, highlightColor) {
@@ -236,9 +238,11 @@ internal fun DetailTitle(
         }
         Text(
             text = highlightedTitle,
-            style = presetTitleStyle,
+            style = measuredTitleStyle,
             onTextLayout = { result -> onTextLayout?.invoke(result) },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .width(with(density) { secondLimitPx.toDp() })
+                .align(Alignment.Center)
         )
     }
 }

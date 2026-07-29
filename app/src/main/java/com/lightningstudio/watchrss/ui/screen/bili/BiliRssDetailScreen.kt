@@ -1,8 +1,6 @@
 package com.lightningstudio.watchrss.ui.screen.bili
 
 import android.graphics.Bitmap
-import android.graphics.Paint
-import android.text.TextPaint
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
@@ -12,7 +10,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -58,19 +55,15 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.res.ResourcesCompat
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
 import com.lightningstudio.watchrss.ui.theme.WatchReadingBackgroundLight
 import com.lightningstudio.watchrss.ui.theme.WatchReadingTextLight
 import com.lightningstudio.watchrss.ui.theme.WatchTextPrimary
-import com.lightningstudio.watchrss.ui.theme.rememberWatchTitleLineLimitsPx
 import com.lightningstudio.watchrss.ui.util.RssImageLoader
-import com.lightningstudio.watchrss.ui.util.formatWatchTitleForWidthLimits
-import com.lightningstudio.watchrss.ui.util.normalizeWatchTitleWhitespace
 import com.lightningstudio.watchrss.ui.viewmodel.BiliDetailUiState
-import kotlin.math.max
+import com.lightningstudio.watchrss.ui.screen.rss.DetailTitle
 
 @Composable
 fun BiliRssDetailScreen(
@@ -182,7 +175,7 @@ fun BiliRssDetailScreen(
                 Spacer(modifier = Modifier.height(watchDimensionResource(R.dimen.hey_distance_4dp)))
             }
             item(key = "title") {
-                BiliRssDetailTitle(
+                DetailTitle(
                     title = display.title,
                     titlePadding = WatchDimens.detail_title_safe_padding,
                     textColor = textColor
@@ -422,56 +415,3 @@ private data class BiliRssDisplay(
     val owner: String,
     val desc: String
 )
-
-@Composable
-private fun BiliRssDetailTitle(
-    title: String,
-    titlePadding: Dp,
-    textColor: Color
-) {
-    val hintSize = textSize(R.dimen.hey_m_title)
-    val titleStyle = MaterialTheme.typography.titleMedium.copy(
-        fontSize = hintSize,
-        lineHeight = max(
-            MaterialTheme.typography.titleMedium.lineHeight.value,
-            hintSize.value * 1.24f
-        ).sp
-    )
-    val context = LocalContext.current
-    val density = LocalDensity.current
-    val titleSizePx = with(density) { watchDimensionResource(R.dimen.hey_m_title).toPx() }
-    val typeface = remember(context) { ResourcesCompat.getFont(context, R.font.watch_sans) }
-    val paint = remember(typeface, titleSizePx) {
-        TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            textSize = titleSizePx
-            this.typeface = typeface
-        }
-    }
-
-    BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = titlePadding)
-    ) {
-        val availableWidthPx = with(density) { maxWidth.toPx() }
-        val (firstLimitPx, secondLimitPx) = remember(availableWidthPx, density) {
-            rememberWatchTitleLineLimitsPx(availableWidthPx, density)
-        }
-        val formattedTitle = remember(title, availableWidthPx, paint) {
-            formatWatchTitleForWidthLimits(
-                title = title,
-                paint = paint,
-                availableWidthPx = availableWidthPx,
-                firstLimitPx = firstLimitPx,
-                secondLimitPx = secondLimitPx
-            )
-        }
-        Text(
-            text = formattedTitle,
-            style = com.lightningstudio.watchrss.ui.reader.readerTextStyle(
-                com.lightningstudio.watchrss.ui.reader.ReaderTextRole.TITLE
-            ),
-            modifier = Modifier.fillMaxWidth()
-        )
-    }
-}
