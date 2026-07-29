@@ -4,6 +4,7 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -36,5 +37,45 @@ class WatchReaderPresetPreviewSessionTest {
         advanceTimeBy(1_000L)
         runCurrent()
         assertNull(session.state.value)
+    }
+
+    @Test
+    fun rapidDeltasPublishOnlyTheLatestPendingState() = runTest {
+        val session = WatchReaderPresetPreviewSession(
+            scope = this,
+            timeoutMs = 5_000L,
+            publishIntervalMs = 100L
+        )
+        val initial = ReaderPreset.darkDefault(name = "预览")
+        session.update("phone", 0L, initial)
+
+        val first = initial.copy(body = initial.body.copy(fontSizeSp = 20f))
+        val second = initial.copy(body = initial.body.copy(fontSizeSp = 24f))
+        assertTrue(
+            session.updateDelta(
+                sessionId = "phone",
+                sequence = 1L,
+                changes = JSONObject().put(
+                    "body",
+                    JSONObject(ReaderPresetCodec.encode(first)).getJSONObject("body")
+                )
+            )
+        )
+        assertTrue(
+            session.updateDelta(
+                sessionId = "phone",
+                sequence = 2L,
+                changes = JSONObject().put(
+                    "body",
+                    JSONObject(ReaderPresetCodec.encode(second)).getJSONObject("body")
+                )
+            )
+        )
+
+        assertEquals(0L, session.state.value?.sequence)
+        advanceTimeBy(100L)
+        runCurrent()
+        assertEquals(2L, session.state.value?.sequence)
+        assertEquals(24f, session.state.value?.preset?.body?.fontSizeSp)
     }
 }

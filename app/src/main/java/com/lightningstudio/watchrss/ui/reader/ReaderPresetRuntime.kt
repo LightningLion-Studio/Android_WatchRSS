@@ -1,6 +1,8 @@
 package com.lightningstudio.watchrss.ui.reader
 
+import android.graphics.Paint
 import android.graphics.Typeface
+import android.text.TextPaint
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -8,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
@@ -18,6 +21,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -46,6 +50,7 @@ import com.lightningstudio.watchrss.data.reader.ReaderTextAlignment
 import com.lightningstudio.watchrss.data.reader.ReaderTextStyle
 import com.lightningstudio.watchrss.data.reader.ReaderTypographyRole
 import java.io.File
+import java.util.LinkedHashMap
 
 enum class ReaderTextRole {
     BODY,
@@ -85,16 +90,57 @@ fun ProvideReaderPreset(
 @Composable
 fun readerTextStyle(role: ReaderTextRole): TextStyle {
     val runtime = LocalReaderPresetRuntime.current
-    val preset = runtime.preset
-    val spec = when (role) {
-        ReaderTextRole.BODY -> preset.body
-        ReaderTextRole.TITLE -> preset.resolvedStyle(ReaderTypographyRole.TITLE)
-        ReaderTextRole.SUBTITLE -> preset.resolvedStyle(ReaderTypographyRole.SUBTITLE)
-        ReaderTextRole.QUOTE -> preset.resolvedStyle(ReaderTypographyRole.QUOTE)
-        ReaderTextRole.CODE -> preset.resolvedStyle(ReaderTypographyRole.CODE)
-        ReaderTextRole.LINK -> preset.resolvedStyle(ReaderTypographyRole.LINK)
+    val spec = runtime.preset.styleFor(role)
+    val file = runtime.fontFile(spec.fontAssetId)
+    val filePath = file?.absolutePath
+    val fileLength = file?.length() ?: 0L
+    val fileModifiedAt = file?.lastModified() ?: 0L
+    return remember(spec, filePath, fileLength, fileModifiedAt) {
+        spec.toComposeTextStyle(file)
     }
-    return spec.toComposeTextStyle(runtime.fontFile)
+}
+
+@Composable
+fun readerTextWidthMeasurer(role: ReaderTextRole): (String) -> Float {
+    val runtime = LocalReaderPresetRuntime.current
+    val spec = runtime.preset.styleFor(role)
+    val file = runtime.fontFile(spec.fontAssetId)
+    val filePath = file?.absolutePath
+    val fileLength = file?.length() ?: 0L
+    val fileModifiedAt = file?.lastModified() ?: 0L
+    val density = LocalDensity.current
+    val textSizePx = with(density) { spec.fontSizeSp.sp.toPx() }
+    return remember(spec, filePath, fileLength, fileModifiedAt, textSizePx) {
+        val typeface = file?.let { ReaderFontFamilyCache.getTypeface(it, spec) }
+            ?: Typeface.create(
+                Typeface.DEFAULT,
+                spec.fontWeight.coerceIn(1, 1000),
+                spec.italic
+            )
+        val paint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.typeface = typeface
+            this.textSize = textSizePx
+            letterSpacing = spec.letterSpacingEm
+        }
+        paint::measureText
+    }
+}
+
+fun readerTypefaceFor(file: File?, style: ReaderTextStyle): Typeface =
+    file?.let { ReaderFontFamilyCache.getTypeface(it, style) }
+        ?: Typeface.create(
+            Typeface.DEFAULT,
+            style.fontWeight.coerceIn(1, 1000),
+            style.italic
+        )
+
+private fun ReaderPreset.styleFor(role: ReaderTextRole): ReaderTextStyle = when (role) {
+    ReaderTextRole.BODY -> body
+    ReaderTextRole.TITLE -> resolvedStyle(ReaderTypographyRole.TITLE)
+    ReaderTextRole.SUBTITLE -> resolvedStyle(ReaderTypographyRole.SUBTITLE)
+    ReaderTextRole.QUOTE -> resolvedStyle(ReaderTypographyRole.QUOTE)
+    ReaderTextRole.CODE -> resolvedStyle(ReaderTypographyRole.CODE)
+    ReaderTextRole.LINK -> resolvedStyle(ReaderTypographyRole.LINK)
 }
 
 @Composable
@@ -169,18 +215,9 @@ private fun backgroundColorMatrix(brightness: Float, saturation: Float): ColorMa
 }
 
 private fun ReaderTextStyle.toComposeTextStyle(
-    fontFile: (String?) -> File?
+    fontFile: File?
 ): TextStyle {
-    val family = fontFile(fontAssetId)?.let { file ->
-        runCatching {
-            val builder = Typeface.Builder(file)
-                .setTtcIndex(fontFaceIndex.coerceAtLeast(0))
-                .setWeight(fontWeight.coerceIn(1, 1000))
-                .setItalic(italic)
-            variationSettings.takeIf(String::isNotBlank)?.let(builder::setFontVariationSettings)
-            FontFamily(builder.build())
-        }.getOrNull()
-    }
+    val family = fontFile?.let { file -> ReaderFontFamilyCache.get(file, this) }
     return TextStyle(
         color = Color(colorArgb),
         fontFamily = family,
@@ -220,6 +257,67 @@ private fun ReaderTextStyle.toComposeTextStyle(
         },
         platformStyle = PlatformTextStyle(includeFontPadding = false)
     )
+}
+
+private data class ReaderFontFamilyKey(
+    val path: String,
+    val length: Long,
+    val modifiedAt: Long,
+    val faceIndex: Int,
+    val weight: Int,
+    val italic: Boolean,
+    val variationSettings: String
+)
+
+private data class ReaderFontResource(
+    val typeface: Typeface,
+    val family: FontFamily
+)
+
+private object ReaderFontFamilyCache {
+    private const val MAX_ENTRIES = 32
+    private val entries = object : LinkedHashMap<ReaderFontFamilyKey, ReaderFontResource?>(
+        MAX_ENTRIES,
+        0.75f,
+        true
+    ) {
+        override fun removeEldestEntry(
+            eldest: MutableMap.MutableEntry<ReaderFontFamilyKey, ReaderFontResource?>
+        ): Boolean = size > MAX_ENTRIES
+    }
+
+    @Synchronized
+    fun get(file: File, style: ReaderTextStyle): FontFamily? =
+        getResource(file, style)?.family
+
+    @Synchronized
+    fun getTypeface(file: File, style: ReaderTextStyle): Typeface? =
+        getResource(file, style)?.typeface
+
+    private fun getResource(file: File, style: ReaderTextStyle): ReaderFontResource? {
+        val key = ReaderFontFamilyKey(
+            path = file.absolutePath,
+            length = file.length(),
+            modifiedAt = file.lastModified(),
+            faceIndex = style.fontFaceIndex.coerceAtLeast(0),
+            weight = style.fontWeight.coerceIn(1, 1000),
+            italic = style.italic,
+            variationSettings = style.variationSettings
+        )
+        if (entries.containsKey(key)) return entries[key]
+        val resource = runCatching {
+            val builder = Typeface.Builder(file)
+                .setTtcIndex(key.faceIndex)
+                .setWeight(key.weight)
+                .setItalic(key.italic)
+            key.variationSettings.takeIf(String::isNotBlank)
+                ?.let(builder::setFontVariationSettings)
+            val typeface = builder.build()
+            ReaderFontResource(typeface, FontFamily(typeface))
+        }.getOrNull()
+        entries[key] = resource
+        return resource
+    }
 }
 
 private fun ReaderBackgroundFit.contentScale(): ContentScale = when (this) {

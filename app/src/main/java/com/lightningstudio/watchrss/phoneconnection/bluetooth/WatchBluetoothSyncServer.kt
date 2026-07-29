@@ -80,6 +80,59 @@ private data class ChunkedArticleRequestFrames(
     val stats: ArticleRequestBatchStats
 )
 
+private class ReaderPreviewStreamStats {
+    private var windowStartedAt = SystemClock.elapsedRealtime()
+    private var frames = 0
+    private var updateFrames = 0
+    private var acknowledgements = 0
+    private var handleElapsedMs = 0L
+    private var maxHandleElapsedMs = 0L
+    private var readElapsedMs = 0L
+
+    fun recordFrame(phase: String, handleMs: Long, readMs: Long, acknowledged: Boolean) {
+        frames += 1
+        if (phase == ReaderPresetPreviewPayload.PHASE_UPDATE) updateFrames += 1
+        if (acknowledged) acknowledgements += 1
+        handleElapsedMs += handleMs
+        maxHandleElapsedMs = maxOf(maxHandleElapsedMs, handleMs)
+        readElapsedMs += readMs
+    }
+
+    fun snapshotIfDue(): Map<String, Any?>? {
+        val now = SystemClock.elapsedRealtime()
+        val durationMs = now - windowStartedAt
+        if (durationMs < REPORT_INTERVAL_MS) return null
+        val snapshot = mapOf(
+            "durationMs" to durationMs,
+            "frames" to frames,
+            "framesPerSecond" to rate(frames, durationMs),
+            "updateFrames" to updateFrames,
+            "acknowledgements" to acknowledgements,
+            "averageHandleMs" to average(handleElapsedMs, frames),
+            "maxHandleMs" to maxHandleElapsedMs,
+            "averageReadMs" to average(readElapsedMs, frames)
+        )
+        windowStartedAt = now
+        frames = 0
+        updateFrames = 0
+        acknowledgements = 0
+        handleElapsedMs = 0L
+        maxHandleElapsedMs = 0L
+        readElapsedMs = 0L
+        return snapshot
+    }
+
+    private fun rate(count: Int, durationMs: Long): Double =
+        if (durationMs <= 0L) 0.0 else count * 1_000.0 / durationMs
+
+    private fun average(total: Long, count: Int): Double =
+        if (count <= 0) 0.0 else total.toDouble() / count
+
+    private companion object {
+        const val REPORT_INTERVAL_MS = 1_000L
+    }
+}
+
 class WatchBluetoothSyncServer(
     private val context: Context,
     private val expectedAbility: PhoneConnectionAbility? = null,
@@ -730,7 +783,8 @@ class WatchBluetoothSyncServer(
         client: BluetoothSocket,
         sessionId: String,
         label: String,
-        timeoutMs: Long
+        timeoutMs: Long,
+        logFrame: Boolean = true
     ): JSONObject = coroutineScope {
         val timeoutJob = launch {
             delay(timeoutMs)
@@ -748,7 +802,11 @@ class WatchBluetoothSyncServer(
             }
         }
         try {
-            readFrameLogged(client, sessionId, label)
+            if (logFrame) {
+                readFrameLogged(client, sessionId, label)
+            } else {
+                BluetoothSyncProtocol.readFrame(client.inputStream)
+            }
         } finally {
             timeoutJob.cancel()
         }
@@ -1020,27 +1078,57 @@ class WatchBluetoothSyncServer(
         val app = context.applicationContext as WatchRssApplication
         var request = initialRequest
         var lastResponse = JSONObject()
+        var lastAcknowledgedAt = 0L
+        var lastReadElapsedMs = 0L
+        val stats = ReaderPreviewStreamStats()
         while (true) {
+            val handleStartedAt = SystemClock.elapsedRealtime()
             lastResponse = ReaderPresetPreviewPayload.handle(
                 request = request,
                 session = app.readerPresetPreviewSession
             )
-            writeFrameLogged(client, sessionId, "previewResponse", lastResponse)
+            val handledAt = SystemClock.elapsedRealtime()
+            val phase = request.optString("phase")
+            val shouldAcknowledge =
+                lastAcknowledgedAt == 0L ||
+                    phase == ReaderPresetPreviewPayload.PHASE_STOP ||
+                    !lastResponse.optBoolean("applied", true) ||
+                    handledAt - lastAcknowledgedAt >= PREVIEW_ACK_INTERVAL_MS
+            if (shouldAcknowledge) {
+                BluetoothSyncProtocol.writeFrame(client.outputStream, lastResponse)
+                lastAcknowledgedAt = SystemClock.elapsedRealtime()
+            }
+            stats.recordFrame(
+                phase = phase,
+                handleMs = handledAt - handleStartedAt,
+                readMs = lastReadElapsedMs,
+                acknowledged = shouldAcknowledge
+            )
+            stats.snapshotIfDue()?.let { fields ->
+                WatchBluetoothDebugLog.event(
+                    sessionId = sessionId,
+                    event = "preview.stream.stats",
+                    fields = fields
+                )
+            }
             if (
-                request.optString("phase") == ReaderPresetPreviewPayload.PHASE_UPDATE &&
+                phase == ReaderPresetPreviewPayload.PHASE_UPDATE &&
                 lastResponse.optBoolean("applied")
             ) {
                 app.openReaderPresetPreview()
             }
-            if (request.optString("phase") == ReaderPresetPreviewPayload.PHASE_STOP) {
+            if (phase == ReaderPresetPreviewPayload.PHASE_STOP) {
                 return lastResponse
             }
+            val readStartedAt = SystemClock.elapsedRealtime()
             request = readFrameLoggedWithTimeout(
                 client = client,
                 sessionId = sessionId,
                 label = "previewFrame",
-                timeoutMs = PREVIEW_STREAM_IDLE_TIMEOUT_MS
+                timeoutMs = PREVIEW_STREAM_IDLE_TIMEOUT_MS,
+                logFrame = false
             )
+            lastReadElapsedMs = SystemClock.elapsedRealtime() - readStartedAt
             require(
                 request.optString("action") ==
                     BluetoothSyncProtocol.ACTION_PREVIEW_READER
@@ -1269,6 +1357,7 @@ class WatchBluetoothSyncServer(
         private const val TAG = "WatchRSS_BtSyncServer"
         private const val DEFAULT_TIMEOUT_MS = 120_000L
         private const val PREVIEW_STREAM_IDLE_TIMEOUT_MS = 30_000L
+        private const val PREVIEW_ACK_INTERVAL_MS = 50L
         private const val RESPONSE_ACK_TIMEOUT_MS = 10_000L
         private const val APPLIED_ACK_TIMEOUT_MS = 120_000L
         private const val INITIAL_REQUEST_READ_TIMEOUT_MS = 30_000L

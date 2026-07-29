@@ -281,6 +281,40 @@ object ReaderPresetCodec {
             deleted = json.optBoolean("deleted")
         ).normalized()
     }
+
+    fun applyChanges(base: ReaderPreset, changes: JSONObject): ReaderPreset {
+        var merged = base
+        changes.keys().forEach { key ->
+            merged = when (key) {
+                "schemaVersion" -> {
+                    require(changes.getInt(key) <= SCHEMA_VERSION) {
+                        "不支持的阅读器预设版本"
+                    }
+                    merged
+                }
+                "id" -> merged.copy(id = changes.getString(key))
+                "name" -> merged.copy(name = changes.getString(key))
+                "body" -> merged.copy(body = changes.getJSONObject(key).toTextStyle())
+                "categoryTypographyEnabled" -> merged.copy(
+                    categoryTypographyEnabled = changes.getBoolean(key)
+                )
+                "title" -> merged.copy(title = changes.getJSONObject(key).toOverride())
+                "subtitle" -> merged.copy(subtitle = changes.getJSONObject(key).toOverride())
+                "quote" -> merged.copy(quote = changes.getJSONObject(key).toOverride())
+                "code" -> merged.copy(code = changes.getJSONObject(key).toOverride())
+                "link" -> merged.copy(link = changes.getJSONObject(key).toOverride())
+                "background" -> merged.copy(
+                    background = changes.getJSONObject(key).toBackground()
+                )
+                "accentColorArgb" -> merged.copy(accentColorArgb = changes.getLong(key))
+                "updatedAt" -> merged.copy(updatedAt = changes.getLong(key))
+                "modifiedBy" -> merged.copy(modifiedBy = changes.getString(key))
+                "deleted" -> merged.copy(deleted = changes.getBoolean(key))
+                else -> merged
+            }
+        }
+        return merged.normalized()
+    }
 }
 
 private fun Long.withAlpha(alpha: Int): Long =

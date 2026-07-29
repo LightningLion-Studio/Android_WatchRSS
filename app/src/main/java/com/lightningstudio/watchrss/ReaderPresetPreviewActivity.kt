@@ -1,9 +1,14 @@
 package com.lightningstudio.watchrss
 
+import android.graphics.Paint
 import android.os.Bundle
+import android.text.Layout
+import android.text.StaticLayout
+import android.text.TextPaint
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,31 +21,57 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.lightningstudio.watchrss.data.reader.ReaderHyphenation
+import com.lightningstudio.watchrss.data.reader.ReaderLineBreakMode
+import com.lightningstudio.watchrss.data.reader.ReaderPreset
 import com.lightningstudio.watchrss.data.reader.ReaderPresetRepository
+import com.lightningstudio.watchrss.data.reader.ReaderTextAlignment
+import com.lightningstudio.watchrss.data.reader.ReaderTextStyle
+import com.lightningstudio.watchrss.data.reader.ReaderTypographyRole
 import com.lightningstudio.watchrss.ui.reader.LocalReaderPresetRuntime
 import com.lightningstudio.watchrss.ui.reader.ReaderBackgroundSurface
 import com.lightningstudio.watchrss.ui.reader.ReaderPageLayout
 import com.lightningstudio.watchrss.ui.reader.ReaderPresetRuntime
-import com.lightningstudio.watchrss.ui.reader.ReaderTextRole
-import com.lightningstudio.watchrss.ui.reader.readerTextStyle
-import com.lightningstudio.watchrss.ui.screen.rss.DetailTitle
+import com.lightningstudio.watchrss.ui.reader.readerTypefaceFor
 import com.lightningstudio.watchrss.ui.screen.rss.CircleIconButton
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
+import com.lightningstudio.watchrss.ui.theme.rememberWatchTitleLineLimitsPx
+import com.lightningstudio.watchrss.ui.util.formatWatchTitleForWidthLimitsWithMeasurer
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.withContext
+import java.io.File
+import kotlin.math.roundToInt
 
 class ReaderPresetPreviewActivity : BaseWatchActivity() {
     private val app by lazy { application as WatchRssApplication }
@@ -83,14 +114,27 @@ private fun WatchReaderPresetLivePreview(
     application: WatchRssApplication,
     onExpired: () -> Unit
 ) {
-    val state = application.readerPresetPreviewSession.state.collectAsStateWithLifecycle().value
-    LaunchedEffect(state) {
-        if (state == null) onExpired()
+    val session = application.readerPresetPreviewSession
+    var renderedPreview by remember { mutableStateOf(session.state.value) }
+    var resourceTransferInProgress by remember {
+        mutableStateOf(session.state.value?.resourceTransferInProgress == true)
     }
-    val preview = state ?: return
+    val fastScaleState = remember { mutableFloatStateOf(1f) }
+    LaunchedEffect(session) {
+        session.state.collect { current ->
+            if (current == null) {
+                onExpired()
+            } else {
+                resourceTransferInProgress = current.resourceTransferInProgress
+            }
+        }
+    }
+    val preview = renderedPreview ?: return
     val context = LocalContext.current
-    val showUnsupportedAction = {
-        Toast.makeText(context, "预览页面不支持收藏/分享", Toast.LENGTH_SHORT).show()
+    val showUnsupportedAction = remember(context) {
+        {
+            Toast.makeText(context, "预览页面不支持收藏/分享", Toast.LENGTH_SHORT).show()
+        }
     }
     androidx.compose.runtime.CompositionLocalProvider(
         LocalReaderPresetRuntime provides ReaderPresetRuntime(
@@ -100,25 +144,63 @@ private fun WatchReaderPresetLivePreview(
         )
     ) {
         ReaderBackgroundSurface(modifier = Modifier.fillMaxSize()) {
-            Text(
-                text = if (preview.resourceTransferInProgress) {
-                    "资源文件传输中"
-                } else {
-                    "预设实时预览"
-                },
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 2.dp)
-                    .background(
-                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
-                        shape = RoundedCornerShape(50)
-                    )
-                    .padding(horizontal = 7.dp, vertical = 1.dp)
-            )
             val pagePadding = ReaderPageLayout.horizontalPadding
             val blockSpacing = ReaderPageLayout.blockSpacing
+            val titlePadding = ReaderPageLayout.titleHorizontalPadding
+            val density = LocalDensity.current
+            val configuration = LocalConfiguration.current
+            val contentWidthPx = with(density) {
+                (configuration.screenWidthDp.dp - pagePadding * 2).toPx()
+            }.coerceAtLeast(1f)
+            val titleAvailableWidthPx = with(density) {
+                (configuration.screenWidthDp.dp - pagePadding * 2 - titlePadding * 2).toPx()
+            }.coerceAtLeast(1f)
+            val titleLimits = remember(titleAvailableWidthPx, density) {
+                rememberWatchTitleLineLimitsPx(titleAvailableWidthPx, density)
+            }
+            val blockSpacingPx = with(density) { blockSpacing.toPx() }
+            var preparedLayout by remember { mutableStateOf<NativePreviewLayout?>(null) }
+            LaunchedEffect(
+                session,
+                contentWidthPx,
+                titleLimits,
+                blockSpacingPx,
+                density.density,
+                density.fontScale
+            ) {
+                session.state
+                    .filterNotNull()
+                    .distinctUntilChanged()
+                    .collectLatest { preset ->
+                        val incomingPreset = preset.preset
+                        val current = preparedLayout
+                        if (
+                            current != null &&
+                            incomingPreset.differsOnlyByBodyFontSizeFrom(current.preset)
+                        ) {
+                            fastScaleState.floatValue =
+                                incomingPreset.body.fontSizeSp / current.preset.body.fontSizeSp
+                            delay(FONT_SIZE_SETTLE_MS)
+                        } else {
+                            fastScaleState.floatValue = 1f
+                        }
+                        preparedLayout = withContext(Dispatchers.Default) {
+                            buildNativePreviewLayout(
+                                preset = incomingPreset,
+                                fontFile = repository::fontFile,
+                                contentWidthPx = contentWidthPx,
+                                titleFirstLimitPx = titleLimits.first,
+                                titleSecondLimitPx = titleLimits.second,
+                                blockSpacingPx = blockSpacingPx,
+                                density = density.density,
+                                fontScale = density.fontScale
+                            )
+                        }
+                        renderedPreview = preset
+                        fastScaleState.floatValue = 1f
+                    }
+            }
+            val layout = preparedLayout
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -128,38 +210,15 @@ private fun WatchReaderPresetLivePreview(
                         top = ReaderPageLayout.titleTopPadding,
                         end = pagePadding,
                         bottom = ReaderPageLayout.bottomPadding(hasFloatingAction = false)
-                    ),
-                verticalArrangement = Arrangement.spacedBy(blockSpacing)
+                    )
             ) {
-                DetailTitle(
-                    title = "阅读，让时间慢下来",
-                    titlePadding = ReaderPageLayout.titleHorizontalPadding,
-                    textColor = androidx.compose.ui.graphics.Color(preview.preset.body.colorArgb)
-                )
-                Text("标题、副标题与正文会分别使用分类样式", style = readerTextStyle(ReaderTextRole.SUBTITLE))
-                Text(
-                    "这是手表端的实时正文预览。你在手机上调整字体、字号、颜色、排版或背景后，这里会自动更新。",
-                    style = readerTextStyle(ReaderTextRole.BODY)
-                )
-                Text("“好的排版让文字安静地抵达读者。”", style = readerTextStyle(ReaderTextRole.QUOTE))
-                Text("val preview = ReaderPreset.live", style = readerTextStyle(ReaderTextRole.CODE))
-                Text(
-                    "链接样式预览 · watchrss.app",
-                    style = readerTextStyle(ReaderTextRole.LINK),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Text(
-                    "继续向下阅读时，可以观察正文在圆形屏幕不同高度上的换行和边缘留白。预览内容会保留足够长度，方便检查滚动过程。",
-                    style = readerTextStyle(ReaderTextRole.BODY)
-                )
-                Text(
-                    "较长文章往往包含多个段落。这里再加入一段常规文字，用来确认段间距、首行缩进和两端对齐在连续内容中的实际效果。",
-                    style = readerTextStyle(ReaderTextRole.BODY)
-                )
-                Text(
-                    "到达文章结尾前，还应留出收藏与分享操作的位置，使最后一段文字能够完整滚动到圆屏中央，而不是停留在底部曲面区域。",
-                    style = readerTextStyle(ReaderTextRole.BODY)
-                )
+                layout?.let {
+                    NativePreviewCanvas(
+                        layout = layout,
+                        scale = fastScaleState,
+                        density = density.density
+                    )
+                }
                 Spacer(modifier = Modifier.height(15.dp))
                 Box(
                     modifier = Modifier.fillMaxWidth(),
@@ -194,6 +253,244 @@ private fun WatchReaderPresetLivePreview(
                     }
                 }
             }
+            Text(
+                text = if (resourceTransferInProgress) {
+                    "资源文件传输中"
+                } else {
+                    "预设实时预览"
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 2.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+                        shape = RoundedCornerShape(50)
+                    )
+                    .padding(horizontal = 7.dp, vertical = 1.dp)
+            )
         }
     }
 }
+
+@Immutable
+private data class NativePreviewParagraph(
+    val layout: StaticLayout,
+    val leftPx: Float,
+    val topPx: Float
+)
+
+@Immutable
+private data class NativePreviewLayout(
+    val preset: ReaderPreset,
+    val paragraphs: List<NativePreviewParagraph>,
+    val heightPx: Float
+)
+
+@Composable
+private fun NativePreviewCanvas(
+    layout: NativePreviewLayout,
+    scale: State<Float>,
+    density: Float
+) {
+    Canvas(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height((layout.heightPx / density).dp)
+            .graphicsLayer {
+                val currentScale = scale.value
+                scaleX = currentScale
+                scaleY = currentScale
+                transformOrigin = TransformOrigin(0.5f, 0f)
+            }
+    ) {
+        drawIntoCanvas { canvas ->
+            val nativeCanvas = canvas.nativeCanvas
+            val clipBounds = nativeCanvas.clipBounds
+            layout.paragraphs.forEach { paragraph ->
+                val paragraphBottomPx = paragraph.topPx + paragraph.layout.height
+                if (
+                    paragraphBottomPx < clipBounds.top ||
+                    paragraph.topPx > clipBounds.bottom
+                ) {
+                    return@forEach
+                }
+                val saveCount = nativeCanvas.save()
+                nativeCanvas.translate(paragraph.leftPx, paragraph.topPx)
+                paragraph.layout.draw(nativeCanvas)
+                nativeCanvas.restoreToCount(saveCount)
+            }
+        }
+    }
+}
+
+private data class PreviewParagraphSpec(
+    val text: String,
+    val style: ReaderTextStyle,
+    val forceCenter: Boolean = false,
+    val firstLineLimitPx: Float? = null,
+    val otherLineLimitPx: Float? = null
+)
+
+private fun buildNativePreviewLayout(
+    preset: ReaderPreset,
+    fontFile: (String?) -> File?,
+    contentWidthPx: Float,
+    titleFirstLimitPx: Float,
+    titleSecondLimitPx: Float,
+    blockSpacingPx: Float,
+    density: Float,
+    fontScale: Float
+): NativePreviewLayout {
+    val body = preset.body
+    val title = preset.resolvedStyle(ReaderTypographyRole.TITLE)
+    val specs = listOf(
+        PreviewParagraphSpec(
+            text = "阅读，让时间慢下来",
+            style = title,
+            forceCenter = true,
+            firstLineLimitPx = titleFirstLimitPx,
+            otherLineLimitPx = titleSecondLimitPx
+        ),
+        PreviewParagraphSpec(
+            "标题、副标题与正文会分别使用分类样式",
+            preset.resolvedStyle(ReaderTypographyRole.SUBTITLE)
+        ),
+        PreviewParagraphSpec(
+            "这是手表端的实时正文预览。你在手机上调整字体、字号、颜色、排版或背景后，这里会自动更新。",
+            body
+        ),
+        PreviewParagraphSpec(
+            "“好的排版让文字安静地抵达读者。”",
+            preset.resolvedStyle(ReaderTypographyRole.QUOTE)
+        ),
+        PreviewParagraphSpec(
+            "val preview = ReaderPreset.live",
+            preset.resolvedStyle(ReaderTypographyRole.CODE)
+        ),
+        PreviewParagraphSpec(
+            "链接样式预览 · watchrss.app",
+            preset.resolvedStyle(ReaderTypographyRole.LINK)
+        ),
+        PreviewParagraphSpec(
+            "继续向下阅读时，可以观察正文在圆形屏幕不同高度上的换行和边缘留白。预览内容会保留足够长度，方便检查滚动过程。",
+            body
+        ),
+        PreviewParagraphSpec(
+            "较长文章往往包含多个段落。这里再加入一段常规文字，用来确认段间距、首行缩进和两端对齐在连续内容中的实际效果。",
+            body
+        ),
+        PreviewParagraphSpec(
+            "到达文章结尾前，还应留出收藏与分享操作的位置，使最后一段文字能够完整滚动到圆屏中央，而不是停留在底部曲面区域。",
+            body
+        )
+    )
+    val paragraphs = ArrayList<NativePreviewParagraph>(specs.size)
+    var topPx = 0f
+    specs.forEach { spec ->
+        val paint = spec.style.toPreviewTextPaint(fontFile, density, fontScale)
+        val text = if (spec.firstLineLimitPx != null && spec.otherLineLimitPx != null) {
+            formatWatchTitleForWidthLimitsWithMeasurer(
+                title = spec.text,
+                availableWidthPx = contentWidthPx,
+                firstLimitPx = spec.firstLineLimitPx,
+                secondLimitPx = spec.otherLineLimitPx,
+                measureText = paint::measureText
+            )
+        } else {
+            spec.text
+        }
+        val widthPx = (spec.otherLineLimitPx ?: contentWidthPx)
+            .coerceAtLeast(1f)
+            .roundToInt()
+        val layout = createPreviewStaticLayout(
+            text = text,
+            paint = paint,
+            style = spec.style,
+            widthPx = widthPx,
+            forceCenter = spec.forceCenter
+        )
+        paragraphs += NativePreviewParagraph(
+            layout = layout,
+            leftPx = if (spec.forceCenter) {
+                ((contentWidthPx - widthPx) / 2f).coerceAtLeast(0f)
+            } else {
+                0f
+            },
+            topPx = topPx
+        )
+        topPx += layout.height + blockSpacingPx
+    }
+    return NativePreviewLayout(
+        preset = preset,
+        paragraphs = paragraphs,
+        heightPx = (topPx - blockSpacingPx).coerceAtLeast(0f)
+    )
+}
+
+private fun ReaderPreset.differsOnlyByBodyFontSizeFrom(other: ReaderPreset): Boolean {
+    if (body.fontSizeSp == other.body.fontSizeSp) return false
+    return copy(
+        body = body.copy(fontSizeSp = other.body.fontSizeSp),
+        updatedAt = other.updatedAt,
+        modifiedBy = other.modifiedBy
+    ) == other
+}
+
+private fun ReaderTextStyle.toPreviewTextPaint(
+    fontFile: (String?) -> File?,
+    density: Float,
+    fontScale: Float
+): TextPaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
+    color = colorArgb.toInt()
+    textSize = fontSizeSp * density * fontScale
+    typeface = readerTypefaceFor(fontFile(fontAssetId), this@toPreviewTextPaint)
+    letterSpacing = letterSpacingEm
+    isUnderlineText = underline
+    isStrikeThruText = strikethrough
+}
+
+private fun createPreviewStaticLayout(
+    text: String,
+    paint: TextPaint,
+    style: ReaderTextStyle,
+    widthPx: Int,
+    forceCenter: Boolean
+): StaticLayout {
+    val naturalLineHeight = paint.fontMetrics.run { descent - ascent }
+    val requestedLineHeight = paint.textSize * style.lineHeightEm
+    return StaticLayout.Builder
+        .obtain(text, 0, text.length, paint, widthPx)
+        .setAlignment(
+            if (forceCenter || style.alignment == ReaderTextAlignment.CENTER) {
+                Layout.Alignment.ALIGN_CENTER
+            } else {
+                Layout.Alignment.ALIGN_NORMAL
+            }
+        )
+        .setIncludePad(false)
+        .setLineSpacing(requestedLineHeight - naturalLineHeight, 1f)
+        .setBreakStrategy(
+            when (style.lineBreakMode) {
+                ReaderLineBreakMode.SIMPLE -> Layout.BREAK_STRATEGY_SIMPLE
+                ReaderLineBreakMode.SYSTEM -> Layout.BREAK_STRATEGY_HIGH_QUALITY
+                ReaderLineBreakMode.PARAGRAPH -> Layout.BREAK_STRATEGY_BALANCED
+            }
+        )
+        .setHyphenationFrequency(
+            if (style.hyphenation == ReaderHyphenation.AUTO) {
+                Layout.HYPHENATION_FREQUENCY_FULL
+            } else {
+                Layout.HYPHENATION_FREQUENCY_NONE
+            }
+        )
+        .apply {
+            if (style.alignment == ReaderTextAlignment.JUSTIFY) {
+                setJustificationMode(Layout.JUSTIFICATION_MODE_INTER_WORD)
+            }
+        }
+        .build()
+}
+
+private const val FONT_SIZE_SETTLE_MS = 180L

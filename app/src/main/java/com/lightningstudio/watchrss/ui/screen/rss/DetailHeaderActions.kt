@@ -52,9 +52,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextLayoutResult
-import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
@@ -62,6 +60,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
+import com.lightningstudio.watchrss.ui.reader.ReaderTextRole
+import com.lightningstudio.watchrss.ui.reader.readerTextWidthMeasurer
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
 import com.lightningstudio.watchrss.ui.theme.rememberIsRoundWatch
 import com.lightningstudio.watchrss.ui.theme.rememberWatchTitleLineLimitsPx
@@ -195,7 +195,7 @@ internal fun DetailTitle(
         presetTitleStyle
     }
     val density = LocalDensity.current
-    val textMeasurer = rememberTextMeasurer()
+    val measureTitleWidth = readerTextWidthMeasurer(ReaderTextRole.TITLE)
 
     BoxWithConstraints(
         modifier = Modifier
@@ -212,21 +212,14 @@ internal fun DetailTitle(
             firstLimitPx,
             secondLimitPx,
             measuredTitleStyle,
-            textMeasurer
+            measureTitleWidth
         ) {
             formatWatchTitleForWidthLimitsWithMeasurer(
                 title = title,
                 availableWidthPx = availableWidthPx,
                 firstLimitPx = firstLimitPx,
                 secondLimitPx = secondLimitPx,
-                measureText = { candidate ->
-                    textMeasurer.measure(
-                        text = AnnotatedString(candidate),
-                        style = measuredTitleStyle,
-                        softWrap = false,
-                        maxLines = 1
-                    ).size.width.toFloat()
-                }
+                measureText = measureTitleWidth
             )
         }
         val highlightedTitle = remember(formattedTitle, highlightRange, highlightColor) {
