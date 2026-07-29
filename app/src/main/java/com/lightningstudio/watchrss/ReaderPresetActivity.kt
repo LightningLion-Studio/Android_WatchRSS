@@ -28,10 +28,14 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -41,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -79,6 +84,7 @@ class ReaderPresetActivity : BaseWatchActivity() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun WatchReaderPresetSelector(repository: ReaderPresetRepository) {
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -131,10 +137,16 @@ private fun WatchReaderPresetSelector(repository: ReaderPresetRepository) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scroll)
-            .padding(horizontal = 18.dp, vertical = 26.dp),
+            .padding(horizontal = 18.dp, vertical = 26.dp)
+            .padding(bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Text("阅读器预设", style = MaterialTheme.typography.titleLarge)
+        Text(
+            text = "阅读器预设",
+            modifier = Modifier.fillMaxWidth(),
+            textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.titleLarge
+        )
         Text(
             "手表端只选择手机同步的预设，不提供新建或编辑。",
             style = MaterialTheme.typography.bodySmall
@@ -142,24 +154,32 @@ private fun WatchReaderPresetSelector(repository: ReaderPresetRepository) {
         Text("当前：${active.name}", fontWeight = FontWeight.SemiBold)
 
         Text("显示方式")
-        listOf(
+        val themeModes = listOf(
             ReaderThemeMode.DARK,
             ReaderThemeMode.LIGHT,
             ReaderThemeMode.SYSTEM
-        ).forEach { mode ->
-            FilterChip(
-                selected = selection.mode == mode,
-                onClick = { repository.setThemeMode(mode) },
-                label = {
-                    Text(
-                        when (mode) {
-                            ReaderThemeMode.DARK -> "始终深色"
-                            ReaderThemeMode.LIGHT -> "始终浅色"
-                            ReaderThemeMode.SYSTEM -> "自动切换"
-                        }
-                    )
-                }
-            )
+        )
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            themeModes.forEachIndexed { index, mode ->
+                SegmentedButton(
+                    selected = selection.mode == mode,
+                    onClick = { repository.setThemeMode(mode) },
+                    shape = SegmentedButtonDefaults.itemShape(
+                        index = index,
+                        count = themeModes.size
+                    ),
+                    icon = {},
+                    label = {
+                        Text(
+                            when (mode) {
+                                ReaderThemeMode.DARK -> "深色"
+                                ReaderThemeMode.LIGHT -> "浅色"
+                                ReaderThemeMode.SYSTEM -> "自动"
+                            }
+                        )
+                    }
+                )
+            }
         }
 
         if (selection.mode == ReaderThemeMode.SYSTEM) {
