@@ -124,6 +124,11 @@
             android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
+            android:name=".ReaderPresetPreviewActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:theme="@style/Theme.WatchRSS.Translucent" />
+        <activity
             android:name=".AdvancedSettingsActivity"
             android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />

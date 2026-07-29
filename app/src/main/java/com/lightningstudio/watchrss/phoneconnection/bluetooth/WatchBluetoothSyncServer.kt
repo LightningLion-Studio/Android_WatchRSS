@@ -887,6 +887,21 @@ class WatchBluetoothSyncServer(
                     )
                 }
 
+                BluetoothSyncProtocol.ACTION_PREVIEW_READER -> {
+                    val app = context.applicationContext as WatchRssApplication
+                    ReaderPresetPreviewPayload.handle(
+                        request = request,
+                        session = app.readerPresetPreviewSession
+                    ).also { response ->
+                        if (
+                            request.optString("phase") == ReaderPresetPreviewPayload.PHASE_UPDATE &&
+                            response.optBoolean("applied")
+                        ) {
+                            app.openReaderPresetPreview()
+                        }
+                    }
+                }
+
                 BluetoothSyncProtocol.ACTION_SYNC_LIBRARY -> {
                     val localDeviceId = WatchDeviceIdentity(context).deviceId
                     if (request.optString("phase") == LibrarySyncPayload.PHASE_PROBE) {

@@ -152,6 +152,7 @@ class WatchBluetoothForegroundSyncManager(
                         context = application,
                         allowedActions = setOf(
                             BluetoothSyncProtocol.ACTION_SYNC_LIBRARY,
+                            BluetoothSyncProtocol.ACTION_PREVIEW_READER,
                             BluetoothSyncProtocol.ACTION_SYNC_ACCOUNT
                         ),
                         onClientAccepted = {

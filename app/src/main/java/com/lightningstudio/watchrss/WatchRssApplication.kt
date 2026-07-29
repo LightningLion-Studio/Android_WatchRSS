@@ -1,9 +1,11 @@
 package com.lightningstudio.watchrss
 
 import android.app.Application
+import android.content.Intent
 import com.lightningstudio.watchrss.data.AppContainer
 import com.lightningstudio.watchrss.data.DefaultAppContainer
 import com.lightningstudio.watchrss.data.account.WatchAccountStore
+import com.lightningstudio.watchrss.data.reader.WatchReaderPresetPreviewSession
 import com.lightningstudio.watchrss.data.telemetry.WatchUsageTelemetry
 import com.lightningstudio.watchrss.debug.DebugLogBuffer
 import com.lightningstudio.watchrss.debug.StartupDurationTracker
@@ -37,6 +39,10 @@ class WatchRssApplication : Application() {
         WatchAccountStore(this)
     }
 
+    val readerPresetPreviewSession by lazy {
+        WatchReaderPresetPreviewSession(appScope)
+    }
+
     val usageTelemetry: WatchUsageTelemetry by lazy {
         WatchUsageTelemetry(
             context = this,
@@ -67,5 +73,18 @@ class WatchRssApplication : Application() {
 
     fun setContainerForTesting(container: AppContainer?) {
         testContainerOverride = container
+    }
+
+    fun openReaderPresetPreview() {
+        if (ReaderPresetPreviewActivity.isVisible) return
+        startActivity(
+            Intent(this, ReaderPresetPreviewActivity::class.java).apply {
+                addFlags(
+                    Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP
+                )
+            }
+        )
     }
 }
