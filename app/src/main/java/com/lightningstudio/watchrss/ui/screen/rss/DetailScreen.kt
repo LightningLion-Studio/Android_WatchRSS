@@ -1448,7 +1448,10 @@ internal fun DetailContent(
                 Spacer(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(if (showAiButton) 56.dp else actionVerticalSpacing)
+                        .height(
+                            com.lightningstudio.watchrss.ui.reader.ReaderPageLayout
+                                .bottomPadding(showAiButton)
+                        )
                         .readAloudLongPressTarget(::openReadAloudFromVisibleAnchor)
                 )
             }
