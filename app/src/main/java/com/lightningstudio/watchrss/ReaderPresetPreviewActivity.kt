@@ -86,7 +86,11 @@ private fun WatchReaderPresetLivePreview(
     ) {
         ReaderBackgroundSurface(modifier = Modifier.fillMaxSize()) {
             Text(
-                text = "预设实时预览",
+                text = if (preview.resourceTransferInProgress) {
+                    "资源文件传输中"
+                } else {
+                    "预设实时预览"
+                },
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier

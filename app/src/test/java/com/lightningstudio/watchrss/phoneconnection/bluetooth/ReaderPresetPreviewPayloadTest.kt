@@ -30,13 +30,23 @@ class ReaderPresetPreviewPayloadTest {
         assertTrue(updateResponse.getBoolean("success"))
         assertTrue(updateResponse.getBoolean("applied"))
         assertEquals("手机草稿", session.state.value?.preset?.name)
+        assertFalse(session.state.value?.resourceTransferInProgress == true)
+
+        val transferResponse = ReaderPresetPreviewPayload.handle(
+            JSONObject(update.toString())
+                .put("sequence", 5L)
+                .put("resourceTransfer", true),
+            session
+        )
+        assertTrue(transferResponse.getBoolean("applied"))
+        assertTrue(session.state.value?.resourceTransferInProgress == true)
 
         val staleResponse = ReaderPresetPreviewPayload.handle(
-            JSONObject(update.toString()).put("sequence", 3L),
+            JSONObject(update.toString()).put("sequence", 4L),
             session
         )
         assertFalse(staleResponse.getBoolean("applied"))
-        assertEquals(4L, session.state.value?.sequence)
+        assertEquals(5L, session.state.value?.sequence)
 
         val stopResponse = ReaderPresetPreviewPayload.handle(
             JSONObject().apply {

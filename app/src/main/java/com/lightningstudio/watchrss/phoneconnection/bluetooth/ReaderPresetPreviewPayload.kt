@@ -20,7 +20,12 @@ object ReaderPresetPreviewPayload {
             PHASE_UPDATE -> {
                 val sequence = request.getLong("sequence")
                 val preset = ReaderPresetCodec.decode(request.getString("presetJson"))
-                val applied = session.update(sessionId, sequence, preset)
+                val applied = session.update(
+                    sessionId = sessionId,
+                    sequence = sequence,
+                    preset = preset,
+                    resourceTransferInProgress = request.optBoolean("resourceTransfer")
+                )
                 JSONObject().apply {
                     put("success", true)
                     put("action", BluetoothSyncProtocol.ACTION_PREVIEW_READER)

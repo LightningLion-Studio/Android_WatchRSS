@@ -906,6 +906,13 @@ class WatchBluetoothSyncServer(
 
                 BluetoothSyncProtocol.ACTION_SYNC_READER -> {
                     val app = context.applicationContext as WatchRssApplication
+                    if (
+                        request.optString("phase") ==
+                        ReaderPresetSyncPayload.PHASE_PUSH_RESOURCE &&
+                        request.optString("kind") in setOf("background", "variant")
+                    ) {
+                        app.readerPresetPreviewSession.refreshResourceTransfer()
+                    }
                     ReaderPresetSyncPayload.handle(
                         request = request,
                         repository = app.container.readerPresetRepository
