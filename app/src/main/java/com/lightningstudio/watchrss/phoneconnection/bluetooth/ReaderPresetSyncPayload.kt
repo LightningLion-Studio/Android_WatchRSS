@@ -63,14 +63,20 @@ object ReaderPresetSyncPayload {
         require(data.size <= CHUNK_BYTES) { "资源分块过大" }
         require(sha256(data) == request.getString("chunkSha256")) { "资源分块校验失败" }
         val target = targetFile(repository, kind, fileName)
-        val partial = File(target.parentFile, "${target.name}.part")
-        RandomAccessFile(partial, "rw").use { output ->
-            val offset = index.toLong() * CHUNK_BYTES
-            require(output.length() == offset) { "资源分块顺序不连续" }
-            output.seek(offset)
-            output.write(data)
-            output.fd.sync()
+        if (target.exists() && repository.resourceStore.verify(target, totalBytes, expectedHash)) {
+            return pushAck(index, data, applied = true)
         }
+        val partial = File(target.parentFile, "${target.name}.part")
+        val metadata = File(target.parentFile, "${target.name}.part.meta")
+        applyIncomingChunk(
+            partial = partial,
+            metadata = metadata,
+            index = index,
+            chunkCount = chunkCount,
+            data = data,
+            totalBytes = totalBytes,
+            expectedHash = expectedHash
+        )
         val complete = index == chunkCount - 1
         if (complete) {
             require(repository.resourceStore.verify(partial, totalBytes, expectedHash)) {
@@ -78,15 +84,64 @@ object ReaderPresetSyncPayload {
             }
             if (target.exists()) target.delete()
             require(partial.renameTo(target)) { "资源落盘失败" }
+            metadata.delete()
         }
-        return JSONObject().apply {
+        return pushAck(index, data, applied = complete)
+    }
+
+    private fun pushAck(index: Int, data: ByteArray, applied: Boolean) =
+        JSONObject().apply {
             put("success", true)
             put("action", BluetoothSyncProtocol.ACTION_SYNC_READER)
             put("phase", PHASE_PUSH_RESOURCE)
             put("received", true)
-            put("applied", complete)
+            put("applied", applied)
             put("chunkIndex", index)
             put("chunkSha256", sha256(data))
+        }
+
+    internal fun applyIncomingChunk(
+        partial: File,
+        metadata: File,
+        index: Int,
+        chunkCount: Int,
+        data: ByteArray,
+        totalBytes: Long,
+        expectedHash: String
+    ) {
+        val signature = "$expectedHash:$totalBytes:$chunkCount"
+        val savedSignature = runCatching { metadata.readText() }.getOrNull()
+        if (savedSignature != signature) {
+            require(index == 0) { "资源传输已变化，请从第一块重试" }
+            if (partial.exists()) partial.delete()
+            metadata.parentFile?.mkdirs()
+            metadata.writeText(signature)
+        }
+
+        RandomAccessFile(partial, "rw").use { output ->
+            val offset = index.toLong() * CHUNK_BYTES
+            val end = offset + data.size
+            require(offset <= totalBytes && end <= totalBytes) { "资源分块范围异常" }
+            when {
+                output.length() < offset -> error("资源分块顺序不连续")
+                output.length() >= end -> {
+                    val existing = ByteArray(data.size)
+                    output.seek(offset)
+                    output.readFully(existing)
+                    if (!existing.contentEquals(data)) {
+                        require(index == 0) { "资源分块内容冲突，请从第一块重试" }
+                        output.setLength(0L)
+                        output.seek(0L)
+                        output.write(data)
+                    }
+                }
+                else -> {
+                    output.setLength(offset)
+                    output.seek(offset)
+                    output.write(data)
+                }
+            }
+            output.fd.sync()
         }
     }
 

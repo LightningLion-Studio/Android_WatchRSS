@@ -64,6 +64,7 @@ class WatchBluetoothForegroundSyncManager(
 
     private val lock = Any()
     private var listeningJob: Job? = null
+    private var stopListeningJob: Job? = null
 
     fun install() {
         application.registerActivityLifecycleCallbacks(this)
@@ -110,11 +111,12 @@ class WatchBluetoothForegroundSyncManager(
 
     private fun updateListeningState() {
         val shouldListen = shouldListen()
-        desiredListening = shouldListen
         if (shouldListen) {
+            desiredListening = true
+            cancelScheduledStop()
             ensureListeningJob()
         } else {
-            stopListeningIfIdle()
+            scheduleStopListening()
         }
     }
 
@@ -136,11 +138,26 @@ class WatchBluetoothForegroundSyncManager(
         }
     }
 
-    private fun stopListeningIfIdle() {
+    private fun cancelScheduledStop() {
         synchronized(lock) {
-            if (transferInProgress) return
-            listeningJob?.cancel()
-            listeningJob = null
+            stopListeningJob?.cancel()
+            stopListeningJob = null
+        }
+    }
+
+    private fun scheduleStopListening() {
+        synchronized(lock) {
+            if (transferInProgress || stopListeningJob?.isActive == true) return
+            stopListeningJob = scope.launch {
+                delay(LISTENER_STOP_GRACE_MS)
+                synchronized(lock) {
+                    stopListeningJob = null
+                    if (shouldListen() || transferInProgress) return@synchronized
+                    desiredListening = false
+                    listeningJob?.cancel()
+                    listeningJob = null
+                }
+            }
         }
     }
 
@@ -182,9 +199,7 @@ class WatchBluetoothForegroundSyncManager(
                     delay(RETRY_DELAY_MS)
                 }
             }
-            if (!shouldListen()) {
-                desiredListening = false
-            }
+            if (!shouldListen()) scheduleStopListening()
         }
         synchronized(lock) {
             if (listeningJob?.isActive != true) {
@@ -196,6 +211,7 @@ class WatchBluetoothForegroundSyncManager(
     private fun updateTransferInProgress(inProgress: Boolean) {
         transferInProgress = inProgress
         screenOnController.setTransferInProgress(inProgress)
+        if (!inProgress && !shouldListen()) scheduleStopListening()
     }
 
     private fun hasBluetoothPermission(): Boolean {
@@ -221,6 +237,7 @@ class WatchBluetoothForegroundSyncManager(
     companion object {
         private const val TAG = "WatchRSS_BtFgSync"
         private const val FOREGROUND_ACCEPT_TIMEOUT_MS = 120_000L
-        private const val RETRY_DELAY_MS = 5_000L
+        private const val RETRY_DELAY_MS = 500L
+        private const val LISTENER_STOP_GRACE_MS = 2_500L
     }
 }
