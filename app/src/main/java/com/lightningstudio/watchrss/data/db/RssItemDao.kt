@@ -153,8 +153,23 @@ interface RssItemDao {
     @Query("UPDATE rss_items SET isLiked = :liked WHERE id = :id")
     suspend fun updateLiked(id: Long, liked: Boolean)
 
-    @Query("UPDATE rss_items SET readingProgress = :progress WHERE id = :id")
-    suspend fun updateReadingProgress(id: Long, progress: Float)
+    @Query(
+        """
+        UPDATE rss_items
+        SET readingProgress = :progress,
+            readingPositionBytes = :positionBytes,
+            readingPositionContentHash = :positionContentHash,
+            readingPositionChangedAt = :positionChangedAt
+        WHERE id = :id
+        """
+    )
+    suspend fun updateReadingProgress(
+        id: Long,
+        progress: Float,
+        positionBytes: Long,
+        positionContentHash: String,
+        positionChangedAt: Long
+    )
 
     @Query("DELETE FROM rss_items WHERE id = :id")
     suspend fun deleteItem(id: Long)
@@ -247,7 +262,10 @@ interface RssItemDao {
             syncChunkHashesJson = :syncChunkHashesJson,
             syncMetadataHash = :syncMetadataHash,
             readingProgress = :readingProgress,
-            isRead = :isRead
+            isRead = :isRead,
+            readingPositionBytes = :readingPositionBytes,
+            readingPositionContentHash = :readingPositionContentHash,
+            readingPositionChangedAt = :readingPositionChangedAt
         WHERE id = :id
         """
     )
@@ -269,7 +287,10 @@ interface RssItemDao {
         syncChunkHashesJson: String,
         syncMetadataHash: String,
         readingProgress: Float,
-        isRead: Boolean
+        isRead: Boolean,
+        readingPositionBytes: Long,
+        readingPositionContentHash: String,
+        readingPositionChangedAt: Long
     )
 
     @Query(

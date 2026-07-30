@@ -26,7 +26,7 @@ import com.lightningstudio.watchrss.data.reader.ReaderPresetEntity
         ReaderBackgroundAssetEntity::class,
         ReaderDeletionEntity::class
     ],
-    version = 15,
+    version = 16,
     exportSchema = false
 )
 @SkipQueryVerification
@@ -279,6 +279,20 @@ abstract class WatchRssDatabase : RoomDatabase() {
         val MIGRATION_14_15 = object : Migration(14, 15) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.createReaderPresetTables()
+            }
+        }
+
+        val MIGRATION_15_16 = object : Migration(15, 16) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL(
+                    "ALTER TABLE rss_items ADD COLUMN readingPositionBytes INTEGER NOT NULL DEFAULT 0"
+                )
+                database.execSQL(
+                    "ALTER TABLE rss_items ADD COLUMN readingPositionContentHash TEXT NOT NULL DEFAULT ''"
+                )
+                database.execSQL(
+                    "ALTER TABLE rss_items ADD COLUMN readingPositionChangedAt INTEGER NOT NULL DEFAULT 0"
+                )
             }
         }
     }

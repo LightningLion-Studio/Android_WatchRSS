@@ -1,14 +1,15 @@
 package com.lightningstudio.watchrss
 
+import android.content.Context
 import android.graphics.Paint
 import android.os.Bundle
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
+import android.view.View
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,12 +39,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import com.lightningstudio.watchrss.data.reader.ReaderHyphenation
 import com.lightningstudio.watchrss.data.reader.ReaderLineBreakMode
 import com.lightningstudio.watchrss.data.reader.ReaderPreset
@@ -65,6 +65,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.withContext
 import java.io.File
+import kotlin.math.ceil
 import kotlin.math.roundToInt
 
 class ReaderPresetPreviewActivity : BaseWatchActivity() {
@@ -164,7 +165,7 @@ private fun WatchReaderPresetLivePreview(
                 rememberWatchTitleLineLimitsPx(titleAvailableWidthPx, density)
             }
             val blockSpacingPx = with(density) { blockSpacing.toPx() }
-            var preparedLayout by remember { mutableStateOf<NativePreviewLayout?>(null) }
+            val layoutHolder = remember { NativePreviewLayoutHolder() }
             LaunchedEffect(
                 session,
                 contentWidthPx,
@@ -190,10 +191,9 @@ private fun WatchReaderPresetLivePreview(
                                 fontScale = density.fontScale
                             )
                         }
-                        preparedLayout = exactLayout
+                        layoutHolder.submit(exactLayout)
                     }
             }
-            val layout = preparedLayout
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -205,12 +205,13 @@ private fun WatchReaderPresetLivePreview(
                         bottom = ReaderPageLayout.bottomPadding(hasFloatingAction = false)
                     )
             ) {
-                layout?.let {
-                    NativePreviewCanvas(
-                        layout = layout,
-                        density = density.density
-                    )
-                }
+                AndroidView(
+                    factory = { context ->
+                        NativePreviewLayoutView(context).also(layoutHolder::attach)
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    onRelease = layoutHolder::detach
+                )
                 Spacer(modifier = Modifier.height(15.dp))
                 Box(
                     modifier = Modifier.fillMaxWidth(),
@@ -280,32 +281,62 @@ private data class NativePreviewLayout(
     val heightPx: Float
 )
 
-@Composable
-private fun NativePreviewCanvas(
-    layout: NativePreviewLayout,
-    density: Float
-) {
-    Canvas(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height((layout.heightPx / density).dp)
-    ) {
-        drawIntoCanvas { canvas ->
-            val nativeCanvas = canvas.nativeCanvas
-            val clipBounds = nativeCanvas.clipBounds
-            layout.paragraphs.forEach { paragraph ->
-                val paragraphBottomPx = paragraph.topPx + paragraph.layout.height
-                if (
-                    paragraphBottomPx < clipBounds.top ||
-                    paragraph.topPx > clipBounds.bottom
-                ) {
-                    return@forEach
-                }
-                val saveCount = nativeCanvas.save()
-                nativeCanvas.translate(paragraph.leftPx, paragraph.topPx)
-                paragraph.layout.draw(nativeCanvas)
-                nativeCanvas.restoreToCount(saveCount)
+private class NativePreviewLayoutHolder {
+    private var view: NativePreviewLayoutView? = null
+    private var latest: NativePreviewLayout? = null
+
+    fun attach(view: NativePreviewLayoutView) {
+        this.view = view
+        latest?.let(view::submit)
+    }
+
+    fun detach(view: NativePreviewLayoutView) {
+        if (this.view === view) this.view = null
+    }
+
+    fun submit(layout: NativePreviewLayout) {
+        latest = layout
+        view?.submit(layout)
+    }
+}
+
+private class NativePreviewLayoutView(context: Context) : View(context) {
+    private var previewLayout: NativePreviewLayout? = null
+
+    init {
+        setWillNotDraw(false)
+    }
+
+    fun submit(layout: NativePreviewLayout) {
+        previewLayout = layout
+        requestLayout()
+        invalidate()
+    }
+
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val desiredHeight = ceil(previewLayout?.heightPx ?: 0f).toInt()
+        setMeasuredDimension(
+            resolveSize(suggestedMinimumWidth, widthMeasureSpec),
+            resolveSize(desiredHeight, heightMeasureSpec)
+        )
+    }
+
+    override fun onDraw(canvas: android.graphics.Canvas) {
+        super.onDraw(canvas)
+        val layout = previewLayout ?: return
+        val clipBounds = canvas.clipBounds
+        layout.paragraphs.forEach { paragraph ->
+            val paragraphBottomPx = paragraph.topPx + paragraph.layout.height
+            if (
+                paragraphBottomPx < clipBounds.top ||
+                paragraph.topPx > clipBounds.bottom
+            ) {
+                return@forEach
             }
+            val saveCount = canvas.save()
+            canvas.translate(paragraph.leftPx, paragraph.topPx)
+            paragraph.layout.draw(canvas)
+            canvas.restoreToCount(saveCount)
         }
     }
 }

@@ -16,26 +16,26 @@ import org.json.JSONObject
 
 class LibrarySyncPayloadTest {
     @Test
-    fun unsupportedPhoneProtocolResponse_rejectsLibrarySyncBelowV10() {
+    fun unsupportedPhoneProtocolResponse_rejectsLibrarySyncBelowV12() {
         val response = LibrarySyncPayload.buildUnsupportedPhoneProtocolResponse(
             JSONObject().apply {
                 put("action", BluetoothSyncProtocol.ACTION_SYNC_LIBRARY)
-                put("version", 9)
+                put("version", 11)
             }
         )
 
         assertTrue(response != null)
         assertFalse(response!!.getBoolean("success"))
         assertEquals(LibrarySyncPayload.PROTOCOL_VERSION, response.getInt("version"))
-        assertEquals(10, response.getInt("minimumPhoneProtocolVersion"))
+        assertEquals(12, response.getInt("minimumPhoneProtocolVersion"))
         assertTrue(response.getString("message").contains("升级到最新版"))
     }
 
     @Test
-    fun unsupportedPhoneProtocolResponse_acceptsV10AndDoesNotGateOtherActions() {
+    fun unsupportedPhoneProtocolResponse_acceptsV12AndDoesNotGateOtherActions() {
         val supportedLibraryRequest = JSONObject().apply {
             put("action", BluetoothSyncProtocol.ACTION_SYNC_LIBRARY)
-            put("version", 10)
+            put("version", 12)
         }
         val legacyAccountRequest = JSONObject().apply {
             put("action", BluetoothSyncProtocol.ACTION_SYNC_ACCOUNT)

@@ -38,6 +38,7 @@ import kotlinx.coroutines.withContext
 import org.jsoup.Jsoup
 import org.json.JSONArray
 import java.net.URI
+import kotlin.math.roundToLong
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 
@@ -554,8 +555,25 @@ class DefaultRssRepository(
             val clamped = progress.coerceIn(0f, 1f)
             val item = itemDao.getItem(itemId) ?: return@withContext
             if (kotlin.math.abs(item.readingProgress - clamped) < 0.001f) return@withContext
-            itemDao.updateReadingProgress(itemId, clamped)
-            recordArticleChange(stableArticleId(item.link ?: item.dedupKey), "readingProgress")
+            val importedReader = getImportedTextReader(itemId)
+            val byteLength = importedReader?.byteLength
+                ?: (item.originalContent ?: item.content.orEmpty()).toByteArray(Charsets.UTF_8).size.toLong()
+            val positionBytes = (byteLength.toDouble() * clamped.toDouble())
+                .roundToLong()
+                .coerceIn(0L, byteLength)
+            val changedAt = System.currentTimeMillis()
+            itemDao.updateReadingProgress(
+                id = itemId,
+                progress = clamped,
+                positionBytes = positionBytes,
+                positionContentHash = item.syncBodyHash,
+                positionChangedAt = changedAt
+            )
+            recordArticleChange(
+                stableArticleId(item.link ?: item.dedupKey),
+                "readingProgress",
+                changedAt
+            )
         }
     }
 
@@ -677,6 +695,9 @@ class DefaultRssRepository(
                                     deleted = false,
                                     deletedAt = 0L,
                                     readingProgress = item.readingProgress,
+                                    readingPositionBytes = item.readingPositionBytes,
+                                    readingPositionContentHash = item.readingPositionContentHash,
+                                    readingPositionChangedAt = item.readingPositionChangedAt,
                                     isRead = item.isRead
                                 )
                             }
@@ -1628,6 +1649,9 @@ class DefaultRssRepository(
             deleted = false,
             deletedAt = 0L,
             readingProgress = fullItem.readingProgress,
+            readingPositionBytes = fullItem.readingPositionBytes,
+            readingPositionContentHash = fullItem.readingPositionContentHash,
+            readingPositionChangedAt = fullItem.readingPositionChangedAt,
             isRead = fullItem.isRead
         )
         return article.copy(cachedBodyMetadata = fullItem.currentSyncMetadataFor(article))
@@ -1674,6 +1698,9 @@ class DefaultRssRepository(
             deleted = false,
             deletedAt = 0L,
             readingProgress = item.readingProgress,
+            readingPositionBytes = item.readingPositionBytes,
+            readingPositionContentHash = item.readingPositionContentHash,
+            readingPositionChangedAt = item.readingPositionChangedAt,
             isRead = item.isRead
         )
         return article.toManifestFromItem(
@@ -1824,6 +1851,9 @@ class DefaultRssRepository(
             deleted = false,
             deletedAt = 0L,
             readingProgress = fullItem.readingProgress,
+            readingPositionBytes = fullItem.readingPositionBytes,
+            readingPositionContentHash = fullItem.readingPositionContentHash,
+            readingPositionChangedAt = fullItem.readingPositionChangedAt,
             isRead = fullItem.isRead
         )
         return article.copy(cachedBodyMetadata = fullItem.currentSyncMetadataFor(article))
@@ -1865,6 +1895,9 @@ class DefaultRssRepository(
             deleted = false,
             deletedAt = 0L,
             readingProgress = readingProgress,
+            readingPositionBytes = readingPositionBytes,
+            readingPositionContentHash = readingPositionContentHash,
+            readingPositionChangedAt = readingPositionChangedAt,
             isRead = isRead
         )
         return article.toManifestFromItem(
@@ -2001,7 +2034,10 @@ class DefaultRssRepository(
             syncBodyByteCount = syncMetadata.bodyByteCount,
             syncChunkSize = syncMetadata.chunkSize,
             syncChunkHashesJson = syncMetadata.chunkHashes.toJsonString(),
-            syncMetadataHash = syncMetadata.metadataHash
+            syncMetadataHash = syncMetadata.metadataHash,
+            readingPositionBytes = article.readingPositionBytes,
+            readingPositionContentHash = article.readingPositionContentHash,
+            readingPositionChangedAt = article.readingPositionChangedAt
         ).externalizeLargeContent()
         val existing = itemDao.getItemByDedupKey(channelId, article.articleId)
         if (existing == null) {
@@ -2010,6 +2046,14 @@ class DefaultRssRepository(
             return itemDao.getItemByDedupKey(channelId, article.articleId)?.id
                 ?: error("同步文章保存失败")
         }
+        val incomingReadingPositionWins =
+            (hasIncomingBody && entity.syncBodyHash != existing.syncBodyHash) ||
+                article.readingPositionChangedAt > existing.readingPositionChangedAt ||
+                (
+                    article.readingPositionChangedAt == 0L &&
+                        existing.readingPositionChangedAt == 0L &&
+                        incomingReadingProgress > existing.readingProgress
+                    )
         itemDao.updateSyncedArticle(
             id = existing.id,
             title = entity.title,
@@ -2047,8 +2091,26 @@ class DefaultRssRepository(
             } else {
                 existing.syncMetadataHash
             },
-            readingProgress = maxOf(existing.readingProgress, incomingReadingProgress),
-            isRead = existing.isRead || article.isRead
+            readingProgress = if (incomingReadingPositionWins) {
+                incomingReadingProgress
+            } else {
+                existing.readingProgress
+            },
+            isRead = existing.isRead || article.isRead,
+            readingPositionBytes = if (incomingReadingPositionWins) {
+                article.readingPositionBytes
+            } else {
+                existing.readingPositionBytes
+            },
+            readingPositionContentHash = if (incomingReadingPositionWins) {
+                article.readingPositionContentHash
+            } else {
+                existing.readingPositionContentHash
+            },
+            readingPositionChangedAt = maxOf(
+                existing.readingPositionChangedAt,
+                article.readingPositionChangedAt
+            )
         )
         return existing.id
     }
@@ -2104,6 +2166,9 @@ class DefaultRssRepository(
             bodyAvailable = true,
             bodySyncMode = bodySyncModeForSync(),
             readingProgress = readingProgress,
+            readingPositionBytes = readingPositionBytes,
+            readingPositionContentHash = readingPositionContentHash,
+            readingPositionChangedAt = readingPositionChangedAt,
             isRead = isRead
         )
     }
@@ -2140,6 +2205,9 @@ class DefaultRssRepository(
             bodyAvailable = bodyAvailable,
             bodySyncMode = bodySyncModeForSync(),
             readingProgress = readingProgress,
+            readingPositionBytes = readingPositionBytes,
+            readingPositionContentHash = readingPositionContentHash,
+            readingPositionChangedAt = readingPositionChangedAt,
             isRead = isRead
         )
     }

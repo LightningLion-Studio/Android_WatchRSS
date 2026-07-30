@@ -75,6 +75,9 @@ class WatchCloudLibraryAdapter(
                         put("deleted", article.deleted)
                         put("deletedAt", article.deletedAt)
                         put("readingProgress", article.readingProgress.toDouble())
+                        put("readingPositionBytes", article.readingPositionBytes)
+                        put("readingPositionContentHash", article.readingPositionContentHash)
+                        put("readingPositionChangedAt", article.readingPositionChangedAt)
                         put("isRead", article.isRead)
                     })
                 }
@@ -157,6 +160,9 @@ class WatchCloudLibraryAdapter(
                         readingProgress = state.optDouble("readingProgress")
                             .toFloat()
                             .coerceIn(0f, 1f),
+                        readingPositionBytes = state.optLong("readingPositionBytes").coerceAtLeast(0L),
+                        readingPositionContentHash = state.optString("readingPositionContentHash"),
+                        readingPositionChangedAt = state.optLong("readingPositionChangedAt").coerceAtLeast(0L),
                         isRead = state.optBoolean("isRead")
                     )
                 )

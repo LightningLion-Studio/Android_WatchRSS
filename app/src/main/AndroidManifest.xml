@@ -83,6 +83,7 @@
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".OobeActivity"
+            android:enableOnBackInvokedCallback="true"
             android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
@@ -123,10 +124,12 @@
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".SettingsActivity"
+            android:enableOnBackInvokedCallback="true"
             android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".ReaderPresetActivity"
+            android:enableOnBackInvokedCallback="true"
             android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
@@ -136,14 +139,17 @@
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".AdvancedSettingsActivity"
+            android:enableOnBackInvokedCallback="true"
             android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".LlmConnectivityActivity"
+            android:enableOnBackInvokedCallback="true"
             android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".LlmPromptPresetActivity"
+            android:enableOnBackInvokedCallback="true"
             android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
@@ -200,6 +206,7 @@
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".InfoActivity"
+            android:enableOnBackInvokedCallback="true"
             android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
@@ -308,6 +315,7 @@
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".BeianActivity"
+            android:enableOnBackInvokedCallback="true"
             android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity

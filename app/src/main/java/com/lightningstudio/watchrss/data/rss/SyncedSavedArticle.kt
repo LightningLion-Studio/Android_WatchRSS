@@ -30,6 +30,9 @@ data class SyncedSavedArticle(
     val deleted: Boolean,
     val deletedAt: Long,
     val readingProgress: Float = 0f,
+    val readingPositionBytes: Long = 0L,
+    val readingPositionContentHash: String = "",
+    val readingPositionChangedAt: Long = 0L,
     val isRead: Boolean = false,
     val cachedBodyMetadata: ArticleBodyMetadata? = null
 )
@@ -57,6 +60,9 @@ data class SyncedArticleManifest(
     val bodyAvailable: Boolean = true,
     val bodySyncMode: String = ARTICLE_BODY_SYNC_MODE_FULL,
     val readingProgress: Float = 0f,
+    val readingPositionBytes: Long = 0L,
+    val readingPositionContentHash: String = "",
+    val readingPositionChangedAt: Long = 0L,
     val isRead: Boolean = false
 )
 

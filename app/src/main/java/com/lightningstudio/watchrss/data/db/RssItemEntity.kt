@@ -49,5 +49,8 @@ data class RssItemEntity(
     val syncBodyByteCount: Long = 0L,
     val syncChunkSize: Int = 0,
     val syncChunkHashesJson: String = "",
-    val syncMetadataHash: String = ""
+    val syncMetadataHash: String = "",
+    val readingPositionBytes: Long = 0L,
+    val readingPositionContentHash: String = "",
+    val readingPositionChangedAt: Long = 0L
 )
