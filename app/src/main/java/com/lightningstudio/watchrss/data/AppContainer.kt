@@ -1,5 +1,9 @@
 package com.lightningstudio.watchrss.data
 
+import com.lightningstudio.watchrss.data.telemetry.OpenPanelAnalytics
+import com.lightningstudio.watchrss.data.telemetry.WatchInstallationIdentity
+import com.lightningstudio.watchrss.data.telemetry.WatchUsageTelemetry
+
 import android.content.Context
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.preferencesDataStoreFile
@@ -27,6 +31,7 @@ import com.lightningstudio.watchrss.data.douyin.DouyinRepositoryContract
 import com.lightningstudio.watchrss.data.douyin.DouyinWatchHistoryStore
 import com.lightningstudio.watchrss.data.douyin.DouyinWatchHistoryStoreContract
 import com.lightningstudio.watchrss.data.db.WatchRssDatabase
+import com.lightningstudio.watchrss.data.llm.LlmTokenUsageRepository
 import com.lightningstudio.watchrss.data.media.AudioManagerMediaPlaybackStartVolumeLimiter
 import com.lightningstudio.watchrss.data.network.DefaultInternetAvailabilityMonitor
 import com.lightningstudio.watchrss.data.network.InternetAvailabilityMonitor
@@ -50,6 +55,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 interface AppContainer {
+    val openPanelAnalytics: OpenPanelAnalytics
+    val watchUsageTelemetry: WatchUsageTelemetry
     val rssRepository: RssRepository
     val settingsRepository: SettingsRepository
     val llmApiKeyStore: LlmApiKeyStore
@@ -67,6 +74,7 @@ interface AppContainer {
     val douyinRecentWindowCacheCoordinator: DouyinRecentWindowCacheCoordinatorContract
     val internetAvailabilityMonitor: InternetAvailabilityMonitor
     val readerPresetRepository: ReaderPresetRepository
+    val llmTokenUsageRepository: LlmTokenUsageRepository
 }
 
 class DefaultAppContainer(context: Context) : AppContainer {
@@ -100,10 +108,28 @@ class DefaultAppContainer(context: Context) : AppContainer {
             WatchRssDatabase.MIGRATION_12_13,
             WatchRssDatabase.MIGRATION_13_14,
             WatchRssDatabase.MIGRATION_14_15,
-            WatchRssDatabase.MIGRATION_15_16
+            WatchRssDatabase.MIGRATION_15_16,
+            WatchRssDatabase.MIGRATION_16_17
         )
             .addCallback(BuiltinChannelSeed.callback)
             .build()
+    }
+
+    private val installationIdentity: WatchInstallationIdentity by lazy {
+        WatchInstallationIdentity(appContext)
+    }
+
+    override val openPanelAnalytics: OpenPanelAnalytics by lazy {
+        OpenPanelAnalytics(appContext, appScope)
+    }
+
+    override val watchUsageTelemetry: WatchUsageTelemetry by lazy {
+        WatchUsageTelemetry(
+            context = appContext,
+            installationIdentity = installationIdentity,
+            appScope = appScope,
+            openPanelAnalytics = openPanelAnalytics
+        )
     }
 
     override val settingsRepository: SettingsRepository by lazy {
@@ -235,6 +261,10 @@ class DefaultAppContainer(context: Context) : AppContainer {
         )
     }
 
+    override val llmTokenUsageRepository: LlmTokenUsageRepository by lazy {
+        LlmTokenUsageRepository(database.llmTokenUsageDao())
+    }
+
     override val readAloudController: ReadAloudController by lazy {
         ReadAloudController(
             context = appContext,
@@ -242,7 +272,7 @@ class DefaultAppContainer(context: Context) : AppContainer {
             rssRepository = rssRepository,
             playbackStartVolumeLimiter = AudioManagerMediaPlaybackStartVolumeLimiter(appContext),
             playbackStartVolumeLimitPercentProvider = {
-                settingsRepository.mediaPlaybackStartVolumeLimitPercent.first()
+                kotlinx.coroutines.runBlocking { settingsRepository.mediaPlaybackStartVolumeLimitPercent.first() }
             }
         )
     }

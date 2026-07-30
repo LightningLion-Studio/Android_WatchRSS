@@ -60,6 +60,9 @@ class SettingsActivity : BaseWatchActivity() {
                     onOpenLlmPromptPreset = {
                         startActivity(LlmPromptPresetActivity.createIntent(this))
                     },
+                    onOpenLlmTokenUsage = {
+                        startActivity(LlmTokenUsageActivity.createIntent(this))
+                    },
                     onBeianClick = {
                         startActivity(BeianActivity.createIntent(this))
                     }

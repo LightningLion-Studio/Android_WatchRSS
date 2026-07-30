@@ -1,6 +1,7 @@
 package com.lightningstudio.watchrss
 
 import android.annotation.SuppressLint
+import com.lightningstudio.watchrss.data.telemetry.WatchUsageTelemetry
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -29,6 +30,7 @@ import kotlin.math.abs
 import kotlin.math.max
 
 open class BaseWatchActivity : ComponentActivity() {
+    private var screenStartedAt: Long = 0L
     private val resetRunnable = Runnable { resetViewState(window.decorView) }
     private var swipeStartX = 0f
     private var swipeStartY = 0f
@@ -69,6 +71,8 @@ open class BaseWatchActivity : ComponentActivity() {
         swipeCommitted = false
         resetNavigationThrottle()
         resetViewState(window.decorView)
+        screenStartedAt = SystemClock.elapsedRealtime()
+        telemetryOrNull()?.recordScreenOpen(screenName())
 
         // 记录Activity活跃
         AppLogger.log("Activity", "活跃: ${this.javaClass.simpleName}")
@@ -184,6 +188,11 @@ open class BaseWatchActivity : ComponentActivity() {
         window.decorView.removeCallbacks(resetRunnable)
         if (!swipeCommitted) {
             resetViewState(window.decorView)
+        }
+        val startedAt = screenStartedAt
+        if (startedAt > 0L) {
+            telemetryOrNull()?.recordScreenDuration(screenName(), SystemClock.elapsedRealtime() - startedAt)
+            screenStartedAt = 0L
         }
         pendingActivityStartAllowanceAt = 0L
         super.onPause()
@@ -385,6 +394,12 @@ open class BaseWatchActivity : ComponentActivity() {
         pendingActivityStartAllowanceAt = 0L
     }
 
+
+    protected open fun screenName(): String = this.javaClass.simpleName
+
+    private fun telemetryOrNull(): WatchUsageTelemetry? {
+        return (applicationContext as? WatchRssApplication)?.container?.watchUsageTelemetry
+    }
     private fun shouldStartSwipe(root: View, ev: MotionEvent): Boolean {
         val width = root.width
         if (width <= 0 || ev.pointerCount != 1) {

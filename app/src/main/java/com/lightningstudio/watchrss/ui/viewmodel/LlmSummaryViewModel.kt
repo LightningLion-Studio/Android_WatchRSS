@@ -3,6 +3,7 @@ package com.lightningstudio.watchrss.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lightningstudio.watchrss.data.llm.LlmProviderCatalog
+import com.lightningstudio.watchrss.data.llm.LlmTokenUsageRepository
 import com.lightningstudio.watchrss.data.rss.ImportedContentIds
 import com.lightningstudio.watchrss.data.rss.RssRepository
 import com.lightningstudio.watchrss.data.rss.effectiveContent
@@ -72,7 +73,8 @@ object LlmPromptPresets {
 class LlmSummaryViewModel(
     private val rssRepository: RssRepository,
     private val settingsRepository: SettingsRepository,
-    private val llmApiKeyProvider: LlmApiKeyProvider
+    private val llmApiKeyProvider: LlmApiKeyProvider,
+    private val tokenUsageRepository: LlmTokenUsageRepository
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(LlmSummaryUiState())
@@ -217,6 +219,7 @@ class LlmSummaryViewModel(
                 val presetIndex = settingsRepository.llmPromptPreset.first()
                 val systemPrompt = LlmPromptPresets.getPrompt(presetIndex)
                 val userMessage = buildUserMessage(pendingTitle, pendingContent)
+                val requestIdPrefix = System.currentTimeMillis().toString()
                 val url = "${baseUrl.trimEnd('/')}/chat/completions"
 
                 val messages = JSONArray()
@@ -269,6 +272,8 @@ class LlmSummaryViewModel(
                 var completionTokens: Int? = null
                 var totalTokens: Int? = null
 
+                val usageAccum = JSONObject()
+
                 reader.use { br ->
                     var line = br.readLine()
                     while (line != null && isActive) {
@@ -278,6 +283,13 @@ class LlmSummaryViewModel(
                                 runCatching {
                                     val json = JSONObject(data)
                                     json.optJSONObject("usage")?.let { usage ->
+                                        usage.keys().forEach { key ->
+                                            val existing = usageAccum.opt(key)
+                                            val incoming = usage.get(key)
+                                            if (existing == null) {
+                                                usageAccum.put(key, incoming)
+                                            }
+                                        }
                                         val pt = usage.optInt("prompt_tokens")
                                         val ct = usage.optInt("completion_tokens")
                                         val tt = usage.optInt("total_tokens")
@@ -309,10 +321,18 @@ class LlmSummaryViewModel(
                 }
 
                 if (isActive) {
+                    val finalText = accum.toString().ifBlank { "（无内容）" }
+                    val requestId = "${requestIdPrefix}_${provider}_$model"
+                    tokenUsageRepository.record(
+                        provider = provider,
+                        model = model,
+                        requestId = requestId,
+                        rawUsage = usageAccum.takeIf { it.length() > 0 }
+                    )
                     _state.update {
                         it.copy(
                             status = SummaryStatus.Done,
-                            text = accum.toString().ifBlank { "（无内容）" },
+                            text = finalText,
                             promptTokens = promptTokens,
                             completionTokens = completionTokens,
                             totalTokens = totalTokens

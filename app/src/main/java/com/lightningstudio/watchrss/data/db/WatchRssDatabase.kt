@@ -24,9 +24,10 @@ import com.lightningstudio.watchrss.data.reader.ReaderPresetEntity
         ReaderPresetEntity::class,
         ReaderFontAssetEntity::class,
         ReaderBackgroundAssetEntity::class,
-        ReaderDeletionEntity::class
+        ReaderDeletionEntity::class,
+        LlmTokenUsageEntity::class
     ],
-    version = 16,
+    version = 17,
     exportSchema = false
 )
 @SkipQueryVerification
@@ -40,6 +41,7 @@ abstract class WatchRssDatabase : RoomDatabase() {
     abstract fun syncPeerStateDao(): SyncPeerStateDao
     abstract fun rssSourceSyncStateDao(): RssSourceSyncStateDao
     abstract fun readerPresetDao(): ReaderPresetDao
+    abstract fun llmTokenUsageDao(): LlmTokenUsageDao
 
     companion object {
         val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -279,11 +281,13 @@ abstract class WatchRssDatabase : RoomDatabase() {
         val MIGRATION_14_15 = object : Migration(14, 15) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.createReaderPresetTables()
+                database.createLlmTokenUsageTable()
             }
         }
 
         val MIGRATION_15_16 = object : Migration(15, 16) {
             override fun migrate(database: SupportSQLiteDatabase) {
+                database.createReaderPresetTables()
                 database.execSQL(
                     "ALTER TABLE rss_items ADD COLUMN readingPositionBytes INTEGER NOT NULL DEFAULT 0"
                 )
@@ -293,6 +297,13 @@ abstract class WatchRssDatabase : RoomDatabase() {
                 database.execSQL(
                     "ALTER TABLE rss_items ADD COLUMN readingPositionChangedAt INTEGER NOT NULL DEFAULT 0"
                 )
+                database.createLlmTokenUsageTable()
+            }
+        }
+
+        val MIGRATION_16_17 = object : Migration(16, 17) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.createLlmTokenUsageTable()
             }
         }
     }
@@ -368,4 +379,36 @@ private fun SupportSQLiteDatabase.createReaderPresetTables() {
         """.trimIndent()
     )
     execSQL("CREATE INDEX IF NOT EXISTS index_reader_deletions_deletedAt ON reader_deletions(deletedAt)")
+}
+
+private fun SupportSQLiteDatabase.createLlmTokenUsageTable() {
+    execSQL(
+        """
+        CREATE TABLE IF NOT EXISTS llm_token_usage (
+            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+            provider TEXT NOT NULL,
+            model TEXT NOT NULL,
+            requestId TEXT NOT NULL,
+            promptTokens INTEGER,
+            completionTokens INTEGER,
+            totalTokens INTEGER,
+            reasoningTokens INTEGER,
+            cachedPromptTokens INTEGER,
+            inputTokens INTEGER,
+            outputTokens INTEGER,
+            promptTokenCount INTEGER,
+            candidatesTokenCount INTEGER,
+            totalTokenCount INTEGER,
+            createdAt INTEGER NOT NULL
+        )
+        """.trimIndent()
+    )
+    execSQL(
+        "CREATE INDEX IF NOT EXISTS index_llm_token_usage_provider_createdAt " +
+            "ON llm_token_usage(provider, createdAt)"
+    )
+    execSQL(
+        "CREATE UNIQUE INDEX IF NOT EXISTS index_llm_token_usage_requestId " +
+            "ON llm_token_usage(requestId)"
+    )
 }

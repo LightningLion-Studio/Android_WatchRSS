@@ -6,6 +6,8 @@ import androidx.lifecycle.createSavedStateHandle
 import androidx.lifecycle.viewmodel.CreationExtras
 import com.lightningstudio.watchrss.data.AppContainer
 
+import com.lightningstudio.watchrss.data.llm.LlmTokenUsageRepository
+
 class AppViewModelFactory(private val container: AppContainer) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>, extras: CreationExtras): T {
@@ -15,7 +17,8 @@ class AppViewModelFactory(private val container: AppContainer) : ViewModelProvid
                 HomeViewModel(
                     repository = container.rssRepository,
                     isBiliLoggedIn = { container.biliRepository.isLoggedIn() },
-                    isDouyinLoggedIn = { container.douyinRepository.isLoggedIn() }
+                    isDouyinLoggedIn = { container.douyinRepository.isLoggedIn() },
+                    usageTelemetry = container.watchUsageTelemetry
                 )
             }
             modelClass.isAssignableFrom(AddRssViewModel::class.java) -> {
@@ -58,8 +61,12 @@ class AppViewModelFactory(private val container: AppContainer) : ViewModelProvid
                 LlmSummaryViewModel(
                     container.rssRepository,
                     container.settingsRepository,
-                    container.llmApiKeyStore
+                    container.llmApiKeyStore,
+                    container.llmTokenUsageRepository
                 )
+            }
+            modelClass.isAssignableFrom(LlmTokenUsageViewModel::class.java) -> {
+                LlmTokenUsageViewModel(container.llmTokenUsageRepository)
             }
             else -> throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
         } as T

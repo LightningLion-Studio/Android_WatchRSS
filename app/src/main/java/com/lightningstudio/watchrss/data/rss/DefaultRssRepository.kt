@@ -2719,6 +2719,20 @@ class DefaultRssRepository(
         readingProgress = readingProgress,
         fetchedAt = fetchedAt
     )
+
+    /**
+     * 仅供 instrumented tests 直接操作真实 Room DAO，用于截图测试准备数据。
+     * 不应用于生产代码。
+     */
+    val testChannelDao: RssChannelDao
+        get() = channelDao
+
+    /**
+     * 仅供 instrumented tests 直接操作真实 Room DAO，用于截图测试准备数据。
+     * 不应用于生产代码。
+     */
+    val testItemDao: RssItemDao
+        get() = itemDao
 }
 
 private data class PendingOriginalUpdate(

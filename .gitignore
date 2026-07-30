@@ -31,3 +31,7 @@ java_pid13968.hprof
 /*.apk
 /artifacts/douyin_jank/
 /artifacts/user_logs/
+
+# Shot screenshot testing
+# 基线截图需要提交，用于 CI 回归比对；验证产生的差异图在 build/reports/ 下，不会被提交。
+# 若本地误产生了临时文件，可手动清理 app/screenshots/debug/。

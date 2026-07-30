@@ -1,6 +1,7 @@
 package com.lightningstudio.watchrss.ui.viewmodel
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import com.lightningstudio.watchrss.data.llm.LlmTokenUsageRepository
 import com.lightningstudio.watchrss.data.settings.LlmApiKeyProvider
 import com.lightningstudio.watchrss.data.settings.SettingsRepository
 import com.lightningstudio.watchrss.testutil.MainDispatcherRule
@@ -19,6 +20,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import org.mockito.Mockito.mock
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class LlmSummaryViewModelTest {
@@ -51,7 +53,8 @@ class LlmSummaryViewModelTest {
             val viewModel = LlmSummaryViewModel(
                 rssRepository = repo,
                 settingsRepository = env.repository,
-                llmApiKeyProvider = FakeLlmApiKeyProvider()
+                llmApiKeyProvider = FakeLlmApiKeyProvider(),
+                tokenUsageRepository = mock(LlmTokenUsageRepository::class.java)
             )
 
             viewModel.prepare(42L)

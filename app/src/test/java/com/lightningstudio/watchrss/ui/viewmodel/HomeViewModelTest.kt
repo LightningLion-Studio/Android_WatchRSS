@@ -1,6 +1,7 @@
 package com.lightningstudio.watchrss.ui.viewmodel
 
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
+import com.lightningstudio.watchrss.data.telemetry.WatchUsageTelemetry
 import com.lightningstudio.watchrss.testutil.MainDispatcherRule
 import com.lightningstudio.watchrss.testutil.TestBiliRepository
 import com.lightningstudio.watchrss.testutil.TestDouyinRepository
@@ -14,6 +15,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Rule
 import org.junit.Test
+import org.mockito.Mockito.mock
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModelTest {
@@ -31,7 +33,8 @@ class HomeViewModelTest {
         val viewModel = HomeViewModel(
             repository = repo,
             isBiliLoggedIn = { biliRepository.isLoggedIn() },
-            isDouyinLoggedIn = { douyinRepository.isLoggedIn() }
+            isDouyinLoggedIn = { douyinRepository.isLoggedIn() },
+            usageTelemetry = mock(WatchUsageTelemetry::class.java)
         )
         val collection = collectFlow(viewModel.channels)
         advanceUntilIdle()
@@ -47,7 +50,8 @@ class HomeViewModelTest {
         val viewModel = HomeViewModel(
             repository = repo,
             isBiliLoggedIn = { false },
-            isDouyinLoggedIn = { false }
+            isDouyinLoggedIn = { false },
+            usageTelemetry = mock(WatchUsageTelemetry::class.java)
         )
         val collection = collectFlow(viewModel.channels)
 
@@ -74,7 +78,8 @@ class HomeViewModelTest {
         val viewModel = HomeViewModel(
             repository = repo,
             isBiliLoggedIn = { biliRepository.isLoggedIn() },
-            isDouyinLoggedIn = { douyinRepository.isLoggedIn() }
+            isDouyinLoggedIn = { douyinRepository.isLoggedIn() },
+            usageTelemetry = mock(WatchUsageTelemetry::class.java)
         )
         val collection = collectFlow(viewModel.channels)
         advanceUntilIdle()
@@ -98,7 +103,8 @@ class HomeViewModelTest {
         val viewModel = HomeViewModel(
             repository = repo,
             isBiliLoggedIn = { biliRepository.isLoggedIn() },
-            isDouyinLoggedIn = { douyinRepository.isLoggedIn() }
+            isDouyinLoggedIn = { douyinRepository.isLoggedIn() },
+            usageTelemetry = mock(WatchUsageTelemetry::class.java)
         )
         val collection = collectFlow(viewModel.channels)
         advanceUntilIdle()

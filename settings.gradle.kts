@@ -15,6 +15,9 @@ pluginManagement {
             if (requested.id.id.startsWith("com.android.")) {
                 useModule("com.android.tools.build:gradle:${requested.version}")
             }
+            if (requested.id.id == "shot") {
+                useModule("com.karumi:shot:${requested.version}")
+            }
         }
     }
 }
@@ -32,4 +35,4 @@ rootProject.name = "WatchRSS"
 include(":app")
 include(":sdk:bili")
 include(":sdk:douyin")
- 
+include(":openpanel")

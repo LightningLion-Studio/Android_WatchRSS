@@ -56,14 +56,8 @@ class WatchRssApplication : Application() {
         WatchAccountStore(this)
     }
 
-    val usageTelemetry: WatchUsageTelemetry by lazy {
-        WatchUsageTelemetry(
-            context = this,
-            accountStore = accountStore,
-            deviceIdentity = WatchDeviceIdentity(this),
-            appScope = appScope
-        )
-    }
+    val usageTelemetry: WatchUsageTelemetry
+        get() = container.watchUsageTelemetry
 
     val cloudSyncService: WatchCloudSyncService by lazy {
         WatchCloudSyncService(
@@ -81,7 +75,6 @@ class WatchRssApplication : Application() {
         val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
         AppLogger.log("Application", "应用启动 - ${dateFormat.format(Date())}")
         StartupDurationTracker.markApplicationCreated()
-
         val enableDebugLogBuffer = BuildConfig.ENABLE_RUNTIME_PERF_MONITOR
         DebugLogBuffer.setEnabled(enableDebugLogBuffer)
         if (enableDebugLogBuffer) {

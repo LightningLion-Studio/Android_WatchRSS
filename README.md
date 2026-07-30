@@ -10,7 +10,7 @@
 - **目标用户**：可穿戴设备用户、内容爱好者、碎片化阅读需求人群
 - **产品slogan**：腕间方寸，尽览万象
 
-### 腕上RRS会上架应用商店吗？
+### 腕上RSS会上架应用商店吗？
 - [x] 会上架应用商店
 
 ---
@@ -38,17 +38,15 @@ cp gradle.properties.example gradle.properties
 ```
 - 如需配置本机路径（如 `org.gradle.java.home`、临时目录等），请仅修改本地 `gradle.properties`。
 
-## 🧾 日志上传器资源更新
-- 本地日志上传页面来自仓库外的 `../Loger_key/LogUploader/LogUploader`，私钥也保留在 `../Loger_key`，不要放进 Android 仓库。
-- 复用现有私钥并重新构建、同步到 `app/src/main/assets/log_upload/`：
+## 📸 截图测试
 ```bash
-scripts/update_log_upload_assets.sh
+# 录制/更新基线
+./gradlew :app:executeScreenshotTests -Precord
+
+# 验证当前 UI 与基线一致
+./gradlew :app:executeScreenshotTests
 ```
-- 如果需要轮换日志加密密钥，执行：
-```bash
-scripts/update_log_upload_assets.sh --rotate-key
-```
-- 脚本会生成/更新 `../Loger_key/rsa_pub_pkcs1.pem`，同步 `private_key.pem` / `rsa_pub_pkcs1.pem` 到 LogUploader 根目录，同步私钥到 `../log-decrypter/public/private_key.pem`，把公钥写进 `src/config/publicKey.js`，运行 `npm run build`，再把 `dist` 产物同步进 Android assets 并修正 Vite 资源路径为相对路径。
+截图测试使用真实 `HomeFeedListActivity` 与真实 Room 数据库，通过 `ComposeTestRule` 断言关键 UI 元素，并用 AndroidX Test `Screenshot` + Shot 生成 HTML 报告。基线文件保存在 `app/screenshots/debug/`，需要提交到版本库用于 CI 回归比对。
 
 ### 获取并解密用户日志
 

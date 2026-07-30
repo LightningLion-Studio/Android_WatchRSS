@@ -4,25 +4,35 @@ import androidx.core.content.edit
 import android.content.Context
 import android.os.Build
 import com.lightningstudio.watchrss.BuildConfig
-import com.lightningstudio.watchrss.data.account.WatchAccountStore
-import com.lightningstudio.watchrss.phoneconnection.WatchDeviceIdentity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
 
 class WatchUsageTelemetry(
-    private val context: Context,
-    private val accountStore: WatchAccountStore,
-    private val deviceIdentity: WatchDeviceIdentity,
-    private val appScope: CoroutineScope
+    context: Context,
+    private val installationIdentity: WatchInstallationIdentity,
+    private val appScope: CoroutineScope,
+    private val openPanelAnalytics: OpenPanelAnalytics
 ) {
-    private val preferences = context.applicationContext.getSharedPreferences(
-        "watchrss_watch_telemetry",
-        Context.MODE_PRIVATE
-    )
+    private val appContext = context.applicationContext
+
+    init {
+        openPanelAnalytics.setGlobalProperties(
+            mapOf(
+                "platform" to "watch",
+                "packageName" to appContext.packageName,
+                "appVersionName" to BuildConfig.VERSION_NAME,
+                "appVersionCode" to BuildConfig.VERSION_CODE,
+                "deviceModel" to "${Build.MANUFACTURER} ${Build.MODEL}",
+                "sdk" to Build.VERSION.SDK_INT,
+                "firstInstalledAt" to installationIdentity.firstInstalledAtMillis
+            )
+        )
+        openPanelAnalytics.identify(
+            installationIdentity.installId,
+            mapOf("installId" to installationIdentity.installId)
+        )
+    }
 
     fun recordAppLaunch() {
         capture("app_opened")
@@ -32,60 +42,85 @@ class WatchUsageTelemetry(
         capture("screen_opened", mapOf("screen" to screen))
     }
 
+    fun recordScreenDuration(screen: String, durationMs: Long) {
+        if (durationMs <= 0L) return
+        capture("screen_duration", mapOf("screen" to screen, "durationMs" to durationMs))
+    }
+
+    fun recordSyncReceived(kind: String, itemCount: Int = 0) {
+        capture(
+            event = "sync_received",
+            properties = mapOf(
+                "kind" to kind,
+                "itemCount" to itemCount
+            )
+        )
+    }
+
+    fun recordFeedRefreshed(channelId: String?, channelTitle: String?, success: Boolean) {
+        capture(
+            event = "feed_refreshed",
+            properties = mapOf(
+                "channelId" to channelId.orEmpty(),
+                "channelTitle" to channelTitle.orEmpty(),
+                "success" to success
+            )
+        )
+    }
+
+    fun recordArticleReadStarted(itemId: Long, title: String?, channelId: String?, channelTitle: String?) {
+        capture(
+            event = "article_read_started",
+            properties = mapOf(
+                "itemId" to itemId,
+                "title" to title.orEmpty(),
+                "channelId" to channelId.orEmpty(),
+                "channelTitle" to channelTitle.orEmpty()
+            )
+        )
+    }
+
+    fun recordArticleReadFinished(
+        itemId: Long,
+        title: String?,
+        channelId: String?,
+        channelTitle: String?,
+        reachedBottom: Boolean,
+        durationMs: Long
+    ) {
+        capture(
+            event = "article_read_finished",
+            properties = mapOf(
+                "itemId" to itemId,
+                "title" to title.orEmpty(),
+                "channelId" to channelId.orEmpty(),
+                "channelTitle" to channelTitle.orEmpty(),
+                "reachedBottom" to reachedBottom,
+                "durationMs" to durationMs
+            )
+        )
+    }
+
+    fun recordVideoPlayed(source: String, id: String, title: String?) {
+        capture(
+            event = "video_played",
+            properties = mapOf(
+                "source" to source,
+                "id" to id,
+                "title" to title.orEmpty()
+            )
+        )
+    }
+
     fun recordSyncAccount() {
-        capture("account_synced")
+        capture("sync_account")
     }
 
-    fun backlogCount(): Int = preferences.getInt(KEY_BACKLOG_COUNT, 0)
+    fun backlogCount(): Int = 0
 
-    private fun capture(event: String, properties: Map<String, Any?> = emptyMap()) {
-        val state = accountStore.state.value ?: return
-        if (!state.telemetryConfig.anonymousEnabled) return
-        if (state.posthogHost.isBlank() || state.posthogProjectApiKey.isBlank()) return
+    private fun capture(event: String, properties: Map<String, Any> = emptyMap()) {
         appScope.launch(Dispatchers.IO) {
-            runCatching {
-                val payload = JSONObject().apply {
-                    put("api_key", state.posthogProjectApiKey)
-                    put("event", event)
-                    put("distinct_id", state.userId.ifBlank { deviceIdentity.deviceId })
-                    put("properties", JSONObject().apply {
-                        put("userId", state.userId)
-                        put("installId", state.installId)
-                        put("deviceId", deviceIdentity.deviceId)
-                        put("platform", "watch")
-                        put("packageName", context.packageName)
-                        put("appVersionName", BuildConfig.VERSION_NAME)
-                        put("appVersionCode", BuildConfig.VERSION_CODE)
-                        put("deviceModel", "${Build.MANUFACTURER} ${Build.MODEL}")
-                        put("sdk", Build.VERSION.SDK_INT)
-                        properties.forEach { (key, value) -> put(key, value) }
-                    })
-                }
-                postJson("${state.posthogHost}/capture/", payload)
-                preferences.edit {putInt(KEY_BACKLOG_COUNT, 0)}
-            }.onFailure {
-                preferences.edit {putInt(KEY_BACKLOG_COUNT, backlogCount() + 1)}
-            }
+            openPanelAnalytics.track(event, properties)
         }
-    }
-
-    private fun postJson(url: String, payload: JSONObject) {
-        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"
-            connectTimeout = 8000
-            readTimeout = 12000
-            doOutput = true
-            setRequestProperty("content-type", "application/json; charset=utf-8")
-        }
-        connection.outputStream.use { output ->
-            output.write(payload.toString().toByteArray(Charsets.UTF_8))
-        }
-        val code = connection.responseCode
-        connection.disconnect()
-        require(code in 200..299) { "telemetry_http_$code" }
-    }
-
-    companion object {
-        private const val KEY_BACKLOG_COUNT = "backlog_count"
     }
 }

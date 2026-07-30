@@ -109,6 +109,7 @@ fun SettingsScreen(
     onOpenDouyinCookieInput: () -> Unit,
     onOpenLlmConnectivity: () -> Unit,
     onOpenLlmPromptPreset: () -> Unit,
+    onOpenLlmTokenUsage: () -> Unit,
     onBeianClick: () -> Unit,
     onOpenReaderPresets: () -> Unit = {},
     onOpenAdvanced: (() -> Unit)? = null
@@ -170,6 +171,7 @@ fun SettingsScreen(
             onOpenDouyinCookieInput = onOpenDouyinCookieInput,
             onOpenLlmConnectivity = onOpenLlmConnectivity,
             onOpenLlmPromptPreset = onOpenLlmPromptPreset,
+            onOpenLlmTokenUsage = onOpenLlmTokenUsage,
             onBeianClick = onBeianClick
         )
         SettingsPage.Advanced -> AdvancedSettingsPage(
@@ -244,6 +246,7 @@ private fun MainSettingsPage(
     onOpenDouyinCookieInput: () -> Unit,
     onOpenLlmConnectivity: () -> Unit,
     onOpenLlmPromptPreset: () -> Unit,
+    onOpenLlmTokenUsage: () -> Unit,
     onBeianClick: () -> Unit
 ) {
     val fontOptions = remember { (12..32 step 2).toList() }
@@ -598,6 +601,20 @@ private fun MainSettingsPage(
                     }
                     Text(
                         text = "在总结页面显示本次请求消耗的 token 数量",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+                    )
+                    Spacer(modifier = Modifier.height(entrySpacing))
+                    WatchSettingsPillRow(label = "Token 消耗统计", onClick = onOpenLlmTokenUsage) {
+                        RoundIconButton(
+                            text = "进入",
+                            enabled = true,
+                            onClick = onOpenLlmTokenUsage
+                        )
+                    }
+                    Text(
+                        text = "查看 LLM 调用历史与累计 token 消耗",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(start = valueIndent, top = valueSpacing)

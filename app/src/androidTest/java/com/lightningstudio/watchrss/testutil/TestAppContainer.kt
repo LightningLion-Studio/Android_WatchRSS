@@ -5,6 +5,8 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import com.lightningstudio.watchrss.WatchRssApplication
 import com.lightningstudio.watchrss.data.AppContainer
 import com.lightningstudio.watchrss.data.DefaultAppContainer
+import com.lightningstudio.watchrss.data.telemetry.OpenPanelAnalytics
+import com.lightningstudio.watchrss.data.telemetry.WatchUsageTelemetry
 import com.lightningstudio.watchrss.data.bili.BiliPlaybackCacheManager
 import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
 import com.lightningstudio.watchrss.data.cache.ManagedCacheService
@@ -35,6 +37,12 @@ class TestAppContainer(
     private val internetAvailabilityMonitorOverride: InternetAvailabilityMonitor? = null
 ) : AppContainer {
     private val fallback by lazy { DefaultAppContainer(context.applicationContext) }
+
+    override val openPanelAnalytics: OpenPanelAnalytics
+        get() = fallback.openPanelAnalytics
+
+    override val watchUsageTelemetry: WatchUsageTelemetry
+        get() = fallback.watchUsageTelemetry
 
     override val llmApiKeyStore: LlmApiKeyStore
         get() = fallback.llmApiKeyStore

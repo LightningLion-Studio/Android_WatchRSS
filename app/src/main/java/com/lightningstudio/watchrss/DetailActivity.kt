@@ -2,6 +2,7 @@ package com.lightningstudio.watchrss
 
 import android.content.Intent
 import android.os.Bundle
+import android.os.SystemClock
 import android.widget.Toast
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -36,6 +37,10 @@ class DetailActivity : BaseWatchActivity() {
     private val isStartingActivity = _isStartingActivity.asStateFlow()
 
     private var fromWatchLater: Boolean = false
+    private var readStartedAt: Long = 0L
+    private var articleTitle: String? = null
+    private var articleChannelId: String? = null
+    private var articleChannelTitle: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -51,6 +56,22 @@ class DetailActivity : BaseWatchActivity() {
             )
         }
 
+        lifecycleScope.launch {
+            viewModel.item.collect { current ->
+                if (current != null && readStartedAt == 0L) {
+                    readStartedAt = SystemClock.elapsedRealtime()
+                    articleTitle = current.title
+                    articleChannelId = current.channelId.toString()
+                    articleChannelTitle = channelTitle(current.channelId)
+                    container.watchUsageTelemetry.recordArticleReadStarted(
+                        itemId = current.id,
+                        title = current.title,
+                        channelId = articleChannelId,
+                        channelTitle = articleChannelTitle
+                    )
+                }
+            }
+        }
         setContent {
             WatchRSSTheme {
                 ProvideReaderPreset(container.readerPresetRepository) {
@@ -82,6 +103,17 @@ class DetailActivity : BaseWatchActivity() {
     }
 
     private fun handleBackPress(itemId: Long, reachedBottom: Boolean, isWatchLater: Boolean) {
+        if (itemId > 0L && readStartedAt > 0L) {
+            container.watchUsageTelemetry.recordArticleReadFinished(
+                itemId = itemId,
+                title = articleTitle,
+                channelId = articleChannelId,
+                channelTitle = articleChannelTitle,
+                reachedBottom = reachedBottom,
+                durationMs = SystemClock.elapsedRealtime() - readStartedAt
+            )
+            readStartedAt = 0L
+        }
         if (fromWatchLater && reachedBottom && isWatchLater && itemId > 0L) {
             val data = Intent().putExtra(EXTRA_REMOVE_WATCH_LATER_ID, itemId)
             setResult(RESULT_OK, data)
@@ -165,6 +197,10 @@ class DetailActivity : BaseWatchActivity() {
         }
     }
 
+
+    private suspend fun channelTitle(channelId: Long): String? {
+        return container.rssRepository.observeChannel(channelId).first()?.title
+    }
     companion object {
         const val EXTRA_ITEM_ID = "itemId"
         const val EXTRA_USE_ORIGINAL_CONTENT = "useOriginalContent"

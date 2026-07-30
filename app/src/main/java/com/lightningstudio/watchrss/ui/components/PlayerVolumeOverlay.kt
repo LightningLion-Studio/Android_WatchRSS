@@ -147,7 +147,7 @@ class PlayerVolumeState internal constructor(
             "apply playback start guard current=$current target=$targetVolume limitPercent=$playbackStartVolumeLimitPercent"
         )
         val previousVirtualVolume = virtualVolume
-        virtualVolume = targetVolume ?: current.toFloat()
+        virtualVolume = targetVolume?.toFloat() ?: current.toFloat()
         setVolume(virtualVolume.roundToInt())
         if (currentVolume != current || virtualVolume != previousVirtualVolume) {
             show()

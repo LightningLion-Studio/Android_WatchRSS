@@ -22,6 +22,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 
@@ -989,6 +990,44 @@ class WatchBluetoothSyncServer(
                         ) {
                             app.openReaderPresetPreview()
                         }
+                    }
+                }
+
+                BluetoothSyncProtocol.ACTION_SYNC_LLM_TOKEN_USAGE -> {
+                    val app = context.applicationContext as WatchRssApplication
+                    val limit = request.optInt("limit", 200)
+                    val records = app.container.llmTokenUsageRepository.getRecent(limit)
+                    val payload = JSONArray().apply {
+                        records.forEach { record ->
+                            put(JSONObject().apply {
+                                put("id", record.id)
+                                put("provider", record.provider)
+                                put("model", record.model)
+                                put("requestId", record.requestId)
+                                put("createdAt", record.createdAt)
+                                putOpt("promptTokens", record.promptTokens)
+                                putOpt("completionTokens", record.completionTokens)
+                                putOpt("totalTokens", record.totalTokens)
+                                putOpt("reasoningTokens", record.reasoningTokens)
+                                putOpt("cachedPromptTokens", record.cachedPromptTokens)
+                                putOpt("inputTokens", record.inputTokens)
+                                putOpt("outputTokens", record.outputTokens)
+                                putOpt("promptTokenCount", record.promptTokenCount)
+                                putOpt("candidatesTokenCount", record.candidatesTokenCount)
+                                putOpt("totalTokenCount", record.totalTokenCount)
+                            })
+                        }
+                    }
+                    WatchBluetoothDebugLog.event(
+                        sessionId = sessionId,
+                        event = "request.syncLlmTokenUsage.built",
+                        fields = mapOf("records" to payload.length())
+                    )
+                    JSONObject().apply {
+                        put("success", true)
+                        put("action", BluetoothSyncProtocol.ACTION_SYNC_LLM_TOKEN_USAGE)
+                        put("count", payload.length())
+                        put("records", payload)
                     }
                 }
 
