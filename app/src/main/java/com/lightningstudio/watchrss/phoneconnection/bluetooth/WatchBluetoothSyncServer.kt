@@ -798,6 +798,7 @@ class WatchBluetoothSyncServer(
                             "userId" to state.userId,
                             "plan" to state.entitlement.plan,
                             "tokenExpiresAt" to state.tokenExpiresAtMillis,
+                            "refreshTokenExpiresAt" to state.refreshTokenExpiresAtMillis,
                             "diagnosticsEnabled" to state.telemetryConfig.diagnosticsEnabled
                         )
                     )

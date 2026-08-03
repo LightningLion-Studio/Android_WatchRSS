@@ -4,6 +4,7 @@ import android.app.Application
 import com.lightningstudio.watchrss.data.AppContainer
 import com.lightningstudio.watchrss.data.DefaultAppContainer
 import com.lightningstudio.watchrss.data.account.WatchAccountStore
+import com.lightningstudio.watchrss.data.account.WatchTokenManager
 import com.lightningstudio.watchrss.data.telemetry.WatchInstallationIdentity
 import com.lightningstudio.watchrss.data.telemetry.WatchUsageTelemetry
 import com.lightningstudio.watchrss.debug.DebugLogBuffer
@@ -36,6 +37,9 @@ class WatchRssApplication : Application() {
 
     val accountStore: WatchAccountStore by lazy {
         WatchAccountStore(this)
+    }
+    val watchTokenManager: WatchTokenManager by lazy {
+        WatchTokenManager(accountStore)
     }
 
     val usageTelemetry: WatchUsageTelemetry by lazy {

@@ -17,8 +17,13 @@ object AccountSyncPayload {
             userId = account.optString("userId").trim(),
             phoneMasked = account.optString("phoneMasked").trim(),
             installId = account.optString("installId").trim(),
-            watchDeviceToken = account.optString("watchDeviceToken").trim(),
-            tokenExpiresAtMillis = account.optLong("tokenExpiresAt"),
+            watchDeviceToken = account.optString("watchAccessToken")
+                .ifBlank { account.optString("watchDeviceToken") }.trim(),
+            tokenExpiresAtMillis = account.optLong(
+                "accessTokenExpiresAt", account.optLong("tokenExpiresAt")
+            ),
+            watchRefreshToken = account.optString("watchRefreshToken").trim(),
+            refreshTokenExpiresAtMillis = account.optLong("refreshTokenExpiresAt"),
             backendBaseUrl = account.optString("backendBaseUrl").trim(),
             posthogHost = account.optString("posthogHost").trim(),
             posthogProjectApiKey = account.optString("posthogProjectApiKey").trim(),
@@ -62,4 +67,3 @@ object AccountSyncPayload {
         }
     }
 }
-

@@ -82,7 +82,14 @@ private fun AccountStatusScreen(state: WatchAccountState?) {
                 Text("会员：${state.entitlement.plan}")
                 Text("状态：${if (state.entitlement.active) "有效" else "未生效"}")
                 Text("诊断：${if (state.telemetryConfig.diagnosticsEnabled) "已开启" else "未开启"}")
-                Text("Token：${if (state.isTokenExpired) "已过期" else "有效"}")
+                Text("Access Token：${if (state.isTokenExpired) "待刷新" else "有效"}")
+                Text(
+                    "Refresh Token：${when {
+                        state.watchRefreshToken.isBlank() -> "旧版，需重新同步"
+                        state.isRefreshTokenExpired -> "已过期"
+                        else -> "有效"
+                    }}"
+                )
             }
         }
     }

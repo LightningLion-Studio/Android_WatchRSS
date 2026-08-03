@@ -19,6 +19,8 @@ data class WatchAccountState(
     val installId: String,
     val watchDeviceToken: String,
     val tokenExpiresAtMillis: Long,
+    val watchRefreshToken: String = "",
+    val refreshTokenExpiresAtMillis: Long = 0L,
     val backendBaseUrl: String,
     val posthogHost: String,
     val posthogProjectApiKey: String,
@@ -26,7 +28,12 @@ data class WatchAccountState(
     val telemetryConfig: WatchTelemetryConfig = WatchTelemetryConfig(),
     val updatedAtMillis: Long = System.currentTimeMillis()
 ) {
+    val accessToken: String get() = watchDeviceToken
+    val accessTokenExpiresAtMillis: Long get() = tokenExpiresAtMillis
     val isTokenExpired: Boolean
         get() = tokenExpiresAtMillis > 0L && tokenExpiresAtMillis <= System.currentTimeMillis()
-}
 
+    val isRefreshTokenExpired: Boolean
+        get() = refreshTokenExpiresAtMillis > 0L &&
+            refreshTokenExpiresAtMillis <= System.currentTimeMillis()
+}
