@@ -107,8 +107,8 @@ class DetailViewModel(
 
     val shareUseSystem = settingsRepository.shareUseSystem
 
-    val llmFeatureEnabled = settingsRepository.llmFeatureEnabled
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+    val llmEnabled = settingsRepository.llmEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
     val llmAutoSummarize = settingsRepository.llmAutoSummarize
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)

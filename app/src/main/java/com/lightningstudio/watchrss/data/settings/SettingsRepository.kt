@@ -26,7 +26,6 @@ private val LLM_MODEL = stringPreferencesKey("llm_model")
 private val LLM_BASE_URL = stringPreferencesKey("llm_base_url")
 private val LLM_SYSTEM_PROMPT = stringPreferencesKey("llm_system_prompt")
 private val LLM_ENABLED = booleanPreferencesKey("llm_enabled")
-private val LLM_FEATURE_ENABLED = booleanPreferencesKey("llm_feature_enabled")
 private val LLM_AUTO_SUMMARIZE = booleanPreferencesKey("llm_auto_summarize")
 private val LLM_SHOW_TOKEN_USAGE = booleanPreferencesKey("llm_show_token_usage")
 private val LLM_PROMPT_PRESET = intPreferencesKey("llm_prompt_preset")
@@ -90,8 +89,7 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     val llmModel: Flow<String> = dataStore.data.map { it[LLM_MODEL] ?: "" }
     val llmBaseUrl: Flow<String> = dataStore.data.map { it[LLM_BASE_URL] ?: "" }
     val llmSystemPrompt: Flow<String> = dataStore.data.map { it[LLM_SYSTEM_PROMPT] ?: "" }
-    val llmEnabled: Flow<Boolean> = dataStore.data.map { it[LLM_ENABLED] ?: false }
-    val llmFeatureEnabled: Flow<Boolean> = dataStore.data.map { it[LLM_FEATURE_ENABLED] ?: false }
+    val llmEnabled: Flow<Boolean> = dataStore.data.map { it[LLM_ENABLED] ?: true }
     val llmAutoSummarize: Flow<Boolean> = dataStore.data.map { it[LLM_AUTO_SUMMARIZE] ?: false }
     val llmShowTokenUsage: Flow<Boolean> = dataStore.data.map { it[LLM_SHOW_TOKEN_USAGE] ?: false }
     val llmPromptPreset: Flow<Int> = dataStore.data.map { it[LLM_PROMPT_PRESET] ?: 0 }
@@ -180,8 +178,8 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
         }
     }
 
-    suspend fun setLlmFeatureEnabled(value: Boolean) {
-        dataStore.edit { it[LLM_FEATURE_ENABLED] = value }
+    suspend fun setLlmEnabled(value: Boolean) {
+        dataStore.edit { it[LLM_ENABLED] = value }
     }
 
     suspend fun setLlmAutoSummarize(value: Boolean) {

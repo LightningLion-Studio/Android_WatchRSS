@@ -119,9 +119,8 @@ class LlmSummaryViewModel(
         _state.value = LlmSummaryUiState(itemId = itemId)
 
         preparationJob = viewModelScope.launch {
-            val featureEnabled = settingsRepository.llmFeatureEnabled.first()
-            val autoStart = forceStartWhenReady ||
-                (settingsRepository.llmAutoSummarize.first() && featureEnabled)
+            val llmEnabled = settingsRepository.llmEnabled.first()
+            val autoStart = llmEnabled && (forceStartWhenReady || settingsRepository.llmAutoSummarize.first())
 
             combine(
                 rssRepository.observeItem(itemId),
@@ -143,6 +142,16 @@ class LlmSummaryViewModel(
                 ).orEmpty()
 
                 val isImportedText = ImportedContentIds.isImportedTextItemUrl(item.link)
+                if (ImportedContentIds.isNovelContentItemUrl(item.link)) {
+                    pendingContent = ""
+                    _state.update {
+                        it.copy(
+                            status = SummaryStatus.Error("小说内容暂不支持 AI 总结"),
+                            text = ""
+                        )
+                    }
+                    return@collect
+                }
                 val waitingForOriginalContent = !isImportedText &&
                     item.isOriginalContentMissing() &&
                     channel?.useOriginalContent == true &&
@@ -194,6 +203,10 @@ class LlmSummaryViewModel(
         generationJob?.cancel()
         generationJob = viewModelScope.launch(Dispatchers.IO) {
             try {
+                if (!settingsRepository.llmEnabled.first()) {
+                    _state.update { it.copy(status = SummaryStatus.Error("AI 总结功能已关闭")) }
+                    return@launch
+                }
                 val apiKey = llmApiKeyProvider.getApiKey()
                 if (apiKey.isEmpty()) {
                     _state.update { it.copy(status = SummaryStatus.Error("未配置 API Key")) }
