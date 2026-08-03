@@ -8,6 +8,7 @@ import android.os.SystemClock
 import com.lightningstudio.watchrss.data.AppContainer
 import com.lightningstudio.watchrss.data.DefaultAppContainer
 import com.lightningstudio.watchrss.data.account.WatchAccountStore
+import com.lightningstudio.watchrss.data.account.WatchTokenManager
 import com.lightningstudio.watchrss.data.cloud.WatchCloudSyncService
 import com.lightningstudio.watchrss.data.cloud.WatchCloudSyncWorker
 import com.lightningstudio.watchrss.data.reader.WatchReaderPresetPreviewSession
@@ -54,6 +55,9 @@ class WatchRssApplication : Application() {
 
     val accountStore: WatchAccountStore by lazy {
         WatchAccountStore(this)
+    }
+    val watchTokenManager: WatchTokenManager by lazy {
+        WatchTokenManager(accountStore)
     }
 
     val usageTelemetry: WatchUsageTelemetry

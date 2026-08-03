@@ -87,6 +87,10 @@ class WatchAccountStore(
             put("installId", state.installId)
             put("watchDeviceToken", state.watchDeviceToken)
             put("tokenExpiresAtMillis", state.tokenExpiresAtMillis)
+            put("watchAccessToken", state.watchDeviceToken)
+            put("accessTokenExpiresAtMillis", state.tokenExpiresAtMillis)
+            put("watchRefreshToken", state.watchRefreshToken)
+            put("refreshTokenExpiresAtMillis", state.refreshTokenExpiresAtMillis)
             put("backendBaseUrl", state.backendBaseUrl)
             put("posthogHost", state.posthogHost)
             put("posthogProjectApiKey", state.posthogProjectApiKey)
@@ -111,8 +115,13 @@ class WatchAccountStore(
                 userId = json.optString("userId").trim(),
                 phoneMasked = json.optString("phoneMasked").trim(),
                 installId = json.optString("installId").trim(),
-                watchDeviceToken = json.optString("watchDeviceToken").trim(),
-                tokenExpiresAtMillis = json.optLong("tokenExpiresAtMillis"),
+                watchDeviceToken = json.optString("watchAccessToken")
+                    .ifBlank { json.optString("watchDeviceToken") }.trim(),
+                tokenExpiresAtMillis = json.optLong(
+                    "accessTokenExpiresAtMillis", json.optLong("tokenExpiresAtMillis")
+                ),
+                watchRefreshToken = json.optString("watchRefreshToken").trim(),
+                refreshTokenExpiresAtMillis = json.optLong("refreshTokenExpiresAtMillis"),
                 backendBaseUrl = json.optString("backendBaseUrl").trim(),
                 posthogHost = json.optString("posthogHost").trim(),
                 posthogProjectApiKey = json.optString("posthogProjectApiKey").trim(),

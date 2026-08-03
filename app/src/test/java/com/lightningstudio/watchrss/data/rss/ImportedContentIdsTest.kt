@@ -6,6 +6,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ImportedContentIdsTest {
+
+    @Test
+    fun novelContentRecognizesTxtAndEpubButNotIndependentPhoneArticles() {
+        assertTrue(ImportedContentIds.isNovelContentItemUrl("https://watchrss.local/import-content/txt/book"))
+        assertTrue(ImportedContentIds.isNovelContentItemUrl("https://watchrss.local/import-epub/book/chapter/1"))
+        assertFalse(ImportedContentIds.isNovelContentItemUrl(ImportedContentIds.PHONE_IMPORT_CHANNEL_URL))
+    }
     @Test
     fun isImportedContentUrl_matchesOnlyReservedImportPrefix() {
         assertTrue(ImportedContentIds.isImportedContentUrl("https://watchrss.local/import-content"))

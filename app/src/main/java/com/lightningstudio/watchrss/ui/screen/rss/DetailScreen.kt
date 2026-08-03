@@ -153,7 +153,7 @@ fun DetailScreen(
     val readingFontSizeSp by viewModel.readingFontSizeSp.collectAsState()
     val shareUseSystem by viewModel.shareUseSystem.collectAsState(initial = false)
     val rssInlineImagePrefetchMode by viewModel.rssInlineImagePrefetchMode.collectAsState()
-    val llmFeatureEnabled by viewModel.llmFeatureEnabled.collectAsState()
+    val llmEnabled by viewModel.llmEnabled.collectAsState()
     val llmAutoSummarize by viewModel.llmAutoSummarize.collectAsState()
     val effectiveUseOriginalContent by viewModel.effectiveUseOriginalContent.collectAsState()
 
@@ -180,7 +180,7 @@ fun DetailScreen(
             readingFontSizeSp = readingFontSizeSp,
             shareUseSystem = shareUseSystem,
             rssInlineImagePrefetchMode = rssInlineImagePrefetchMode,
-            llmFeatureEnabled = llmFeatureEnabled,
+            llmEnabled = llmEnabled,
             llmAutoSummarize = llmAutoSummarize,
             llmSummaryState = llmSummaryState,
             readAloudState = readAloudState,
@@ -215,7 +215,7 @@ internal fun DetailContent(
     readingFontSizeSp: Int,
     shareUseSystem: Boolean,
     rssInlineImagePrefetchMode: RssInlineImagePrefetchMode,
-    llmFeatureEnabled: Boolean = false,
+    llmEnabled: Boolean = true,
     llmAutoSummarize: Boolean = false,
     llmSummaryState: LlmSummaryUiState = LlmSummaryUiState(),
     readAloudState: ReadAloudUiState = ReadAloudUiState(),
@@ -353,6 +353,7 @@ internal fun DetailContent(
 
     val link = item?.link?.trim().orEmpty()
     val isImportedText = ImportedContentIds.isImportedTextItemUrl(link)
+    val isNovelContent = ImportedContentIds.isNovelContentItemUrl(link)
     val canToggleOriginalContent = link.isNotEmpty() && !isImportedText
     val baseLink = link.takeIf { it.isNotBlank() }
     val bodyFontSize = remember(readingFontSizeSp, density, context) {
@@ -379,12 +380,12 @@ internal fun DetailContent(
             currentFontSizeSp = readingFontSizeSp
         )
     }
-    val showAiBanner = llmFeatureEnabled && llmAutoSummarize &&
+    val showAiBanner = llmEnabled && !isNovelContent && llmAutoSummarize &&
         (llmSummaryState.status == SummaryStatus.WaitingForContent ||
             llmSummaryState.status == SummaryStatus.Generating ||
             llmSummaryState.text.isNotBlank() ||
             llmSummaryState.status is SummaryStatus.Error)
-    val showAiButton = llmFeatureEnabled && !llmAutoSummarize
+    val showAiButton = llmEnabled && !isNovelContent && !llmAutoSummarize
     val showReadAloudAction = item != null
     val articleActionItemCount = if (canToggleOriginalContent || showReadAloudAction) 1 else 0
     val importedTextFirstItemIndex = remember(

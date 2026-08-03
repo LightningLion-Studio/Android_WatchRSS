@@ -74,8 +74,8 @@ class SettingsViewModel(
                 DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE
             )
 
-    val llmFeatureEnabled: StateFlow<Boolean> = settingsRepository.llmFeatureEnabled
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+    val llmEnabled: StateFlow<Boolean> = settingsRepository.llmEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
     val llmAutoSummarize: StateFlow<Boolean> = settingsRepository.llmAutoSummarize
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
@@ -146,9 +146,9 @@ class SettingsViewModel(
         }
     }
 
-    fun toggleLlmFeatureEnabled() {
+    fun toggleLlmEnabled() {
         viewModelScope.launch {
-            settingsRepository.setLlmFeatureEnabled(!llmFeatureEnabled.value)
+            settingsRepository.setLlmEnabled(!llmEnabled.value)
         }
     }
 

@@ -23,6 +23,13 @@ object ImportedContentIds {
         return normalized.startsWith("$ROOT_SOURCE_URL/txt/")
     }
 
+    /** 小说由 TXT 整书或 EPUB 章节组成；独立网页导入不在此范围。 */
+    fun isNovelContentItemUrl(url: String?): Boolean {
+        val normalized = url?.trim()?.lowercase() ?: return false
+        return normalized.startsWith("$ROOT_SOURCE_URL/txt/") ||
+            normalized.startsWith(EPUB_SOURCE_ROOT_URL)
+    }
+
     fun isDeletableLocalContentChannel(url: String?): Boolean {
         val normalized = url?.trim()?.lowercase() ?: return false
         return normalized.startsWith(ROOT_SOURCE_URL) ||

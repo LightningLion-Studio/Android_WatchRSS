@@ -87,7 +87,7 @@ fun SettingsScreen(
     mediaVolumeGuardEnabled: StateFlow<Boolean>,
     mediaPlaybackStartVolumeLimitPercent: StateFlow<Int?>,
     rssInlineImagePrefetchMode: StateFlow<RssInlineImagePrefetchMode>,
-    llmFeatureEnabled: StateFlow<Boolean>,
+    llmEnabledFlow: StateFlow<Boolean>,
     llmAutoSummarize: StateFlow<Boolean>,
     llmShowTokenUsage: StateFlow<Boolean>,
     llmPromptPreset: StateFlow<Int>,
@@ -100,7 +100,7 @@ fun SettingsScreen(
     onToggleMediaVolumeGuard: () -> Unit,
     onSelectMediaPlaybackStartVolumeLimit: (Int?) -> Unit,
     onSelectRssInlineImagePrefetchMode: (RssInlineImagePrefetchMode) -> Unit,
-    onToggleLlmFeatureEnabled: () -> Unit,
+    onToggleLlmEnabled: () -> Unit,
     onToggleLlmAutoSummarize: () -> Unit,
     onToggleLlmShowTokenUsage: () -> Unit,
     onOpenOobe: () -> Unit,
@@ -124,7 +124,7 @@ fun SettingsScreen(
     val mediaVolumeGuard by mediaVolumeGuardEnabled.collectAsState()
     val mediaPlaybackStartVolumeLimit by mediaPlaybackStartVolumeLimitPercent.collectAsState()
     val imagePrefetchMode by rssInlineImagePrefetchMode.collectAsState()
-    val llmEnabled by llmFeatureEnabled.collectAsState()
+    val llmEnabled by llmEnabledFlow.collectAsState()
     val llmAuto by llmAutoSummarize.collectAsState()
     val llmTokenUsage by llmShowTokenUsage.collectAsState()
     val llmPreset by llmPromptPreset.collectAsState()
@@ -144,7 +144,7 @@ fun SettingsScreen(
             mediaVolumeControlEnabled = mediaVolumeControl,
             mediaVolumeGuardEnabled = mediaVolumeGuard,
             mediaPlaybackStartVolumeLimitPercent = mediaPlaybackStartVolumeLimit,
-            llmFeatureEnabled = llmEnabled,
+            llmEnabled = llmEnabled,
             llmAutoSummarize = llmAuto,
             llmShowTokenUsage = llmTokenUsage,
             llmPromptPreset = llmPreset,
@@ -154,7 +154,7 @@ fun SettingsScreen(
             onToggleMediaVolumeControl = onToggleMediaVolumeControl,
             onToggleMediaVolumeGuard = onToggleMediaVolumeGuard,
             onSelectMediaPlaybackStartVolumeLimit = onSelectMediaPlaybackStartVolumeLimit,
-            onToggleLlmFeatureEnabled = onToggleLlmFeatureEnabled,
+            onToggleLlmEnabled = onToggleLlmEnabled,
             onToggleLlmAutoSummarize = onToggleLlmAutoSummarize,
             onToggleLlmShowTokenUsage = onToggleLlmShowTokenUsage,
             onOpenAdvanced = {
@@ -225,7 +225,7 @@ private fun MainSettingsPage(
     mediaVolumeControlEnabled: Boolean,
     mediaVolumeGuardEnabled: Boolean,
     mediaPlaybackStartVolumeLimitPercent: Int?,
-    llmFeatureEnabled: Boolean,
+    llmEnabled: Boolean,
     llmAutoSummarize: Boolean,
     llmShowTokenUsage: Boolean,
     llmPromptPreset: Int,
@@ -235,7 +235,7 @@ private fun MainSettingsPage(
     onToggleMediaVolumeControl: () -> Unit,
     onToggleMediaVolumeGuard: () -> Unit,
     onSelectMediaPlaybackStartVolumeLimit: (Int?) -> Unit,
-    onToggleLlmFeatureEnabled: () -> Unit,
+    onToggleLlmEnabled: () -> Unit,
     onToggleLlmAutoSummarize: () -> Unit,
     onToggleLlmShowTokenUsage: () -> Unit,
     onOpenReaderPresets: () -> Unit,
@@ -536,8 +536,8 @@ private fun MainSettingsPage(
                 // AI 总结功能
                 WatchSettingsPillRow(label = "AI 总结功能", endPaddingMultiplier = 1.5f) {
                     WatchSwitch(
-                        checked = llmFeatureEnabled,
-                        onCheckedChange = { onToggleLlmFeatureEnabled() }
+                        checked = llmEnabled,
+                        onCheckedChange = { onToggleLlmEnabled() }
                     )
                 }
                 Text(
@@ -559,7 +559,7 @@ private fun MainSettingsPage(
                     modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
                 )
 
-                if (llmFeatureEnabled) {
+                if (llmEnabled) {
                     Spacer(modifier = Modifier.height(entrySpacing))
                     WatchSettingsPillRow(label = "进入详情自动开始总结", endPaddingMultiplier = 1.5f) {
                         WatchSwitch(
