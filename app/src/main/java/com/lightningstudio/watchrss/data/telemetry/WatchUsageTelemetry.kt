@@ -13,7 +13,7 @@ class WatchUsageTelemetry(
     private val installationIdentity: WatchInstallationIdentity,
     private val appScope: CoroutineScope,
     private val openPanelAnalytics: OpenPanelAnalytics
-) {
+) : UsageTelemetry {
     private val appContext = context.applicationContext
 
     init {
@@ -34,20 +34,20 @@ class WatchUsageTelemetry(
         )
     }
 
-    fun recordAppLaunch() {
+    override fun recordAppLaunch() {
         capture("app_opened")
     }
 
-    fun recordScreenOpen(screen: String) {
+    override fun recordScreenOpen(screen: String) {
         capture("screen_opened", mapOf("screen" to screen))
     }
 
-    fun recordScreenDuration(screen: String, durationMs: Long) {
+    override fun recordScreenDuration(screen: String, durationMs: Long) {
         if (durationMs <= 0L) return
         capture("screen_duration", mapOf("screen" to screen, "durationMs" to durationMs))
     }
 
-    fun recordSyncReceived(kind: String, itemCount: Int = 0) {
+    override fun recordSyncReceived(kind: String, itemCount: Int) {
         capture(
             event = "sync_received",
             properties = mapOf(
@@ -57,7 +57,7 @@ class WatchUsageTelemetry(
         )
     }
 
-    fun recordFeedRefreshed(channelId: String?, channelTitle: String?, success: Boolean) {
+    override fun recordFeedRefreshed(channelId: String?, channelTitle: String?, success: Boolean) {
         capture(
             event = "feed_refreshed",
             properties = mapOf(
@@ -68,7 +68,7 @@ class WatchUsageTelemetry(
         )
     }
 
-    fun recordArticleReadStarted(itemId: Long, title: String?, channelId: String?, channelTitle: String?) {
+    override fun recordArticleReadStarted(itemId: Long, title: String?, channelId: String?, channelTitle: String?) {
         capture(
             event = "article_read_started",
             properties = mapOf(
@@ -80,7 +80,7 @@ class WatchUsageTelemetry(
         )
     }
 
-    fun recordArticleReadFinished(
+    override fun recordArticleReadFinished(
         itemId: Long,
         title: String?,
         channelId: String?,
@@ -101,7 +101,7 @@ class WatchUsageTelemetry(
         )
     }
 
-    fun recordVideoPlayed(source: String, id: String, title: String?) {
+    override fun recordVideoPlayed(source: String, id: String, title: String?) {
         capture(
             event = "video_played",
             properties = mapOf(
@@ -112,11 +112,11 @@ class WatchUsageTelemetry(
         )
     }
 
-    fun recordSyncAccount() {
+    override fun recordSyncAccount() {
         capture("sync_account")
     }
 
-    fun backlogCount(): Int = 0
+    override fun backlogCount(): Int = 0
 
     private fun capture(event: String, properties: Map<String, Any> = emptyMap()) {
         appScope.launch(Dispatchers.IO) {

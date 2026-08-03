@@ -1,6 +1,7 @@
 package com.lightningstudio.watchrss.ui.viewmodel
 
-import com.lightningstudio.watchrss.data.telemetry.WatchUsageTelemetry
+import com.lightningstudio.watchrss.data.telemetry.NoOpUsageTelemetry
+import com.lightningstudio.watchrss.data.telemetry.UsageTelemetry
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -10,10 +11,10 @@ import com.lightningstudio.watchrss.data.rss.RssRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -27,7 +28,7 @@ class HomeViewModel(
     private val repository: RssRepository,
     private val isBiliLoggedIn: suspend () -> Boolean,
     private val isDouyinLoggedIn: suspend () -> Boolean,
-    private val usageTelemetry: WatchUsageTelemetry
+    private val usageTelemetry: UsageTelemetry = NoOpUsageTelemetry
 ) : ViewModel() {
     private val _hasLoadedChannels = MutableStateFlow(false)
     val hasLoadedChannels: StateFlow<Boolean> = _hasLoadedChannels.asStateFlow()

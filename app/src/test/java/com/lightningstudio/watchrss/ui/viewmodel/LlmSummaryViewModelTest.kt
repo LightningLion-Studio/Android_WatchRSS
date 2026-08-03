@@ -1,6 +1,9 @@
 package com.lightningstudio.watchrss.ui.viewmodel
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import com.lightningstudio.watchrss.data.account.AccountStore
+import com.lightningstudio.watchrss.data.account.WatchAccountState
+import com.lightningstudio.watchrss.data.db.LlmTokenUsageDao
 import com.lightningstudio.watchrss.data.llm.LlmTokenUsageRepository
 import com.lightningstudio.watchrss.data.settings.LlmApiKeyProvider
 import com.lightningstudio.watchrss.data.settings.SettingsRepository
@@ -13,6 +16,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -54,7 +59,8 @@ class LlmSummaryViewModelTest {
                 rssRepository = repo,
                 settingsRepository = env.repository,
                 llmApiKeyProvider = FakeLlmApiKeyProvider(),
-                tokenUsageRepository = mock(LlmTokenUsageRepository::class.java)
+                tokenUsageRepository = LlmTokenUsageRepository(FakeLlmTokenUsageDao()),
+                watchAccountStore = FakeAccountStore()
             )
 
             viewModel.prepare(42L)
@@ -86,5 +92,22 @@ class LlmSummaryViewModelTest {
 
     private class FakeLlmApiKeyProvider : LlmApiKeyProvider {
         override fun getApiKey(): String = ""
+    }
+
+    private class FakeLlmTokenUsageDao : LlmTokenUsageDao {
+        override fun observeRecent(limit: Int) = MutableStateFlow(emptyList<com.lightningstudio.watchrss.data.db.LlmTokenUsageEntity>())
+        override fun observeStatistics(provider: String?) = MutableStateFlow(com.lightningstudio.watchrss.data.db.LlmTokenUsageStatisticsPojo())
+        override fun observeByProvider() = MutableStateFlow(emptyList<com.lightningstudio.watchrss.data.db.LlmTokenUsageByProviderPojo>())
+        override fun observeDaily(since: Long, bucketMs: Long) = MutableStateFlow(emptyList<com.lightningstudio.watchrss.data.db.LlmTokenUsageDailyPojo>())
+        override suspend fun insert(entity: com.lightningstudio.watchrss.data.db.LlmTokenUsageEntity) {}
+        override suspend fun deleteAll() {}
+    }
+
+    private class FakeAccountStore : AccountStore {
+        private val _state = MutableStateFlow<WatchAccountState?>(null)
+        override val state: StateFlow<WatchAccountState?> = _state
+        override fun read(): WatchAccountState? = null
+        override fun save(state: WatchAccountState) { _state.value = state }
+        override fun clear() { _state.value = null }
     }
 }

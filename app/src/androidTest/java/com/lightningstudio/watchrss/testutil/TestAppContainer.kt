@@ -23,6 +23,8 @@ import com.lightningstudio.watchrss.data.rss.RssRepository
 import com.lightningstudio.watchrss.data.settings.LlmApiKeyStore
 import com.lightningstudio.watchrss.data.settings.SettingsRepository
 import com.lightningstudio.watchrss.data.tts.ReadAloudController
+import com.lightningstudio.watchrss.data.account.AccountStore
+import com.lightningstudio.watchrss.data.account.WatchAccountStore
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.rules.ExternalResource
 import java.io.File
@@ -49,6 +51,9 @@ class TestAppContainer(
 
     override val readAloudController: ReadAloudController
         get() = fallback.readAloudController
+
+    override val watchAccountStore: AccountStore
+        get() = fallback.watchAccountStore
 
     override val managedCacheService: ManagedCacheService
         get() = fallback.managedCacheService

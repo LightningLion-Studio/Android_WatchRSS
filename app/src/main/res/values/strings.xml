@@ -5,4 +5,10 @@
     <string name="about_privacy_content">本应用会在设备本地保存你的订阅、阅读进度与收藏数据。使用 RSS 等内容源时，网络访问仅用于拉取你主动添加的内容；登录 B 站并播放视频时，应用会将观看历史和观看进度同步到你的 B 站账号，用于同账号客户端之间的记录同步。</string>
     <string name="about_user_agreement_content">腕上RSS是一款面向可穿戴设备场景的内容聚合与阅读工具。在您使用本应用前，请您认真阅读并充分理解本用户协议。您下载、安装、访问或使用本应用，即视为您已阅读、理解并同意接受本协议全部内容。\n\n本应用主要提供 RSS 订阅与阅读、收藏、稍后再看、分享等功能。您应合法合规使用本服务，不得利用本服务从事任何违法违规、侵权、扰乱网络秩序或损害他人合法权益的行为。\n\n详细协议内容请查看应用内完整版用户协议。</string>
     <string name="about_licenses_content">本应用使用了以下开源库和项目：\n\n• RSS-Parser\n• Jsoup\n• OkHttp\n• SocialSisterYi / bilibili-API-collect\n• SpaceXC / Re-WearBili\n\n本项目已依据 GPL-3.0 开源\n\nLightningLion-Studio / Android_WatchRSS\nhttps://github.com/LightningLion-Studio/Android_WatchRSS/</string>
+
+    <string name="llm_provider_default_model">默认模型</string>
+    <string name="llm_use_default_model">使用默认模型</string>
+    <string name="llm_default_model_data_collection_notice">使用默认模型，我们会收集模型的聊天数据用于优化服务。</string>
+    <string name="llm_default_model_login_required">使用默认模型前请先登录</string>
+    <string name="llm_default_model_desc">由后端统一鉴权与扣费，无需自备 API Key。</string>
 </resources>

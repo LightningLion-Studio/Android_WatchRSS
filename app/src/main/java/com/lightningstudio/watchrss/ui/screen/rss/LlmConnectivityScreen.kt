@@ -21,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
@@ -41,7 +42,7 @@ fun LlmConnectivityScreen(viewModel: LlmConnectivityViewModel) {
     LlmConnectivityContent(
         state = state,
         onRunTest = viewModel::runTest,
-        onUsePublicWelfareSite = viewModel::usePublicWelfareSite,
+        onUseDefaultModel = viewModel::useDefaultModel,
         onOpenPhoneConfig = null
     )
 }
@@ -55,7 +56,7 @@ fun LlmConnectivityScreen(
     LlmConnectivityContent(
         state = state,
         onRunTest = viewModel::runTest,
-        onUsePublicWelfareSite = viewModel::usePublicWelfareSite,
+        onUseDefaultModel = viewModel::useDefaultModel,
         onOpenPhoneConfig = onOpenPhoneConfig
     )
 }
@@ -64,7 +65,7 @@ fun LlmConnectivityScreen(
 private fun LlmConnectivityContent(
     state: LlmConnectivityState,
     onRunTest: () -> Unit,
-    onUsePublicWelfareSite: () -> Unit,
+    onUseDefaultModel: () -> Unit,
     onOpenPhoneConfig: (() -> Unit)?
 ) {
     val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
@@ -119,16 +120,17 @@ private fun LlmConnectivityContent(
 
             Spacer(modifier = Modifier.height(entrySpacing))
 
+            val isDefaultModel = LlmProviderCatalog.isDefaultModel(state.provider)
             WatchSettingsPillRow(
-                label = if (LlmProviderCatalog.isPublicWelfare(state.provider)) {
-                    "已使用公益站点"
+                label = if (isDefaultModel) {
+                    "已使用默认模型"
                 } else {
-                    "使用公益站点"
+                    "使用默认模型"
                 },
-                onClick = onUsePublicWelfareSite
+                onClick = onUseDefaultModel
             )
             Text(
-                text = state.configMessage.ifBlank { "公益站不保证稳定性。" },
+                text = stringResource(R.string.llm_default_model_data_collection_notice),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
@@ -151,8 +153,8 @@ private fun LlmConnectivityContent(
 
             Spacer(modifier = Modifier.height(entrySpacing))
 
-            // 测试按钮
-            val canTest = state.hasApiKey && state.provider.isNotEmpty() && !isTesting
+            // 测试按钮：默认模型使用账号鉴权，无需 API Key
+            val canTest = (state.isDefaultModel || state.hasApiKey) && state.provider.isNotEmpty() && !isTesting
             WatchSettingsPillRow(
                 label = if (isTesting) "正在测试..." else "开始测试",
                 onClick = if (canTest) onRunTest else null
@@ -165,10 +167,13 @@ private fun LlmConnectivityContent(
                     )
                 }
             }
-            if (!state.hasApiKey || state.provider.isEmpty()) {
+            if (!canTest && !isTesting) {
                 Text(
-                    text = if (state.provider.isEmpty()) "请先通过手机端配置 LLM 参数"
-                    else "请先配置 API Key",
+                    text = when {
+                        state.provider.isEmpty() -> "请先通过手机端配置 LLM 参数"
+                        state.isDefaultModel -> "请先登录以使用默认模型"
+                        else -> "请先配置 API Key"
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = valueIndent, top = valueSpacing)

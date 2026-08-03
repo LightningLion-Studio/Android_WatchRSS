@@ -2,6 +2,8 @@ package com.lightningstudio.watchrss.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.lightningstudio.watchrss.data.account.AccountStore
+import com.lightningstudio.watchrss.data.account.WatchAccountStore
 import com.lightningstudio.watchrss.data.llm.LlmProviderCatalog
 import com.lightningstudio.watchrss.data.settings.LlmApiKeyStore
 import com.lightningstudio.watchrss.data.settings.SettingsRepository
@@ -29,6 +31,8 @@ data class LlmConnectivityState(
     val baseUrl: String = "",
     val enabled: Boolean = false,
     val hasApiKey: Boolean = false,
+    val isLoggedIn: Boolean = false,
+    val isDefaultModel: Boolean = false,
     val configMessage: String = "",
     val testStatus: LlmTestStatus = LlmTestStatus.Idle
 )
@@ -42,7 +46,8 @@ sealed interface LlmTestStatus {
 
 class LlmConnectivityViewModel(
     private val settingsRepository: SettingsRepository,
-    private val llmApiKeyStore: LlmApiKeyStore
+    private val llmApiKeyStore: LlmApiKeyStore,
+    private val watchAccountStore: AccountStore
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(LlmConnectivityState())
@@ -64,14 +69,19 @@ class LlmConnectivityViewModel(
                 Triple(provider, model, Pair(baseUrl, enabled))
             }.collect { (provider, model, rest) ->
                 val (baseUrl, enabled) = rest
-                val hasKey = llmApiKeyStore.hasApiKey()
+                val account = watchAccountStore.read()
+                val isLoggedIn = account != null
+                val isDefaultModel = LlmProviderCatalog.isDefaultModel(provider)
+                val hasKey = if (isDefaultModel) isLoggedIn else llmApiKeyStore.hasApiKey()
                 _state.update {
                     it.copy(
                         provider = provider,
                         model = model,
                         baseUrl = baseUrl,
                         enabled = enabled,
-                        hasApiKey = hasKey
+                        hasApiKey = hasKey,
+                        isLoggedIn = isLoggedIn,
+                        isDefaultModel = isDefaultModel
                     )
                 }
             }
@@ -92,33 +102,39 @@ class LlmConnectivityViewModel(
         }
     }
 
-    fun usePublicWelfareSite() {
+    fun useDefaultModel() {
         viewModelScope.launch {
             runCatching {
-                llmApiKeyStore.setApiKey(LlmProviderCatalog.PUBLIC_WELFARE_API_KEY)
+                val account = watchAccountStore.read()
+                    ?: throw IllegalStateException("使用默认模型前请先登录")
+                val backendBaseUrl = account.backendBaseUrl
+                if (backendBaseUrl.isBlank()) {
+                    throw IllegalStateException("账号后端地址未配置")
+                }
                 settingsRepository.setLlmConfig(
-                    provider = LlmProviderCatalog.PROVIDER_PUBLIC_WELFARE,
-                    model = LlmProviderCatalog.PUBLIC_WELFARE_MODEL,
-                    baseUrl = LlmProviderCatalog.PUBLIC_WELFARE_BASE_URL,
+                    provider = LlmProviderCatalog.PROVIDER_DEFAULT_MODEL,
+                    model = "",
+                    baseUrl = backendBaseUrl,
                     enabled = true
                 )
             }.onSuccess {
                 _state.update {
                     it.copy(
-                        provider = LlmProviderCatalog.PROVIDER_PUBLIC_WELFARE,
-                        model = LlmProviderCatalog.PUBLIC_WELFARE_MODEL,
-                        baseUrl = LlmProviderCatalog.PUBLIC_WELFARE_BASE_URL,
+                        provider = LlmProviderCatalog.PROVIDER_DEFAULT_MODEL,
+                        model = "",
+                        baseUrl = it.baseUrl,
                         enabled = true,
-                        hasApiKey = true,
-                        configMessage = "已应用公益站点",
+                        hasApiKey = it.isLoggedIn,
+                        isDefaultModel = true,
+                        configMessage = "已使用默认模型",
                         testStatus = LlmTestStatus.Idle
                     )
                 }
             }.onFailure { error ->
-                AppLogger.e(TAG, "Apply public welfare LLM site failed", error)
+                AppLogger.e(TAG, "Apply default model failed", error)
                 _state.update {
                     it.copy(
-                        configMessage = error.message ?: "应用公益站点失败",
+                        configMessage = error.message ?: "应用默认模型失败",
                         testStatus = LlmTestStatus.Idle
                     )
                 }
@@ -127,14 +143,74 @@ class LlmConnectivityViewModel(
     }
 
     private fun doConnectivityTest(state: LlmConnectivityState): LlmTestStatus {
+        if (state.provider.isEmpty()) {
+            return LlmTestStatus.Failure("未配置服务商")
+        }
+        val account = watchAccountStore.read()
+        val isDefaultModel = LlmProviderCatalog.isDefaultModel(state.provider)
+        if (isDefaultModel) {
+            if (account == null) {
+                return LlmTestStatus.Failure("使用默认模型前请先登录")
+            }
+            if (account.backendBaseUrl.isBlank()) {
+                return LlmTestStatus.Failure("账号后端地址未配置")
+            }
+            return doDefaultModelTest(account.backendBaseUrl, account.watchDeviceToken)
+        }
+        return doByokTest(state)
+    }
+
+    private fun doDefaultModelTest(backendBaseUrl: String, token: String): LlmTestStatus {
+        val url = "${backendBaseUrl.trimEnd('/')}/api/v1/llm/default-model/article-summary"
+        val body = JSONObject().apply {
+            put("title", "连通性测试")
+            put("content", "Hi")
+            put("stream", false)
+        }.toString()
+
+        return try {
+            val request = Request.Builder()
+                .url(url)
+                .addHeader("Authorization", "Bearer $token")
+                .addHeader("Content-Type", "application/json")
+                .post(body.toRequestBody("application/json".toMediaType()))
+                .build()
+
+            val startMs = System.currentTimeMillis()
+            val response = client.newCall(request).execute()
+            val latencyMs = System.currentTimeMillis() - startMs
+            val responseBody = response.body?.string() ?: ""
+
+            if (!response.isSuccessful) {
+                val errMsg = runCatching {
+                    JSONObject(responseBody).optJSONObject("error")?.optString("message") ?: ""
+                }.getOrDefault("").ifEmpty { "HTTP ${response.code}" }
+                return LlmTestStatus.Failure(errMsg)
+            }
+
+            val snippet = runCatching {
+                val json = JSONObject(responseBody)
+                json.optJSONArray("choices")
+                    ?.optJSONObject(0)
+                    ?.optJSONObject("message")
+                    ?.optString("content")
+                    ?.trim()
+                    ?.take(40)
+                    ?: "（无回复内容）"
+            }.getOrDefault("（解析失败）")
+
+            LlmTestStatus.Success(latencyMs = latencyMs, replySnippet = snippet)
+        } catch (e: Exception) {
+            AppLogger.e(TAG, "Default model connectivity test failed", e)
+            LlmTestStatus.Failure(e.message ?: "网络异常")
+        }
+    }
+
+    private fun doByokTest(state: LlmConnectivityState): LlmTestStatus {
         val apiKey = llmApiKeyStore.getApiKey()
         if (apiKey.isEmpty()) {
             return LlmTestStatus.Failure("未配置 API Key")
         }
-        if (state.provider.isEmpty()) {
-            return LlmTestStatus.Failure("未配置服务商")
-        }
-
         val baseUrl = LlmProviderCatalog.resolveBaseUrl(state.provider, state.baseUrl)
         if (baseUrl.isEmpty()) {
             return LlmTestStatus.Failure("无法解析 Base URL")
@@ -165,16 +241,11 @@ class LlmConnectivityViewModel(
             val response = client.newCall(request).execute()
             val latencyMs = System.currentTimeMillis() - startMs
             val responseBody = response.body?.string() ?: ""
-
             if (!response.isSuccessful) {
-                val errorMsg = LlmProviderCatalog.publicWelfareOverloadedMessage(
-                    provider = state.provider,
-                    httpCode = response.code,
-                    responseBody = responseBody
-                ) ?: runCatching {
+                val errMsg = runCatching {
                     JSONObject(responseBody).optJSONObject("error")?.optString("message") ?: ""
                 }.getOrDefault("").ifEmpty { "HTTP ${response.code}" }
-                return LlmTestStatus.Failure(errorMsg)
+                return LlmTestStatus.Failure(errMsg)
             }
 
             val snippet = runCatching {
@@ -194,5 +265,4 @@ class LlmConnectivityViewModel(
             LlmTestStatus.Failure(e.message ?: "网络异常")
         }
     }
-
 }

@@ -17,27 +17,27 @@ import java.security.KeyStore
 class WatchAccountStore(
     context: Context,
     private val prefsName: String = "watchrss_account_state"
-) {
+) : AccountStore {
     private val appContext = context.applicationContext
     private val lock = Any()
     private var prefsRef: SharedPreferences? = null
     private val _state = MutableStateFlow<WatchAccountState?>(read())
-    val state: StateFlow<WatchAccountState?> = _state
+    override val state: StateFlow<WatchAccountState?> = _state
 
-    fun read(): WatchAccountState? = synchronized(lock) {
+    override fun read(): WatchAccountState? = synchronized(lock) {
         withPrefsLocked { prefs ->
             prefs.getString(KEY_STATE, null)?.let(::decodeState)
         }
     }
 
-    fun save(state: WatchAccountState) = synchronized(lock) {
+    override fun save(state: WatchAccountState) = synchronized(lock) {
         withPrefsLocked { prefs ->
             prefs.edit {putString(KEY_STATE, encodeState(state))}
         }
         _state.value = state
     }
 
-    fun clear() = synchronized(lock) {
+    override fun clear() = synchronized(lock) {
         withPrefsLocked { prefs ->
             prefs.edit {remove(KEY_STATE)}
         }
