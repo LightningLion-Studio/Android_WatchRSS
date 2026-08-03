@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.lightningstudio.watchrss.data.network.InternetAvailabilityMonitor
 import com.lightningstudio.watchrss.data.network.InternetAvailabilityStatus
 import com.lightningstudio.watchrss.data.settings.CURRENT_OOBE_VERSION
+import com.lightningstudio.watchrss.data.settings.PRIVACY_POLICY_VERSION
 import com.lightningstudio.watchrss.data.settings.SettingsRepository
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -53,6 +54,7 @@ class OobeViewModel(
     fun completeOobe() {
         viewModelScope.launch {
             settingsRepository.setOobeSeenVersion(CURRENT_OOBE_VERSION)
+            settingsRepository.setPrivacyPolicyAgreedVersion(PRIVACY_POLICY_VERSION)
             _events.emit(OobeEvent.Finish)
         }
     }

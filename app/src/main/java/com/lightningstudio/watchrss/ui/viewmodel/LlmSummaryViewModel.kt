@@ -250,14 +250,12 @@ class LlmSummaryViewModel(
 
         val presetIndex = settingsRepository.llmPromptPreset.first()
         val systemPrompt = LlmPromptPresets.getPrompt(presetIndex)
-        val url = "${backendBaseUrl.trimEnd('/')}/api/v1/llm/default-model/article-summary"
+        val url = "${backendBaseUrl.trimEnd('/')}/api/v1/llm/default-model/llm-summary"
 
         val body = JSONObject().apply {
-            put("title", pendingTitle)
-            put("content", buildUserMessage(pendingTitle, pendingContent))
-            put("system_prompt", systemPrompt)
-            put("prompt_preset", presetIndex)
             put("model", model)
+            put("instructions", systemPrompt)
+            put("input", buildUserMessage(pendingTitle, pendingContent))
             put("stream", true)
         }.toString()
 
@@ -268,7 +266,12 @@ class LlmSummaryViewModel(
             .post(body.toRequestBody("application/json".toMediaType()))
             .build()
 
-        executeStream(request, provider = LlmProviderCatalog.PROVIDER_DEFAULT_MODEL, model = model, requestId = requestId)
+        executeResponsesStream(
+            request,
+            provider = LlmProviderCatalog.PROVIDER_DEFAULT_MODEL,
+            model = model,
+            requestId = requestId
+        )
     }
 
     private suspend fun generateByok(provider: String, model: String, requestId: String) {
@@ -379,6 +382,105 @@ class LlmSummaryViewModel(
                                         completionTokens = completionTokens,
                                         totalTokens = totalTokens
                                     )
+                                }
+                            }
+                        }
+                    }
+                }
+                line = br.readLine()
+            }
+        }
+
+        if (coroutineContext.isActive) {
+            val finalText = accum.toString().ifBlank { "（无内容）" }
+            tokenUsageRepository.record(
+                provider = provider,
+                model = model,
+                requestId = requestId,
+                rawUsage = usageAccum.takeIf { it.length() > 0 }
+            )
+            _state.update {
+                it.copy(
+                    status = SummaryStatus.Done,
+                    text = finalText,
+                    promptTokens = promptTokens,
+                    completionTokens = completionTokens,
+                    totalTokens = totalTokens
+                )
+            }
+        }
+    }
+
+    private suspend fun executeResponsesStream(
+        request: Request,
+        provider: String,
+        model: String,
+        requestId: String
+    ) {
+        val response = client.newCall(request).execute()
+        if (!response.isSuccessful) {
+            val errBody = response.body?.string() ?: ""
+            val errMsg = runCatching {
+                JSONObject(errBody).optJSONObject("error")?.optString("message") ?: ""
+            }.getOrDefault("").ifEmpty { "HTTP ${response.code}" }
+            _state.update { it.copy(status = SummaryStatus.Error(errMsg)) }
+            return
+        }
+
+        val reader = response.body?.byteStream()?.bufferedReader() ?: run {
+            _state.update { it.copy(status = SummaryStatus.Error("空响应")) }
+            return
+        }
+
+        val accum = StringBuilder()
+        var promptTokens: Int? = null
+        var completionTokens: Int? = null
+        var totalTokens: Int? = null
+        val usageAccum = JSONObject()
+
+        reader.use { br ->
+            var line = br.readLine()
+            while (line != null && coroutineContext.isActive) {
+                if (line.startsWith("data: ")) {
+                    val data = line.removePrefix("data: ").trim()
+                    runCatching {
+                        val json = JSONObject(data)
+                        val eventType = json.optString("type", "")
+                        when {
+                            eventType == "response.output_text.delta" -> {
+                                val delta = json.optString("delta", "")
+                                if (delta.isNotEmpty()) {
+                                    accum.append(delta)
+                                    _state.update {
+                                        it.copy(
+                                            text = accum.toString(),
+                                            promptTokens = promptTokens,
+                                            completionTokens = completionTokens,
+                                            totalTokens = totalTokens
+                                        )
+                                    }
+                                }
+                            }
+                            eventType == "response.completed" || eventType == "response.incomplete" -> {
+                                json.optJSONObject("response")?.optJSONObject("usage")?.let { usage ->
+                                    usage.keys().forEach { key ->
+                                        if (!usageAccum.has(key)) {
+                                            usageAccum.put(key, usage.get(key))
+                                        }
+                                    }
+                                    promptTokens = usage.optInt("input_tokens").takeIf { it > 0 }
+                                        ?: usage.optInt("prompt_tokens").takeIf { it > 0 }
+                                    completionTokens = usage.optInt("output_tokens").takeIf { it > 0 }
+                                        ?: usage.optInt("completion_tokens").takeIf { it > 0 }
+                                    totalTokens = usage.optInt("total_tokens").takeIf { it > 0 }
+                                    _state.update {
+                                        it.copy(
+                                            text = accum.toString(),
+                                            promptTokens = promptTokens,
+                                            completionTokens = completionTokens,
+                                            totalTokens = totalTokens
+                                        )
+                                    }
                                 }
                             }
                         }

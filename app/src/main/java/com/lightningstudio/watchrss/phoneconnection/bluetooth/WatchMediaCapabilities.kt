@@ -35,7 +35,7 @@ object WatchMediaCapabilities {
                     .forEach { mime ->
                         val caps = runCatching { info.getCapabilitiesForType(mime) }.getOrNull()
                             ?: return@forEach
-                        val video = caps.videoCapabilities
+                        val video = caps.videoCapabilities ?: return@forEach
                         val profiles = JSONArray().apply {
                             caps.profileLevels.forEach {
                                 put(JSONObject().apply {

@@ -161,10 +161,10 @@ class LlmConnectivityViewModel(
     }
 
     private fun doDefaultModelTest(backendBaseUrl: String, token: String): LlmTestStatus {
-        val url = "${backendBaseUrl.trimEnd('/')}/api/v1/llm/default-model/article-summary"
+        val url = "${backendBaseUrl.trimEnd('/')}/api/v1/llm/default-model/llm-summary"
         val body = JSONObject().apply {
-            put("title", "连通性测试")
-            put("content", "Hi")
+            put("model", "deepseek-v4-flash")
+            put("input", "Hi")
             put("stream", false)
         }.toString()
 
@@ -190,13 +190,7 @@ class LlmConnectivityViewModel(
 
             val snippet = runCatching {
                 val json = JSONObject(responseBody)
-                json.optJSONArray("choices")
-                    ?.optJSONObject(0)
-                    ?.optJSONObject("message")
-                    ?.optString("content")
-                    ?.trim()
-                    ?.take(40)
-                    ?: "（无回复内容）"
+                extractResponsesOutputText(json)?.trim()?.take(40) ?: "（无回复内容）"
             }.getOrDefault("（解析失败）")
 
             LlmTestStatus.Success(latencyMs = latencyMs, replySnippet = snippet)
@@ -204,6 +198,23 @@ class LlmConnectivityViewModel(
             AppLogger.e(TAG, "Default model connectivity test failed", e)
             LlmTestStatus.Failure(e.message ?: "网络异常")
         }
+    }
+
+    private fun extractResponsesOutputText(response: JSONObject): String? {
+        val output = response.optJSONArray("output") ?: return null
+        for (i in 0 until output.length()) {
+            val item = output.optJSONObject(i) ?: continue
+            if (item.optString("type") != "message") continue
+            if (item.optString("role") != "assistant") continue
+            val content = item.optJSONArray("content") ?: continue
+            for (j in 0 until content.length()) {
+                val part = content.optJSONObject(j) ?: continue
+                if (part.optString("type") == "output_text") {
+                    return part.optString("text")
+                }
+            }
+        }
+        return null
     }
 
     private fun doByokTest(state: LlmConnectivityState): LlmTestStatus {

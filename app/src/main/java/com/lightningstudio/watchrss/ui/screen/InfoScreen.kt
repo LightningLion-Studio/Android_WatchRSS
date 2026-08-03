@@ -122,7 +122,7 @@ fun InfoScreen(
     }
 }
 
-private fun buildInfoBlocks(content: String): List<ContentBlock.Text> {
+internal fun buildInfoBlocks(content: String): List<ContentBlock.Text> {
     return content
         .split(Regex("\\n\\s*\\n"))
         .map { it.trim() }

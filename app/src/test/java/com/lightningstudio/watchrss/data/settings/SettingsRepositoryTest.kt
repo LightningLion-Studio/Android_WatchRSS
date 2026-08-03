@@ -45,6 +45,27 @@ class SettingsRepositoryTest {
     }
 
     @Test
+    fun privacyPolicyAgreedVersion_defaultsToZero() = runBlocking {
+        val env = createRepository("privacy-default.preferences_pb")
+        try {
+            assertEquals(0, env.repository.privacyPolicyAgreedVersion.first())
+        } finally {
+            env.scope.cancel()
+        }
+    }
+
+    @Test
+    fun privacyPolicyAgreedVersion_persistsUpdates() = runBlocking {
+        val env = createRepository("privacy-updated.preferences_pb")
+        try {
+            env.repository.setPrivacyPolicyAgreedVersion(PRIVACY_POLICY_VERSION)
+            assertEquals(PRIVACY_POLICY_VERSION, env.repository.privacyPolicyAgreedVersion.first())
+        } finally {
+            env.scope.cancel()
+        }
+    }
+
+    @Test
     fun cacheLimitBytes_defaultsToNewMinimum() = runBlocking {
         val env = createRepository("cache-default.preferences_pb")
         try {

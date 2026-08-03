@@ -31,6 +31,7 @@ private val LLM_SHOW_TOKEN_USAGE = booleanPreferencesKey("llm_show_token_usage")
 private val LLM_PROMPT_PRESET = intPreferencesKey("llm_prompt_preset")
 private const val TEMP_ORIGINAL_MODE_HINT_ATTEMPTS_PREFIX = "temp_original_mode_hint_attempts_"
 private const val TEMP_ORIGINAL_MODE_HINT_LAST_TOAST_PREFIX = "temp_original_mode_hint_last_toast_"
+private val PRIVACY_POLICY_AGREED_VERSION = intPreferencesKey("privacy_policy_agreed_version")
 const val MIN_CACHE_LIMIT_MB: Long = 512
 const val MAX_CACHE_LIMIT_MB: Long = 4 * 1024
 const val DEFAULT_CACHE_LIMIT_MB: Long = MIN_CACHE_LIMIT_MB
@@ -38,6 +39,7 @@ val CACHE_LIMIT_OPTIONS_MB: List<Long> = listOf(512L, 768L, 1024L, 1536L, 2048L,
 const val MB_BYTES: Long = 1024 * 1024
 const val DEFAULT_READING_FONT_SIZE_SP: Int = 14
 const val CURRENT_OOBE_VERSION: Int = 3
+const val PRIVACY_POLICY_VERSION: Int = 1
 const val DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED: Boolean = true
 const val DEFAULT_MEDIA_VOLUME_GUARD_ENABLED: Boolean = false
 const val TEMP_ORIGINAL_MODE_HINT_WINDOW_MS: Long = 12L * 60L * 60L * 1000L
@@ -93,6 +95,7 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     val llmAutoSummarize: Flow<Boolean> = dataStore.data.map { it[LLM_AUTO_SUMMARIZE] ?: false }
     val llmShowTokenUsage: Flow<Boolean> = dataStore.data.map { it[LLM_SHOW_TOKEN_USAGE] ?: false }
     val llmPromptPreset: Flow<Int> = dataStore.data.map { it[LLM_PROMPT_PRESET] ?: 0 }
+    val privacyPolicyAgreedVersion: Flow<Int> = dataStore.data.map { it[PRIVACY_POLICY_AGREED_VERSION] ?: 0 }
 
     suspend fun setCacheLimitBytes(bytes: Long) {
         dataStore.edit { preferences ->
@@ -192,6 +195,10 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
 
     suspend fun setLlmPromptPreset(value: Int) {
         dataStore.edit { it[LLM_PROMPT_PRESET] = value }
+    }
+
+    suspend fun setPrivacyPolicyAgreedVersion(value: Int) {
+        dataStore.edit { it[PRIVACY_POLICY_AGREED_VERSION] = value }
     }
 
     suspend fun recordTemporaryOriginalContentEnableAndShouldShowHint(

@@ -7,7 +7,6 @@ import android.os.Bundle
 import android.os.SystemClock
 import com.lightningstudio.watchrss.data.AppContainer
 import com.lightningstudio.watchrss.data.DefaultAppContainer
-import com.lightningstudio.watchrss.data.account.AccountStore
 import com.lightningstudio.watchrss.data.account.WatchAccountStore
 import com.lightningstudio.watchrss.data.account.WatchTokenManager
 import com.lightningstudio.watchrss.data.cloud.WatchCloudSyncService
@@ -54,7 +53,7 @@ class WatchRssApplication : Application() {
     val container: AppContainer
         get() = testContainerOverride ?: defaultContainer
 
-    val accountStore: AccountStore by lazy {
+    val accountStore: WatchAccountStore by lazy {
         (container as DefaultAppContainer).watchAccountStore
     }
     val watchTokenManager: WatchTokenManager by lazy {

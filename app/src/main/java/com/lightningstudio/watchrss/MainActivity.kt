@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import com.lightningstudio.watchrss.data.settings.CURRENT_OOBE_VERSION
+import com.lightningstudio.watchrss.data.settings.PRIVACY_POLICY_VERSION
 import com.lightningstudio.watchrss.debug.PerformanceMonitor
 import com.lightningstudio.watchrss.debug.StartupDurationTracker
 import com.lightningstudio.watchrss.ui.screen.launch.LaunchScreenOverlay
@@ -52,9 +53,12 @@ class MainActivity : BaseWatchActivity() {
         renderLaunchContent()
 
         lifecycleScope.launch {
+            val settingsRepository = (application as WatchRssApplication).container.settingsRepository
             val shouldShowOobeDeferred = async(Dispatchers.IO) {
-                val settingsRepository = (application as WatchRssApplication).container.settingsRepository
                 settingsRepository.oobeSeenVersion.first() < CURRENT_OOBE_VERSION
+            }
+            val shouldShowPrivacyConsentDeferred = async(Dispatchers.IO) {
+                settingsRepository.privacyPolicyAgreedVersion.first() < PRIVACY_POLICY_VERSION
             }
             launchShellReady.await()
             keepSplashOnScreen = false
@@ -65,6 +69,13 @@ class MainActivity : BaseWatchActivity() {
             if (shouldShowOobe) {
                 StartupDurationTracker.markStartupReady(destination = "oobe")
                 startActivity(OobeActivity.createIntent(this@MainActivity))
+                finish()
+                return@launch
+            }
+            val shouldShowPrivacyConsent = shouldShowPrivacyConsentDeferred.await()
+            if (shouldShowPrivacyConsent) {
+                StartupDurationTracker.markStartupReady(destination = "privacy_consent")
+                startActivity(PrivacyPolicyConsentActivity.createIntent(this@MainActivity))
                 finish()
                 return@launch
             }
