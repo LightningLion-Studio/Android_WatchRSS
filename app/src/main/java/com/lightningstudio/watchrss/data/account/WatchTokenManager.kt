@@ -14,7 +14,7 @@ import java.util.concurrent.TimeUnit
 
 /** Owns access-token freshness and performs single-flight refresh-token rotation. */
 class WatchTokenManager(
-    private val store: WatchAccountStore,
+    private val store: AccountStore,
     private val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)

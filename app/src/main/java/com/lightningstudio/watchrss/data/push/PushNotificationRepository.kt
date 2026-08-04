@@ -28,7 +28,7 @@ class PushNotificationRepository(context: Context) {
 
     suspend fun fetchNewMessages(topic: String = "watchrss", limit: Int = 10): List<PushMessage> = withContext(Dispatchers.IO) {
         val request = Request.Builder()
-            .url("${BuildConfig.WATCHRSS_LOCAL_BACKEND_URL}/api/notify/$topic?limit=$limit")
+            .url("${BuildConfig.WATCHRSS_BACKEND_URL}/api/notify/$topic?limit=$limit")
             .get()
             .build()
         try {
