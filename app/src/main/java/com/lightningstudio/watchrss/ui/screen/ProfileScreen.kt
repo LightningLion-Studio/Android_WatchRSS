@@ -22,6 +22,7 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -47,6 +48,7 @@ fun ProfileScreen(
     onAccountClick: () -> Unit = {},
     onFavoritesClick: () -> Unit,
     onWatchLaterClick: () -> Unit,
+    onNotesClick: () -> Unit,
     onPhoneConnectionClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onAboutClick: () -> Unit,
@@ -126,6 +128,22 @@ fun ProfileScreen(
                 icon = Icons.Filled.PlayCircle,
                 onClick = onWatchLaterClick,
                 testTag = ProfileTestTags.WATCH_LATER_ENTRY,
+                pillHeight = pillHeight,
+                pillRadius = pillRadius,
+                pillColor = pillColor,
+                pillHorizontalPadding = pillHorizontalPadding,
+                pillVerticalPadding = pillVerticalPadding,
+                iconSize = iconSize,
+                iconSpacing = iconSpacing
+            )
+
+            Spacer(modifier = Modifier.height(entrySpacing))
+
+            ProfileEntry(
+                title = "备忘录",
+                icon = Icons.Outlined.EditNote,
+                onClick = onNotesClick,
+                testTag = "profile_notes_entry",
                 pillHeight = pillHeight,
                 pillRadius = pillRadius,
                 pillColor = pillColor,
