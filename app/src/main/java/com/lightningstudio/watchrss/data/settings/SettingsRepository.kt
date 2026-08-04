@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -14,6 +15,8 @@ private val CACHE_LIMIT_BYTES = longPreferencesKey("cache_limit_bytes")
 private val OOBE_SEEN_VERSION = intPreferencesKey("oobe_seen_version")
 private val READING_THEME_DARK = booleanPreferencesKey("reading_theme_dark")
 private val READING_FONT_SIZE_SP = intPreferencesKey("reading_font_size_sp")
+private val READER_AUTO_SCROLL_ENABLED = booleanPreferencesKey("reader_auto_scroll_enabled")
+private val READER_AUTO_SCROLL_LINES_PER_SECOND = floatPreferencesKey("reader_auto_scroll_lines_per_second")
 private val SHARE_USE_SYSTEM = booleanPreferencesKey("share_use_system")
 private val PHONE_CONNECTION_ENABLED = booleanPreferencesKey("phone_connection_enabled")
 private val MEDIA_VOLUME_CONTROL_ENABLED = booleanPreferencesKey("media_volume_control_enabled")
@@ -37,6 +40,10 @@ const val DEFAULT_CACHE_LIMIT_MB: Long = MIN_CACHE_LIMIT_MB
 val CACHE_LIMIT_OPTIONS_MB: List<Long> = listOf(512L, 768L, 1024L, 1536L, 2048L, 2560L, 3072L, 4096L)
 const val MB_BYTES: Long = 1024 * 1024
 const val DEFAULT_READING_FONT_SIZE_SP: Int = 14
+const val DEFAULT_READER_AUTO_SCROLL_ENABLED: Boolean = false
+const val DEFAULT_READER_AUTO_SCROLL_LINES_PER_SECOND: Float = 2f
+const val MIN_READER_AUTO_SCROLL_LINES_PER_SECOND: Float = 0.5f
+const val MAX_READER_AUTO_SCROLL_LINES_PER_SECOND: Float = 10f
 const val CURRENT_OOBE_VERSION: Int = 3
 const val DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED: Boolean = true
 const val DEFAULT_MEDIA_VOLUME_GUARD_ENABLED: Boolean = false
@@ -54,6 +61,17 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     }
     val readingFontSizeSp: Flow<Int> = dataStore.data.map { preferences ->
         preferences[READING_FONT_SIZE_SP] ?: DEFAULT_READING_FONT_SIZE_SP
+    }
+    val readerAutoScrollEnabled: Flow<Boolean> = dataStore.data.map { preferences ->
+        preferences[READER_AUTO_SCROLL_ENABLED] ?: DEFAULT_READER_AUTO_SCROLL_ENABLED
+    }
+    val readerAutoScrollLinesPerSecond: Flow<Float> = dataStore.data.map { preferences ->
+        (preferences[READER_AUTO_SCROLL_LINES_PER_SECOND]
+            ?: DEFAULT_READER_AUTO_SCROLL_LINES_PER_SECOND)
+            .coerceIn(
+                MIN_READER_AUTO_SCROLL_LINES_PER_SECOND,
+                MAX_READER_AUTO_SCROLL_LINES_PER_SECOND
+            )
     }
     val shareUseSystem: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[SHARE_USE_SYSTEM] ?: false
@@ -115,6 +133,21 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     suspend fun setReadingFontSizeSp(value: Int) {
         dataStore.edit { preferences ->
             preferences[READING_FONT_SIZE_SP] = value
+        }
+    }
+
+    suspend fun setReaderAutoScrollEnabled(value: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[READER_AUTO_SCROLL_ENABLED] = value
+        }
+    }
+
+    suspend fun setReaderAutoScrollLinesPerSecond(value: Float) {
+        dataStore.edit { preferences ->
+            preferences[READER_AUTO_SCROLL_LINES_PER_SECOND] = value.coerceIn(
+                MIN_READER_AUTO_SCROLL_LINES_PER_SECOND,
+                MAX_READER_AUTO_SCROLL_LINES_PER_SECOND
+            )
         }
     }
 

@@ -12,6 +12,8 @@ import com.lightningstudio.watchrss.data.rss.isOriginalContentMissing
 import com.lightningstudio.watchrss.data.settings.DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE
 import com.lightningstudio.watchrss.data.settings.SettingsRepository
 import com.lightningstudio.watchrss.data.settings.DEFAULT_READING_FONT_SIZE_SP
+import com.lightningstudio.watchrss.data.settings.DEFAULT_READER_AUTO_SCROLL_ENABLED
+import com.lightningstudio.watchrss.data.settings.DEFAULT_READER_AUTO_SCROLL_LINES_PER_SECOND
 import com.lightningstudio.watchrss.ui.util.RssContentCache
 import com.lightningstudio.watchrss.ui.util.buildContentBlocks
 import kotlinx.coroutines.Dispatchers
@@ -105,6 +107,20 @@ class DetailViewModel(
     val readingFontSizeSp = settingsRepository.readingFontSizeSp
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DEFAULT_READING_FONT_SIZE_SP)
 
+    val readerAutoScrollEnabled = settingsRepository.readerAutoScrollEnabled
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            DEFAULT_READER_AUTO_SCROLL_ENABLED
+        )
+
+    val readerAutoScrollLinesPerSecond = settingsRepository.readerAutoScrollLinesPerSecond
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            DEFAULT_READER_AUTO_SCROLL_LINES_PER_SECOND
+        )
+
     val shareUseSystem = settingsRepository.shareUseSystem
 
     val llmEnabled = settingsRepository.llmEnabled
@@ -122,6 +138,14 @@ class DetailViewModel(
             SharingStarted.WhileSubscribed(5_000),
             DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE
         )
+
+    fun setReaderAutoScrollEnabled(value: Boolean) {
+        viewModelScope.launch { settingsRepository.setReaderAutoScrollEnabled(value) }
+    }
+
+    fun setReaderAutoScrollLinesPerSecond(value: Float) {
+        viewModelScope.launch { settingsRepository.setReaderAutoScrollLinesPerSecond(value) }
+    }
 
     private val requestedOriginalIds = mutableSetOf<Long>()
 

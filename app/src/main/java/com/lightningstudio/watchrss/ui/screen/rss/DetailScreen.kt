@@ -16,6 +16,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -39,7 +40,15 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Remove
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -55,6 +64,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -77,6 +87,7 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -100,6 +111,7 @@ import com.lightningstudio.watchrss.data.tts.ReadAloudUiState
 import com.lightningstudio.watchrss.ui.components.BlurFadeVisibility
 import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
+import com.lightningstudio.watchrss.ui.reader.LocalReaderPresetRuntime
 import com.lightningstudio.watchrss.ui.screen.WarningConfirmDialog
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
 import com.lightningstudio.watchrss.ui.theme.WatchReadingBackgroundLight
@@ -129,6 +141,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.isActive
 import kotlin.math.roundToInt
 
 @Composable
@@ -151,6 +164,8 @@ fun DetailScreen(
     val importedTextReader by viewModel.importedTextReader.collectAsState()
     val readingThemeDark by viewModel.readingThemeDark.collectAsState()
     val readingFontSizeSp by viewModel.readingFontSizeSp.collectAsState()
+    val readerAutoScrollEnabled by viewModel.readerAutoScrollEnabled.collectAsState()
+    val readerAutoScrollLinesPerSecond by viewModel.readerAutoScrollLinesPerSecond.collectAsState()
     val shareUseSystem by viewModel.shareUseSystem.collectAsState(initial = false)
     val rssInlineImagePrefetchMode by viewModel.rssInlineImagePrefetchMode.collectAsState()
     val llmEnabled by viewModel.llmEnabled.collectAsState()
@@ -178,6 +193,8 @@ fun DetailScreen(
             originalContentEnabled = effectiveUseOriginalContent,
             readingThemeDark = readingThemeDark,
             readingFontSizeSp = readingFontSizeSp,
+            readerAutoScrollEnabled = readerAutoScrollEnabled,
+            readerAutoScrollLinesPerSecond = readerAutoScrollLinesPerSecond,
             shareUseSystem = shareUseSystem,
             rssInlineImagePrefetchMode = rssInlineImagePrefetchMode,
             llmEnabled = llmEnabled,
@@ -190,6 +207,8 @@ fun DetailScreen(
             onRetryOfflineMedia = viewModel::retryOfflineMedia,
             onSaveReadingProgress = viewModel::saveReadingProgress,
             onLoadImportedTextChunk = viewModel::loadImportedTextChunk,
+            onReaderAutoScrollEnabledChange = viewModel::setReaderAutoScrollEnabled,
+            onReaderAutoScrollLinesPerSecondChange = viewModel::setReaderAutoScrollLinesPerSecond,
             onOpenAiSummary = onOpenAiSummary,
             onOpenReadAloud = onOpenReadAloud,
             onOpenReadAloudControls = onOpenReadAloudControls,
@@ -213,6 +232,8 @@ internal fun DetailContent(
     originalContentEnabled: Boolean,
     readingThemeDark: Boolean,
     readingFontSizeSp: Int,
+    readerAutoScrollEnabled: Boolean = false,
+    readerAutoScrollLinesPerSecond: Float = 2f,
     shareUseSystem: Boolean,
     rssInlineImagePrefetchMode: RssInlineImagePrefetchMode,
     llmEnabled: Boolean = true,
@@ -225,6 +246,8 @@ internal fun DetailContent(
     onRetryOfflineMedia: () -> Unit,
     onSaveReadingProgress: suspend (Float) -> Unit,
     onLoadImportedTextChunk: suspend (String, Int) -> String? = { _, _ -> null },
+    onReaderAutoScrollEnabledChange: (Boolean) -> Unit = {},
+    onReaderAutoScrollLinesPerSecondChange: (Float) -> Unit = {},
     onOpenAiSummary: () -> Unit = {},
     onOpenReadAloud: (ReadAloudStartAnchor?, Boolean) -> Unit = { _, _ -> },
     onOpenReadAloudControls: (ReadAloudStartAnchor?, Boolean) -> Unit = { _, _ -> },
@@ -291,6 +314,9 @@ internal fun DetailContent(
         derivedStateOf { listState.layoutInfo.totalItemsCount }
     }
     var hasRestoredPosition by remember { mutableStateOf(false) }
+    var autoScrollPaused by remember(item?.id) { mutableStateOf(false) }
+    var showAutoScrollSettings by remember(item?.id) { mutableStateOf(false) }
+    var autoScrollFeedbackPlaying by remember(item?.id) { mutableStateOf<Boolean?>(null) }
     var lastItemId by remember { mutableStateOf<Long?>(null) }
     var lastSavedProgress by remember { mutableStateOf(-1f) }
     var lastProgressSavedAt by remember { mutableStateOf(0L) }
@@ -363,6 +389,48 @@ internal fun DetailContent(
             baseDimenRes = R.dimen.detail_body_text_size,
             currentFontSizeSp = readingFontSizeSp
         )
+    }
+    val autoScrollLineHeightPx = with(density) {
+        (
+            LocalReaderPresetRuntime.current.preset.body.fontSizeSp.sp *
+                LocalReaderPresetRuntime.current.preset.body.lineHeightEm
+            ).toPx()
+    }.coerceAtLeast(1f)
+
+    fun setAutoScrollPaused(paused: Boolean, showFeedback: Boolean = true) {
+        autoScrollPaused = paused
+        if (showFeedback) autoScrollFeedbackPlaying = !paused
+    }
+
+    LaunchedEffect(autoScrollFeedbackPlaying) {
+        if (autoScrollFeedbackPlaying != null) {
+            delay(AUTO_SCROLL_FEEDBACK_DURATION_MS)
+            autoScrollFeedbackPlaying = null
+        }
+    }
+
+    LaunchedEffect(
+        readerAutoScrollEnabled,
+        autoScrollPaused,
+        hasRestoredPosition,
+        autoScrollLineHeightPx,
+        readerAutoScrollLinesPerSecond
+    ) {
+        if (!readerAutoScrollEnabled || autoScrollPaused || !hasRestoredPosition) {
+            return@LaunchedEffect
+        }
+        var previousFrameNanos = 0L
+        while (isActive) {
+            val frameNanos = withFrameNanos { it }
+            if (previousFrameNanos != 0L) {
+                val elapsedSeconds = (frameNanos - previousFrameNanos) / 1_000_000_000f
+                val deltaPx = readerAutoScrollLinesPerSecond * autoScrollLineHeightPx * elapsedSeconds
+                if (deltaPx > 0f && listState.scrollBy(deltaPx) == 0f) {
+                    setAutoScrollPaused(paused = true, showFeedback = false)
+                }
+            }
+            previousFrameNanos = frameNanos
+        }
     }
     val titleBlockFontSize = remember(readingFontSizeSp, density, context) {
         adjustedTextSizeSp(
@@ -1207,6 +1275,9 @@ internal fun DetailContent(
                         fontSizeSp = bodyFontSize,
                         topPadding = 0.dp,
                         isScrolling = isScrolling,
+                        onTap = {
+                            if (readerAutoScrollEnabled) setAutoScrollPaused(!autoScrollPaused)
+                        },
                         onLongClick = ::openReadAloudFromVisibleAnchor
                     )
                 }
@@ -1268,6 +1339,9 @@ internal fun DetailContent(
                             isScrolling = isScrolling,
                             highlightRange = highlightRange,
                             highlightColor = readAloudHighlightColor,
+                            onTap = {
+                                if (readerAutoScrollEnabled) setAutoScrollPaused(!autoScrollPaused)
+                            },
                             onLongClick = ::openReadAloudFromVisibleAnchor,
                             onTextLayout = { importedTextChunkLayouts[index] = it }
                         )
@@ -1324,6 +1398,9 @@ internal fun DetailContent(
                                 onInlineActionClick = onToggleOriginalContent,
                                 highlightRange = highlightRange,
                                 highlightColor = readAloudHighlightColor,
+                                onTap = {
+                                    if (readerAutoScrollEnabled) setAutoScrollPaused(!autoScrollPaused)
+                                },
                                 onLongClick = ::openReadAloudFromVisibleAnchor,
                                 onTextLayout = { contentTextBlockLayouts[index] = it }
                             )
@@ -1445,6 +1522,22 @@ internal fun DetailContent(
                                 }
                             }
                         )
+                        Spacer(modifier = Modifier.width(actionHorizontalSpacing))
+                        CircleIconButton(
+                            icon = if (readerAutoScrollEnabled && !autoScrollPaused) {
+                                Icons.Default.Pause
+                            } else {
+                                Icons.Default.PlayArrow
+                            },
+                            contentDescription = "自动滚动",
+                            tint = normalIconColor,
+                            containerColor = actionContainerColor,
+                            borderColor = actionBorderColor,
+                            size = actionIconSize,
+                            padding = actionIconPadding,
+                            enabled = !isScrolling,
+                            onClick = { showAutoScrollSettings = true }
+                        )
                     }
                 }
             }
@@ -1508,6 +1601,42 @@ internal fun DetailContent(
             }
         }
 
+        if (showAutoScrollSettings) {
+            AutoScrollSettingsCard(
+                enabled = readerAutoScrollEnabled,
+                linesPerSecond = readerAutoScrollLinesPerSecond,
+                textColor = textColor,
+                containerColor = actionContainerColor,
+                onEnabledChange = { enabled ->
+                    onReaderAutoScrollEnabledChange(enabled)
+                    autoScrollPaused = false
+                },
+                onLinesPerSecondChange = onReaderAutoScrollLinesPerSecondChange,
+                onDismiss = { showAutoScrollSettings = false }
+            )
+        }
+
+        autoScrollFeedbackPlaying?.let { playing ->
+            Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = Color.Transparent
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Surface(
+                        shape = RoundedCornerShape(28.dp),
+                        color = MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.9f)
+                    ) {
+                        Icon(
+                            imageVector = if (playing) Icons.Default.PlayArrow else Icons.Default.Pause,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.inverseOnSurface,
+                            modifier = Modifier.padding(20.dp).size(38.dp)
+                        )
+                    }
+                }
+            }
+        }
+
         // Warning dialog
         if (showOriginalModeWarning && link.isNotEmpty()) {
             WarningConfirmDialog(
@@ -1519,6 +1648,100 @@ internal fun DetailContent(
                 },
                 onCancel = { showOriginalModeWarning = false }
             )
+        }
+    }
+}
+
+@Composable
+private fun AutoScrollSettingsCard(
+    enabled: Boolean,
+    linesPerSecond: Float,
+    textColor: Color,
+    containerColor: Color,
+    onEnabledChange: (Boolean) -> Unit,
+    onLinesPerSecondChange: (Float) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.45f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Surface(
+            modifier = Modifier.width(292.dp),
+            shape = RoundedCornerShape(32.dp),
+            color = containerColor,
+            border = BorderStroke(1.dp, textColor.copy(alpha = 0.16f))
+        ) {
+            Column(
+                modifier = Modifier.padding(22.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("自动滚动", color = textColor, style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "打开文章后自动开始",
+                            color = textColor.copy(alpha = 0.65f),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                    Switch(checked = enabled, onCheckedChange = onEnabledChange)
+                }
+                Text("自动滚动速率（行/秒）", color = textColor)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CircleIconButton(
+                        icon = Icons.Default.Remove,
+                        contentDescription = "降低速率",
+                        tint = textColor,
+                        containerColor = textColor.copy(alpha = 0.1f),
+                        borderColor = Color.Transparent,
+                        size = 38.dp,
+                        padding = 7.dp,
+                        enabled = linesPerSecond > AUTO_SCROLL_MIN_LINES_PER_SECOND,
+                        onClick = {
+                            onLinesPerSecondChange(
+                                (linesPerSecond - AUTO_SCROLL_STEP_LINES_PER_SECOND)
+                                    .coerceAtLeast(AUTO_SCROLL_MIN_LINES_PER_SECOND)
+                            )
+                        }
+                    )
+                    Text(
+                        String.format(java.util.Locale.US, "%.1f", linesPerSecond),
+                        color = textColor,
+                        style = MaterialTheme.typography.headlineMedium
+                    )
+                    CircleIconButton(
+                        icon = Icons.Default.Add,
+                        contentDescription = "提高速率",
+                        tint = textColor,
+                        containerColor = textColor.copy(alpha = 0.1f),
+                        borderColor = Color.Transparent,
+                        size = 38.dp,
+                        padding = 7.dp,
+                        enabled = linesPerSecond < AUTO_SCROLL_MAX_LINES_PER_SECOND,
+                        onClick = {
+                            onLinesPerSecondChange(
+                                (linesPerSecond + AUTO_SCROLL_STEP_LINES_PER_SECOND)
+                                    .coerceAtMost(AUTO_SCROLL_MAX_LINES_PER_SECOND)
+                            )
+                        }
+                    )
+                }
+                DetailActionButton(
+                    text = "完成",
+                    fontSize = 16.sp,
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    borderColor = Color.Transparent,
+                    onClick = onDismiss
+                )
+            }
         }
     }
 }
@@ -2490,6 +2713,10 @@ private fun utf8ByteCountForCodePoint(codePoint: Int): Int {
 private const val DETAIL_CONTENT_START_ITEM_INDEX = 4
 private const val DETAIL_TITLE_ITEM_INDEX = 2
 private const val DETAIL_LOADING_SKELETON_ITEM_COUNT = 1
+private const val AUTO_SCROLL_MIN_LINES_PER_SECOND = 0.5f
+private const val AUTO_SCROLL_MAX_LINES_PER_SECOND = 10f
+private const val AUTO_SCROLL_STEP_LINES_PER_SECOND = 0.5f
+private const val AUTO_SCROLL_FEEDBACK_DURATION_MS = 700L
 private const val IMPORTED_TEXT_RESTORE_OFFSET_TIMEOUT_MS = 3_000L
 private const val IMPORTED_TEXT_SAVE_LAYOUT_TIMEOUT_MS = 800L
 private const val READ_ALOUD_MANUAL_SCROLL_GRACE_MS = 3_000L
