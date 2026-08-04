@@ -14,6 +14,9 @@ interface WatchNoteDao {
     @Query("SELECT * FROM watch_notes WHERE noteId = :noteId LIMIT 1")
     suspend fun get(noteId: String): WatchNoteEntity?
 
+    @Query("SELECT * FROM watch_notes")
+    suspend fun all(): List<WatchNoteEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(notes: List<WatchNoteEntity>)
 

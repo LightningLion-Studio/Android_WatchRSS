@@ -48,6 +48,7 @@ import com.lightningstudio.watchrss.data.account.WatchAccountStore
 import com.lightningstudio.watchrss.data.settings.LlmApiKeyStore
 import com.lightningstudio.watchrss.data.settings.SettingsRepository
 import com.lightningstudio.watchrss.data.tts.ReadAloudController
+import com.lightningstudio.watchrss.data.note.WatchNoteRepository
 import com.lightningstudio.watchrss.phoneconnection.WatchDeviceIdentity
 import com.lightningstudio.watchrss.ui.util.RssImageLoader
 import kotlinx.coroutines.CoroutineScope
@@ -78,6 +79,7 @@ interface AppContainer {
     val internetAvailabilityMonitor: InternetAvailabilityMonitor
     val readerPresetRepository: ReaderPresetRepository
     val llmTokenUsageRepository: LlmTokenUsageRepository
+    val watchNoteRepository: WatchNoteRepository
 }
 
 class DefaultAppContainer(context: Context) : AppContainer {
@@ -272,6 +274,8 @@ class DefaultAppContainer(context: Context) : AppContainer {
     override val llmTokenUsageRepository: LlmTokenUsageRepository by lazy {
         LlmTokenUsageRepository(database.llmTokenUsageDao())
     }
+
+    override val watchNoteRepository: WatchNoteRepository by lazy { WatchNoteRepository(database.watchNoteDao()) }
 
     override val readAloudController: ReadAloudController by lazy {
         ReadAloudController(

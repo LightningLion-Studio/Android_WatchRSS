@@ -1082,6 +1082,14 @@ class WatchBluetoothSyncServer(
                     )
                 }
 
+                BluetoothSyncProtocol.ACTION_SYNC_NOTES -> {
+                    val app = context.applicationContext as WatchRssApplication
+                    val incoming = WatchNoteSyncPayload.parse(request)
+                    val applied = app.container.watchNoteRepository.merge(incoming)
+                    val localDeviceId = WatchDeviceIdentity(context).deviceId
+                    WatchNoteSyncPayload.response(localDeviceId, app.container.watchNoteRepository.all(), applied)
+                }
+
                 else -> error("未知蓝牙同步动作：$action")
             }
         }.onSuccess { response ->
