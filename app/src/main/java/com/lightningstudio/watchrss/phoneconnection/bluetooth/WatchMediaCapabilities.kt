@@ -49,12 +49,12 @@ object WatchMediaCapabilities {
                             put("mime", mime)
                             put("hardwareAccelerated", info.isHardwareAccelerated)
                             put("profiles", profiles)
-                            put("maxWidth", video.supportedWidths.upper)
-                            put("maxHeight", video.supportedHeights.upper)
+                            put("maxWidth", video.supportedWidths?.upper)
+                            put("maxHeight", video.supportedHeights?.upper)
                             put(
                                 "maxFrameRate",
                                 runCatching {
-                                    video.getSupportedFrameRatesFor(width, height).upper
+                                    video.getSupportedFrameRatesFor(width, height)?.upper
                                 }.getOrDefault(refreshRate.toDouble())
                             )
                         })

@@ -354,7 +354,7 @@ internal fun DetailContent(
     val link = item?.link?.trim().orEmpty()
     val isImportedText = ImportedContentIds.isImportedTextItemUrl(link)
     val isNovelContent = ImportedContentIds.isNovelContentItemUrl(link)
-    val canToggleOriginalContent = link.isNotEmpty() && !isImportedText
+    val canToggleOriginalContent = link.isNotEmpty() && !ImportedContentIds.isImportedContentUrl(link)
     val baseLink = link.takeIf { it.isNotBlank() }
     val bodyFontSize = remember(readingFontSizeSp, density, context) {
         adjustedTextSizeSp(
@@ -386,7 +386,7 @@ internal fun DetailContent(
             llmSummaryState.text.isNotBlank() ||
             llmSummaryState.status is SummaryStatus.Error)
     val showAiButton = llmEnabled && !isNovelContent && !llmAutoSummarize
-    val showReadAloudAction = item != null
+    val showReadAloudAction = item != null && !ImportedContentIds.isImportedContentUrl(link)
     val articleActionItemCount = if (canToggleOriginalContent || showReadAloudAction) 1 else 0
     val importedTextFirstItemIndex = remember(
         articleActionItemCount,

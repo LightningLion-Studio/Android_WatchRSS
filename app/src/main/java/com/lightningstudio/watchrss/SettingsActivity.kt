@@ -35,6 +35,9 @@ class SettingsActivity : BaseWatchActivity() {
                     onOpenReaderPresets = {
                         startActivity(ReaderPresetActivity.createIntent(this))
                     },
+                    onOpenTtsSettings = {
+                        startActivity(TtsSettingsActivity.createIntent(this))
+                    },
                     onOpenOobe = {
                         startActivity(OobeActivity.createIntent(this, returnHomeOnFinish = false))
                     },

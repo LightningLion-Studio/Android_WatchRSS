@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -29,6 +30,11 @@ private val LLM_ENABLED = booleanPreferencesKey("llm_enabled")
 private val LLM_AUTO_SUMMARIZE = booleanPreferencesKey("llm_auto_summarize")
 private val LLM_SHOW_TOKEN_USAGE = booleanPreferencesKey("llm_show_token_usage")
 private val LLM_PROMPT_PRESET = intPreferencesKey("llm_prompt_preset")
+private val TTS_ENGINE = stringPreferencesKey("tts_engine")
+private val TTS_MODEL = stringPreferencesKey("tts_model")
+private val TTS_VOICE_ID = stringPreferencesKey("tts_voice_id")
+private val TTS_SPEED = floatPreferencesKey("tts_speed")
+private val TTS_BASE_URL = stringPreferencesKey("tts_base_url")
 private const val TEMP_ORIGINAL_MODE_HINT_ATTEMPTS_PREFIX = "temp_original_mode_hint_attempts_"
 private const val TEMP_ORIGINAL_MODE_HINT_LAST_TOAST_PREFIX = "temp_original_mode_hint_last_toast_"
 private val PRIVACY_POLICY_AGREED_VERSION = intPreferencesKey("privacy_policy_agreed_version")
@@ -95,6 +101,11 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     val llmAutoSummarize: Flow<Boolean> = dataStore.data.map { it[LLM_AUTO_SUMMARIZE] ?: false }
     val llmShowTokenUsage: Flow<Boolean> = dataStore.data.map { it[LLM_SHOW_TOKEN_USAGE] ?: false }
     val llmPromptPreset: Flow<Int> = dataStore.data.map { it[LLM_PROMPT_PRESET] ?: 0 }
+    val ttsEngine: Flow<String> = dataStore.data.map { it[TTS_ENGINE] ?: "" }
+    val ttsModel: Flow<String> = dataStore.data.map { it[TTS_MODEL] ?: "" }
+    val ttsVoiceId: Flow<String> = dataStore.data.map { it[TTS_VOICE_ID] ?: "" }
+    val ttsSpeed: Flow<Float> = dataStore.data.map { it[TTS_SPEED] ?: 1.0f }
+    val ttsBaseUrl: Flow<String> = dataStore.data.map { it[TTS_BASE_URL] ?: "" }
     val privacyPolicyAgreedVersion: Flow<Int> = dataStore.data.map { it[PRIVACY_POLICY_AGREED_VERSION] ?: 0 }
 
     suspend fun setCacheLimitBytes(bytes: Long) {
@@ -195,6 +206,34 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
 
     suspend fun setLlmPromptPreset(value: Int) {
         dataStore.edit { it[LLM_PROMPT_PRESET] = value }
+    }
+
+    suspend fun setTtsConfig(
+        engine: String,
+        model: String,
+        voiceId: String,
+        speed: Float,
+        baseUrl: String
+    ) {
+        dataStore.edit { preferences ->
+            preferences[TTS_ENGINE] = engine
+            preferences[TTS_MODEL] = model
+            preferences[TTS_VOICE_ID] = voiceId
+            preferences[TTS_SPEED] = speed
+            preferences[TTS_BASE_URL] = baseUrl
+        }
+    }
+
+    suspend fun setTtsEngine(value: String) {
+        dataStore.edit { it[TTS_ENGINE] = value }
+    }
+
+    suspend fun setTtsVoiceId(value: String) {
+        dataStore.edit { it[TTS_VOICE_ID] = value }
+    }
+
+    suspend fun setTtsSpeed(value: Float) {
+        dataStore.edit { it[TTS_SPEED] = value }
     }
 
     suspend fun setPrivacyPolicyAgreedVersion(value: Int) {
