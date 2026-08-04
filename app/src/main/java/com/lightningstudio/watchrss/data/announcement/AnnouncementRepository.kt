@@ -30,7 +30,7 @@ class AnnouncementRepository(context: Context) {
 
     suspend fun checkAnnouncement(): Announcement? = withContext(Dispatchers.IO) {
         val request = Request.Builder()
-            .url("${BuildConfig.WATCHRSS_BACKEND_URL}/api/announcement")
+            .url("${BuildConfig.WATCHRSS_BACKEND_URL}/functions/v1/announcement")
             .get()
             .build()
         try {
