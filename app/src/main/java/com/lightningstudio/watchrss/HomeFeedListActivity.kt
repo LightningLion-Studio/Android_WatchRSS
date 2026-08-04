@@ -17,6 +17,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.lifecycleScope
+import androidx.core.net.toUri
 import com.lightningstudio.watchrss.data.cache.CacheTrimReason
 import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackPreviewCache
 import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackRefreshTrigger
@@ -174,14 +175,25 @@ class HomeFeedListActivity : BaseWatchActivity() {
                     val ann = announcement
                     if (ann != null) {
                         AlertDialog(
-                            onDismissRequest = { announcementRepository.markDismissed(ann.version); pendingAnnouncement.value = null },
+                            onDismissRequest = {
+                                if (!ann.forceUpdate) dismissAnnouncement(ann.version)
+                            },
                             confirmButton = {
-                                TextButton(onClick = { announcementRepository.markDismissed(ann.version); pendingAnnouncement.value = null }) {
-                                    M3Text("关闭")
+                                TextButton(onClick = { openUpdatePage(ann.downloadUrl) }) {
+                                    M3Text("立即更新")
                                 }
                             },
-                            title = { M3Text("发现新版本 " + ann.version) },
-                            text = { M3Text(markdownToPlainText(ann.changelogMarkdown)) }
+                            dismissButton = if (ann.forceUpdate) null else {
+                                {
+                                    TextButton(onClick = { dismissAnnouncement(ann.version) }) {
+                                        M3Text("稍后")
+                                    }
+                                }
+                            },
+                            title = {
+                                M3Text((if (ann.forceUpdate) "需要更新 " else "发现新版本 ") + ann.version)
+                            },
+                            text = { M3Text(formatChangelog(ann.changelogMarkdown)) }
                         )
                     }
 
@@ -286,13 +298,23 @@ class HomeFeedListActivity : BaseWatchActivity() {
         }
     }
 
-    private fun markdownToPlainText(markdown: String): String {
+    private fun dismissAnnouncement(version: String) {
+        announcementRepository.markDismissed(version)
+        pendingAnnouncement.value = null
+    }
+
+    private fun openUpdatePage(url: String) {
+        runCatching { startActivity(Intent(Intent.ACTION_VIEW, url.toUri())) }
+            .onFailure { error -> AppLogger.log("Update", "无法打开更新地址: ${error.message}") }
+    }
+
+    private fun formatChangelog(markdown: String): String {
         return markdown
-            .replace(Regex("""#+\s+"""), "")
-            .replace(Regex("""\*\*([^\*]+)\*\*"""), "$1")
-            .replace(Regex("""\*([^\*]+)\*"""), "$1")
-            .replace(Regex("""`([^`]+)`"""), "$1")
-            .replace(Regex("""\[(.*?)]\(.*?\)"""), "$1")
+            .replace(Regex("(?m)^#{1,6}\\s*"), "")
+            .replace(Regex("\\*\\*([^*]+)\\*\\*"), "$1")
+            .replace(Regex("\\*([^*]+)\\*"), "$1")
+            .replace(Regex("`([^`]+)`"), "$1")
+            .replace(Regex("\\[([^]]+)]\\([^)]+\\)"), "$1")
             .trim()
     }
 
