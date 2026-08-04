@@ -186,6 +186,7 @@ class BluetoothConnectionActivity : BaseWatchActivity() {
         return buildList {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 add(Manifest.permission.BLUETOOTH_CONNECT)
+                add(Manifest.permission.BLUETOOTH_SCAN)
             }
         }
     }

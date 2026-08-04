@@ -7,7 +7,6 @@ import android.os.Bundle
 import android.os.SystemClock
 import com.lightningstudio.watchrss.data.AppContainer
 import com.lightningstudio.watchrss.data.DefaultAppContainer
-import com.lightningstudio.watchrss.data.account.AccountStore
 import com.lightningstudio.watchrss.data.account.WatchAccountStore
 import com.lightningstudio.watchrss.data.account.WatchTokenManager
 import com.lightningstudio.watchrss.data.cloud.WatchCloudSyncService
@@ -18,6 +17,7 @@ import com.lightningstudio.watchrss.debug.DebugLogBuffer
 import com.lightningstudio.watchrss.debug.StartupDurationTracker
 import com.lightningstudio.watchrss.phoneconnection.WatchDeviceIdentity
 import com.lightningstudio.watchrss.phoneconnection.bluetooth.WatchBluetoothForegroundSyncManager
+import com.lightningstudio.watchrss.phoneconnection.ip.WatchIpSyncManager
 import com.lightningstudio.watchrss.sdk.bili.BiliDebugLog
 import com.lightningstudio.watchrss.util.AppLogger
 import kotlinx.coroutines.CoroutineScope
@@ -44,6 +44,7 @@ class WatchRssApplication : Application() {
             appScope.launch { cloudSyncService.syncNow() }
         }
     }
+    val ipSyncManager: WatchIpSyncManager by lazy { WatchIpSyncManager(this) }
     private var lastCloudForegroundAt = 0L
     private var pendingCloudChangeSync: Job? = null
 
@@ -54,7 +55,7 @@ class WatchRssApplication : Application() {
     val container: AppContainer
         get() = testContainerOverride ?: defaultContainer
 
-    val accountStore: AccountStore by lazy {
+    val accountStore: WatchAccountStore by lazy {
         (container as DefaultAppContainer).watchAccountStore
     }
     val watchTokenManager: WatchTokenManager by lazy {
@@ -87,6 +88,7 @@ class WatchRssApplication : Application() {
         }
 
         bluetoothForegroundSyncManager.install()
+        ipSyncManager.install()
         WatchCloudSyncWorker.schedule(this)
         usageTelemetry.recordAppLaunch()
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {

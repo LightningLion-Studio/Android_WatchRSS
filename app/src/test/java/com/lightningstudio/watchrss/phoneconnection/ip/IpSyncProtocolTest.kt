@@ -1,0 +1,108 @@
+package com.lightningstudio.watchrss.phoneconnection.ip
+
+import org.json.JSONObject
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import java.util.Base64
+
+class IpSyncProtocolTest {
+    @Test
+    fun parsesAndVerifiesPhoneCompactDescriptor() {
+        val unsigned = descriptor(hmac = "")
+        val signed = unsigned.copy(
+            hmac = IpSyncProtocol.hmac(unsigned.authToken, unsigned.canonicalPayload())
+        )
+        val compact = JSONObject().apply {
+            put("v", signed.version)
+            put("id", signed.serverDeviceId)
+            put("e", signed.epoch)
+            put("x", signed.expiresAt)
+            put("p", signed.port)
+            put("a", org.json.JSONArray().apply {
+                signed.endpoints.forEach { endpoint ->
+                    put(
+                        org.json.JSONArray()
+                            .put(endpoint.endpointId)
+                            .put(endpoint.address)
+                            .put(endpoint.transportKind.wireName)
+                            .put(endpoint.priority)
+                    )
+                }
+            })
+            put("n", signed.nonce)
+            put("k", signed.authToken)
+            put("h", signed.hmac)
+        }
+
+        val decoded = IpEndpointDescriptor.fromJson(compact)
+        assertEquals(signed, decoded)
+        assertTrue(decoded.verify(1_700_000_000_000L))
+        assertFalse(decoded.copy(epoch = 8).verify(1_700_000_000_000L))
+        assertFalse(decoded.verify(decoded.expiresAt + 1))
+    }
+
+    @Test
+    fun helloAndResumeAckUseSameAuthenticatedCanonicalFields() {
+        val unsigned = descriptor(hmac = "")
+        val descriptor = unsigned.copy(
+            hmac = IpSyncProtocol.hmac(unsigned.authToken, unsigned.canonicalPayload())
+        )
+        val hello = IpSyncProtocol.buildHello(
+            descriptor = descriptor,
+            watchDeviceId = "watch-device",
+            clientNonce = "client-nonce",
+            resumeSessionId = "session-1",
+            lastAckSeq = 42
+        )
+        assertEquals(
+            IpSyncProtocol.hmac(
+                descriptor.authToken,
+                "1|watch-device|7|client-nonce|session-1|42"
+            ),
+            hello.getString("hmac")
+        )
+
+        val unsignedAck = IpHelloAck(
+            serverDeviceId = descriptor.serverDeviceId,
+            sessionId = "session-1",
+            routeKind = IpTransportKind.WIFI_LAN,
+            acceptedResumeSeq = 42,
+            serverNonce = "server-nonce",
+            hmac = ""
+        )
+        val ack = unsignedAck.copy(
+            hmac = IpSyncProtocol.hmac(descriptor.authToken, unsignedAck.canonicalPayload())
+        )
+        assertTrue(IpSyncProtocol.verifyAck(descriptor, ack))
+        assertFalse(IpSyncProtocol.verifyAck(descriptor, ack.copy(acceptedResumeSeq = 41)))
+    }
+
+    private fun descriptor(hmac: String): IpEndpointDescriptor = IpEndpointDescriptor(
+        version = IpSyncProtocol.VERSION,
+        serverDeviceId = "phone-device",
+        epoch = 7,
+        expiresAt = 1_800_000_000_000L,
+        port = 31_337,
+        endpoints = listOf(
+            IpEndpointCandidate(
+                endpointId = "wifi",
+                address = "192.168.1.2",
+                family = "ipv4",
+                transportKind = IpTransportKind.WIFI_LAN,
+                priority = IpTransportKind.WIFI_LAN.priority
+            ),
+            IpEndpointCandidate(
+                endpointId = "bridge",
+                address = "192.168.7.1",
+                family = "ipv4",
+                transportKind = IpTransportKind.BLUETOOTH_BRIDGE,
+                priority = IpTransportKind.BLUETOOTH_BRIDGE.priority
+            )
+        ),
+        nonce = "descriptor-nonce",
+        authToken = Base64.getUrlEncoder().encodeToString(ByteArray(32) { it.toByte() }),
+        hmac = hmac
+    )
+}

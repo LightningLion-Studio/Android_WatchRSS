@@ -24,7 +24,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.Closeable
 import java.io.IOException
+import java.io.InputStream
+import java.io.OutputStream
 
 data class BluetoothSyncResult(
     val remoteName: String,
@@ -73,6 +76,29 @@ private data class ArticleRequestBatchStats(
             "${prefix}ArticleCount" to articleCount
         )
     }
+}
+
+private interface WatchSyncTransport : Closeable {
+    val inputStream: InputStream
+    val outputStream: OutputStream
+}
+
+private class BluetoothWatchSyncTransport(
+    private val socket: BluetoothSocket
+) : WatchSyncTransport {
+    override val inputStream: InputStream
+        get() = socket.inputStream
+    override val outputStream: OutputStream
+        get() = socket.outputStream
+    override fun close() = socket.close()
+}
+
+private class StreamWatchSyncTransport(
+    override val inputStream: InputStream,
+    override val outputStream: OutputStream,
+    private val closeTransport: () -> Unit
+) : WatchSyncTransport {
+    override fun close() = closeTransport()
 }
 
 private data class ChunkedArticleRequestFrames(
@@ -138,7 +164,8 @@ class WatchBluetoothSyncServer(
     private val context: Context,
     private val expectedAbility: PhoneConnectionAbility? = null,
     private val allowedActions: Set<String>? = null,
-    private val onClientAccepted: (() -> Unit)? = null
+    private val onClientAccepted: (() -> Unit)? = null,
+    private val onRequestReceived: (() -> Unit)? = null
 ) {
     @SuppressLint("MissingPermission")
     suspend fun acceptOnce(timeoutMs: Long = DEFAULT_TIMEOUT_MS): BluetoothSyncResult {
@@ -185,69 +212,14 @@ class WatchBluetoothSyncServer(
                     event = "server.accept.success",
                     fields = mapOf("elapsedMs" to elapsedSince(acceptStartedAt))
                 )
-                bluetoothSocket.use { client ->
-                    val remoteName = client.remoteDevice?.name.orEmpty()
-                    val remoteAddress = client.remoteDevice?.address.orEmpty()
-                    Log.i(TAG, "accepted from name=$remoteName address=$remoteAddress")
-                    WatchBluetoothDebugLog.event(
+                bluetoothSocket.use { socketClient ->
+                    serveTransport(
+                        client = BluetoothWatchSyncTransport(socketClient),
+                        remoteName = socketClient.remoteDevice?.name.orEmpty(),
+                        remoteAddress = socketClient.remoteDevice?.address.orEmpty(),
                         sessionId = sessionId,
-                        event = "server.client.accepted",
-                        fields = remoteFields(remoteName, remoteAddress)
-                    )
-                    onClientAccepted?.invoke()
-                    val request = readFrameLoggedWithTimeout(
-                        client = client,
-                        sessionId = sessionId,
-                        label = "initialRequest",
-                        timeoutMs = INITIAL_REQUEST_READ_TIMEOUT_MS
-                    )
-                    if (
-                        request.optString("action") ==
-                        BluetoothSyncProtocol.ACTION_PREVIEW_READER &&
-                        request.optBoolean("stream")
-                    ) {
-                        val response = handleReaderPreviewStream(
-                            client = client,
-                            initialRequest = request,
-                            sessionId = sessionId
-                        )
-                        return@runCatching BluetoothSyncResult(
-                            remoteName = remoteName,
-                            remoteAddress = remoteAddress,
-                            request = request,
-                            response = response
-                        )
-                    }
-                    val unsupportedPhoneProtocolResponse =
-                        LibrarySyncPayload.buildUnsupportedPhoneProtocolResponse(request)
-                    val libraryExchange = if (
-                        unsupportedPhoneProtocolResponse == null && request.isManifestLibrarySync()
-                    ) {
-                        handleLibraryManifestExchange(client, request, sessionId)
-                    } else {
-                        null
-                    }
-                    val response = libraryExchange?.response ?: run {
-                        (unsupportedPhoneProtocolResponse ?: handleRequest(request, sessionId)).also { response ->
-                            writeFrameLogged(client, sessionId, "response", response)
-                        }
-                    }
-                    val ack = waitForResponseAck(client, sessionId)
-                    libraryExchange?.pendingSyncSuccess?.let { pending ->
-                        markLibrarySyncSuccessAfterAck(pending, ack, sessionId)
-                    }
-                    WatchBluetoothDebugLog.event(
-                        sessionId = sessionId,
-                        event = "server.acceptOnce.complete",
-                        fields = remoteFields(remoteName, remoteAddress) +
-                            payloadFields("request", request) + payloadFields("response", response) +
-                            mapOf("elapsedMs" to elapsedSince(totalStartedAt))
-                    )
-                    BluetoothSyncResult(
-                        remoteName = remoteName,
-                        remoteAddress = remoteAddress,
-                        request = request,
-                        response = response
+                        totalStartedAt = totalStartedAt,
+                        initialRequestTimeoutMs = INITIAL_REQUEST_READ_TIMEOUT_MS
                     )
                 }
             }
@@ -265,8 +237,98 @@ class WatchBluetoothSyncServer(
         }.getOrThrow()
     }
 
+    suspend fun serveStreams(
+        inputStream: InputStream,
+        outputStream: OutputStream,
+        remoteName: String,
+        remoteAddress: String,
+        closeTransport: () -> Unit = {},
+        initialRequestTimeoutMs: Long = INITIAL_REQUEST_READ_TIMEOUT_MS
+    ): BluetoothSyncResult {
+        val sessionId = WatchBluetoothDebugLog.newSessionId("watchIpSync")
+        val startedAt = SystemClock.elapsedRealtime()
+        return runCatching {
+            serveTransport(
+                client = StreamWatchSyncTransport(inputStream, outputStream, closeTransport),
+                remoteName = remoteName,
+                remoteAddress = remoteAddress,
+                sessionId = sessionId,
+                totalStartedAt = startedAt,
+                initialRequestTimeoutMs = initialRequestTimeoutMs
+            )
+        }.onFailure { throwable ->
+            WatchBluetoothDebugLog.error(
+                sessionId = sessionId,
+                event = "server.ip.failed",
+                fields = mapOf(
+                    "elapsedMs" to elapsedSince(startedAt),
+                    "errorClass" to throwable::class.java.name,
+                    "message" to throwable.message.orEmpty()
+                ),
+                throwable = throwable
+            )
+        }.getOrThrow()
+    }
+
+    private suspend fun serveTransport(
+        client: WatchSyncTransport,
+        remoteName: String,
+        remoteAddress: String,
+        sessionId: String,
+        totalStartedAt: Long,
+        initialRequestTimeoutMs: Long
+    ): BluetoothSyncResult {
+        Log.i(TAG, "accepted from name=$remoteName address=$remoteAddress")
+        WatchBluetoothDebugLog.event(
+            sessionId = sessionId,
+            event = "server.client.accepted",
+            fields = remoteFields(remoteName, remoteAddress)
+        )
+        onClientAccepted?.invoke()
+        val request = readFrameLoggedWithTimeout(
+            client = client,
+            sessionId = sessionId,
+            label = "initialRequest",
+            timeoutMs = initialRequestTimeoutMs
+        )
+        onRequestReceived?.invoke()
+        if (
+            request.optString("action") == BluetoothSyncProtocol.ACTION_PREVIEW_READER &&
+            request.optBoolean("stream")
+        ) {
+            val response = handleReaderPreviewStream(client, request, sessionId)
+            return BluetoothSyncResult(remoteName, remoteAddress, request, response)
+        }
+        val unsupportedPhoneProtocolResponse =
+            LibrarySyncPayload.buildUnsupportedPhoneProtocolResponse(request)
+        val libraryExchange = if (
+            unsupportedPhoneProtocolResponse == null && request.isManifestLibrarySync()
+        ) {
+            handleLibraryManifestExchange(client, request, sessionId)
+        } else {
+            null
+        }
+        val response = libraryExchange?.response ?: run {
+            (unsupportedPhoneProtocolResponse ?: handleRequest(request, sessionId)).also { payload ->
+                writeFrameLogged(client, sessionId, "response", payload)
+            }
+        }
+        val ack = waitForResponseAck(client, sessionId)
+        libraryExchange?.pendingSyncSuccess?.let { pending ->
+            markLibrarySyncSuccessAfterAck(pending, ack, sessionId)
+        }
+        WatchBluetoothDebugLog.event(
+            sessionId = sessionId,
+            event = "server.acceptOnce.complete",
+            fields = remoteFields(remoteName, remoteAddress) +
+                payloadFields("request", request) + payloadFields("response", response) +
+                mapOf("elapsedMs" to elapsedSince(totalStartedAt))
+        )
+        return BluetoothSyncResult(remoteName, remoteAddress, request, response)
+    }
+
     private suspend fun handleLibraryManifestExchange(
-        client: BluetoothSocket,
+        client: WatchSyncTransport,
         request: JSONObject,
         sessionId: String
     ): LibraryManifestExchangeResult {
@@ -564,7 +626,7 @@ class WatchBluetoothSyncServer(
     }
 
     private suspend fun readArticleRequestFrames(
-        client: BluetoothSocket,
+        client: WatchSyncTransport,
         sessionId: String
     ): List<JSONObject> {
         val first = readFrameLoggedWithTimeout(
@@ -597,7 +659,7 @@ class WatchBluetoothSyncServer(
     }
 
     private suspend fun readChunkedArticleRequestFrames(
-        client: BluetoothSocket,
+        client: WatchSyncTransport,
         sessionId: String
     ): ChunkedArticleRequestFrames {
         val first = readFrameLoggedWithTimeout(
@@ -688,7 +750,7 @@ class WatchBluetoothSyncServer(
         }
     }
 
-    private suspend fun waitForResponseAck(client: BluetoothSocket, sessionId: String): BluetoothSyncAck? {
+    private suspend fun waitForResponseAck(client: WatchSyncTransport, sessionId: String): BluetoothSyncAck? {
         val startedAt = SystemClock.elapsedRealtime()
         WatchBluetoothDebugLog.event(
             sessionId = sessionId,
@@ -742,7 +804,7 @@ class WatchBluetoothSyncServer(
     }
 
     private suspend fun readAckPayloadOrNull(
-        client: BluetoothSocket,
+        client: WatchSyncTransport,
         sessionId: String,
         timeoutMs: Long,
         startedAt: Long
@@ -781,7 +843,7 @@ class WatchBluetoothSyncServer(
     }
 
     private suspend fun readFrameLoggedWithTimeout(
-        client: BluetoothSocket,
+        client: WatchSyncTransport,
         sessionId: String,
         label: String,
         timeoutMs: Long,
@@ -1111,7 +1173,7 @@ class WatchBluetoothSyncServer(
     }
 
     private suspend fun handleReaderPreviewStream(
-        client: BluetoothSocket,
+        client: WatchSyncTransport,
         initialRequest: JSONObject,
         sessionId: String
     ): JSONObject {
@@ -1181,7 +1243,7 @@ class WatchBluetoothSyncServer(
     }
 
     private fun readFrameLogged(
-        client: BluetoothSocket,
+        client: WatchSyncTransport,
         sessionId: String,
         label: String
     ): JSONObject {
@@ -1217,7 +1279,7 @@ class WatchBluetoothSyncServer(
     }
 
     private fun writeFrameLogged(
-        client: BluetoothSocket,
+        client: WatchSyncTransport,
         sessionId: String,
         label: String,
         payload: JSONObject
