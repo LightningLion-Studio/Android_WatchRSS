@@ -40,10 +40,6 @@ class ProfileActivity : BaseWatchActivity() {
                         )
                         startActivity(intent)
                     },
-                    onNotesClick = {
-                        if (!allowNavigation()) return@ProfileScreen
-                        startActivity(Intent(this, NotesActivity::class.java))
-                    },
                     onPhoneConnectionClick = {
                         Toast.makeText(
                             this,
