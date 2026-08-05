@@ -10,6 +10,9 @@ import com.lightningstudio.watchrss.data.reader.ReaderDeletionEntity
 import com.lightningstudio.watchrss.data.reader.ReaderFontAssetEntity
 import com.lightningstudio.watchrss.data.reader.ReaderPresetDao
 import com.lightningstudio.watchrss.data.reader.ReaderPresetEntity
+import com.lightningstudio.watchrss.data.note.WatchNoteDao
+import com.lightningstudio.watchrss.data.note.WatchNoteEntity
+import com.lightningstudio.watchrss.data.note.WatchNoteFolderEntity
 
 @Database(
     entities = [
@@ -25,9 +28,11 @@ import com.lightningstudio.watchrss.data.reader.ReaderPresetEntity
         ReaderFontAssetEntity::class,
         ReaderBackgroundAssetEntity::class,
         ReaderDeletionEntity::class,
+        WatchNoteEntity::class,
+        WatchNoteFolderEntity::class,
         LlmTokenUsageEntity::class
     ],
-    version = 17,
+    version = 18,
     exportSchema = false
 )
 @SkipQueryVerification
@@ -41,6 +46,7 @@ abstract class WatchRssDatabase : RoomDatabase() {
     abstract fun syncPeerStateDao(): SyncPeerStateDao
     abstract fun rssSourceSyncStateDao(): RssSourceSyncStateDao
     abstract fun readerPresetDao(): ReaderPresetDao
+    abstract fun watchNoteDao(): WatchNoteDao
     abstract fun llmTokenUsageDao(): LlmTokenUsageDao
 
     companion object {
@@ -304,6 +310,16 @@ abstract class WatchRssDatabase : RoomDatabase() {
         val MIGRATION_16_17 = object : Migration(16, 17) {
             override fun migrate(database: SupportSQLiteDatabase) {
                 database.createLlmTokenUsageTable()
+            }
+        }
+
+        val MIGRATION_17_18 = object : Migration(17, 18) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.execSQL("""CREATE TABLE IF NOT EXISTS watch_notes (noteId TEXT NOT NULL PRIMARY KEY, folderId TEXT, title TEXT NOT NULL, markdown TEXT NOT NULL, plainText TEXT NOT NULL, contentHash TEXT NOT NULL, baseContentHash TEXT NOT NULL, baseMarkdown TEXT NOT NULL, pinned INTEGER NOT NULL, createdAt INTEGER NOT NULL, updatedAt INTEGER NOT NULL, modifiedBy TEXT NOT NULL, deleted INTEGER NOT NULL, deletedAt INTEGER NOT NULL)""")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_watch_notes_folderId_deleted_pinned_updatedAt ON watch_notes(folderId, deleted, pinned, updatedAt)")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_watch_notes_contentHash ON watch_notes(contentHash)")
+                database.execSQL("""CREATE TABLE IF NOT EXISTS watch_note_folders (folderId TEXT NOT NULL PRIMARY KEY, name TEXT NOT NULL, sortOrder INTEGER NOT NULL, updatedAt INTEGER NOT NULL, modifiedBy TEXT NOT NULL, deleted INTEGER NOT NULL, deletedAt INTEGER NOT NULL)""")
+                database.execSQL("CREATE INDEX IF NOT EXISTS index_watch_note_folders_deleted_sortOrder ON watch_note_folders(deleted, sortOrder)")
             }
         }
     }

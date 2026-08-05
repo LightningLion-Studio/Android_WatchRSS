@@ -3,7 +3,7 @@ package com.lightningstudio.watchrss.data.cloud
 import android.content.Context
 import android.net.ConnectivityManager
 import android.os.Build
-import com.lightningstudio.watchrss.data.account.WatchAccountStore
+import com.lightningstudio.watchrss.data.account.AccountStore
 import com.lightningstudio.watchrss.phoneconnection.WatchDeviceIdentity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,7 +31,7 @@ data class WatchCloudStatus(
 
 class WatchCloudSyncService(
     context: Context,
-    private val accountStore: WatchAccountStore,
+    private val accountStore: AccountStore,
     repository: com.lightningstudio.watchrss.data.rss.RssRepository,
     private val client: WatchCloudClient = WatchCloudClient(),
     private val codec: WatchCloudCodec = WatchCloudCodec()

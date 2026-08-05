@@ -226,6 +226,11 @@ class HomeFeedListActivity : BaseWatchActivity() {
                                 intent = Intent(this@HomeFeedListActivity, ProfileActivity::class.java)
                             )
                         },
+                        onNotesClick = {
+                            startNavigatingActivity(
+                                intent = Intent(this@HomeFeedListActivity, NotesActivity::class.java)
+                            )
+                        },
                         onRecommendClick = {
                             if (closeOpenSwipe()) return@HomeComposeScreen
                             startNavigatingActivity(

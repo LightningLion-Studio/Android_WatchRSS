@@ -340,7 +340,7 @@ class WatchBluetoothSyncServer(
         )
         return runCatching {
             if (allowedActions != null && BluetoothSyncProtocol.ACTION_SYNC_LIBRARY !in allowedActions) {
-                error("当前前台自动同步只支持资料库同步，请在手表上打开对应连接页面")
+                error("当前前台自动同步不支持此操作，请在手表上打开对应连接页面")
             }
             val app = context.applicationContext as WatchRssApplication
             val localDeviceId = WatchDeviceIdentity(context).deviceId
@@ -950,7 +950,7 @@ class WatchBluetoothSyncServer(
         return runCatching {
             val action = request.optString("action")
             if (allowedActions != null && action !in allowedActions) {
-                error("当前前台自动同步只支持资料库同步，请在手表上打开对应连接页面")
+                error("当前前台自动同步不支持此操作，请在手表上打开对应连接页面")
             }
             when (action) {
                 BluetoothSyncProtocol.ACTION_PING -> {
@@ -1142,6 +1142,14 @@ class WatchBluetoothSyncServer(
                         rssSources = outgoingSources,
                         sourcesApplied = sourceStats.applied
                     )
+                }
+
+                BluetoothSyncProtocol.ACTION_SYNC_NOTES -> {
+                    val app = context.applicationContext as WatchRssApplication
+                    val incoming = WatchNoteSyncPayload.parse(request)
+                    val applied = app.container.watchNoteRepository.merge(incoming)
+                    val localDeviceId = WatchDeviceIdentity(context).deviceId
+                    WatchNoteSyncPayload.response(localDeviceId, app.container.watchNoteRepository.all(), applied)
                 }
 
                 else -> error("未知蓝牙同步动作：$action")

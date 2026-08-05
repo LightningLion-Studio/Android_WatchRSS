@@ -50,6 +50,7 @@ import com.lightningstudio.watchrss.data.settings.SettingsRepository
 import com.lightningstudio.watchrss.data.settings.TtsApiKeyStore
 import com.lightningstudio.watchrss.data.tts.ReadAloudController
 import com.lightningstudio.watchrss.data.tts.engine.TtsEngineFactory
+import com.lightningstudio.watchrss.data.note.WatchNoteRepository
 import com.lightningstudio.watchrss.phoneconnection.WatchDeviceIdentity
 import com.lightningstudio.watchrss.ui.util.RssImageLoader
 import kotlinx.coroutines.CoroutineScope
@@ -81,6 +82,7 @@ interface AppContainer {
     val internetAvailabilityMonitor: InternetAvailabilityMonitor
     val readerPresetRepository: ReaderPresetRepository
     val llmTokenUsageRepository: LlmTokenUsageRepository
+    val watchNoteRepository: WatchNoteRepository
 }
 
 class DefaultAppContainer(context: Context) : AppContainer {
@@ -115,7 +117,8 @@ class DefaultAppContainer(context: Context) : AppContainer {
             WatchRssDatabase.MIGRATION_13_14,
             WatchRssDatabase.MIGRATION_14_15,
             WatchRssDatabase.MIGRATION_15_16,
-            WatchRssDatabase.MIGRATION_16_17
+            WatchRssDatabase.MIGRATION_16_17,
+            WatchRssDatabase.MIGRATION_17_18
         )
             .addCallback(BuiltinChannelSeed.callback)
             .build()
@@ -278,6 +281,8 @@ class DefaultAppContainer(context: Context) : AppContainer {
     override val llmTokenUsageRepository: LlmTokenUsageRepository by lazy {
         LlmTokenUsageRepository(database.llmTokenUsageDao())
     }
+
+    override val watchNoteRepository: WatchNoteRepository by lazy { WatchNoteRepository(database.watchNoteDao()) }
 
     override val readAloudController: ReadAloudController by lazy {
         ReadAloudController(

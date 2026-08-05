@@ -116,6 +116,7 @@ fun HomeComposeScreen(
     onDragStart: (Long) -> Unit,
     onDragEnd: () -> Unit,
     onProfileClick: () -> Unit,
+    onNotesClick: () -> Unit,
     onRecommendClick: () -> Unit,
     onReadAloudClick: () -> Unit = {},
     onChannelClick: (RssChannel) -> Unit,
@@ -216,6 +217,15 @@ fun HomeComposeScreen(
                                     testTag = HomeTestTags.EMPTY_ENTRY
                                 )
                             }
+                            HomeEntry.Notes -> {
+                                HomeDefaultItem(
+                                    title = "备忘录",
+                                    summary = "纯文本编辑 · 手机同步",
+                                    backgroundColor = MaterialTheme.colorScheme.surface,
+                                    showIndicator = false,
+                                    onClick = onNotesClick
+                                )
+                            }
                             HomeEntry.Recommend -> {
                                 HomeDefaultItem(
                                     title = "RSS推荐",
@@ -274,6 +284,7 @@ fun HomeComposeScreen(
 
 private sealed class HomeEntry(val key: String) {
     data object Profile : HomeEntry("profile")
+    data object Notes : HomeEntry("notes")
     data object ReadAloud : HomeEntry("read_aloud")
     data class Channel(val channel: RssChannel) : HomeEntry("channel_${channel.id}")
     data object Empty : HomeEntry("empty")
@@ -289,6 +300,7 @@ private fun buildHomeEntries(
 ): List<HomeEntry> {
     val entries = mutableListOf<HomeEntry>()
     entries.add(HomeEntry.Profile)
+    entries.add(HomeEntry.Notes)
     if (showReadAloudEntry) {
         entries.add(HomeEntry.ReadAloud)
     }
