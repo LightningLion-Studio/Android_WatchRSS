@@ -4,6 +4,7 @@ import com.lightningstudio.watchrss.data.AppContainer
 import com.lightningstudio.watchrss.data.bili.BiliErrorCodes
 import com.lightningstudio.watchrss.data.bili.formatBiliError
 import com.lightningstudio.watchrss.data.rss.SaveType
+import com.lightningstudio.watchrss.data.tts.TtsProviderCatalog
 import com.lightningstudio.watchrss.sdk.bili.BiliHistoryCursor
 import com.lightningstudio.watchrss.util.AppLogger
 import fi.iki.elonen.NanoHTTPD
@@ -73,6 +74,8 @@ import org.json.JSONObject
  * | GET  /getBiliPlaybackProgress | SYNC_BILI_WATCH_RECORDS | 手机端拉取手表本地 B 站断点续播进度         |
  * | GET  /getLLMSummaryConfig     | LLM_SUMMARY_CONFIG     | 手机端读取手表当前 LLM 配置（API Key 脱敏）|
  * | POST /setLLMSummaryConfig     | LLM_SUMMARY_CONFIG     | 手机端写入 LLM 配置到手表                  |
+ * | GET  /getTtsConfig            | TTS_CONFIG             | 手机端读取手表当前 TTS 配置（API Key 脱敏）|
+ * | POST /setTtsConfig            | TTS_CONFIG             | 手机端写入 TTS 配置到手表                  |
  *
  * ## 版本协商
  *
@@ -92,7 +95,8 @@ class LocalHttpServer private constructor(
     private val preferredAbility: PhoneConnectionAbility? = null,
     private val onRemoteInput: ((String) -> Unit)? = null,
     private val onSyncComplete: (() -> Unit)? = null,
-    private val onLlmConfigSaved: (() -> Unit)? = null
+    private val onLlmConfigSaved: (() -> Unit)? = null,
+    private val onTtsConfigSaved: (() -> Unit)? = null
 ) : NanoHTTPD(port) {
 
     /**
@@ -110,7 +114,9 @@ class LocalHttpServer private constructor(
         /** 仅支持手机端同步 B 站观看历史和本地播放进度 */
         SYNC_BILI_WATCH_RECORDS,
         /** 仅支持手机端读写 LLM 摘要配置 */
-        LLM_CONFIG
+        LLM_CONFIG,
+        /** 仅支持手机端读写 TTS 配置 */
+        TTS_CONFIG
     }
 
     /** 本实例实际开放的能力集合，由 [serverType] 在构造时确定，运行期不可变。 */
@@ -120,6 +126,7 @@ class LocalHttpServer private constructor(
         ServerType.SYNC_WATCH_LATER -> setOf(PhoneConnectionAbility.SYNC_WATCH_LATER)
         ServerType.SYNC_BILI_WATCH_RECORDS -> setOf(PhoneConnectionAbility.SYNC_BILI_WATCH_RECORDS)
         ServerType.LLM_CONFIG -> setOf(PhoneConnectionAbility.LLM_SUMMARY_CONFIG)
+        ServerType.TTS_CONFIG -> setOf(PhoneConnectionAbility.TTS_CONFIG)
     }
 
     /**
@@ -166,6 +173,12 @@ class LocalHttpServer private constructor(
             }
             uri == "/setLLMSummaryConfig" && supports(PhoneConnectionAbility.LLM_SUMMARY_CONFIG) -> {
                 handleSetLlmSummaryConfig(session)
+            }
+            uri == "/getTtsConfig" && supports(PhoneConnectionAbility.TTS_CONFIG) -> {
+                handleGetTtsConfig()
+            }
+            uri == "/setTtsConfig" && supports(PhoneConnectionAbility.TTS_CONFIG) -> {
+                handleSetTtsConfig(session)
             }
             else -> {
                 newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Not Found")
@@ -740,6 +753,141 @@ class LocalHttpServer private constructor(
         }
     }
 
+    private fun handleGetTtsConfig(): Response {
+        return try {
+            val settingsRepository = container.settingsRepository
+            val apiKeyStore = container.ttsApiKeyStore
+
+            var engine = ""
+            var model = ""
+            var voiceId = ""
+            var speed = 1.0f
+            var baseUrl = ""
+            kotlinx.coroutines.runBlocking {
+                engine = settingsRepository.ttsEngine.first()
+                model = settingsRepository.ttsModel.first()
+                voiceId = settingsRepository.ttsVoiceId.first()
+                speed = settingsRepository.ttsSpeed.first()
+                baseUrl = settingsRepository.ttsBaseUrl.first()
+            }
+
+            val effectiveEngine = engine.ifBlank { TtsProviderCatalog.ENGINE_LOCAL }
+            val needsApiKey = TtsProviderCatalog.needsApiKey(effectiveEngine)
+            val dataObj = JSONObject().apply {
+                put("engine", effectiveEngine)
+                put("model", model)
+                put("voiceId", voiceId)
+                put("speed", speed.toDouble())
+                put("baseUrl", if (TtsProviderCatalog.isBackendDefault(effectiveEngine)) "" else baseUrl)
+                if (needsApiKey) {
+                    val rawKey = apiKeyStore.getApiKey(effectiveEngine)
+                    val maskedKey = if (rawKey.length <= 4) "****" else "****${rawKey.takeLast(4)}"
+                    put("apiKey", maskedKey)
+                } else {
+                    put("apiKey", "")
+                }
+            }
+
+            newFixedLengthResponse(
+                Response.Status.OK,
+                "application/json",
+                JSONObject().apply {
+                    put("success", true)
+                    put("data", dataObj)
+                }.toString()
+            )
+        } catch (e: Exception) {
+            AppLogger.e("LocalHttpServer", "handleGetTtsConfig failed", e)
+            newFixedLengthResponse(
+                Response.Status.INTERNAL_ERROR,
+                "application/json",
+                JSONObject().apply {
+                    put("success", false)
+                    put("data", JSONObject.NULL)
+                }.toString()
+            )
+        }
+    }
+
+    private fun handleSetTtsConfig(session: IHTTPSession): Response {
+        return try {
+            val params = mutableMapOf<String, String>()
+            session.parseBody(params)
+            val postData = params["postData"] ?: ""
+            val json = JSONObject(postData)
+
+            val engine = json.optString("engine", "")
+            val apiKey = json.optString("apiKey", "")
+            val model = json.optString("model", "")
+            val voiceId = json.optString("voiceId", "")
+            val speed = json.optDouble("speed", 1.0).toFloat()
+            val baseUrl = json.optString("baseUrl", "")
+
+            if (engine.isEmpty()) {
+                return newFixedLengthResponse(
+                    Response.Status.BAD_REQUEST,
+                    "application/json",
+                    JSONObject().apply {
+                        put("success", false)
+                        put("message", "engine 不能为空")
+                    }.toString()
+                )
+            }
+
+            val isBackendDefault = TtsProviderCatalog.isBackendDefault(engine)
+            val needsApiKey = TtsProviderCatalog.needsApiKey(engine)
+
+            if (needsApiKey && apiKey.isEmpty()) {
+                return newFixedLengthResponse(
+                    Response.Status.BAD_REQUEST,
+                    "application/json",
+                    JSONObject().apply {
+                        put("success", false)
+                        put("message", "apiKey 不能为空")
+                    }.toString()
+                )
+            }
+
+            if (needsApiKey && apiKey.isNotEmpty()) {
+                container.ttsApiKeyStore.setApiKey(engine, apiKey)
+            }
+
+            val effectiveBaseUrl = if (isBackendDefault) "" else baseUrl
+            val effectiveModel = if (isBackendDefault || engine == TtsProviderCatalog.ENGINE_LOCAL) "" else model
+            val effectiveVoiceId = if (isBackendDefault || engine == TtsProviderCatalog.ENGINE_LOCAL) "" else voiceId
+
+            kotlinx.coroutines.runBlocking {
+                container.settingsRepository.setTtsConfig(
+                    engine = engine,
+                    model = effectiveModel,
+                    voiceId = effectiveVoiceId,
+                    speed = speed,
+                    baseUrl = effectiveBaseUrl
+                )
+            }
+            onTtsConfigSaved?.invoke()
+
+            newFixedLengthResponse(
+                Response.Status.OK,
+                "application/json",
+                JSONObject().apply {
+                    put("success", true)
+                    put("message", "配置已保存")
+                }.toString()
+            )
+        } catch (e: Exception) {
+            AppLogger.e("LocalHttpServer", "handleSetTtsConfig failed", e)
+            newFixedLengthResponse(
+                Response.Status.INTERNAL_ERROR,
+                "application/json",
+                JSONObject().apply {
+                    put("success", false)
+                    put("message", e.message ?: "Unknown error")
+                }.toString()
+            )
+        }
+    }
+
     companion object {
         /**
          * 端口传入 0 让系统自动选择可用端口，避免端口冲突。
@@ -855,6 +1003,28 @@ class LocalHttpServer private constructor(
                 ServerType.LLM_CONFIG,
                 preferredAbility = PhoneConnectionAbility.LLM_SUMMARY_CONFIG,
                 onLlmConfigSaved = onLlmConfigSaved
+            )
+        }
+
+        /**
+         * 创建"TTS 配置"专用服务器。
+         *
+         * 与 LLM 配置服务器类似，手表端通过二维码让手机端代为输入音色、模型和 API Key：
+         * - GET  `/getTtsConfig`：手机端读取当前 TTS 配置，API Key 以 `****xxxx` 形式脱敏返回。
+         * - POST `/setTtsConfig`：手机端将完整配置（含明文 API Key）写入手表，
+         *   Key 存储在 [com.lightningstudio.watchrss.data.settings.TtsApiKeyStore]，
+         *   其余字段持久化到 DataStore。
+         */
+        fun createTtsConfigServer(
+            container: AppContainer,
+            onTtsConfigSaved: (() -> Unit)? = null
+        ): LocalHttpServer {
+            return LocalHttpServer(
+                DEFAULT_PORT,
+                container,
+                ServerType.TTS_CONFIG,
+                preferredAbility = PhoneConnectionAbility.TTS_CONFIG,
+                onTtsConfigSaved = onTtsConfigSaved
             )
         }
 

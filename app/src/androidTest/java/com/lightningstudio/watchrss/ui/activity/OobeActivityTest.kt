@@ -73,6 +73,10 @@ class OobeActivityTest {
             com.lightningstudio.watchrss.data.settings.CURRENT_OOBE_VERSION,
             runBlocking { settingsRepository.oobeSeenVersion.first() }
         )
+        assertEquals(
+            com.lightningstudio.watchrss.data.settings.PRIVACY_POLICY_VERSION,
+            runBlocking { settingsRepository.privacyPolicyAgreedVersion.first() }
+        )
 
         pressBackUnconditionally()
 

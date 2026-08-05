@@ -73,6 +73,13 @@ class AppViewModelFactory(private val container: AppContainer) : ViewModelProvid
             modelClass.isAssignableFrom(LlmTokenUsageViewModel::class.java) -> {
                 LlmTokenUsageViewModel(container.llmTokenUsageRepository)
             }
+            modelClass.isAssignableFrom(TtsSettingsViewModel::class.java) -> {
+                TtsSettingsViewModel(
+                    container.settingsRepository,
+                    container.ttsApiKeyStore,
+                    container.watchAccountStore
+                )
+            }
             else -> throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
         } as T
     }

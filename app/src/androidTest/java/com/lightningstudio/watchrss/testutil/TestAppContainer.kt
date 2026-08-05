@@ -22,6 +22,7 @@ import com.lightningstudio.watchrss.data.network.InternetAvailabilityMonitor
 import com.lightningstudio.watchrss.data.rss.RssRepository
 import com.lightningstudio.watchrss.data.settings.LlmApiKeyStore
 import com.lightningstudio.watchrss.data.settings.SettingsRepository
+import com.lightningstudio.watchrss.data.settings.TtsApiKeyStore
 import com.lightningstudio.watchrss.data.tts.ReadAloudController
 import com.lightningstudio.watchrss.data.account.AccountStore
 import com.lightningstudio.watchrss.data.account.WatchAccountStore
@@ -49,11 +50,20 @@ class TestAppContainer(
     override val llmApiKeyStore: LlmApiKeyStore
         get() = fallback.llmApiKeyStore
 
+    override val ttsApiKeyStore: TtsApiKeyStore
+        get() = fallback.ttsApiKeyStore
+
     override val readAloudController: ReadAloudController
         get() = fallback.readAloudController
 
     override val watchAccountStore: AccountStore
         get() = fallback.watchAccountStore
+
+    override val readerPresetRepository: com.lightningstudio.watchrss.data.reader.ReaderPresetRepository
+        get() = fallback.readerPresetRepository
+
+    override val llmTokenUsageRepository: com.lightningstudio.watchrss.data.llm.LlmTokenUsageRepository
+        get() = fallback.llmTokenUsageRepository
 
     override val managedCacheService: ManagedCacheService
         get() = fallback.managedCacheService

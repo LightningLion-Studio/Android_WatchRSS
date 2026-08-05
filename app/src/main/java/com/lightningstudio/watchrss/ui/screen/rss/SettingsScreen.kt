@@ -112,6 +112,7 @@ fun SettingsScreen(
     onOpenLlmTokenUsage: () -> Unit,
     onBeianClick: () -> Unit,
     onOpenReaderPresets: () -> Unit = {},
+    onOpenTtsSettings: () -> Unit = {},
     onOpenAdvanced: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
@@ -165,6 +166,7 @@ fun SettingsScreen(
                 }
             },
             onOpenReaderPresets = onOpenReaderPresets,
+            onOpenTtsSettings = onOpenTtsSettings,
             onOpenOobe = onOpenOobe,
             onOpenPerfLargeList = onOpenPerfLargeList,
             onOpenPerfLargeArticle = onOpenPerfLargeArticle,
@@ -239,6 +241,7 @@ private fun MainSettingsPage(
     onToggleLlmAutoSummarize: () -> Unit,
     onToggleLlmShowTokenUsage: () -> Unit,
     onOpenReaderPresets: () -> Unit,
+    onOpenTtsSettings: () -> Unit,
     onOpenAdvanced: () -> Unit,
     onOpenOobe: () -> Unit,
     onOpenPerfLargeList: () -> Unit,
@@ -300,6 +303,21 @@ private fun MainSettingsPage(
             }
             Text(
                 text = "字体、排版、纯色与图片背景；视频背景在手表端只读",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+            )
+
+            Spacer(modifier = Modifier.height(entrySpacing))
+
+            WatchSettingsPillRow(
+                label = "朗读语音源",
+                onClick = onOpenTtsSettings
+            ) {
+                Text("配置")
+            }
+            Text(
+                text = "本地 TTS、应用默认语音或第三方语音",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
@@ -882,7 +900,7 @@ internal fun SettingsHeader(title: String) {
 }
 
 @Composable
-private fun StepperValue(
+internal fun StepperValue(
     text: String,
     width: androidx.compose.ui.unit.Dp,
     testTag: String? = null
@@ -939,7 +957,7 @@ private fun RoundIconButton(
 }
 
 @Composable
-private fun RoundIconButtonIcon(
+internal fun RoundIconButtonIcon(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String,
     enabled: Boolean,

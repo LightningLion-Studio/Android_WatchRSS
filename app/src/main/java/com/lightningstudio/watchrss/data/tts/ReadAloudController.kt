@@ -1,15 +1,7 @@
 package com.lightningstudio.watchrss.data.tts
 
 import android.content.Context
-import android.content.Intent
-import android.content.pm.PackageManager
 import android.media.AudioFormat
-import android.os.Build
-import android.os.Bundle
-import android.provider.Settings
-import android.speech.tts.TextToSpeech
-import android.speech.tts.UtteranceProgressListener
-import android.speech.tts.Voice
 import com.lightningstudio.watchrss.BuildConfig
 import com.lightningstudio.watchrss.data.media.MediaPlaybackStartVolumeLimiter
 import com.lightningstudio.watchrss.data.rss.ImportedContentIds
@@ -18,11 +10,13 @@ import com.lightningstudio.watchrss.data.rss.RssChannel
 import com.lightningstudio.watchrss.data.rss.RssItem
 import com.lightningstudio.watchrss.data.rss.RssRepository
 import com.lightningstudio.watchrss.data.rss.effectiveContent
+import com.lightningstudio.watchrss.data.tts.engine.TtsEngine
+import com.lightningstudio.watchrss.data.tts.engine.TtsEngineFactory
+import com.lightningstudio.watchrss.data.tts.engine.TtsUtteranceListener
 import com.lightningstudio.watchrss.ui.util.ContentBlock
 import com.lightningstudio.watchrss.ui.util.buildContentBlocks
 import com.lightningstudio.watchrss.util.AppLogger
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -45,7 +39,6 @@ import kotlin.math.roundToLong
 
 private const val TAG = "ReadAloudController"
 private const val QUEUE_LIMIT = 48
-private const val TTS_INIT_TIMEOUT_MS = 10_000L
 
 enum class ReadAloudPhase {
     IDLE,
@@ -106,6 +99,7 @@ class ReadAloudController(
     context: Context,
     private val appScope: CoroutineScope,
     private val rssRepository: RssRepository,
+    private val ttsEngineFactory: TtsEngineFactory,
     private val playbackStartVolumeLimiter: MediaPlaybackStartVolumeLimiter? = null,
     private val playbackStartVolumeLimitPercentProvider: suspend () -> Int? = { null }
 ) {
@@ -125,10 +119,22 @@ class ReadAloudController(
     private var fallbackHighlightJob: Job? = null
     private var playbackSessionId: Long = 0L
 
-    private var tts: TextToSpeech? = null
-    private var ttsReady: Boolean = false
-    private var localVoiceLabel: String = "本地 TTS"
-    private var localEnginePackage: String? = null
+    private var ttsEngine: TtsEngine? = null
+
+    private fun ensureEngine(): TtsEngine {
+        val current = ttsEngine
+        if (current != null) return current
+        val created = ttsEngineFactory.create()
+        ttsEngine = created
+        return created
+    }
+
+    private fun releaseEngine() {
+        ttsEngine?.release()
+        ttsEngine = null
+    }
+
+    private fun engineLabel(): String = ttsEngine?.label ?: "朗读引擎"
 
     private var currentSegmentSource: ReadAloudTextSegmentSource? = null
     private var currentSegment: ReadAloudSegment? = null
@@ -150,11 +156,10 @@ class ReadAloudController(
     private var synthesisBeginLogged: Boolean = false
     private var audioSpectrumSampleLogged: Boolean = false
 
-    private val utteranceListener = object : UtteranceProgressListener() {
-        override fun onStart(utteranceId: String?) {
+    private val ttsEngineListener = object : TtsUtteranceListener {
+        override fun onStart(utteranceId: String) {
             appScope.launch {
                 if (!isCurrentUtterance(utteranceId)) return@launch
-                val currentUtterance = utteranceId ?: return@launch
                 val segment = currentSegment
                 currentSegmentStartedAtNs = System.nanoTime()
                 currentSegmentUnits = segment?.let(::fallbackSpeechUnits) ?: 0.0
@@ -163,7 +168,7 @@ class ReadAloudController(
                     startFallbackHighlightJob(
                         sessionId = playbackSessionId,
                         queueIndex = currentQueueIndex,
-                        utteranceId = currentUtterance,
+                        utteranceId = utteranceId,
                         segment = segment
                     )
                 }
@@ -179,7 +184,7 @@ class ReadAloudController(
         }
 
         override fun onBeginSynthesis(
-            utteranceId: String?,
+            utteranceId: String,
             sampleRateInHz: Int,
             audioFormat: Int,
             channelCount: Int
@@ -199,8 +204,8 @@ class ReadAloudController(
             }
         }
 
-        override fun onAudioAvailable(utteranceId: String?, audio: ByteArray?) {
-            if (!isCurrentUtterance(utteranceId) || audio == null || audio.isEmpty()) return
+        override fun onAudioAvailable(utteranceId: String, audio: ByteArray) {
+            if (!isCurrentUtterance(utteranceId) || audio.isEmpty()) return
             updateAudioSpectrumFromPcm(
                 audio = audio,
                 sampleRateHz = synthesisSampleRateHz,
@@ -209,7 +214,7 @@ class ReadAloudController(
             )
         }
 
-        override fun onRangeStart(utteranceId: String?, start: Int, end: Int, frame: Int) {
+        override fun onRangeStart(utteranceId: String, start: Int, end: Int, frame: Int) {
             appScope.launch {
                 if (!isCurrentUtterance(utteranceId)) return@launch
                 cancelFallbackHighlightJob()
@@ -223,7 +228,7 @@ class ReadAloudController(
             }
         }
 
-        override fun onDone(utteranceId: String?) {
+        override fun onDone(utteranceId: String) {
             appScope.launch {
                 if (!isCurrentUtterance(utteranceId) || paused) return@launch
                 recordFallbackTimingSample()
@@ -232,20 +237,16 @@ class ReadAloudController(
                     speakNextSegmentOrAdvance()
                 }.onFailure { error ->
                     if (error is CancellationException) return@onFailure
-                    showPlaybackError("本地 TTS 朗读失败", error)
+                    showPlaybackError("${engineLabel()} 朗读失败", error)
                 }
             }
         }
 
-        override fun onError(utteranceId: String?) {
-            handleUtteranceError(utteranceId, "本地 TTS 朗读失败")
+        override fun onError(utteranceId: String, errorCode: Int?) {
+            handleUtteranceError(utteranceId, "${engineLabel()} 朗读失败${errorCode?.let { "：$it" } ?: ""}")
         }
 
-        override fun onError(utteranceId: String?, errorCode: Int) {
-            handleUtteranceError(utteranceId, "本地 TTS 朗读失败：$errorCode")
-        }
-
-        override fun onStop(utteranceId: String?, interrupted: Boolean) {
+        override fun onStop(utteranceId: String, interrupted: Boolean) {
             appScope.launch {
                 if (!isCurrentUtterance(utteranceId)) return@launch
                 cancelFallbackHighlightJob()
@@ -363,9 +364,8 @@ class ReadAloudController(
         currentSegmentIndex = 0
         currentSegmentCount = 0
         currentHighlightRange = null
-        appScope.launch {
-            stopTts()
-        }
+        ttsEngine?.stop()
+        releaseEngine()
         currentQueueIndex = -1
         queue = emptyList()
         _uiState.value = ReadAloudUiState(
@@ -376,14 +376,7 @@ class ReadAloudController(
 
     fun release() {
         stop()
-        appScope.launch {
-            withContext(Dispatchers.Main) {
-                tts?.shutdown()
-                tts = null
-                ttsReady = false
-                clearAudioSpectrum()
-            }
-        }
+        clearAudioSpectrum()
     }
 
     private fun playQueueIndex(index: Int) {
@@ -400,7 +393,8 @@ class ReadAloudController(
         currentHighlightRange = null
         playbackJob = appScope.launch {
             runCatching {
-                stopTts()
+                releaseEngine()
+                val engine = ensureEngine()
                 currentQueueIndex = index
                 val entry = queue[index]
                 updateState(
@@ -410,7 +404,10 @@ class ReadAloudController(
                     errorMessage = null
                 )
 
-                ensureTtsReady()
+                val prepared = engine.prepare()
+                if (!prepared) {
+                    error("${engine.label} 初始化失败")
+                }
                 if (!isActivePlayback(sessionId, index)) return@launch
 
                 updateState(
@@ -445,11 +442,9 @@ class ReadAloudController(
     private fun pauseCurrentSegment() {
         paused = true
         cancelFallbackHighlightJob()
-        appScope.launch {
-            stopTts()
-            clearAudioSpectrum()
-            _uiState.update { it.copy(isPlaying = false) }
-        }
+        ttsEngine?.stop()
+        clearAudioSpectrum()
+        _uiState.update { it.copy(isPlaying = false) }
     }
 
     private fun resumeCurrentSegment() {
@@ -517,7 +512,6 @@ class ReadAloudController(
     }
 
     private suspend fun speakSegment(sessionId: Long, index: Int, segment: ReadAloudSegment) {
-        val engine = ensureTtsReady()
         if (!isActivePlayback(sessionId, index)) return
         cancelFallbackHighlightJob()
         val utteranceId = "$sessionId:$index:$currentSegmentIndex:${System.nanoTime()}"
@@ -530,14 +524,7 @@ class ReadAloudController(
             rangeEnd = initialFallbackRange.end,
             isFallback = true
         )
-        val result = withContext(Dispatchers.Main) {
-            if (engine.setSpeechRate(speechRate) == TextToSpeech.ERROR) {
-                TextToSpeech.ERROR
-            } else {
-                engine.speak(segment.text, TextToSpeech.QUEUE_FLUSH, Bundle(), utteranceId)
-            }
-        }
-        require(result != TextToSpeech.ERROR) { "本地 TTS 无法朗读当前段落" }
+        ensureEngine().speak(segment, speechRate, ttsEngineListener)
         queue.getOrNull(index)?.let { entry ->
             updateState(
                 entry = entry,
@@ -563,11 +550,6 @@ class ReadAloudController(
         val index = currentQueueIndex
         val segment = currentSegment
         if (!_uiState.value.isPlaying || index !in queue.indices || segment == null || segment.text.isBlank()) {
-            appScope.launch {
-                withContext(Dispatchers.Main) {
-                    tts?.setSpeechRate(nextRate)
-                }
-            }
             return
         }
 
@@ -576,7 +558,7 @@ class ReadAloudController(
         playbackJob?.cancel()
         playbackJob = appScope.launch {
             runCatching {
-                stopTts()
+                ttsEngine?.stop()
                 if (!isActivePlayback(sessionId, index)) return@launch
                 speakSegment(sessionId, index, segment)
             }.onFailure { error ->
@@ -585,12 +567,6 @@ class ReadAloudController(
                     showPlaybackError(error.message ?: "朗读调速失败", error)
                 }
             }
-        }
-    }
-
-    private suspend fun stopTts() {
-        withContext(Dispatchers.Main) {
-            tts?.stop()
         }
     }
 
@@ -767,109 +743,6 @@ class ReadAloudController(
             }
         }
         return index
-    }
-
-    private suspend fun ensureTtsReady(): TextToSpeech {
-        val existing = tts
-        if (existing != null && ttsReady) return existing
-
-        return withContext(Dispatchers.Main) {
-            val current = tts
-            if (current != null && ttsReady) {
-                current
-            } else {
-                val enginePackage = resolveTtsEnginePackage()
-                val deferred = CompletableDeferred<Int>()
-                val created = if (enginePackage == null) {
-                    TextToSpeech(appContext) { status ->
-                        deferred.complete(status)
-                    }
-                } else {
-                    TextToSpeech(appContext, { status ->
-                        deferred.complete(status)
-                    }, enginePackage)
-                }
-                tts = created
-                localEnginePackage = enginePackage
-                created.setOnUtteranceProgressListener(utteranceListener)
-                val status = withTimeoutOrNull(TTS_INIT_TIMEOUT_MS) {
-                    deferred.await()
-                }
-                require(status == TextToSpeech.SUCCESS) {
-                    if (enginePackage.isNullOrBlank()) {
-                        "本地 TTS 初始化失败：未找到可绑定的系统 TTS 引擎"
-                    } else {
-                        "本地 TTS 初始化失败：$enginePackage status=${status ?: "timeout"}"
-                    }
-                }
-                localVoiceLabel = configureLocalVoice(created)
-                ttsReady = true
-                created
-            }
-        }
-    }
-
-    private fun configureLocalVoice(engine: TextToSpeech): String {
-        val offlineVoice = engine.voices
-            .orEmpty()
-            .asSequence()
-            .filter { voice -> !voice.isNetworkConnectionRequired }
-            .sortedBy(::voicePriority)
-            .firstOrNull { voice -> voicePriority(voice) < Int.MAX_VALUE }
-
-        if (offlineVoice != null && engine.setVoice(offlineVoice) != TextToSpeech.ERROR) {
-            return "本地 TTS · ${offlineVoice.locale.toLanguageTag()}"
-        }
-
-        val fallbackLocale = listOf(
-            Locale.SIMPLIFIED_CHINESE,
-            Locale.CHINESE,
-            Locale.ENGLISH
-        ).firstOrNull { locale ->
-            engine.isLanguageAvailable(locale) >= TextToSpeech.LANG_AVAILABLE
-        } ?: error("设备没有可用的本地 TTS 语音")
-
-        val result = engine.setLanguage(fallbackLocale)
-        require(result != TextToSpeech.LANG_MISSING_DATA && result != TextToSpeech.LANG_NOT_SUPPORTED) {
-            "设备未安装可用的本地 TTS 语音"
-        }
-        return "本地 TTS · ${fallbackLocale.toLanguageTag()}"
-    }
-
-    private fun resolveTtsEnginePackage(): String? {
-        val enginePackages = queryTtsEnginePackages()
-        if (enginePackages.isEmpty()) return null
-        val defaultEngine = runCatching {
-            Settings.Secure.getString(appContext.contentResolver, TTS_DEFAULT_ENGINE_SETTING)
-        }.getOrNull()
-        return defaultEngine
-            ?.takeIf { it.isNotBlank() && it in enginePackages }
-            ?: enginePackages.firstOrNull()
-    }
-
-    private fun queryTtsEnginePackages(): List<String> {
-        val intent = Intent(TextToSpeech.Engine.INTENT_ACTION_TTS_SERVICE)
-        val services = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            appContext.packageManager.queryIntentServices(
-                intent,
-                PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_ALL.toLong())
-            )
-        } else {
-            @Suppress("DEPRECATION")
-            appContext.packageManager.queryIntentServices(intent, PackageManager.MATCH_ALL)
-        }
-        return services
-            .mapNotNull { it.serviceInfo?.packageName }
-            .distinct()
-    }
-
-    private fun voicePriority(voice: Voice): Int {
-        val language = voice.locale.language.lowercase(Locale.US)
-        return when (language) {
-            Locale.CHINESE.language -> 0
-            Locale.ENGLISH.language -> 1
-            else -> Int.MAX_VALUE
-        }
     }
 
     private suspend fun awaitReadableItem(entry: QueueEntry): RssItem {
@@ -1124,11 +997,11 @@ class ReadAloudController(
         return playbackSessionId == sessionId && currentQueueIndex == queueIndex
     }
 
-    private fun isCurrentUtterance(utteranceId: String?): Boolean {
-        return utteranceId != null && utteranceId == currentUtteranceId
+    private fun isCurrentUtterance(utteranceId: String): Boolean {
+        return utteranceId == currentUtteranceId
     }
 
-    private fun handleUtteranceError(utteranceId: String?, message: String) {
+    private fun handleUtteranceError(utteranceId: String, message: String) {
         appScope.launch {
             if (!isCurrentUtterance(utteranceId)) return@launch
             showPlaybackError(message, null)
@@ -1193,7 +1066,7 @@ class ReadAloudController(
                 queueSize = queue.size,
                 segmentIndex = currentSegmentIndex,
                 segmentCount = currentSegmentCount,
-                providerLabel = localVoiceLabel,
+                providerLabel = engineLabel(),
                 autoAdvanceEnabled = autoAdvanceEnabled,
                 speechRate = speechRate,
                 audioSpectrum = emptyList(),
@@ -1224,43 +1097,13 @@ class ReadAloudController(
                 durationMs = 0L,
                 segmentIndex = currentSegmentIndex,
                 segmentCount = currentSegmentCount,
-                providerLabel = localVoiceLabel,
+                providerLabel = engineLabel(),
                 autoAdvanceEnabled = autoAdvanceEnabled,
                 speechRate = speechRate,
                 audioSpectrum = if (isPlaying) it.audioSpectrum else emptyList(),
                 highlightRange = currentHighlightRange,
                 errorMessage = errorMessage
             )
-        }
-    }
-
-    private data class ReadAloudSegment(
-        val text: String,
-        val importedChunkIndex: Int? = null,
-        val importedCharOffset: Int = 0,
-        val contentBlockIndex: Int? = null,
-        val contentCharOffset: Int = 0,
-        val isTitle: Boolean = false,
-        val sourceOffsets: IntArray? = null
-    ) {
-        fun sourceOffsetForTextOffset(textOffset: Int): Int {
-            val offsets = sourceOffsets ?: return textOffset
-            if (offsets.isEmpty()) return 0
-            val index = textOffset.coerceIn(0, text.length)
-            if (index >= offsets.size) {
-                return offsets.last() + 1
-            }
-            return offsets[index]
-        }
-
-        fun sourceEndOffsetForTextOffset(textOffset: Int): Int {
-            val offsets = sourceOffsets ?: return textOffset
-            if (offsets.isEmpty()) return 0
-            val index = textOffset.coerceIn(0, text.length)
-            if (index >= offsets.size) {
-                return offsets.last() + 1
-            }
-            return offsets[index].coerceAtLeast(sourceOffsetForTextOffset(textOffset))
         }
     }
 

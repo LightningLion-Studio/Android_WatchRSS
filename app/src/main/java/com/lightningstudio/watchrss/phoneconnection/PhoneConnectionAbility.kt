@@ -29,6 +29,11 @@ enum class PhoneConnectionAbility(
         wireCode = "a3e72c1d-5f84-4b90-9d16-e8c047f2b3a1",
         displayName = "LLM总结配置",
         acousticCode = "l"
+    ),
+    TTS_CONFIG(
+        wireCode = "b8f4d9e2-1c7a-4e5b-9a3f-6d2e8c1b5f74",
+        displayName = "朗读语音配置",
+        acousticCode = "t"
     );
 
     companion object {
@@ -37,7 +42,8 @@ enum class PhoneConnectionAbility(
             SYNC_FAVORITES,
             SYNC_WATCH_LATER,
             SYNC_BILI_WATCH_RECORDS,
-            LLM_SUMMARY_CONFIG
+            LLM_SUMMARY_CONFIG,
+            TTS_CONFIG
         )
 
         fun fromNameOrNull(value: String?): PhoneConnectionAbility? {

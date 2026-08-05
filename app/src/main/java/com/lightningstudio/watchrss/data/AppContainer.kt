@@ -47,7 +47,9 @@ import com.lightningstudio.watchrss.data.account.AccountStore
 import com.lightningstudio.watchrss.data.account.WatchAccountStore
 import com.lightningstudio.watchrss.data.settings.LlmApiKeyStore
 import com.lightningstudio.watchrss.data.settings.SettingsRepository
+import com.lightningstudio.watchrss.data.settings.TtsApiKeyStore
 import com.lightningstudio.watchrss.data.tts.ReadAloudController
+import com.lightningstudio.watchrss.data.tts.engine.TtsEngineFactory
 import com.lightningstudio.watchrss.phoneconnection.WatchDeviceIdentity
 import com.lightningstudio.watchrss.ui.util.RssImageLoader
 import kotlinx.coroutines.CoroutineScope
@@ -62,8 +64,9 @@ interface AppContainer {
     val rssRepository: RssRepository
     val settingsRepository: SettingsRepository
     val llmApiKeyStore: LlmApiKeyStore
+    val ttsApiKeyStore: TtsApiKeyStore
     val readAloudController: ReadAloudController
-    val watchAccountStore: AccountStore
+    val watchAccountStore: WatchAccountStore
     val managedCacheService: ManagedCacheService
     val biliPlaybackCacheManager: BiliPlaybackCacheManager
     val biliRepository: BiliRepositoryContract
@@ -144,6 +147,10 @@ class DefaultAppContainer(context: Context) : AppContainer {
 
     override val llmApiKeyStore: LlmApiKeyStore by lazy {
         LlmApiKeyStore(appContext)
+    }
+
+    override val ttsApiKeyStore: TtsApiKeyStore by lazy {
+        TtsApiKeyStore(appContext)
     }
 
     override val readerPresetRepository: ReaderPresetRepository by lazy {
@@ -277,6 +284,12 @@ class DefaultAppContainer(context: Context) : AppContainer {
             context = appContext,
             appScope = appScope,
             rssRepository = rssRepository,
+            ttsEngineFactory = TtsEngineFactory(
+                context = appContext,
+                settingsRepository = settingsRepository,
+                ttsApiKeyProvider = ttsApiKeyStore,
+                watchAccountStore = watchAccountStore
+            ),
             playbackStartVolumeLimiter = AudioManagerMediaPlaybackStartVolumeLimiter(appContext),
             playbackStartVolumeLimitPercentProvider = {
                 kotlinx.coroutines.runBlocking { settingsRepository.mediaPlaybackStartVolumeLimitPercent.first() }

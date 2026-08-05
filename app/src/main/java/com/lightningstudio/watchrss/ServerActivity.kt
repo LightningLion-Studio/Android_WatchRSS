@@ -84,6 +84,11 @@ class ServerActivity : BaseWatchActivity() {
                             handleLlmConfigComplete()
                         }
                     }
+                    ServerType.TTS_CONFIG -> {
+                        LocalHttpServer.createTtsConfigServer(app.container) {
+                            handleTtsConfigComplete()
+                        }
+                    }
                 }
                 server?.start()
                 port = server?.listeningPort ?: 0
@@ -133,6 +138,14 @@ class ServerActivity : BaseWatchActivity() {
         }
     }
 
+    private fun handleTtsConfigComplete() {
+        lifecycleScope.launch {
+            withContext(Dispatchers.Main) {
+                synced = true
+            }
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         server?.stop()
@@ -153,7 +166,8 @@ class ServerActivity : BaseWatchActivity() {
         SYNC_FAVORITES,
         SYNC_WATCH_LATER,
         SYNC_BILI_WATCH_RECORDS,
-        LLM_CONFIG
+        LLM_CONFIG,
+        TTS_CONFIG
     }
 
     private fun resolveTitle(): String {
@@ -164,6 +178,7 @@ class ServerActivity : BaseWatchActivity() {
             ServerType.SYNC_WATCH_LATER -> "同步稍后再看"
             ServerType.SYNC_BILI_WATCH_RECORDS -> "同步B站观看记录"
             ServerType.LLM_CONFIG -> "配置大模型"
+            ServerType.TTS_CONFIG -> "配置朗读语音"
         }
     }
 
@@ -175,6 +190,7 @@ class ServerActivity : BaseWatchActivity() {
             ServerType.SYNC_WATCH_LATER -> "请使用手机版扫描下方二维码"
             ServerType.SYNC_BILI_WATCH_RECORDS -> "请使用手机版扫描下方二维码"
             ServerType.LLM_CONFIG -> "请使用手机版扫描下方二维码"
+            ServerType.TTS_CONFIG -> "请使用手机版扫描下方二维码"
         }
     }
 }

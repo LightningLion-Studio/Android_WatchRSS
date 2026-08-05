@@ -91,6 +91,11 @@
             android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
+            android:name=".PrivacyPolicyConsentActivity"
+            android:enableOnBackInvokedCallback="true"
+            android:exported="${debugActivityExported}"
+            android:theme="@style/Theme.WatchRSS.Translucent" />
+        <activity
             android:name=".FeedActivity"
             android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
@@ -148,6 +153,11 @@
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".LlmConnectivityActivity"
+            android:enableOnBackInvokedCallback="true"
+            android:exported="${debugActivityExported}"
+            android:theme="@style/Theme.WatchRSS.Translucent" />
+        <activity
+            android:name=".TtsSettingsActivity"
             android:enableOnBackInvokedCallback="true"
             android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
