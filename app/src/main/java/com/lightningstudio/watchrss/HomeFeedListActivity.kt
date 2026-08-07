@@ -10,11 +10,15 @@ import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.lifecycleScope
 import com.lightningstudio.watchrss.data.cache.CacheTrimReason
@@ -41,9 +45,12 @@ import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
 import com.lightningstudio.watchrss.ui.viewmodel.HomeViewModel
 import com.lightningstudio.watchrss.data.push.PushNotificationRepository
 import com.lightningstudio.watchrss.data.announcement.AnnouncementRepository
+import com.lightningstudio.watchrss.data.update.AppUpdateDownloader
+import com.lightningstudio.watchrss.data.update.AppUpdateState
 import androidx.compose.material3.Text as M3Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.LinearProgressIndicator
 import com.lightningstudio.watchrss.util.AppLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -56,6 +63,7 @@ class HomeFeedListActivity : BaseWatchActivity() {
         AppViewModelFactory((application as WatchRssApplication).container)
     }
     private val announcementRepository by lazy { AnnouncementRepository(this) }
+    private val appUpdateDownloader by lazy { AppUpdateDownloader(this) }
     private val pushNotificationRepository by lazy { PushNotificationRepository(this) }
 
     private val closeOpenSwipeBackCallback = object : OnBackPressedCallback(false) {
@@ -114,6 +122,11 @@ class HomeFeedListActivity : BaseWatchActivity() {
 
     override fun onResume() {
         super.onResume()
+        (appUpdateDownloader.state.value as? AppUpdateState.Ready)?.let { ready ->
+            if (packageManager.canRequestPackageInstalls()) {
+                appUpdateDownloader.launchInstaller(ready.apk)
+            }
+        }
         closeOpenSwipe()
         if (initialStartupCompleted) {
             schedulePlatformLoginStateRefresh()
@@ -169,19 +182,71 @@ class HomeFeedListActivity : BaseWatchActivity() {
 
                 Box(modifier = Modifier.fillMaxSize()) {
                     val announcement by pendingAnnouncement
+                    val updateState by appUpdateDownloader.state.collectAsState()
                     val pushMessages by pendingPushMessages
 
                     val ann = announcement
                     if (ann != null) {
+                        val downloading = updateState is AppUpdateState.Downloading
                         AlertDialog(
-                            onDismissRequest = { announcementRepository.markDismissed(ann.version); pendingAnnouncement.value = null },
+                            onDismissRequest = {
+                                if (!ann.forceUpdate) dismissAnnouncement(ann.version)
+                            },
                             confirmButton = {
-                                TextButton(onClick = { announcementRepository.markDismissed(ann.version); pendingAnnouncement.value = null }) {
-                                    M3Text("关闭")
+                                TextButton(
+                                    enabled = !downloading,
+                                    onClick = {
+                                        appUpdateDownloader.resetFailure()
+                                        lifecycleScope.launch {
+                                            appUpdateDownloader.download(ann.version, ann.downloadUrl)
+                                        }
+                                    }
+                                ) {
+                                    M3Text(if (downloading) "下载中" else "下载并安装")
                                 }
                             },
-                            title = { M3Text("发现新版本 " + ann.version) },
-                            text = { M3Text(markdownToPlainText(ann.changelogMarkdown)) }
+                            dismissButton = if (ann.forceUpdate || downloading) null else {
+                                {
+                                    TextButton(onClick = { dismissAnnouncement(ann.version) }) {
+                                        M3Text("稍后")
+                                    }
+                                }
+                            },
+                            title = {
+                                M3Text((if (ann.forceUpdate) "需要更新 " else "发现新版本 ") + ann.version)
+                            },
+                            text = {
+                                Column {
+                                    M3Text(formatChangelog(ann.changelogMarkdown))
+                                    when (val state = updateState) {
+                                        is AppUpdateState.Downloading -> {
+                                            Spacer(Modifier.height(12.dp))
+                                            val total = state.totalBytes
+                                            if (total != null) {
+                                                LinearProgressIndicator(
+                                                    progress = { (state.bytesRead.toFloat() / total).coerceIn(0f, 1f) }
+                                                )
+                                                M3Text("${state.bytesRead * 100 / total}%")
+                                            } else {
+                                                LinearProgressIndicator()
+                                                M3Text("已下载 ${state.bytesRead / 1024} KB")
+                                            }
+                                        }
+                                        is AppUpdateState.Failed -> {
+                                            Spacer(Modifier.height(8.dp))
+                                            M3Text(state.message)
+                                        }
+                                        is AppUpdateState.Ready -> {
+                                            Spacer(Modifier.height(8.dp))
+                                            M3Text("下载完成，正在打开系统安装器")
+                                            androidx.compose.runtime.LaunchedEffect(state.apk) {
+                                                appUpdateDownloader.launchInstaller(state.apk)
+                                            }
+                                        }
+                                        AppUpdateState.Idle -> Unit
+                                    }
+                                }
+                            }
                         )
                     }
 
@@ -291,13 +356,18 @@ class HomeFeedListActivity : BaseWatchActivity() {
         }
     }
 
-    private fun markdownToPlainText(markdown: String): String {
+    private fun dismissAnnouncement(version: String) {
+        announcementRepository.markDismissed(version)
+        pendingAnnouncement.value = null
+    }
+
+    private fun formatChangelog(markdown: String): String {
         return markdown
-            .replace(Regex("""#+\s+"""), "")
-            .replace(Regex("""\*\*([^\*]+)\*\*"""), "$1")
-            .replace(Regex("""\*([^\*]+)\*"""), "$1")
-            .replace(Regex("""`([^`]+)`"""), "$1")
-            .replace(Regex("""\[(.*?)]\(.*?\)"""), "$1")
+            .replace(Regex("(?m)^#{1,6}\\s*"), "")
+            .replace(Regex("\\*\\*([^*]+)\\*\\*"), "$1")
+            .replace(Regex("\\*([^*]+)\\*"), "$1")
+            .replace(Regex("`([^`]+)`"), "$1")
+            .replace(Regex("\\[([^]]+)]\\([^)]+\\)"), "$1")
             .trim()
     }
 

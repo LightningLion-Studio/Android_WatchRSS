@@ -42,7 +42,7 @@ android {
         buildConfigField("String", "WATCHRSS_OPENPANEL_API_URL", "\"http://10.0.2.2:3001\"")
         buildConfigField("boolean", "ENABLE_RUNTIME_PERF_MONITOR", "false")
         buildConfigField("boolean", "ENABLE_WATCH_DEBUG_MASK", "false")
-        buildConfigField("String", "WATCHRSS_LOCAL_BACKEND_URL", "\"http://10.0.2.2:8765\"")
+        buildConfigField("String", "WATCHRSS_BACKEND_URL", "\"https://sly-data-plane.watchrss.cn\"")
 
         testInstrumentationRunner = "com.karumi.shot.ShotTestRunner"
         if (clearPackageDataForInstrumentation) {
