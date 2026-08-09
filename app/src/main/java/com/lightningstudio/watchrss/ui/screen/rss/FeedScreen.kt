@@ -400,6 +400,8 @@ internal fun FeedHeader(
     title: String,
     isRefreshing: Boolean,
     enabled: Boolean,
+    showInfoHint: Boolean = true,
+    idleHint: String = "下拉刷新",
     onClick: () -> Unit
 ) {
     val verticalPadding = watchDimensionResource(R.dimen.hey_content_horizontal_distance)
@@ -437,19 +439,23 @@ internal fun FeedHeader(
     ) {
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
             val availableWidthPx = with(density) { maxWidth.toPx() }
-            val formattedTitle = remember(title, availableWidthPx, titleSizePx, typeface) {
+            val formattedTitle = remember(title, showInfoHint, availableWidthPx, titleSizePx, typeface) {
                 formatWatchTitleForWidthLimits(
-                    title = "$title $CHANNEL_TITLE_CLICK_HINT_SYMBOL",
+                    title = if (showInfoHint) "$title $CHANNEL_TITLE_CLICK_HINT_SYMBOL" else title,
                     paint = paint,
                     availableWidthPx = availableWidthPx,
                     firstLimitPx = firstLimitPx,
                     secondLimitPx = secondLimitPx,
-                    protectedSuffix = CHANNEL_TITLE_CLICK_HINT_SYMBOL,
+                    protectedSuffix = CHANNEL_TITLE_CLICK_HINT_SYMBOL.takeIf { showInfoHint },
                     minPrefixCharsBeforeSuffixOnLastLine = 2
                 )
             }
             Text(
-                text = channelTitleWithStyledHint(formattedTitle, titleSize),
+                text = if (showInfoHint) {
+                    channelTitleWithStyledHint(formattedTitle, titleSize)
+                } else {
+                    androidx.compose.ui.text.AnnotatedString(formattedTitle)
+                },
                 color = MaterialTheme.colorScheme.onSurface,
                 fontSize = titleSize,
                 lineHeight = titleLineHeight,
@@ -460,13 +466,15 @@ internal fun FeedHeader(
             )
         }
         Text(
-            text = if (isRefreshing) "正在刷新中..." else "下拉刷新",
+            text = if (isRefreshing) "正在刷新中..." else idleHint,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = hintSize,
             textAlign = TextAlign.Center,
             modifier = Modifier
                 .fillMaxWidth()
-                .semantics { contentDescription = if (isRefreshing) "正在刷新内容" else "下拉可刷新" }
+                .semantics {
+                    contentDescription = if (isRefreshing) "正在刷新内容" else idleHint
+                }
         )
     }
 }
@@ -514,7 +522,7 @@ private fun FeedEmptySkeleton(
 }
 
 @Composable
-private fun FeedEmptyState() {
+internal fun FeedEmptyState() {
     val topPadding = watchDimensionResource(R.dimen.hey_distance_20dp)
     val textSize = textSize(R.dimen.hey_s_title)
     Text(
@@ -772,7 +780,9 @@ internal fun FeedItemEntry(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onFavoriteClick: () -> Unit,
-    onWatchLaterClick: () -> Unit
+    onWatchLaterClick: () -> Unit,
+    swipeActionsEnabled: Boolean = true,
+    semanticItemLabel: String = "文章"
 ) {
     val actionPadding = watchDimensionResource(R.dimen.hey_distance_4dp)
     val actionWidth = watchDimensionResource(R.dimen.watch_swipe_action_button_width)
@@ -832,6 +842,7 @@ internal fun FeedItemEntry(
                     enabled = !isScrolling,
                     useOriginalContent = useOriginalContent,
                     modifier = cardScaleModifier,
+                    semanticItemLabel = semanticItemLabel,
                     onClick = onClick,
                     onLongClick = onLongClick
                 )
@@ -845,6 +856,7 @@ internal fun FeedItemEntry(
                     isScrolling = isScrolling,
                     useOriginalContent = useOriginalContent,
                     modifier = cardScaleModifier,
+                    semanticItemLabel = semanticItemLabel,
                     onClick = onClick,
                     onLongClick = onLongClick
                 )
@@ -852,7 +864,7 @@ internal fun FeedItemEntry(
         }
     }
 
-    if (isScrolling) {
+    if (isScrolling || !swipeActionsEnabled) {
         Box(modifier = Modifier.fillMaxWidth()) {
             cardContent(Modifier)
         }
@@ -1004,6 +1016,7 @@ private fun FeedTextCard(
     enabled: Boolean,
     useOriginalContent: Boolean,
     modifier: Modifier,
+    semanticItemLabel: String,
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
@@ -1036,7 +1049,7 @@ private fun FeedTextCard(
             )
             .padding(padding)
             .semantics {
-                contentDescription = "文章：${item.title}${if (item.isRead) "" else "，未读"}"
+                contentDescription = "$semanticItemLabel：${item.title}${if (item.isRead) "" else "，未读"}"
             }
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
@@ -1069,6 +1082,7 @@ private fun FeedImageCard(
     isScrolling: Boolean,
     useOriginalContent: Boolean,
     modifier: Modifier,
+    semanticItemLabel: String,
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
@@ -1104,7 +1118,7 @@ private fun FeedImageCard(
                 interactionSource = pressState.interactionSource
             )
             .semantics {
-                contentDescription = "文章：${item.title}${if (item.isRead) "" else "，未读"}"
+                contentDescription = "$semanticItemLabel：${item.title}${if (item.isRead) "" else "，未读"}"
             }
     ) {
         RssThumbnail(

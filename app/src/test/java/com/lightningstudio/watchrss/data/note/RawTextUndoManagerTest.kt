@@ -9,25 +9,56 @@ import org.junit.Test
 
 class RawTextUndoManagerTest {
     @Test
-    fun typingBurstIsOneUndoStep() {
+    fun nearbyTouchingTypingIsOneUndoStep() {
         val history = RawTextUndoManager(value(""))
-        history.record(value("你"), 100L)
-        history.record(value("你好"), 200L)
 
-        assertTrue(history.canUndo)
+        history.record(value("a"), 0L)
+        history.record(value("ab"), 200L)
+        history.record(value("abc"), 400L)
+
+        assertEquals(1, history.undoSize)
         assertEquals("", history.undo().text)
-        assertTrue(history.canRedo)
-        assertEquals("你好", history.redo().text)
+        assertEquals("abc", history.redo().text)
     }
 
     @Test
-    fun delayedEditCreatesAnotherUndoStep() {
-        val history = RawTextUndoManager(value("原文"))
-        history.record(value("原文一"), 100L)
-        history.record(value("原文一二"), 1_000L)
+    fun pauseAndCursorMoveCreateNewUndoGroups() {
+        val history = RawTextUndoManager(value(""))
+        history.record(value("a"), 0L)
+        history.record(value("ab"), 600L)
+        history.record(TextFieldValue("ab", TextRange(0)), 650L)
+        history.record(TextFieldValue("Xab", TextRange(1)), 700L)
 
-        assertEquals("原文一", history.undo().text)
-        assertEquals("原文", history.undo().text)
+        assertEquals(3, history.undoSize)
+        assertEquals("ab", history.undo().text)
+        assertEquals("a", history.undo().text)
+        assertEquals("", history.undo().text)
+    }
+
+    @Test
+    fun newEditAfterUndoClearsRedo() {
+        val history = RawTextUndoManager(value(""))
+        history.record(value("a"), 0L)
+        history.record(value("ab"), 600L)
+
+        history.undo()
+        assertTrue(history.canRedo)
+        history.record(value("ac"), 1_200L)
+
+        assertFalse(history.canRedo)
+        assertEquals("ac", history.value.text)
+    }
+
+    @Test
+    fun historyIsCappedAtTwoHundredSteps() {
+        val history = RawTextUndoManager(value(""))
+        repeat(205) { index ->
+            history.record(value("x".repeat(index + 1)), index * 600L)
+        }
+
+        assertEquals(200, history.undoSize)
+        repeat(200) { history.undo() }
+        assertEquals("xxxxx", history.value.text)
         assertFalse(history.canUndo)
     }
 

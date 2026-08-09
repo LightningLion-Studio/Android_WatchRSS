@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.setContent
@@ -16,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.rss.ImportedContentIds
+import com.lightningstudio.watchrss.data.home.HomeEntryPlacementStore
 import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.screen.ActionDialogScreen
 import com.lightningstudio.watchrss.ui.screen.ActionItem
@@ -29,6 +31,10 @@ class ChannelActionsActivity : BaseWatchActivity() {
         AppViewModelFactory((application as WatchRssApplication).container)
     }
     private var isNavigating by mutableStateOf(false)
+    private val isNotesEntry by lazy {
+        intent.getStringExtra(EXTRA_HOME_ENTRY) == HOME_ENTRY_NOTES
+    }
+    private val homeEntryPlacementStore by lazy { HomeEntryPlacementStore(this) }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
@@ -41,7 +47,7 @@ class ChannelActionsActivity : BaseWatchActivity() {
         super.onCreate(savedInstanceState)
         setupSystemBars()
 
-        if (!viewModel.isValid()) {
+        if (!isNotesEntry && !viewModel.isValid()) {
             finish()
             return
         }
@@ -50,8 +56,12 @@ class ChannelActionsActivity : BaseWatchActivity() {
         setContent {
             WatchRSSTheme {
                 val channel by viewModel.channel.collectAsState()
-                val isValid = channel != null
-                val pinLabel = if (channel?.isPinned == true) "取消置顶" else "置顶"
+                val notesPlacement by homeEntryPlacementStore.observeNotesPlacement().collectAsState(
+                    initial = homeEntryPlacementStore.notesPlacement()
+                )
+                val isValid = isNotesEntry || channel != null
+                val isPinned = if (isNotesEntry) notesPlacement.isPinned else channel?.isPinned == true
+                val pinLabel = if (isPinned) "取消置顶" else "置顶"
                 val isBuiltin = channel?.let { BuiltinChannelType.fromUrl(it.url) != null } ?: false
                 val canMarkRead = channel?.let { it.unreadCount > 0 && !isBuiltin } ?: false
                 val canClear = channel?.url
@@ -65,7 +75,11 @@ class ChannelActionsActivity : BaseWatchActivity() {
                             label = "移动到顶部",
                             enabled = isValid,
                             onClick = {
-                                viewModel.moveToTop()
+                                if (isNotesEntry) {
+                                    homeEntryPlacementStore.moveNotesToTop()
+                                } else {
+                                    viewModel.moveToTop()
+                                }
                                 finish()
                             }
                         )
@@ -75,22 +89,28 @@ class ChannelActionsActivity : BaseWatchActivity() {
                             label = pinLabel,
                             enabled = isValid,
                             onClick = {
-                                viewModel.togglePinned()
+                                if (isNotesEntry) {
+                                    homeEntryPlacementStore.setNotesPinned(!notesPlacement.isPinned)
+                                } else {
+                                    viewModel.togglePinned()
+                                }
                                 finish()
                             }
                         )
                     )
-                    add(
-                        ActionItem(
-                            label = "标记已读",
-                            enabled = isValid && canMarkRead,
-                            onClick = {
-                                viewModel.markRead()
-                                finish()
-                            }
+                    if (!isNotesEntry) {
+                        add(
+                            ActionItem(
+                                label = "标记已读",
+                                enabled = isValid && canMarkRead,
+                                onClick = {
+                                    viewModel.markRead()
+                                    finish()
+                                }
+                            )
                         )
-                    )
-                    if (canClear) {
+                    }
+                    if (!isNotesEntry && canClear) {
                         add(
                             ActionItem(
                                 label = "清空",
@@ -99,7 +119,7 @@ class ChannelActionsActivity : BaseWatchActivity() {
                             )
                         )
                     }
-                    if (!quick) {
+                    if (!isNotesEntry && !quick) {
                         add(
                             ActionItem(
                                 label = "删除",
@@ -162,6 +182,12 @@ class ChannelActionsActivity : BaseWatchActivity() {
     companion object {
         const val EXTRA_CHANNEL_ID = "channelId"
         const val EXTRA_QUICK = "quick"
+        private const val EXTRA_HOME_ENTRY = "homeEntry"
+        private const val HOME_ENTRY_NOTES = "notes"
+
+        fun createNotesIntent(context: Context): Intent =
+            Intent(context, ChannelActionsActivity::class.java)
+                .putExtra(EXTRA_HOME_ENTRY, HOME_ENTRY_NOTES)
     }
 
     private fun navigateHome() {

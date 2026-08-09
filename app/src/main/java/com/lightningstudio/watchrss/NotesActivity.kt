@@ -7,6 +7,9 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,29 +19,29 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,23 +51,39 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Density
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.lightningstudio.watchrss.data.note.RawTextUndoManager
 import com.lightningstudio.watchrss.data.note.WatchNoteEntity
+import com.lightningstudio.watchrss.data.rss.RssItem
 import com.lightningstudio.watchrss.phoneconnection.WatchDeviceIdentity
 import com.lightningstudio.watchrss.ui.components.WatchSurface
+import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownHandler
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
+import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownScrollHandler
+import com.lightningstudio.watchrss.ui.input.NoteCursorCrownAccelerator
 import com.lightningstudio.watchrss.ui.reader.ReaderPageLayout
 import com.lightningstudio.watchrss.ui.screen.rss.DetailTitle
+import com.lightningstudio.watchrss.ui.screen.rss.FeedEmptyState
+import com.lightningstudio.watchrss.ui.screen.rss.FeedHeader
+import com.lightningstudio.watchrss.ui.screen.rss.FeedItemEntry
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
+import com.lightningstudio.watchrss.ui.theme.LocalRubberBandOverscrollOffset
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -89,51 +108,21 @@ class NotesActivity : BaseWatchActivity() {
                     val editorSafeInset = notesEditorSafeInset()
                     val selected = selectedNoteId?.let { id -> notes.firstOrNull { it.noteId == id } }
                     val editing = editingNoteId?.let { id -> notes.firstOrNull { it.noteId == id } }
+                    val documentKey = selected?.noteId ?: editing?.noteId ?: NEW_NOTE_DOCUMENT_KEY
+                    val documentScrollState = remember(documentKey) { ScrollState(0) }
                     if (selected == null && editing == null && !creating) {
-                        val listSafePadding = watchDimensionResource(R.dimen.watch_safe_padding)
-                        val itemSpacing = watchDimensionResource(R.dimen.hey_distance_6dp)
-                        val listState = rememberLazyListState()
-                        InstallDigitalCrownLazyListHandler(listState)
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = listSafePadding),
-                            state = listState,
-                            contentPadding = PaddingValues(
-                                top = listSafePadding,
-                                bottom = listSafePadding + itemSpacing
-                            ),
-                            verticalArrangement = Arrangement.spacedBy(itemSpacing),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            item {
-                                Text(
-                                    text = "备忘录",
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = itemSpacing),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    textAlign = TextAlign.Center
-                                )
-                            }
-                            if (notes.isEmpty()) {
-                                item {
-                                    NotesEmptyCard()
-                                }
-                            }
-                            items(notes, key = { it.noteId }) { note ->
-                                NoteListCard(note = note, onClick = {
+                        NotesFeedList(
+                            notes = notes,
+                            onNoteClick = { note ->
                                     creating = false
                                     selectedNoteId = note.noteId
-                                })
-                            }
-                            item {
-                                NewNoteButton(onClick = { creating = true })
-                            }
-                        }
+                            },
+                            onCreateNote = { creating = true }
+                        )
                     } else if (selected != null && editing == null && !creating) {
                         WatchNoteReader(
                             note = selected,
+                            scrollState = documentScrollState,
                             onBack = { selectedNoteId = null },
                             onEdit = { editingNoteId = selected.noteId }
                         )
@@ -141,6 +130,7 @@ class NotesActivity : BaseWatchActivity() {
                         WatchNoteRawEditor(
                             note = editing,
                             safeInset = editorSafeInset,
+                            scrollState = documentScrollState,
                             saveDraft = { noteId, markdown ->
                                 repository.saveRawMarkdown(noteId, markdown, deviceId)
                             },
@@ -157,74 +147,76 @@ class NotesActivity : BaseWatchActivity() {
 }
 
 @androidx.compose.runtime.Composable
-private fun NoteListCard(note: WatchNoteEntity, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(watchDimensionResource(R.dimen.hey_card_normal_bg_radius))
-    val contentPadding = watchDimensionResource(R.dimen.hey_content_horizontal_distance)
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.surface)
-            .clickable(onClick = onClick)
-    ) {
-        Column(Modifier.padding(contentPadding)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (note.pinned) {
-                    Icon(
-                        imageVector = Icons.Default.PushPin,
-                        contentDescription = "已置顶",
-                        modifier = Modifier.size(14.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(Modifier.width(5.dp))
-                }
-                Text(
-                    text = note.title.ifBlank { "未命名笔记" },
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.titleSmall,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            val preview = notePreview(note)
-            if (preview.isNotEmpty()) {
-                Spacer(Modifier.height(5.dp))
-                Text(
-                    text = preview,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            Spacer(Modifier.height(7.dp))
-            Text(
-                text = noteMetadata(note),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.labelSmall
-            )
+private fun NotesFeedList(
+    notes: List<WatchNoteEntity>,
+    onNoteClick: (WatchNoteEntity) -> Unit,
+    onCreateNote: () -> Unit
+) {
+    val baseDensity = LocalDensity.current
+    CompositionLocalProvider(LocalDensity provides Density(2f, baseDensity.fontScale)) {
+        val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
+        val itemSpacing = watchDimensionResource(R.dimen.hey_distance_8dp)
+        val listState = rememberLazyListState()
+        InstallDigitalCrownLazyListHandler(listState)
+        val isScrolling by remember(listState) {
+            derivedStateOf { listState.isScrollInProgress }
         }
-    }
-}
-
-@androidx.compose.runtime.Composable
-private fun NotesEmptyCard() {
-    val shape = RoundedCornerShape(watchDimensionResource(R.dimen.hey_card_normal_bg_radius))
-    val contentPadding = watchDimensionResource(R.dimen.hey_content_horizontal_distance)
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.surface)
-            .padding(contentPadding)
-    ) {
-        Text(text = "还没有备忘录", style = MaterialTheme.typography.titleSmall)
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = "点击下方按钮新建，或从手机同步。",
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodySmall
-        )
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = safePadding),
+            state = listState,
+            contentPadding = PaddingValues(
+                top = 12.dp,
+                bottom = itemSpacing
+            )
+        ) {
+            item(key = "header") {
+                Box(modifier = Modifier.padding(bottom = itemSpacing)) {
+                    FeedHeader(
+                        title = "备忘录",
+                        isRefreshing = false,
+                        enabled = false,
+                        showInfoHint = false,
+                        idleHint = "${notes.size} 条备忘录",
+                        onClick = {}
+                    )
+                }
+            }
+            if (notes.isEmpty()) {
+                item(key = "empty") {
+                    FeedEmptyState()
+                }
+            } else {
+                items(notes, key = { it.noteId }) { note ->
+                    val feedItem = remember(note) { note.asFeedItem() }
+                    Box(modifier = Modifier.padding(bottom = itemSpacing)) {
+                        FeedItemEntry(
+                            item = feedItem,
+                            thumbUrl = null,
+                            maxImageWidthPx = 1,
+                            isScrolling = isScrolling,
+                            useOriginalContent = false,
+                            openSwipeId = null,
+                            onOpenSwipe = {},
+                            onCloseSwipe = {},
+                            draggingSwipeId = null,
+                            onDragStart = {},
+                            onDragEnd = {},
+                            onClick = { onNoteClick(note) },
+                            onLongClick = { onNoteClick(note) },
+                            onFavoriteClick = {},
+                            onWatchLaterClick = {},
+                            swipeActionsEnabled = false,
+                            semanticItemLabel = "备忘录"
+                        )
+                    }
+                }
+            }
+            item(key = "create") {
+                NewNoteButton(onClick = onCreateNote)
+            }
+        }
     }
 }
 
@@ -251,54 +243,41 @@ private fun NewNoteButton(onClick: () -> Unit) {
     }
 }
 
+private fun WatchNoteEntity.asFeedItem(): RssItem = RssItem(
+    id = noteId.hashCode().toLong(),
+    channelId = NOTES_CHANNEL_ID,
+    title = title.ifBlank { "未命名笔记" },
+    description = null,
+    content = plainText,
+    originalContent = null,
+    link = null,
+    pubDate = null,
+    imageUrl = null,
+    audioUrl = null,
+    videoUrl = null,
+    summary = notePreview(this).ifBlank { "暂无摘要" },
+    previewImageUrl = null,
+    isRead = true,
+    isLiked = pinned,
+    readingProgress = 0f,
+    fetchedAt = updatedAt
+)
+
 @androidx.compose.runtime.Composable
 private fun WatchNoteReader(
     note: WatchNoteEntity,
+    scrollState: ScrollState,
     onBack: () -> Unit,
     onEdit: () -> Unit
 ) {
     BackHandler(onBack = onBack)
-    val listState = rememberLazyListState()
-    InstallDigitalCrownLazyListHandler(listState)
-    val horizontalPadding = ReaderPageLayout.horizontalPadding
-    val titlePadding = ReaderPageLayout.titleHorizontalPadding
-    val verticalPadding = ReaderPageLayout.topSafePadding
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        state = listState,
-        contentPadding = PaddingValues(
-            horizontal = horizontalPadding,
-            vertical = verticalPadding
-        ),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        item {
-            Text(
-                text = "阅读备忘录",
-                modifier = Modifier.fillMaxWidth(),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-        }
-        item {
-            DetailTitle(
-                title = note.title.ifBlank { "未命名笔记" },
-                titlePadding = titlePadding,
-                textColor = MaterialTheme.colorScheme.onSurface
-            )
-        }
-        item {
-            Text(
-                text = noteMetadata(note),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.labelSmall
-            )
-        }
-        item {
-            CompactEditButton(onClick = onEdit)
-        }
-        item {
+    InstallDigitalCrownScrollHandler(scrollState)
+    Box(modifier = Modifier.fillMaxSize()) {
+        NoteDocumentContent(
+            title = note.title.ifBlank { "未命名笔记" },
+            metadata = noteMetadata(note),
+            scrollState = scrollState
+        ) {
             SelectionContainer {
                 Text(
                     text = note.plainText.ifBlank { "这条备忘录还没有正文。" },
@@ -313,6 +292,56 @@ private fun WatchNoteReader(
                 )
             }
         }
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(NOTE_TOOL_OVERLAY_HEIGHT),
+            contentAlignment = Alignment.Center
+        ) {
+            CompactEditButton(onClick = onEdit)
+        }
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun NoteDocumentContent(
+    title: String,
+    metadata: String?,
+    scrollState: ScrollState,
+    body: @androidx.compose.runtime.Composable () -> Unit
+) {
+    val horizontalPadding = ReaderPageLayout.horizontalPadding
+    val titlePadding = ReaderPageLayout.titleHorizontalPadding
+    val verticalPadding = ReaderPageLayout.topSafePadding
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .verticalScroll(scrollState)
+            .padding(horizontal = horizontalPadding)
+            .padding(top = verticalPadding, bottom = NOTE_DOCUMENT_BOTTOM_PADDING),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Text(
+            text = "阅读备忘录",
+            modifier = Modifier.fillMaxWidth(),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+        DetailTitle(
+            title = title,
+            titlePadding = titlePadding,
+            textColor = MaterialTheme.colorScheme.onSurface
+        )
+        if (metadata != null) {
+            Text(
+                text = metadata,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelSmall
+            )
+        }
+        body()
     }
 }
 
@@ -339,12 +368,22 @@ private fun CompactEditButton(onClick: () -> Unit) {
 private fun WatchNoteRawEditor(
     note: WatchNoteEntity?,
     safeInset: androidx.compose.ui.unit.Dp,
+    scrollState: ScrollState,
     saveDraft: suspend (noteId: String?, markdown: String) -> WatchNoteEntity,
     onClose: () -> Unit
 ) {
     val initialValue = remember(note?.noteId) {
         val markdown = note?.markdown.orEmpty()
-        TextFieldValue(markdown, TextRange(markdown.length))
+        TextFieldValue(
+            text = markdown,
+            selection = TextRange(
+                estimateNoteCursorForScroll(
+                    textLength = markdown.length,
+                    scrollValue = scrollState.value,
+                    scrollMaxValue = scrollState.maxValue
+                )
+            )
+        )
     }
     val history = remember(note?.noteId) { RawTextUndoManager(initialValue) }
     var editorValue by remember(note?.noteId) { mutableStateOf(initialValue) }
@@ -356,6 +395,24 @@ private fun WatchNoteRawEditor(
     var closing by remember(note?.noteId) { mutableStateOf(false) }
     val saveMutex = remember(note?.noteId) { Mutex() }
     val scope = rememberCoroutineScope()
+    val crownAccelerator = remember(note?.noteId) { NoteCursorCrownAccelerator() }
+    var textLayoutResult by remember(note?.noteId) { mutableStateOf<TextLayoutResult?>(null) }
+    var textFieldFocused by remember(note?.noteId) { mutableStateOf(false) }
+
+    InstallDigitalCrownHandler(supportsDigitalCrown = true) { delta ->
+        if (delta == 0f) return@InstallDigitalCrownHandler false
+        val steps = crownAccelerator.consume(-delta, SystemClock.uptimeMillis())
+        if (steps == 0) return@InstallDigitalCrownHandler true
+        val direction = if (steps > 0) 1 else -1
+        var next = editorValue
+        repeat(kotlin.math.abs(steps)) {
+            next = moveNoteCursor(next, direction)
+        }
+        if (next.selection != editorValue.selection) {
+            editorValue = history.record(next, SystemClock.uptimeMillis())
+        }
+        true
+    }
 
     suspend fun persist(markdown: String): Boolean = saveMutex.withLock {
         if (markdown == lastSavedText) {
@@ -421,61 +478,184 @@ private fun WatchNoteRawEditor(
     }
 
     BackHandler(onBack = ::requestClose)
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(safeInset),
-        horizontalAlignment = Alignment.CenterHorizontally
+    val bodyTextStyle = MaterialTheme.typography.bodyLarge.copy(
+        color = MaterialTheme.colorScheme.onSurface,
+        textAlign = TextAlign.Justify,
+        lineHeight = MaterialTheme.typography.bodyLarge.lineHeight * 1.2f
+    )
+    val cursorColor = MaterialTheme.colorScheme.primary
+    val minimumBodyHeight = LocalConfiguration.current.screenHeightDp.dp * 0.58f
+
+    val rubberBandOffset = LocalRubberBandOverscrollOffset.current
+    Box(modifier = Modifier.fillMaxSize()) {
+        NoteDocumentContent(
+            title = note?.title?.ifBlank { "未命名笔记" } ?: "新建备忘录",
+            metadata = note?.let(::noteMetadata),
+            scrollState = scrollState
+        ) {
+            BasicTextField(
+                value = editorValue,
+                onValueChange = {
+                    editorValue = history.record(it, SystemClock.uptimeMillis())
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = minimumBodyHeight)
+                    .onFocusChanged { textFieldFocused = it.isFocused }
+                    .drawWithContent {
+                        drawContent()
+                        if (!textFieldFocused) {
+                            val cursorRect = textLayoutResult
+                                ?.getCursorRect(editorValue.selection.end.coerceIn(0, editorValue.text.length))
+                            if (cursorRect != null) {
+                                drawLine(
+                                    color = cursorColor,
+                                    start = androidx.compose.ui.geometry.Offset(
+                                        cursorRect.left,
+                                        cursorRect.top
+                                    ),
+                                    end = androidx.compose.ui.geometry.Offset(
+                                        cursorRect.left,
+                                        cursorRect.bottom
+                                    ),
+                                    strokeWidth = 2.dp.toPx()
+                                )
+                            }
+                        }
+                    },
+                textStyle = bodyTextStyle,
+                cursorBrush = SolidColor(cursorColor),
+                onTextLayout = { textLayoutResult = it },
+                decorationBox = { innerTextField ->
+                    if (editorValue.text.isEmpty()) {
+                        Text(
+                            text = "直接输入原始文本",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = bodyTextStyle
+                        )
+                    }
+                    innerTextField()
+                }
+            )
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    // The theme translates the whole screen during rubber-band overscroll. Apply
+                    // the inverse only to editor chrome so its controls and scrims stay screen-fixed.
+                    translationY = -(rubberBandOffset?.value ?: 0f)
+                }
+        ) {
+            NoteEditorTopOverlay(
+                modifier = Modifier.align(Alignment.TopCenter),
+                safeInset = safeInset,
+                undoEnabled = history.canUndo && !closing,
+                redoEnabled = history.canRedo && !closing,
+                onUndo = { editorValue = history.undo() },
+                onRedo = { editorValue = history.redo() }
+            )
+            NoteEditorBottomOverlay(
+                modifier = Modifier.align(Alignment.BottomCenter),
+                safeInset = safeInset,
+                saveState = saveState,
+                enabled = !closing,
+                onClose = ::requestClose
+            )
+        }
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun NoteEditorTopOverlay(
+    modifier: Modifier,
+    safeInset: androidx.compose.ui.unit.Dp,
+    undoEnabled: Boolean,
+    redoEnabled: Boolean,
+    onUndo: () -> Unit,
+    onRedo: () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(NOTE_TOOL_OVERLAY_HEIGHT)
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color.Black, Color.Black.copy(alpha = 0.9f), Color.Transparent)
+                )
+            )
+            .padding(horizontal = safeInset),
+        contentAlignment = Alignment.TopCenter
     ) {
-        Text(
-            text = note?.title?.ifBlank { "未命名笔记" } ?: "新建备忘录",
-            modifier = Modifier.fillMaxWidth(),
-            style = MaterialTheme.typography.titleMedium,
-            textAlign = TextAlign.Center
-        )
-        Spacer(Modifier.height(8.dp))
-        OutlinedTextField(
-            value = editorValue,
-            onValueChange = {
-                editorValue = history.record(it, SystemClock.uptimeMillis())
-            },
-            modifier = Modifier.fillMaxWidth().weight(1f),
-            label = { Text("Markdown / TXT 原文") },
-            placeholder = { Text("直接输入原始文本") }
-        )
-        Text(
-            text = saveState.label,
-            modifier = Modifier.fillMaxWidth(),
-            color = if (saveState == DraftSaveState.ERROR) {
-                MaterialTheme.colorScheme.error
-            } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
-            style = MaterialTheme.typography.labelSmall,
-            textAlign = TextAlign.Center
-        )
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(
-                onClick = { editorValue = history.undo() },
-                enabled = history.canUndo && !closing
-            ) {
+            IconButton(onClick = onUndo, enabled = undoEnabled) {
                 Icon(Icons.AutoMirrored.Filled.Undo, contentDescription = "撤销")
             }
-            IconButton(
-                onClick = { editorValue = history.redo() },
-                enabled = history.canRedo && !closing
-            ) {
+            IconButton(onClick = onRedo, enabled = redoEnabled) {
                 Icon(Icons.AutoMirrored.Filled.Redo, contentDescription = "重做")
-            }
-            IconButton(onClick = ::requestClose, enabled = !closing) {
-                Icon(Icons.Default.Close, contentDescription = "关闭编辑")
             }
         }
     }
+}
+
+@androidx.compose.runtime.Composable
+private fun NoteEditorBottomOverlay(
+    modifier: Modifier,
+    safeInset: androidx.compose.ui.unit.Dp,
+    saveState: DraftSaveState,
+    enabled: Boolean,
+    onClose: () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(NOTE_TOOL_OVERLAY_HEIGHT)
+            .background(
+                Brush.verticalGradient(
+                    listOf(Color.Transparent, Color.Black.copy(alpha = 0.9f), Color.Black)
+                )
+            )
+            .padding(horizontal = safeInset),
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        IconButton(onClick = onClose, enabled = enabled) {
+            Icon(
+                Icons.Default.Close,
+                contentDescription = "关闭编辑，${saveState.label}",
+                tint = if (saveState == DraftSaveState.ERROR) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                }
+            )
+        }
+    }
+}
+
+internal fun estimateNoteCursorForScroll(
+    textLength: Int,
+    scrollValue: Int,
+    scrollMaxValue: Int
+): Int {
+    if (textLength <= 0 || scrollMaxValue <= 0) return 0
+    val fraction = scrollValue.toFloat() / scrollMaxValue.toFloat()
+    return (textLength * fraction).toInt().coerceIn(0, textLength)
+}
+
+internal fun moveNoteCursor(value: TextFieldValue, direction: Int): TextFieldValue {
+    if (direction == 0 || value.text.isEmpty()) return value.copy(composition = null)
+    val anchor = if (direction > 0) value.selection.max else value.selection.min
+    val target = when {
+        direction > 0 && anchor < value.text.length ->
+            Character.offsetByCodePoints(value.text, anchor, 1)
+        direction < 0 && anchor > 0 ->
+            Character.offsetByCodePoints(value.text, anchor, -1)
+        else -> anchor
+    }
+    return value.copy(selection = TextRange(target), composition = null)
 }
 
 @androidx.compose.runtime.Composable
@@ -511,6 +691,12 @@ private fun noteMetadata(note: WatchNoteEntity): String {
 private const val ROUND_SCREEN_SAFE_INSET_FRACTION = 0.1465f
 private const val AUTO_SAVE_DELAY_MILLIS = 600L
 private const val NOTE_PREVIEW_LENGTH = 120
+private const val NOTES_CHANNEL_ID = -1L
+private const val NEW_NOTE_DOCUMENT_KEY = "__new_note__"
+// REL_WHEEL reports roughly one delta unit per crown detent on the watch. Accumulate about three
+// detents for each Unicode code point so precise cursor placement is not too sensitive.
+private val NOTE_TOOL_OVERLAY_HEIGHT = 56.dp
+private val NOTE_DOCUMENT_BOTTOM_PADDING = 64.dp
 
 private enum class DraftSaveState(val label: String) {
     EMPTY("输入后自动保存"),

@@ -28,6 +28,7 @@ object HomeTestTags {
     const val ROOT = "home/root"
     const val CHANNEL_LIST = "home/channel_list"
     const val PROFILE_ENTRY = "home/profile_entry"
+    const val NOTES_ENTRY = "home/notes_entry"
     const val EMPTY_ENTRY = "home/empty_entry"
     const val RECOMMEND_ENTRY = "home/recommend_entry"
     const val ADD_ENTRY = "home/add_entry"

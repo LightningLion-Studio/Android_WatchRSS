@@ -79,6 +79,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.lightningstudio.watchrss.R
+import com.lightningstudio.watchrss.data.home.NotesHomePlacement
 import com.lightningstudio.watchrss.ui.components.PullRefreshBox
 import com.lightningstudio.watchrss.ui.components.rememberPullRefreshEnabled
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
@@ -116,7 +117,9 @@ fun HomeComposeScreen(
     onDragStart: (Long) -> Unit,
     onDragEnd: () -> Unit,
     onProfileClick: () -> Unit,
-    onNotesClick: () -> Unit,
+    onNotesClick: () -> Unit = {},
+    onNotesLongClick: () -> Unit = {},
+    notesPlacement: NotesHomePlacement = NotesHomePlacement(sortOrder = 0L, isPinned = false),
     onRecommendClick: () -> Unit,
     onReadAloudClick: () -> Unit = {},
     onChannelClick: (RssChannel) -> Unit,
@@ -130,8 +133,8 @@ fun HomeComposeScreen(
     val baseDensity = LocalDensity.current
     CompositionLocalProvider(LocalDensity provides Density(2f, baseDensity.fontScale)) {
         val showReadAloudEntry = readAloudState.visible && readAloudState.currentItemId != null
-        val entries = remember(channels, hasLoadedChannels, showReadAloudEntry) {
-            buildHomeEntries(channels, hasLoadedChannels, showReadAloudEntry)
+        val entries = remember(channels, hasLoadedChannels, showReadAloudEntry, notesPlacement) {
+            buildHomeEntries(channels, hasLoadedChannels, showReadAloudEntry, notesPlacement)
         }
         val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
         val itemSpacing = watchDimensionResource(R.dimen.hey_distance_6dp)
@@ -221,9 +224,16 @@ fun HomeComposeScreen(
                                 HomeDefaultItem(
                                     title = "备忘录",
                                     summary = "纯文本编辑 · 手机同步",
-                                    backgroundColor = MaterialTheme.colorScheme.surface,
+                                    backgroundColor = if (notesPlacement.isPinned) {
+                                        MaterialTheme.colorScheme.surfaceVariant
+                                    } else {
+                                        MaterialTheme.colorScheme.surface
+                                    },
+                                    titleFontSize = 16.sp,
                                     showIndicator = false,
-                                    onClick = onNotesClick
+                                    testTag = HomeTestTags.NOTES_ENTRY,
+                                    onClick = onNotesClick,
+                                    onLongClick = onNotesLongClick
                                 )
                             }
                             HomeEntry.Recommend -> {
@@ -282,7 +292,7 @@ fun HomeComposeScreen(
     }
 }
 
-private sealed class HomeEntry(val key: String) {
+internal sealed class HomeEntry(val key: String) {
     data object Profile : HomeEntry("profile")
     data object Notes : HomeEntry("notes")
     data object ReadAloud : HomeEntry("read_aloud")
@@ -296,25 +306,47 @@ private sealed class HomeEntry(val key: String) {
 private fun buildHomeEntries(
     channels: List<RssChannel>,
     hasLoadedChannels: Boolean,
-    showReadAloudEntry: Boolean
+    showReadAloudEntry: Boolean,
+    notesPlacement: NotesHomePlacement
 ): List<HomeEntry> {
     val entries = mutableListOf<HomeEntry>()
     entries.add(HomeEntry.Profile)
-    entries.add(HomeEntry.Notes)
     if (showReadAloudEntry) {
         entries.add(HomeEntry.ReadAloud)
     }
-    if (!hasLoadedChannels) {
-        // Wait for the first Room emission to avoid flashing an empty-state card on cold start.
-    } else if (channels.isEmpty()) {
+    entries.addAll(buildMovableHomeEntries(channels, notesPlacement))
+    // Wait for the first Room emission to avoid flashing an empty-state card on cold start.
+    if (hasLoadedChannels && channels.isEmpty()) {
         entries.add(HomeEntry.Empty)
-    } else {
-        entries.addAll(channels.map { HomeEntry.Channel(it) })
     }
     entries.add(HomeEntry.Recommend)
     entries.add(HomeEntry.AddRss)
     entries.add(HomeEntry.Beian)
     return entries
+}
+
+internal fun buildMovableHomeEntries(
+    channels: List<RssChannel>,
+    notesPlacement: NotesHomePlacement
+): List<HomeEntry> {
+    return buildList {
+        add(HomeEntry.Notes)
+        addAll(channels.map(HomeEntry::Channel))
+    }.sortedWith(
+        compareByDescending<HomeEntry> { entry ->
+            when (entry) {
+                HomeEntry.Notes -> notesPlacement.isPinned
+                is HomeEntry.Channel -> entry.channel.isPinned
+                else -> false
+            }
+        }.thenByDescending { entry ->
+            when (entry) {
+                HomeEntry.Notes -> notesPlacement.sortOrder
+                is HomeEntry.Channel -> entry.channel.sortOrder
+                else -> Long.MIN_VALUE
+            }
+        }
+    )
 }
 
 @Composable

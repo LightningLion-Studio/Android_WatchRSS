@@ -7,6 +7,8 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
@@ -49,6 +51,7 @@ class HomeComposeScreenTest {
         }
 
         composeRule.onNodeWithTag(HomeTestTags.PROFILE_ENTRY).assertExists()
+        composeRule.onNodeWithTag(HomeTestTags.NOTES_ENTRY).assertExists()
         composeRule.onNodeWithTag(HomeTestTags.EMPTY_ENTRY).assertExists()
         composeRule.onNodeWithTag(HomeTestTags.CHANNEL_LIST)
             .performScrollToNode(hasTestTag(HomeTestTags.RECOMMEND_ENTRY))
@@ -59,6 +62,45 @@ class HomeComposeScreenTest {
         composeRule.onNodeWithTag(HomeTestTags.CHANNEL_LIST)
             .performScrollToNode(hasTestTag(HomeTestTags.BEIAN_ENTRY))
         composeRule.onNodeWithTag(HomeTestTags.BEIAN_ENTRY).assertExists()
+    }
+
+    @Test
+    fun notesEntry_clickAndLongClickInvokeCallbacks() {
+        var clicks = 0
+        var longClicks = 0
+
+        composeRule.setWatchContent {
+            HomeComposeScreen(
+                channels = emptyList(),
+                isRefreshing = false,
+                onRefreshAll = {},
+                openSwipeId = null,
+                onOpenSwipe = {},
+                onCloseSwipe = {},
+                draggingSwipeId = null,
+                onDragStart = {},
+                onDragEnd = {},
+                onProfileClick = {},
+                onNotesClick = { clicks++ },
+                onNotesLongClick = { longClicks++ },
+                onRecommendClick = {},
+                onChannelClick = {},
+                onChannelLongClick = {},
+                onSwipeBack = {},
+                onAddRssClick = {},
+                onMoveTopClick = {},
+                onMarkReadClick = {},
+                onBeianClick = {}
+            )
+        }
+
+        composeRule.onNodeWithTag(HomeTestTags.NOTES_ENTRY).performClick()
+        composeRule.onNodeWithTag(HomeTestTags.NOTES_ENTRY).performTouchInput { longClick() }
+
+        composeRule.runOnIdle {
+            assertEquals(1, clicks)
+            assertEquals(1, longClicks)
+        }
     }
 
     @Test

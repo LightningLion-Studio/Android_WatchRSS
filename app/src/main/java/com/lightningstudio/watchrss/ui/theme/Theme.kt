@@ -15,12 +15,14 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -35,6 +37,9 @@ import kotlin.math.abs
 import kotlin.math.sign
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+
+/** Current translation applied by the app-wide rubber-band container. */
+internal val LocalRubberBandOverscrollOffset = staticCompositionLocalOf<State<Float>?> { null }
 
 internal val WatchDarkColorScheme = darkColorScheme(
     primary = BrandOrange,
@@ -114,7 +119,8 @@ fun WatchRSSTheme(
 private fun RubberBandOverscrollContainer(content: @Composable () -> Unit) {
     val scope = rememberCoroutineScope()
     var rawOverscrollY by remember { mutableFloatStateOf(0f) }
-    var renderedOffsetY by remember { mutableFloatStateOf(0f) }
+    val renderedOffsetState = remember { mutableFloatStateOf(0f) }
+    var renderedOffsetY by renderedOffsetState
     var viewportHeightPx by remember { mutableFloatStateOf(1f) }
     var reboundJob by remember { mutableStateOf<Job?>(null) }
     var flingImpactLocked by remember { mutableStateOf(false) }
@@ -256,7 +262,11 @@ private fun RubberBandOverscrollContainer(content: @Composable () -> Unit) {
                 }
                 .graphicsLayer { translationY = renderedOffsetY }
         ) {
-            content()
+            CompositionLocalProvider(
+                LocalRubberBandOverscrollOffset provides renderedOffsetState
+            ) {
+                content()
+            }
         }
     }
 }

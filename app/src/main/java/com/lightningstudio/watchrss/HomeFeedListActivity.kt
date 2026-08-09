@@ -34,6 +34,7 @@ import com.lightningstudio.watchrss.data.douyin.mergeDouyinBootstrapItems
 import com.lightningstudio.watchrss.data.douyin.prioritizeDouyinPreloadItems
 import com.lightningstudio.watchrss.data.douyin.refreshExpiredDouyinBootstrapPlayUrls
 import com.lightningstudio.watchrss.data.douyin.resolveDouyinResumeAnchorAwemeId
+import com.lightningstudio.watchrss.data.home.HomeEntryPlacementStore
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.rss.RssChannel
 import com.lightningstudio.watchrss.debug.PerformanceMonitor
@@ -65,6 +66,7 @@ class HomeFeedListActivity : BaseWatchActivity() {
     private val announcementRepository by lazy { AnnouncementRepository(this) }
     private val appUpdateDownloader by lazy { AppUpdateDownloader(this) }
     private val pushNotificationRepository by lazy { PushNotificationRepository(this) }
+    private val homeEntryPlacementStore by lazy { HomeEntryPlacementStore(this) }
 
     private val closeOpenSwipeBackCallback = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() {
@@ -162,6 +164,9 @@ class HomeFeedListActivity : BaseWatchActivity() {
                     .container
                     .readAloudController
                 val readAloudState by readAloudController.uiState.collectAsState()
+                val notesPlacement by homeEntryPlacementStore.observeNotesPlacement().collectAsState(
+                    initial = homeEntryPlacementStore.notesPlacement()
+                )
 
                 androidx.compose.runtime.LaunchedEffect(hasLoadedChannels) {
                     if (hasLoadedChannels) {
@@ -296,6 +301,14 @@ class HomeFeedListActivity : BaseWatchActivity() {
                                 intent = Intent(this@HomeFeedListActivity, NotesActivity::class.java)
                             )
                         },
+                        onNotesLongClick = {
+                            startNavigatingActivity(
+                                intent = ChannelActionsActivity.createNotesIntent(
+                                    this@HomeFeedListActivity
+                                )
+                            )
+                        },
+                        notesPlacement = notesPlacement,
                         onRecommendClick = {
                             if (closeOpenSwipe()) return@HomeComposeScreen
                             startNavigatingActivity(
