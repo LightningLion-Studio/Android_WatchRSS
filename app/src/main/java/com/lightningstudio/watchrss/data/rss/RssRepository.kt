@@ -47,9 +47,11 @@ interface RssRepository {
     suspend fun exportCloudRssStateArticles(deviceId: String): List<SyncedSavedArticle> =
         exportSyncedSavedArticles(deviceId)
     suspend fun exportSyncedArticleManifests(deviceId: String): List<SyncedArticleManifest>
+    suspend fun getLibrarySyncCursor(peerDeviceId: String): WatchLibrarySyncCursorSnapshot
     suspend fun prepareLibrarySyncWindow(
         peerDeviceId: String,
-        localDeviceId: String
+        localDeviceId: String,
+        peerAppliedLocalSeq: Long? = null
     ): WatchLibrarySyncWindow
     suspend fun markLibrarySyncSuccess(
         peerDeviceId: String,

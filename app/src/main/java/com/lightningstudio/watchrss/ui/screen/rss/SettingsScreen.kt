@@ -83,6 +83,7 @@ fun SettingsScreen(
     readingThemeDark: StateFlow<Boolean>,
     shareUseSystem: StateFlow<Boolean>,
     readingFontSizeSp: StateFlow<Int>,
+    syncMediaKeepAliveEnabled: StateFlow<Boolean>,
     mediaVolumeControlEnabled: StateFlow<Boolean>,
     mediaVolumeGuardEnabled: StateFlow<Boolean>,
     mediaPlaybackStartVolumeLimitPercent: StateFlow<Int?>,
@@ -96,6 +97,7 @@ fun SettingsScreen(
     onToggleReadingTheme: () -> Unit,
     onToggleShareMode: () -> Unit,
     onSelectFontSize: (Int) -> Unit,
+    onToggleSyncMediaKeepAlive: () -> Unit,
     onToggleMediaVolumeControl: () -> Unit,
     onToggleMediaVolumeGuard: () -> Unit,
     onSelectMediaPlaybackStartVolumeLimit: (Int?) -> Unit,
@@ -121,6 +123,7 @@ fun SettingsScreen(
     val themeDark by readingThemeDark.collectAsState()
     val useSystemShare by shareUseSystem.collectAsState()
     val fontSizeSp by readingFontSizeSp.collectAsState()
+    val syncMediaKeepAlive by syncMediaKeepAliveEnabled.collectAsState()
     val mediaVolumeControl by mediaVolumeControlEnabled.collectAsState()
     val mediaVolumeGuard by mediaVolumeGuardEnabled.collectAsState()
     val mediaPlaybackStartVolumeLimit by mediaPlaybackStartVolumeLimitPercent.collectAsState()
@@ -180,10 +183,12 @@ fun SettingsScreen(
             cacheLimit = cacheLimit,
             cacheUsage = usage,
             shareUseSystem = useSystemShare,
+            syncMediaKeepAliveEnabled = syncMediaKeepAlive,
             rssInlineImagePrefetchMode = imagePrefetchMode,
             showSystemShareSetting = showSystemShareSetting,
             onSelectCacheLimit = onSelectCacheLimit,
             onToggleShareMode = onToggleShareMode,
+            onToggleSyncMediaKeepAlive = onToggleSyncMediaKeepAlive,
             onSelectRssInlineImagePrefetchMode = onSelectRssInlineImagePrefetchMode
         )
     }
@@ -194,15 +199,18 @@ fun AdvancedSettingsScreen(
     cacheLimitMb: StateFlow<Long>,
     cacheUsageMb: StateFlow<Long>,
     shareUseSystem: StateFlow<Boolean>,
+    syncMediaKeepAliveEnabled: StateFlow<Boolean>,
     rssInlineImagePrefetchMode: StateFlow<RssInlineImagePrefetchMode>,
     onSelectCacheLimit: (Long) -> Unit,
     onToggleShareMode: () -> Unit,
+    onToggleSyncMediaKeepAlive: () -> Unit,
     onSelectRssInlineImagePrefetchMode: (RssInlineImagePrefetchMode) -> Unit
 ) {
     val context = LocalContext.current
     val cacheLimit by cacheLimitMb.collectAsState()
     val usage by cacheUsageMb.collectAsState()
     val useSystemShare by shareUseSystem.collectAsState()
+    val syncMediaKeepAlive by syncMediaKeepAliveEnabled.collectAsState()
     val imagePrefetchMode by rssInlineImagePrefetchMode.collectAsState()
     val showSystemShareSetting = remember(context) {
         isSystemShareSettingSupported(context)
@@ -212,10 +220,12 @@ fun AdvancedSettingsScreen(
         cacheLimit = cacheLimit,
         cacheUsage = usage,
         shareUseSystem = useSystemShare,
+        syncMediaKeepAliveEnabled = syncMediaKeepAlive,
         rssInlineImagePrefetchMode = imagePrefetchMode,
         showSystemShareSetting = showSystemShareSetting,
         onSelectCacheLimit = onSelectCacheLimit,
         onToggleShareMode = onToggleShareMode,
+        onToggleSyncMediaKeepAlive = onToggleSyncMediaKeepAlive,
         onSelectRssInlineImagePrefetchMode = onSelectRssInlineImagePrefetchMode
     )
 }
@@ -692,10 +702,12 @@ private fun AdvancedSettingsPage(
     cacheLimit: Long,
     cacheUsage: Long,
     shareUseSystem: Boolean,
+    syncMediaKeepAliveEnabled: Boolean,
     rssInlineImagePrefetchMode: RssInlineImagePrefetchMode,
     showSystemShareSetting: Boolean,
     onSelectCacheLimit: (Long) -> Unit,
     onToggleShareMode: () -> Unit,
+    onToggleSyncMediaKeepAlive: () -> Unit,
     onSelectRssInlineImagePrefetchMode: (RssInlineImagePrefetchMode) -> Unit
 ) {
     val cacheOptions = remember { CACHE_LIMIT_OPTIONS_MB }
@@ -799,6 +811,28 @@ private fun AdvancedSettingsPage(
             )
             Text(
                 text = "用于原文媒体内容；默认推荐保留前 4 项",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+            )
+
+            Spacer(modifier = Modifier.height(entrySpacing))
+
+            WatchSettingsPillRow(label = "同步媒体保活", endPaddingMultiplier = 1.5f) {
+                WatchSwitch(
+                    checked = syncMediaKeepAliveEnabled,
+                    modifier = Modifier.testTag(SettingsTestTags.SYNC_MEDIA_KEEP_ALIVE_SWITCH),
+                    onCheckedChange = { onToggleSyncMediaKeepAlive() }
+                )
+            }
+            Text(
+                text = if (syncMediaKeepAliveEnabled) "已开启" else "已关闭（默认）",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+            )
+            Text(
+                text = "连接建立后至同步结束播放无声音频，熄屏传输更稳定；会增加同步期间耗电",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = valueIndent, top = valueSpacing)

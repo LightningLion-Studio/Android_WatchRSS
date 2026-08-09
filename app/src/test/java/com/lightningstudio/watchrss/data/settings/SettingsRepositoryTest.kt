@@ -119,6 +119,22 @@ class SettingsRepositoryTest {
     }
 
     @Test
+    fun syncMediaKeepAlive_defaultsToDisabled_andPersistsUpdates() = runBlocking {
+        val env = createRepository("sync-media-keep-alive.preferences_pb")
+        try {
+            assertEquals(
+                DEFAULT_SYNC_MEDIA_KEEP_ALIVE_ENABLED,
+                env.repository.syncMediaKeepAliveEnabled.first()
+            )
+
+            env.repository.setSyncMediaKeepAliveEnabled(true)
+            assertEquals(true, env.repository.syncMediaKeepAliveEnabled.first())
+        } finally {
+            env.scope.cancel()
+        }
+    }
+
+    @Test
     fun mediaVolumeControlEnabled_defaultsToEnabled() = runBlocking {
         val env = createRepository("media-volume-control-default.preferences_pb")
         try {

@@ -35,7 +35,10 @@ interface RssItemDao {
             syncBodyByteCount,
             syncChunkSize,
             syncChunkHashesJson,
-            syncMetadataHash
+            syncMetadataHash,
+            readingPositionBytes,
+            readingPositionContentHash,
+            readingPositionChangedAt
         FROM rss_items
         WHERE channelId = :channelId
         ORDER BY fetchedAt DESC, id DESC
@@ -90,7 +93,10 @@ interface RssItemDao {
             syncBodyByteCount,
             syncChunkSize,
             syncChunkHashesJson,
-            syncMetadataHash
+            syncMetadataHash,
+            readingPositionBytes,
+            readingPositionContentHash,
+            readingPositionChangedAt
         FROM rss_items
         WHERE channelId = :channelId
         ORDER BY fetchedAt DESC, id DESC
@@ -126,7 +132,10 @@ interface RssItemDao {
             syncBodyByteCount,
             syncChunkSize,
             syncChunkHashesJson,
-            syncMetadataHash
+            syncMetadataHash,
+            readingPositionBytes,
+            readingPositionContentHash,
+            readingPositionChangedAt
         FROM rss_items
         WHERE channelId = :channelId AND (
             title LIKE :keyword ESCAPE '\' OR

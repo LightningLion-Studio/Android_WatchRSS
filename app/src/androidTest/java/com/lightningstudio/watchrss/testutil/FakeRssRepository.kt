@@ -18,6 +18,7 @@ import com.lightningstudio.watchrss.data.rss.SyncedSavedArticleMergeStats
 import com.lightningstudio.watchrss.data.rss.SyncedRssSource
 import com.lightningstudio.watchrss.data.rss.SyncedRssSourceMergeStats
 import com.lightningstudio.watchrss.data.rss.WatchLibrarySyncWindow
+import com.lightningstudio.watchrss.data.rss.WatchLibrarySyncCursorSnapshot
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -106,9 +107,14 @@ class FakeRssRepository(
 
     override suspend fun exportSyncedArticleManifests(deviceId: String): List<SyncedArticleManifest> = emptyList()
 
+    override suspend fun getLibrarySyncCursor(peerDeviceId: String): WatchLibrarySyncCursorSnapshot {
+        return WatchLibrarySyncCursorSnapshot(0L, 0L, 0L)
+    }
+
     override suspend fun prepareLibrarySyncWindow(
         peerDeviceId: String,
-        localDeviceId: String
+        localDeviceId: String,
+        peerAppliedLocalSeq: Long?
     ): WatchLibrarySyncWindow {
         return WatchLibrarySyncWindow(
             articleManifest = emptyList(),

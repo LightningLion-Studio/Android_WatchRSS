@@ -28,6 +28,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.supervisorScope
+import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
 
 class WatchIpSyncManager(
@@ -42,12 +43,16 @@ class WatchIpSyncManager(
     private val probe = WatchIpWebSocketProbe()
     private val watchDeviceId = WatchDeviceIdentity(application).deviceId
     private val refreshMutex = Mutex()
+    private val mediaKeepAlive =
+        (application as WatchRssApplication).syncMediaKeepAlive
     private val cooldownUntil = ConcurrentHashMap<String, Long>()
     private var activeConnection: WatchIpSyncConnection? = null
     private var descriptor: IpEndpointDescriptor? = null
     private var resumedCount = 0
     private var stopJob: Job? = null
+    private var refreshJob: Job? = null
     private var transportJob: Job? = null
+    private var mediaReleaseJob: Job? = null
 
     @Volatile
     private var transferInProgress = false
@@ -85,6 +90,15 @@ class WatchIpSyncManager(
 
     fun currentConnection(): WatchIpSyncConnection? = activeConnection
 
+    fun offerEndpointDescriptor(json: JSONObject): Boolean {
+        val offered = runCatching { IpEndpointDescriptor.fromJson(json) }.getOrNull() ?: return false
+        if (!offered.verify()) return false
+        descriptor = offered
+        scheduleRefresh(RFCOMM_BOOTSTRAP_REASON)
+        AppLogger.i(TAG, "IP endpoint accepted from RFCOMM bootstrap endpoints=${offered.endpoints.size}")
+        return true
+    }
+
     fun updateLastAckSequence(sequence: Long) {
         lastAckSeq = maxOf(lastAckSeq, sequence)
     }
@@ -99,16 +113,7 @@ class WatchIpSyncManager(
     override fun onActivityPaused(activity: Activity) {
         resumedCount = (resumedCount - 1).coerceAtLeast(0)
         if (resumedCount == 0) {
-            stopJob?.cancel()
-            stopJob = scope.launch {
-                delay(STOP_GRACE_MS)
-                if (resumedCount == 0) {
-                    transportJob?.cancel()
-                    transportJob = null
-                    activeConnection?.close()
-                    activeConnection = null
-                }
-            }
+            scheduleBackgroundStop(STOP_GRACE_MS)
         }
     }
 
@@ -119,9 +124,16 @@ class WatchIpSyncManager(
     override fun onActivityDestroyed(activity: Activity) = Unit
 
     private fun scheduleRefresh(reason: String) {
-        if (resumedCount <= 0 || !hasBluetoothPermissions()) return
-        scope.launch {
-            delay(NETWORK_DEBOUNCE_MS)
+        if (!shouldScheduleIpRefresh(resumedCount, reason == RFCOMM_BOOTSTRAP_REASON) ||
+            !hasBluetoothPermissions()
+        ) return
+        if (reason == RFCOMM_BOOTSTRAP_REASON) {
+            refreshJob?.cancel()
+        } else if (refreshJob?.isActive == true) {
+            return
+        }
+        refreshJob = scope.launch {
+            if (reason != RFCOMM_BOOTSTRAP_REASON) delay(NETWORK_DEBOUNCE_MS)
             refreshMutex.withLock { refresh(reason) }
         }
     }
@@ -131,9 +143,13 @@ class WatchIpSyncManager(
             AppLogger.i(TAG, "IP route refresh deferred during active sync reason=$reason")
             return
         }
-        val discovered = runCatching { bleDiscovery.discover() }
-            .onFailure { AppLogger.w(TAG, "BLE 端点发现失败，保留已有通道", it) }
-            .getOrNull()
+        val discovered = if (reason == RFCOMM_BOOTSTRAP_REASON && descriptor?.verify() == true) {
+            null
+        } else {
+            runCatching { bleDiscovery.discover() }
+                .onFailure { AppLogger.w(TAG, "BLE 端点发现失败，保留已有通道", it) }
+                .getOrNull()
+        }
         if (discovered != null) descriptor = discovered
         var current = descriptor ?: return
         if (!current.verify()) {
@@ -215,9 +231,14 @@ class WatchIpSyncManager(
                     BluetoothSyncProtocol.ACTION_SYNC_LIBRARY,
                     BluetoothSyncProtocol.ACTION_SYNC_READER,
                     BluetoothSyncProtocol.ACTION_PREVIEW_READER,
-                    BluetoothSyncProtocol.ACTION_SYNC_ACCOUNT
+                    BluetoothSyncProtocol.ACTION_SYNC_ACCOUNT,
+                    BluetoothSyncProtocol.ACTION_SYNC_LLM_TOKEN_USAGE
                 ),
-                onRequestReceived = { transferInProgress = true }
+                onRequestReceived = { setTransferInProgress(true) },
+                // WebSocket.send() only confirms that bytes entered OkHttp's queue. The phone can
+                // still need minutes to drain a multi-megabyte response through the Bluetooth
+                // proxy, so the RFCOMM-sized 10 second ACK window is not valid for this transport.
+                responseAckTimeoutMs = IP_RESPONSE_ACK_TIMEOUT_MS
             )
             while (activeConnection === connection) {
                 val result = runCatching {
@@ -230,7 +251,13 @@ class WatchIpSyncManager(
                         initialRequestTimeoutMs = IP_IDLE_REQUEST_TIMEOUT_MS
                     )
                 }.also {
-                    transferInProgress = false
+                    setTransferInProgress(false)
+                    if (resumedCount == 0) {
+                        // A library sync can outlive the watch display timeout. Keep
+                        // the route through the current request and allow the next
+                        // protocol phase to arrive before reclaiming it.
+                        scheduleBackgroundStop(BACKGROUND_TRANSFER_GRACE_MS)
+                    }
                 }.getOrElse { error ->
                     if (activeConnection === connection) {
                         AppLogger.w(TAG, "IP 同步数据通道失败", error)
@@ -251,6 +278,35 @@ class WatchIpSyncManager(
         }
     }
 
+    private fun scheduleBackgroundStop(delayMs: Long) {
+        stopJob?.cancel()
+        stopJob = scope.launch {
+            delay(delayMs)
+            if (shouldStopIpTransport(resumedCount, transferInProgress)) {
+                transportJob?.cancel()
+                transportJob = null
+                activeConnection?.close()
+                activeConnection = null
+            }
+        }
+    }
+
+    private fun setTransferInProgress(value: Boolean) {
+        transferInProgress = value
+        mediaReleaseJob?.cancel()
+        mediaReleaseJob = null
+        if (value) {
+            mediaKeepAlive.acquire(MEDIA_KEEP_ALIVE_OWNER)
+        } else {
+            // One manual sync is a sequence of library, reader-resource and token requests.
+            // Retain the lease briefly between phases, then release it once the session is idle.
+            mediaReleaseJob = scope.launch {
+                delay(MEDIA_KEEP_ALIVE_IDLE_GRACE_MS)
+                mediaKeepAlive.release(MEDIA_KEEP_ALIVE_OWNER)
+            }
+        }
+    }
+
     private fun connectionPriority(connection: WatchIpSyncConnection): Int =
         maxOf(connection.routeKind.priority, connection.endpoint.priority)
 
@@ -267,7 +323,18 @@ class WatchIpSyncManager(
     companion object {
         private const val TAG = "WatchRSS_IpSync"
         private const val NETWORK_DEBOUNCE_MS = 350L
+        private const val RFCOMM_BOOTSTRAP_REASON = "rfcomm-bootstrap"
         private const val STOP_GRACE_MS = 2_500L
+        private const val BACKGROUND_TRANSFER_GRACE_MS = 30_000L
         private const val IP_IDLE_REQUEST_TIMEOUT_MS = 10 * 60 * 1_000L
+        private const val IP_RESPONSE_ACK_TIMEOUT_MS = 10 * 60 * 1_000L
+        private const val MEDIA_KEEP_ALIVE_OWNER = "ip-sync"
+        private const val MEDIA_KEEP_ALIVE_IDLE_GRACE_MS = 30_000L
     }
 }
+
+internal fun shouldStopIpTransport(resumedCount: Int, transferInProgress: Boolean): Boolean =
+    resumedCount == 0 && !transferInProgress
+
+internal fun shouldScheduleIpRefresh(resumedCount: Int, rfcommBootstrap: Boolean): Boolean =
+    resumedCount > 0 || rfcommBootstrap

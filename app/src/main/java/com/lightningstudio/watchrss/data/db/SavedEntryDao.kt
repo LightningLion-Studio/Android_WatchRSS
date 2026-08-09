@@ -42,6 +42,9 @@ interface SavedEntryDao {
         }
     }
 
+    // These reduced projections deliberately omit article bodies, but every other
+    // RssItemEntity column must be selected: @Embedded still constructs the full
+    // non-null entity and this database uses @SkipQueryVerification.
     @Query(
         """
         SELECT
@@ -70,6 +73,9 @@ interface SavedEntryDao {
                rss_items.syncChunkSize AS syncChunkSize,
                rss_items.syncChunkHashesJson AS syncChunkHashesJson,
                rss_items.syncMetadataHash AS syncMetadataHash,
+               rss_items.readingPositionBytes AS readingPositionBytes,
+               rss_items.readingPositionContentHash AS readingPositionContentHash,
+               rss_items.readingPositionChangedAt AS readingPositionChangedAt,
                rss_channels.title AS channelTitle,
                rss_channels.url AS channelUrl,
                saved_entries.createdAt AS savedAt,
@@ -124,6 +130,9 @@ interface SavedEntryDao {
                rss_items.syncChunkSize AS syncChunkSize,
                rss_items.syncChunkHashesJson AS syncChunkHashesJson,
                rss_items.syncMetadataHash AS syncMetadataHash,
+               rss_items.readingPositionBytes AS readingPositionBytes,
+               rss_items.readingPositionContentHash AS readingPositionContentHash,
+               rss_items.readingPositionChangedAt AS readingPositionChangedAt,
                rss_channels.title AS channelTitle,
                rss_channels.url AS channelUrl,
                saved_entries.createdAt AS savedAt,

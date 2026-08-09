@@ -25,12 +25,18 @@ class PrivacyPolicyConsentActivity : BaseWatchActivity() {
         setupSystemBars()
 
         val settingsRepository = (application as WatchRssApplication).container.settingsRepository
-        val policyContent = resources.openRawResource(R.raw.privacy_policy).bufferedReader().use { it.readText() }
-
         setContent {
             WatchRSSTheme {
                 PrivacyPolicyConsentScreen(
-                    policyContent = policyContent,
+                    onOpenPrivacy = {
+                        startActivity(
+                            InfoActivity.createIntent(
+                                context = this@PrivacyPolicyConsentActivity,
+                                title = "隐私政策",
+                                contentRawResId = R.raw.privacy_policy
+                            )
+                        )
+                    },
                     onAgree = {
                         lifecycleScope.launch {
                             settingsRepository.setPrivacyPolicyAgreedVersion(PRIVACY_POLICY_VERSION)

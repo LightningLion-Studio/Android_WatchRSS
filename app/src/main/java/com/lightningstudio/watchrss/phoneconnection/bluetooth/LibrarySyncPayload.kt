@@ -50,19 +50,53 @@ data class LibraryChangeSequence(
     val fallbackReason: String = ""
 )
 
+data class LibrarySyncCursor(
+    val localMaxSeq: Long,
+    val lastRemoteSeqApplied: Long,
+    val lastLocalSeqAckedByPeer: Long
+)
+
 object LibrarySyncPayload {
-    const val PROTOCOL_VERSION = 12
-    const val MIN_SUPPORTED_PHONE_PROTOCOL_VERSION = 12
+    const val PROTOCOL_VERSION = 13
+    const val MIN_SUPPORTED_PHONE_PROTOCOL_VERSION = 13
     const val LEGACY_PROTOCOL_VERSION = 4
     const val MAX_BODY_REQUEST_CHUNKS_PER_SYNC = Int.MAX_VALUE
     const val MAX_ARTICLE_REQUEST_BATCH_COUNT = 256
+    const val MAX_MANIFEST_BATCH_COUNT = 512
     const val FIELD_BATCH_WIRE_BYTES = "batchWireBytes"
     const val FIELD_BATCH_TOTAL_WIRE_BYTES = "batchTotalWireBytes"
+    const val PHASE_CURSOR = "cursor"
     const val PHASE_MANIFEST = "manifest"
     const val PHASE_PROBE = "probe"
     const val PHASE_ARTICLES = "articles"
     const val PHASE_COMPLETE = "complete"
     private const val FIELD_SUPPORTS_TRANSFER_BYTE_PROGRESS = "supportsTransferByteProgress"
+    private const val FIELD_SUPPORTS_MANIFEST_BATCHES = "supportsManifestBatches"
+    private const val FIELD_MANIFEST_BATCH_INDEX = "manifestBatchIndex"
+    private const val FIELD_MANIFEST_BATCH_COUNT = "manifestBatchCount"
+    private const val FIELD_MANIFEST_TOTAL_ARTICLES = "manifestTotalArticles"
+    private const val FIELD_SYNC_CURSOR = "syncCursor"
+    private val MANIFEST_ARRAY_FIELDS = listOf("articleManifest", "bodyRequests", "rssSources")
+
+    fun buildCursorRequest(
+        deviceId: String,
+        cursor: LibrarySyncCursor
+    ): JSONObject = JSONObject().apply {
+        put("version", PROTOCOL_VERSION)
+        put("action", BluetoothSyncProtocol.ACTION_SYNC_LIBRARY)
+        put("phase", PHASE_CURSOR)
+        put(FIELD_SUPPORTS_MANIFEST_BATCHES, true)
+        put("deviceId", deviceId)
+        put("sentAt", System.currentTimeMillis())
+        putCursor(cursor)
+    }
+
+    fun buildCursorResponse(
+        deviceId: String,
+        cursor: LibrarySyncCursor
+    ): JSONObject = buildCursorRequest(deviceId, cursor).apply {
+        put("success", true)
+    }
 
     fun buildProbeResponse(
         deviceId: String,
@@ -73,6 +107,7 @@ object LibrarySyncPayload {
             put("version", PROTOCOL_VERSION)
             put("action", BluetoothSyncProtocol.ACTION_SYNC_LIBRARY)
             put("phase", PHASE_PROBE)
+            put(FIELD_SUPPORTS_MANIFEST_BATCHES, true)
             put("supportsReaderPresets", true)
             put("supportsReaderAssets", true)
             put("supportsResourceChunkAck", true)
@@ -291,6 +326,15 @@ object LibrarySyncPayload {
             toSeqInclusive = range.optLong("toInclusive"),
             fullSnapshot = payload.optBoolean("fullSnapshot", true),
             fallbackReason = payload.optString("fallbackReason").trim()
+        )
+    }
+
+    fun parseCursor(payload: JSONObject): LibrarySyncCursor {
+        val cursor = payload.optJSONObject(FIELD_SYNC_CURSOR) ?: JSONObject()
+        return LibrarySyncCursor(
+            localMaxSeq = cursor.optLong("localMaxSeq").coerceAtLeast(0L),
+            lastRemoteSeqApplied = cursor.optLong("lastRemoteSeqApplied").coerceAtLeast(0L),
+            lastLocalSeqAckedByPeer = cursor.optLong("lastLocalSeqAckedByPeer").coerceAtLeast(0L)
         )
     }
 
@@ -726,7 +770,8 @@ object LibrarySyncPayload {
         articles: List<SyncedSavedArticle>,
         rssSources: List<SyncedRssSource> = emptyList(),
         sourcesApplied: Int = 0,
-        changeSequence: LibraryChangeSequence? = null
+        changeSequence: LibraryChangeSequence? = null,
+        cursor: LibrarySyncCursor? = null
     ): JSONObject {
         return JSONObject().apply {
             put("success", true)
@@ -734,6 +779,7 @@ object LibrarySyncPayload {
             put("action", BluetoothSyncProtocol.ACTION_SYNC_LIBRARY)
             put("phase", PHASE_MANIFEST)
             put("supportsArticleBatches", true)
+            put(FIELD_SUPPORTS_MANIFEST_BATCHES, true)
             put("supportsChunkedBodies", true)
             put("supportsChangeSequences", true)
             put("supportsMetadataOnlyArticles", true)
@@ -744,6 +790,7 @@ object LibrarySyncPayload {
             put("articleManifest", articles.toManifestJsonArray())
             put("rssSources", rssSources.toSourceJsonArray())
             putChangeSequence(changeSequence)
+            putCursor(cursor)
             put(
                 "stats",
                 JSONObject().apply {
@@ -760,7 +807,8 @@ object LibrarySyncPayload {
         bodyRequests: List<SyncedArticleBodyRequest>,
         rssSources: List<SyncedRssSource> = emptyList(),
         sourcesApplied: Int = 0,
-        changeSequence: LibraryChangeSequence? = null
+        changeSequence: LibraryChangeSequence? = null,
+        cursor: LibrarySyncCursor? = null
     ): JSONObject {
         return JSONObject().apply {
             put("success", true)
@@ -768,6 +816,7 @@ object LibrarySyncPayload {
             put("action", BluetoothSyncProtocol.ACTION_SYNC_LIBRARY)
             put("phase", PHASE_MANIFEST)
             put("supportsArticleBatches", true)
+            put(FIELD_SUPPORTS_MANIFEST_BATCHES, true)
             put("supportsChunkedBodies", true)
             put("supportsChangeSequences", true)
             put("supportsMetadataOnlyArticles", true)
@@ -779,6 +828,7 @@ object LibrarySyncPayload {
             put("bodyRequests", bodyRequests.toBodyRequestJsonArray())
             put("rssSources", rssSources.toSourceJsonArray())
             putChangeSequence(changeSequence)
+            putCursor(cursor)
             put(
                 "stats",
                 JSONObject().apply {
@@ -790,6 +840,117 @@ object LibrarySyncPayload {
                 }
             )
         }
+    }
+
+    fun supportsManifestBatches(payload: JSONObject): Boolean =
+        payload.optBoolean(FIELD_SUPPORTS_MANIFEST_BATCHES, false)
+
+    fun buildManifestFrames(payload: JSONObject): List<JSONObject> {
+        require(payload.optString("phase") == PHASE_MANIFEST) { "只能分批资料库清单消息" }
+        payload.put(FIELD_SUPPORTS_MANIFEST_BATCHES, true)
+        if (BluetoothSyncProtocol.encodedSize(payload) <= BluetoothSyncProtocol.MAX_FRAME_BYTES) {
+            return listOf(payload)
+        }
+
+        val items = buildList {
+            MANIFEST_ARRAY_FIELDS.forEach { field ->
+                val array = payload.optJSONArray(field) ?: JSONArray()
+                for (index in 0 until array.length()) {
+                    array.optJSONObject(index)?.let { add(ManifestWireItem(field, it)) }
+                }
+            }
+        }
+        require(items.isNotEmpty()) { "资料库清单元数据超过同步消息上限" }
+
+        val chunks = mutableListOf<MutableList<ManifestWireItem>>()
+        var current = mutableListOf<ManifestWireItem>()
+        var currentBytes = 0L
+        items.forEach { item ->
+            val itemBytes = BluetoothSyncProtocol.encodedSize(item.payload).toLong()
+            require(itemBytes <= BluetoothSyncProtocol.MAX_FRAME_BYTES) {
+                "单个资料库清单项超过同步消息上限：${item.payload.optString("articleId").take(40)}"
+            }
+            if (current.isNotEmpty() && currentBytes + itemBytes > MANIFEST_BATCH_TARGET_BYTES) {
+                chunks += current
+                current = mutableListOf()
+                currentBytes = 0L
+            }
+            current += item
+            currentBytes += itemBytes
+        }
+        if (current.isNotEmpty()) chunks += current
+
+        val batchCount = chunks.size + 1
+        require(batchCount <= MAX_MANIFEST_BATCH_COUNT) { "资料库清单批次数过多：$batchCount" }
+        val totalArticles = payload.optJSONArray("articleManifest")?.length() ?: 0
+        val header = JSONObject(payload.toString()).apply {
+            MANIFEST_ARRAY_FIELDS.forEach { field ->
+                if (has(field)) put(field, JSONArray())
+            }
+            putManifestBatchFields(0, batchCount, totalArticles)
+        }
+        require(BluetoothSyncProtocol.encodedSize(header) <= BluetoothSyncProtocol.MAX_FRAME_BYTES) {
+            "资料库清单头超过同步消息上限"
+        }
+        return buildList(batchCount) {
+            add(header)
+            chunks.forEachIndexed { chunkIndex, chunk ->
+                val frame = JSONObject().apply {
+                    if (payload.has("success")) put("success", payload.optBoolean("success"))
+                    put("version", payload.optInt("version", PROTOCOL_VERSION))
+                    put("action", BluetoothSyncProtocol.ACTION_SYNC_LIBRARY)
+                    put("phase", PHASE_MANIFEST)
+                    put("deviceId", payload.optString("deviceId"))
+                    put("sentAt", payload.optLong("sentAt"))
+                    put(FIELD_SUPPORTS_MANIFEST_BATCHES, true)
+                    MANIFEST_ARRAY_FIELDS.forEach { put(it, JSONArray()) }
+                    chunk.forEach { item -> getJSONArray(item.field).put(item.payload) }
+                    putManifestBatchFields(chunkIndex + 1, batchCount, totalArticles)
+                }
+                require(BluetoothSyncProtocol.encodedSize(frame) <= BluetoothSyncProtocol.MAX_FRAME_BYTES) {
+                    "资料库清单批次超过同步消息上限：${chunkIndex + 1}/$batchCount"
+                }
+                add(frame)
+            }
+        }
+    }
+
+    fun manifestBatchCount(payload: JSONObject): Int =
+        payload.optInt(FIELD_MANIFEST_BATCH_COUNT, 1).coerceAtLeast(1)
+
+    fun combineManifestFrames(frames: List<JSONObject>): JSONObject {
+        require(frames.isNotEmpty()) { "资料库清单批次为空" }
+        val expectedCount = manifestBatchCount(frames.first())
+        require(expectedCount in 1..MAX_MANIFEST_BATCH_COUNT) { "资料库清单批次数异常：$expectedCount" }
+        require(frames.size == expectedCount) { "资料库清单批次不完整：${frames.size}/$expectedCount" }
+        if (expectedCount == 1) return frames.first()
+
+        val combined = JSONObject(frames.first().toString())
+        val expectedVersion = frames.first().optInt("version", PROTOCOL_VERSION)
+        val expectedDeviceId = frames.first().optString("deviceId")
+        val arrays = MANIFEST_ARRAY_FIELDS.associateWith { JSONArray() }
+        frames.forEachIndexed { index, frame ->
+            require(frame.optInt(FIELD_MANIFEST_BATCH_INDEX, -1) == index) {
+                "资料库清单批次顺序异常：$index"
+            }
+            require(manifestBatchCount(frame) == expectedCount) { "资料库清单批次数不一致" }
+            require(frame.optString("phase") == PHASE_MANIFEST) { "资料库清单批次阶段异常" }
+            require(frame.optInt("version", PROTOCOL_VERSION) == expectedVersion) { "资料库清单协议版本不一致" }
+            require(frame.optString("deviceId") == expectedDeviceId) { "资料库清单设备身份不一致" }
+            MANIFEST_ARRAY_FIELDS.forEach { field ->
+                val source = frame.optJSONArray(field) ?: JSONArray()
+                for (itemIndex in 0 until source.length()) {
+                    source.optJSONObject(itemIndex)?.let(arrays.getValue(field)::put)
+                }
+            }
+        }
+        arrays.forEach { (field, array) ->
+            if (combined.has(field) || array.length() > 0) combined.put(field, array)
+        }
+        combined.remove(FIELD_MANIFEST_BATCH_INDEX)
+        combined.remove(FIELD_MANIFEST_BATCH_COUNT)
+        combined.put(FIELD_MANIFEST_TOTAL_ARTICLES, arrays.getValue("articleManifest").length())
+        return combined
     }
 
     private fun List<SyncedRssSource>.toSourceJsonArray(): JSONArray {
@@ -825,6 +986,11 @@ object LibrarySyncPayload {
     private data class SizedArticleItem(
         val payload: JSONObject,
         val estimatedBytes: Long
+    )
+
+    private data class ManifestWireItem(
+        val field: String,
+        val payload: JSONObject
     )
 
     private fun buildArticleFrames(
@@ -878,7 +1044,7 @@ object LibrarySyncPayload {
             require(oversized.size > 1) {
                 val item = oversized.first()
                 val payloadSize = estimatedPayloadBytes[oversizedIndex]
-                "单篇文章蓝牙消息过大：${item.payload.optString("title").ifBlank { item.payload.optString("url") }.take(40)}（约 $payloadSize 字节）"
+                "单篇文章同步消息过大：${item.payload.optString("title").ifBlank { item.payload.optString("url") }.take(40)}（约 $payloadSize 字节）"
             }
             val midpoint = oversized.size / 2
             chunks[oversizedIndex] = oversized.take(midpoint)
@@ -894,7 +1060,7 @@ object LibrarySyncPayload {
     private fun List<JSONObject>.withEstimatedBatchWireByteHints(estimatedPayloadBytes: List<Long>): List<JSONObject> {
         if (isEmpty()) return this
         require(size == estimatedPayloadBytes.size) {
-            "蓝牙批次大小估算数量不匹配：payloads=$size estimates=${estimatedPayloadBytes.size}"
+            "同步批次大小估算数量不匹配：payloads=$size estimates=${estimatedPayloadBytes.size}"
         }
         val wireBytes = estimatedPayloadBytes.map { payloadBytes ->
             payloadBytes + ESTIMATED_BATCH_WIRE_HINT_BYTES + BluetoothSyncProtocol.LENGTH_PREFIX_BYTES
@@ -1005,6 +1171,16 @@ object LibrarySyncPayload {
         }
     }
 
+    private fun JSONObject.putManifestBatchFields(
+        batchIndex: Int,
+        batchCount: Int,
+        totalArticles: Int
+    ) {
+        put(FIELD_MANIFEST_BATCH_INDEX, batchIndex)
+        put(FIELD_MANIFEST_BATCH_COUNT, batchCount)
+        put(FIELD_MANIFEST_TOTAL_ARTICLES, totalArticles)
+    }
+
     private fun JSONObject.putChangeSequence(changeSequence: LibraryChangeSequence?) {
         if (changeSequence == null) return
         put("supportsChangeSequences", true)
@@ -1015,6 +1191,18 @@ object LibrarySyncPayload {
             JSONObject().apply {
                 put("fromExclusive", changeSequence.fromSeqExclusive)
                 put("toInclusive", changeSequence.toSeqInclusive)
+            }
+        )
+    }
+
+    private fun JSONObject.putCursor(cursor: LibrarySyncCursor?) {
+        if (cursor == null) return
+        put(
+            FIELD_SYNC_CURSOR,
+            JSONObject().apply {
+                put("localMaxSeq", cursor.localMaxSeq.coerceAtLeast(0L))
+                put("lastRemoteSeqApplied", cursor.lastRemoteSeqApplied.coerceAtLeast(0L))
+                put("lastLocalSeqAckedByPeer", cursor.lastLocalSeqAckedByPeer.coerceAtLeast(0L))
             }
         )
     }
@@ -1388,6 +1576,7 @@ object LibrarySyncPayload {
 
     private const val MAX_DECOMPRESSED_TEXT_BYTES = 32 * 1024 * 1024
     private const val ARTICLE_BATCH_TARGET_BYTES = 384 * 1024
+    private const val MANIFEST_BATCH_TARGET_BYTES = 1024 * 1024L
     private const val RESPONSE_PROGRESS_HEADER_MIN_BODY_BYTES = 16 * 1024
     private const val EXACT_CHUNKED_ARTICLE_SIZE_MAX_BYTES = 64 * 1024L
     private const val ESTIMATED_CHUNKED_ARTICLE_JSON_OVERHEAD_BYTES = 8 * 1024L

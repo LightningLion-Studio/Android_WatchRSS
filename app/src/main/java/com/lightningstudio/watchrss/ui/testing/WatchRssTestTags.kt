@@ -97,6 +97,7 @@ object SettingsTestTags {
     const val FONT_DECREASE_BUTTON = "settings/font_decrease_button"
     const val FONT_VALUE = "settings/font_value"
     const val FONT_INCREASE_BUTTON = "settings/font_increase_button"
+    const val SYNC_MEDIA_KEEP_ALIVE_SWITCH = "settings/sync_media_keep_alive_switch"
     const val MEDIA_VOLUME_CONTROL_SWITCH = "settings/media_volume_control_switch"
     const val MEDIA_VOLUME_GUARD_ROW = "settings/media_volume_guard_row"
     const val MEDIA_VOLUME_GUARD_SWITCH = "settings/media_volume_guard_switch"

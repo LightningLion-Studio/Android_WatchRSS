@@ -38,6 +38,7 @@ class SettingsScreenTest {
                 readingThemeDark = MutableStateFlow(true),
                 shareUseSystem = MutableStateFlow(false),
                 readingFontSizeSp = MutableStateFlow(14),
+                syncMediaKeepAliveEnabled = MutableStateFlow(false),
                 mediaVolumeControlEnabled = MutableStateFlow(true),
                 mediaVolumeGuardEnabled = MutableStateFlow(true),
                 mediaPlaybackStartVolumeLimitPercent = MutableStateFlow<Int?>(10),
@@ -51,6 +52,7 @@ class SettingsScreenTest {
                 onToggleReadingTheme = {},
                 onToggleShareMode = {},
                 onSelectFontSize = {},
+                onToggleSyncMediaKeepAlive = {},
                 onToggleMediaVolumeControl = {},
                 onToggleMediaVolumeGuard = {},
                 onSelectMediaPlaybackStartVolumeLimit = {},
@@ -88,6 +90,9 @@ class SettingsScreenTest {
 
         composeRule.onNodeWithTag(SettingsTestTags.CACHE_VALUE, useUnmergedTree = true).assertExists()
         composeRule.onNodeWithTag(SettingsTestTags.IMAGE_PREFETCH_VALUE, useUnmergedTree = true).assertExists()
+        composeRule.onNodeWithTag(SettingsTestTags.SYNC_MEDIA_KEEP_ALIVE_SWITCH, useUnmergedTree = true)
+            .performScrollTo()
+            .assertExists()
         composeRule.onAllNodesWithText("视频编码").assertCountEquals(0)
         if (showSystemShareSetting) {
             composeRule.onNodeWithTag(SettingsTestTags.SHARE_SWITCH, useUnmergedTree = true).assertExists()
@@ -110,6 +115,7 @@ class SettingsScreenTest {
                 readingThemeDark = MutableStateFlow(true),
                 shareUseSystem = MutableStateFlow(false),
                 readingFontSizeSp = MutableStateFlow(14),
+                syncMediaKeepAliveEnabled = MutableStateFlow(false),
                 mediaVolumeControlEnabled = MutableStateFlow(true),
                 mediaVolumeGuardEnabled = MutableStateFlow(true),
                 mediaPlaybackStartVolumeLimitPercent = MutableStateFlow<Int?>(10),
@@ -123,6 +129,7 @@ class SettingsScreenTest {
                 onToggleReadingTheme = { themeToggleCount += 1 },
                 onToggleShareMode = {},
                 onSelectFontSize = { fontSelections += it },
+                onToggleSyncMediaKeepAlive = {},
                 onToggleMediaVolumeControl = { mediaVolumeControlToggleCount += 1 },
                 onToggleMediaVolumeGuard = { mediaVolumeGuardToggleCount += 1 },
                 onSelectMediaPlaybackStartVolumeLimit = { playbackStartVolumeSelections += it },
@@ -170,6 +177,7 @@ class SettingsScreenTest {
                 readingThemeDark = MutableStateFlow(true),
                 shareUseSystem = MutableStateFlow(false),
                 readingFontSizeSp = MutableStateFlow(14),
+                syncMediaKeepAliveEnabled = MutableStateFlow(false),
                 mediaVolumeControlEnabled = MutableStateFlow(false),
                 mediaVolumeGuardEnabled = MutableStateFlow(true),
                 mediaPlaybackStartVolumeLimitPercent = MutableStateFlow<Int?>(10),
@@ -183,6 +191,7 @@ class SettingsScreenTest {
                 onToggleReadingTheme = {},
                 onToggleShareMode = {},
                 onSelectFontSize = {},
+                onToggleSyncMediaKeepAlive = {},
                 onToggleMediaVolumeControl = {},
                 onToggleMediaVolumeGuard = {},
                 onSelectMediaPlaybackStartVolumeLimit = {},

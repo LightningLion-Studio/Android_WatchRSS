@@ -10,7 +10,7 @@ data class WatchNoteEntity(
     val folderId: String?,
     val title: String,
     val markdown: String,
-    /** Editable text projection. Image placeholders are retained as literal text. */
+    /** Read/search projection only. Editing always uses [markdown] verbatim. */
     val plainText: String,
     val contentHash: String,
     val baseContentHash: String,

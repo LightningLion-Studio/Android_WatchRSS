@@ -12,30 +12,67 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
+import org.json.JSONArray
 import org.json.JSONObject
 
 class LibrarySyncPayloadTest {
     @Test
-    fun unsupportedPhoneProtocolResponse_rejectsLibrarySyncBelowV12() {
+    fun manifestFrames_splitAndReassemblePayloadLargerThanTransportFrame() {
+        val manifest = JSONArray().also { array ->
+            repeat(5_600) { index ->
+                array.put(
+                    JSONObject()
+                        .put("articleId", "article-$index")
+                        .put("contentHash", "hash-$index")
+                        .put("metadataHash", "m".repeat(512))
+                )
+            }
+        }
+        val payload = JSONObject().apply {
+            put("success", true)
+            put("version", LibrarySyncPayload.PROTOCOL_VERSION)
+            put("action", BluetoothSyncProtocol.ACTION_SYNC_LIBRARY)
+            put("phase", LibrarySyncPayload.PHASE_MANIFEST)
+            put("deviceId", "watch")
+            put("sentAt", 123L)
+            put("articleManifest", manifest)
+            put("bodyRequests", JSONArray().put(JSONObject().put("articleId", "article-1")))
+            put("rssSources", JSONArray().put(JSONObject().put("url", "https://example.com/feed")))
+        }
+
+        assertTrue(BluetoothSyncProtocol.encodedSize(payload) > BluetoothSyncProtocol.MAX_FRAME_BYTES)
+        val frames = LibrarySyncPayload.buildManifestFrames(payload)
+        assertTrue(frames.size > 1)
+        assertTrue(frames.all { BluetoothSyncProtocol.encodedSize(it) <= BluetoothSyncProtocol.MAX_FRAME_BYTES })
+
+        val combined = LibrarySyncPayload.combineManifestFrames(frames)
+        assertTrue(combined.getBoolean("success"))
+        assertEquals(5_600, combined.getJSONArray("articleManifest").length())
+        assertEquals(1, combined.getJSONArray("bodyRequests").length())
+        assertEquals(1, combined.getJSONArray("rssSources").length())
+    }
+
+    @Test
+    fun unsupportedPhoneProtocolResponse_rejectsLibrarySyncBelowV13() {
         val response = LibrarySyncPayload.buildUnsupportedPhoneProtocolResponse(
             JSONObject().apply {
                 put("action", BluetoothSyncProtocol.ACTION_SYNC_LIBRARY)
-                put("version", 11)
+                put("version", 12)
             }
         )
 
         assertTrue(response != null)
         assertFalse(response!!.getBoolean("success"))
         assertEquals(LibrarySyncPayload.PROTOCOL_VERSION, response.getInt("version"))
-        assertEquals(12, response.getInt("minimumPhoneProtocolVersion"))
+        assertEquals(13, response.getInt("minimumPhoneProtocolVersion"))
         assertTrue(response.getString("message").contains("升级到最新版"))
     }
 
     @Test
-    fun unsupportedPhoneProtocolResponse_acceptsV12AndDoesNotGateOtherActions() {
+    fun unsupportedPhoneProtocolResponse_acceptsV13AndDoesNotGateOtherActions() {
         val supportedLibraryRequest = JSONObject().apply {
             put("action", BluetoothSyncProtocol.ACTION_SYNC_LIBRARY)
-            put("version", 12)
+            put("version", 13)
         }
         val legacyAccountRequest = JSONObject().apply {
             put("action", BluetoothSyncProtocol.ACTION_SYNC_ACCOUNT)
@@ -44,6 +81,29 @@ class LibrarySyncPayloadTest {
 
         assertEquals(null, LibrarySyncPayload.buildUnsupportedPhoneProtocolResponse(supportedLibraryRequest))
         assertEquals(null, LibrarySyncPayload.buildUnsupportedPhoneProtocolResponse(legacyAccountRequest))
+    }
+
+    @Test
+    fun cursorHandshake_roundTripsDirectionalProgress() {
+        val cursor = LibrarySyncCursor(
+            localMaxSeq = 220L,
+            lastRemoteSeqApplied = 178L,
+            lastLocalSeqAckedByPeer = 191L
+        )
+
+        val request = LibrarySyncPayload.buildCursorRequest("phone-device", cursor)
+        val response = LibrarySyncPayload.buildCursorResponse("watch-device", cursor)
+
+        assertEquals(LibrarySyncPayload.PROTOCOL_VERSION, request.getInt("version"))
+        assertEquals(BluetoothSyncProtocol.ACTION_SYNC_LIBRARY, request.getString("action"))
+        assertEquals(LibrarySyncPayload.PHASE_CURSOR, request.getString("phase"))
+        assertTrue(LibrarySyncPayload.supportsManifestBatches(request))
+        assertEquals("phone-device", request.getString("deviceId"))
+        assertEquals(cursor, LibrarySyncPayload.parseCursor(request))
+        assertTrue(response.getBoolean("success"))
+        assertTrue(LibrarySyncPayload.supportsManifestBatches(response))
+        assertEquals("watch-device", response.getString("deviceId"))
+        assertEquals(cursor, LibrarySyncPayload.parseCursor(response))
     }
 
     @Test
@@ -149,11 +209,17 @@ class LibrarySyncPayloadTest {
                 toSeqInclusive = 8L,
                 fullSnapshot = false,
                 fallbackReason = ""
+            ),
+            cursor = LibrarySyncCursor(
+                localMaxSeq = 8L,
+                lastRemoteSeqApplied = 3L,
+                lastLocalSeqAckedByPeer = 4L
             )
         )
         val manifest = LibrarySyncPayload.parseArticleManifest(response).single()
         val parsedSource = LibrarySyncPayload.parseRssSources(response).single()
         val changeSequence = LibrarySyncPayload.parseChangeSequence(response)
+        val cursor = LibrarySyncPayload.parseCursor(response)
 
         assertEquals(0, LibrarySyncPayload.parseArticles(response).size)
         assertEquals(article.articleId, manifest.articleId)
@@ -166,6 +232,9 @@ class LibrarySyncPayloadTest {
         assertEquals(4L, changeSequence.fromSeqExclusive)
         assertEquals(8L, changeSequence.toSeqInclusive)
         assertEquals(false, changeSequence.fullSnapshot)
+        assertEquals(8L, cursor.localMaxSeq)
+        assertEquals(3L, cursor.lastRemoteSeqApplied)
+        assertEquals(4L, cursor.lastLocalSeqAckedByPeer)
         assertEquals("manifest", response.getString("phase"))
     }
 

@@ -17,6 +17,7 @@ import com.lightningstudio.watchrss.debug.DebugLogBuffer
 import com.lightningstudio.watchrss.debug.StartupDurationTracker
 import com.lightningstudio.watchrss.phoneconnection.WatchDeviceIdentity
 import com.lightningstudio.watchrss.phoneconnection.bluetooth.WatchBluetoothForegroundSyncManager
+import com.lightningstudio.watchrss.phoneconnection.ip.SyncMediaKeepAlive
 import com.lightningstudio.watchrss.phoneconnection.ip.WatchIpSyncManager
 import com.lightningstudio.watchrss.sdk.bili.BiliDebugLog
 import com.lightningstudio.watchrss.util.AppLogger
@@ -44,6 +45,7 @@ class WatchRssApplication : Application() {
             appScope.launch { cloudSyncService.syncNow() }
         }
     }
+    internal val syncMediaKeepAlive: SyncMediaKeepAlive by lazy { SyncMediaKeepAlive() }
     val ipSyncManager: WatchIpSyncManager by lazy { WatchIpSyncManager(this) }
     private var lastCloudForegroundAt = 0L
     private var pendingCloudChangeSync: Job? = null
@@ -89,6 +91,11 @@ class WatchRssApplication : Application() {
 
         bluetoothForegroundSyncManager.install()
         ipSyncManager.install()
+        appScope.launch {
+            container.settingsRepository.syncMediaKeepAliveEnabled.collect(
+                syncMediaKeepAlive::setEnabled
+            )
+        }
         WatchCloudSyncWorker.schedule(this)
         usageTelemetry.recordAppLaunch()
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {

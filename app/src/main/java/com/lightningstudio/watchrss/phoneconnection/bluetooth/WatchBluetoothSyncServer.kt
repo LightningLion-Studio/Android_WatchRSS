@@ -15,6 +15,7 @@ import com.lightningstudio.watchrss.WatchRssApplication
 import com.lightningstudio.watchrss.data.rss.SaveType
 import com.lightningstudio.watchrss.data.rss.SyncedArticleBodyRequest
 import com.lightningstudio.watchrss.data.rss.SyncedChunkedArticle
+import com.lightningstudio.watchrss.data.rss.SyncedSavedArticleMergeStats
 import com.lightningstudio.watchrss.phoneconnection.PhoneConnectionAbility
 import com.lightningstudio.watchrss.phoneconnection.SavedItemsSyncPayload
 import com.lightningstudio.watchrss.phoneconnection.WatchDeviceIdentity
@@ -102,9 +103,10 @@ private class StreamWatchSyncTransport(
 }
 
 private data class ChunkedArticleRequestFrames(
-    val articles: List<SyncedChunkedArticle>,
     val bodyRequests: List<SyncedArticleBodyRequest>,
-    val stats: ArticleRequestBatchStats
+    val stats: ArticleRequestBatchStats,
+    val receivedArticles: Int,
+    val mergeStats: SyncedSavedArticleMergeStats
 )
 
 private class ReaderPreviewStreamStats {
@@ -165,7 +167,8 @@ class WatchBluetoothSyncServer(
     private val expectedAbility: PhoneConnectionAbility? = null,
     private val allowedActions: Set<String>? = null,
     private val onClientAccepted: (() -> Unit)? = null,
-    private val onRequestReceived: (() -> Unit)? = null
+    private val onRequestReceived: (() -> Unit)? = null,
+    private val responseAckTimeoutMs: Long = RESPONSE_ACK_TIMEOUT_MS
 ) {
     @SuppressLint("MissingPermission")
     suspend fun acceptOnce(timeoutMs: Long = DEFAULT_TIMEOUT_MS): BluetoothSyncResult {
@@ -285,7 +288,7 @@ class WatchBluetoothSyncServer(
             fields = remoteFields(remoteName, remoteAddress)
         )
         onClientAccepted?.invoke()
-        val request = readFrameLoggedWithTimeout(
+        var request = readFrameLoggedWithTimeout(
             client = client,
             sessionId = sessionId,
             label = "initialRequest",
@@ -299,8 +302,23 @@ class WatchBluetoothSyncServer(
             val response = handleReaderPreviewStream(client, request, sessionId)
             return BluetoothSyncResult(remoteName, remoteAddress, request, response)
         }
-        val unsupportedPhoneProtocolResponse =
+        var unsupportedPhoneProtocolResponse =
             LibrarySyncPayload.buildUnsupportedPhoneProtocolResponse(request)
+        if (unsupportedPhoneProtocolResponse == null && request.isCursorLibrarySync()) {
+            val cursorResponse = buildLibraryCursorResponse(request, sessionId)
+            writeFrameLogged(client, sessionId, "cursorResponse", cursorResponse)
+            request = readFrameLoggedWithTimeout(
+                client = client,
+                sessionId = sessionId,
+                label = "manifestRequest",
+                timeoutMs = initialRequestTimeoutMs
+            )
+            unsupportedPhoneProtocolResponse =
+                LibrarySyncPayload.buildUnsupportedPhoneProtocolResponse(request)
+        }
+        if (unsupportedPhoneProtocolResponse == null && request.isManifestLibrarySync()) {
+            request = readManifestRequestFrames(client, sessionId, request)
+        }
         val libraryExchange = if (
             unsupportedPhoneProtocolResponse == null && request.isManifestLibrarySync()
         ) {
@@ -327,6 +345,37 @@ class WatchBluetoothSyncServer(
         return BluetoothSyncResult(remoteName, remoteAddress, request, response)
     }
 
+    private suspend fun buildLibraryCursorResponse(
+        request: JSONObject,
+        sessionId: String
+    ): JSONObject {
+        if (allowedActions != null && BluetoothSyncProtocol.ACTION_SYNC_LIBRARY !in allowedActions) {
+            error("当前前台自动同步不支持此操作，请在手表上打开对应连接页面")
+        }
+        val app = context.applicationContext as WatchRssApplication
+        val localDeviceId = WatchDeviceIdentity(context).deviceId
+        val remoteDeviceId = request.optString("deviceId").trim().ifBlank { "phone" }
+        val cursor = app.container.rssRepository.getLibrarySyncCursor(remoteDeviceId)
+        WatchBluetoothDebugLog.event(
+            sessionId = sessionId,
+            event = "library.cursor.exchanged",
+            fields = mapOf(
+                "remoteDeviceId" to remoteDeviceId,
+                "localMaxSeq" to cursor.localMaxSeq,
+                "lastRemoteSeqApplied" to cursor.lastRemoteSeqApplied,
+                "lastLocalSeqAckedByPeer" to cursor.lastLocalSeqAckedByPeer
+            )
+        )
+        return LibrarySyncPayload.buildCursorResponse(
+            deviceId = localDeviceId,
+            cursor = LibrarySyncCursor(
+                localMaxSeq = cursor.localMaxSeq,
+                lastRemoteSeqApplied = cursor.lastRemoteSeqApplied,
+                lastLocalSeqAckedByPeer = cursor.lastLocalSeqAckedByPeer
+            )
+        )
+    }
+
     private suspend fun handleLibraryManifestExchange(
         client: WatchSyncTransport,
         request: JSONObject,
@@ -345,6 +394,7 @@ class WatchBluetoothSyncServer(
             val app = context.applicationContext as WatchRssApplication
             val localDeviceId = WatchDeviceIdentity(context).deviceId
             val remoteDeviceId = request.optString("deviceId").ifBlank { "phone" }
+            val remoteCursor = LibrarySyncPayload.parseCursor(request)
             val remoteSupportsArticleBatches = request.optBoolean("supportsArticleBatches", false)
             val remoteChangeSequence = LibrarySyncPayload.parseChangeSequence(request)
             val remoteManifest = LibrarySyncPayload.parseArticleManifest(request)
@@ -377,7 +427,8 @@ class WatchBluetoothSyncServer(
             val supportsMetadataOnlyArticles = LibrarySyncPayload.supportsMetadataOnlyArticles(request)
             val preparedWindow = app.container.rssRepository.prepareLibrarySyncWindow(
                 peerDeviceId = remoteDeviceId,
-                localDeviceId = localDeviceId
+                localDeviceId = localDeviceId,
+                peerAppliedLocalSeq = remoteCursor.lastRemoteSeqApplied
             )
             val outgoingWindow = if (LibrarySyncPayload.supportsChangeSequences(request)) {
                 preparedWindow
@@ -400,6 +451,9 @@ class WatchBluetoothSyncServer(
                     "chunked" to supportsChunkedBodies,
                     "localSeqMax" to outgoingWindow.toSeqInclusive,
                     "peerAckedSeq" to outgoingWindow.peerAckedSeq,
+                    "remoteLocalMaxSeq" to remoteCursor.localMaxSeq,
+                    "remoteLastRemoteSeqApplied" to remoteCursor.lastRemoteSeqApplied,
+                    "remoteLastLocalSeqAckedByPeer" to remoteCursor.lastLocalSeqAckedByPeer,
                     "fullSnapshot" to outgoingWindow.fullSnapshot,
                     "fallbackReason" to outgoingWindow.fallbackReason
                 )
@@ -439,10 +493,28 @@ class WatchBluetoothSyncServer(
                     )
                 )
             }
-            writeFrameLogged(client, sessionId, "manifestResponse", manifestResponse)
+            val manifestResponseFrames = if (LibrarySyncPayload.supportsManifestBatches(request)) {
+                LibrarySyncPayload.buildManifestFrames(manifestResponse)
+            } else {
+                listOf(manifestResponse)
+            }
+            manifestResponseFrames.forEachIndexed { index, frame ->
+                writeFrameLogged(
+                    client,
+                    sessionId,
+                    batchLabel("manifestResponse", index, manifestResponseFrames.size),
+                    frame
+                )
+            }
 
             val chunkedArticleRequests = if (supportsChunkedBodies) {
-                readChunkedArticleRequestFrames(client, sessionId)
+                readChunkedArticleRequestFrames(client, sessionId) { articles ->
+                    app.container.rssRepository.mergeSyncedChunkedArticles(
+                        articles = articles,
+                        remoteDeviceId = remoteDeviceId,
+                        localDeviceId = localDeviceId
+                    )
+                }
             } else {
                 null
             }
@@ -452,23 +524,20 @@ class WatchBluetoothSyncServer(
                 readArticleRequestFrames(client, sessionId)
             }
             val incoming = if (supportsChunkedBodies) {
-                chunkedArticleRequests?.articles.orEmpty()
+                emptyList()
             } else {
                 articleRequestFrames.flatMap { LibrarySyncPayload.parseArticles(it) }
             }
+            val incomingArticleCount = chunkedArticleRequests?.receivedArticles ?: incoming.size
             WatchBluetoothDebugLog.event(
                 sessionId = sessionId,
                 event = "library.articles.parsed",
                 fields = (chunkedArticleRequests?.stats?.fields("articlesRequest")
                     ?: batchFields("articlesRequest", articleRequestFrames)) +
-                    mapOf("incomingArticles" to incoming.size)
+                    mapOf("incomingArticles" to incomingArticleCount)
             )
             val stats = if (supportsChunkedBodies) {
-                app.container.rssRepository.mergeSyncedChunkedArticles(
-                    articles = incoming.filterIsInstance<com.lightningstudio.watchrss.data.rss.SyncedChunkedArticle>(),
-                    remoteDeviceId = remoteDeviceId,
-                    localDeviceId = localDeviceId
-                )
+                requireNotNull(chunkedArticleRequests).mergeStats
             } else {
                 app.container.rssRepository.mergeSyncedSavedArticles(
                     articles = incoming.filterIsInstance<com.lightningstudio.watchrss.data.rss.SyncedSavedArticle>(),
@@ -486,7 +555,7 @@ class WatchBluetoothSyncServer(
                 sessionId = sessionId,
                 event = "library.articles.merged",
                 fields = mapOf(
-                    "incomingArticles" to incoming.size,
+                    "incomingArticles" to incomingArticleCount,
                     "articlesApplied" to stats.applied,
                     "outgoingDiff" to outgoingDiff.size,
                     "chunked" to supportsChunkedBodies
@@ -555,13 +624,13 @@ class WatchBluetoothSyncServer(
             val response = summarizeLibraryResponse(responseFrames)
             Log.i(
                 TAG,
-                "library manifest exchange complete incoming=${incoming.size} outgoing=${outgoingDiff.size} sources=${outgoingWindow.rssSources.size}"
+                "library manifest exchange complete incoming=$incomingArticleCount outgoing=${outgoingDiff.size} sources=${outgoingWindow.rssSources.size}"
             )
             WatchBluetoothDebugLog.event(
                 sessionId = sessionId,
                 event = "library.manifest.handle.complete",
                 fields = batchFields("libraryResponse", responseFrames) + payloadFields("combinedLibraryResponse", response) + mapOf(
-                    "incomingArticles" to incoming.size,
+                    "incomingArticles" to incomingArticleCount,
                     "outgoingDiff" to outgoingDiff.size,
                     "outgoingSources" to outgoingWindow.rssSources.size,
                     "localSeqMax" to outgoingWindow.toSeqInclusive,
@@ -582,7 +651,7 @@ class WatchBluetoothSyncServer(
                     localSeqToInclusive = outgoingWindow.toSeqInclusive,
                     remoteSeqToInclusive = remoteChangeSequence.toSeqInclusive,
                     remoteProtocolVersion = request.optInt("version"),
-                    fullSnapshot = outgoingWindow.fullSnapshot || remoteChangeSequence.fullSnapshot,
+                    fullSnapshot = outgoingWindow.fullSnapshot,
                     localArticleCount = outgoingWindow.articleManifest.size,
                     remoteArticleCount = remoteManifest.size
                 )
@@ -625,6 +694,26 @@ class WatchBluetoothSyncServer(
         }
     }
 
+    private suspend fun readManifestRequestFrames(
+        client: WatchSyncTransport,
+        sessionId: String,
+        first: JSONObject
+    ): JSONObject {
+        val batchCount = LibrarySyncPayload.manifestBatchCount(first)
+        if (batchCount <= 1) return first
+        val frames = ArrayList<JSONObject>(batchCount)
+        frames += first
+        for (index in 1 until batchCount) {
+            frames += readFrameLoggedWithTimeout(
+                client = client,
+                sessionId = sessionId,
+                label = batchLabel("manifestRequest", index, batchCount),
+                timeoutMs = EXCHANGE_FRAME_READ_TIMEOUT_MS
+            )
+        }
+        return LibrarySyncPayload.combineManifestFrames(frames)
+    }
+
     private suspend fun readArticleRequestFrames(
         client: WatchSyncTransport,
         sessionId: String
@@ -660,7 +749,8 @@ class WatchBluetoothSyncServer(
 
     private suspend fun readChunkedArticleRequestFrames(
         client: WatchSyncTransport,
-        sessionId: String
+        sessionId: String,
+        mergeArticles: suspend (List<SyncedChunkedArticle>) -> SyncedSavedArticleMergeStats
     ): ChunkedArticleRequestFrames {
         val first = readFrameLoggedWithTimeout(
             client = client,
@@ -672,16 +762,46 @@ class WatchBluetoothSyncServer(
             frame = first,
             expectedBatchIndex = 0
         )
-        val byArticleId = linkedMapOf<String, SyncedChunkedArticle>()
         val bodyRequests = mutableListOf<SyncedArticleBodyRequest>()
         val stats = ArticleRequestBatchStats()
+        val completedArticleIds = hashSetOf<String>()
+        var pendingArticle: SyncedChunkedArticle? = null
+        var receivedArticles = 0
+        var receivedForMerge = 0
+        var applied = 0
 
-        fun consume(frame: JSONObject) {
+        suspend fun mergeReady(articles: List<SyncedChunkedArticle>) {
+            if (articles.isEmpty()) return
+            val merged = mergeArticles(articles)
+            receivedForMerge += merged.received
+            applied += merged.applied
+        }
+
+        suspend fun consume(frame: JSONObject) {
             stats.add(frame)
+            val ready = mutableListOf<SyncedChunkedArticle>()
             LibrarySyncPayload.parseChunkedArticles(frame).forEach { payload ->
-                byArticleId.mergeChunkedArticle(payload)
+                val current = pendingArticle
+                if (current == null) {
+                    require(payload.article.articleId !in completedArticleIds) {
+                        "同步正文文章批次顺序异常：${payload.article.articleId}"
+                    }
+                    pendingArticle = payload
+                    receivedArticles += 1
+                } else if (current.article.articleId == payload.article.articleId) {
+                    pendingArticle = current.mergeChunkedArticle(payload)
+                } else {
+                    completedArticleIds += current.article.articleId
+                    ready += current
+                    require(payload.article.articleId !in completedArticleIds) {
+                        "同步正文文章批次顺序异常：${payload.article.articleId}"
+                    }
+                    pendingArticle = payload
+                    receivedArticles += 1
+                }
             }
             bodyRequests += LibrarySyncPayload.parseBodyRequests(frame)
+            mergeReady(ready)
         }
 
         consume(first)
@@ -701,35 +821,45 @@ class WatchBluetoothSyncServer(
             consume(frame)
             frameCount += 1
         }
+        pendingArticle?.let { article ->
+            mergeReady(listOf(article))
+            completedArticleIds += article.article.articleId
+            pendingArticle = null
+        }
+        require(receivedForMerge == receivedArticles) {
+            "同步正文流式合并数量异常：received=$receivedArticles merged=$receivedForMerge"
+        }
         return ChunkedArticleRequestFrames(
-            articles = byArticleId.values.toList(),
             bodyRequests = bodyRequests,
-            stats = stats
+            stats = stats,
+            receivedArticles = receivedArticles,
+            mergeStats = SyncedSavedArticleMergeStats(
+                received = receivedForMerge,
+                applied = applied
+            )
         )
     }
 
-    private fun MutableMap<String, SyncedChunkedArticle>.mergeChunkedArticle(
+    private fun SyncedChunkedArticle.mergeChunkedArticle(
         payload: SyncedChunkedArticle
-    ) {
-        val existing = this[payload.article.articleId]
-        this[payload.article.articleId] = if (existing == null) {
-            payload
-        } else {
-            require(
-                existing.bodyHash == payload.bodyHash &&
-                    existing.chunkSize == payload.chunkSize &&
-                    existing.chunkHashes == payload.chunkHashes &&
-                    existing.metadataOnly == payload.metadataOnly
-            ) {
-                "同步正文分块元数据冲突：${payload.article.articleId}"
-            }
-            existing.copy(
-                article = payload.article,
-                chunks = (existing.chunks + payload.chunks)
-                    .distinctBy { it.index }
-                    .sortedBy { it.index }
-            )
+    ): SyncedChunkedArticle {
+        require(article.articleId == payload.article.articleId) {
+            "同步正文文章不一致：${article.articleId} != ${payload.article.articleId}"
         }
+        require(
+            bodyHash == payload.bodyHash &&
+                chunkSize == payload.chunkSize &&
+                chunkHashes == payload.chunkHashes &&
+                metadataOnly == payload.metadataOnly
+        ) {
+            "同步正文分块元数据冲突：${payload.article.articleId}"
+        }
+        return copy(
+            article = payload.article,
+            chunks = (chunks + payload.chunks)
+                .distinctBy { it.index }
+                .sortedBy { it.index }
+        )
     }
 
     private fun summarizeLibraryResponse(responseFrames: List<JSONObject>): JSONObject {
@@ -755,9 +885,9 @@ class WatchBluetoothSyncServer(
         WatchBluetoothDebugLog.event(
             sessionId = sessionId,
             event = "ack.read.start",
-            fields = mapOf("timeoutMs" to RESPONSE_ACK_TIMEOUT_MS)
+            fields = mapOf("timeoutMs" to responseAckTimeoutMs)
         )
-        var ack = readAckPayloadOrNull(client, sessionId, RESPONSE_ACK_TIMEOUT_MS, startedAt)
+        var ack = readAckPayloadOrNull(client, sessionId, responseAckTimeoutMs, startedAt)
         var parsedAck = BluetoothSyncProtocol.parseAck(ack)
         if (
             parsedAck != null &&
@@ -1097,15 +1227,22 @@ class WatchBluetoothSyncServer(
                 BluetoothSyncProtocol.ACTION_SYNC_LIBRARY -> {
                     val localDeviceId = WatchDeviceIdentity(context).deviceId
                     if (request.optString("phase") == LibrarySyncPayload.PHASE_PROBE) {
+                        val app = context.applicationContext as WatchRssApplication
+                        val ipUpgradeAccepted = request.optJSONObject(FIELD_IP_ENDPOINT_DESCRIPTOR)
+                            ?.let(app.ipSyncManager::offerEndpointDescriptor)
+                            ?: false
                         WatchBluetoothDebugLog.event(
                             sessionId = sessionId,
                             event = "request.syncLibrary.probe",
-                            fields = mapOf("remoteDeviceId" to request.optString("deviceId"))
+                            fields = mapOf(
+                                "remoteDeviceId" to request.optString("deviceId"),
+                                "ipUpgradeAccepted" to ipUpgradeAccepted
+                            )
                         )
                         return@runCatching LibrarySyncPayload.buildProbeResponse(
                             localDeviceId,
                             WatchMediaCapabilities.inspect(context)
-                        )
+                        ).apply { put(FIELD_IP_UPGRADE_ACCEPTED, ipUpgradeAccepted) }
                     }
                     val app = context.applicationContext as WatchRssApplication
                     val remoteDeviceId = request.optString("deviceId").ifBlank { "phone" }
@@ -1467,8 +1604,16 @@ class WatchBluetoothSyncServer(
             optString("phase") == LibrarySyncPayload.PHASE_MANIFEST
     }
 
+    private fun JSONObject.isCursorLibrarySync(): Boolean {
+        return optString("action") == BluetoothSyncProtocol.ACTION_SYNC_LIBRARY &&
+            optInt("version") >= LibrarySyncPayload.PROTOCOL_VERSION &&
+            optString("phase") == LibrarySyncPayload.PHASE_CURSOR
+    }
+
     companion object {
         private const val TAG = "WatchRSS_BtSyncServer"
+        private const val FIELD_IP_ENDPOINT_DESCRIPTOR = "ipEndpointDescriptor"
+        private const val FIELD_IP_UPGRADE_ACCEPTED = "ipUpgradeAccepted"
         private const val DEFAULT_TIMEOUT_MS = 120_000L
         private const val PREVIEW_STREAM_IDLE_TIMEOUT_MS = 30_000L
         private const val PREVIEW_ACK_INTERVAL_MS = 50L

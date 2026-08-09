@@ -16,6 +16,7 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import com.lightningstudio.watchrss.BluetoothConnectionActivity
 import com.lightningstudio.watchrss.DebugBluetoothSyncActivity
+import com.lightningstudio.watchrss.WatchRssApplication
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -32,6 +33,8 @@ class WatchBluetoothForegroundSyncManager(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val powerManager = application.getSystemService(PowerManager::class.java)
     private val screenOnController = BluetoothTransferScreenOnController()
+    private val mediaKeepAlive =
+        (application as WatchRssApplication).syncMediaKeepAlive
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             when (intent?.action) {
@@ -65,6 +68,7 @@ class WatchBluetoothForegroundSyncManager(
     private val lock = Any()
     private var listeningJob: Job? = null
     private var stopListeningJob: Job? = null
+    private var mediaReleaseJob: Job? = null
 
     fun install() {
         application.registerActivityLifecycleCallbacks(this)
@@ -173,15 +177,18 @@ class WatchBluetoothForegroundSyncManager(
                             BluetoothSyncProtocol.ACTION_SYNC_NOTES,
                             BluetoothSyncProtocol.ACTION_SYNC_READER,
                             BluetoothSyncProtocol.ACTION_PREVIEW_READER,
-                            BluetoothSyncProtocol.ACTION_SYNC_ACCOUNT
+                            BluetoothSyncProtocol.ACTION_SYNC_ACCOUNT,
+                            BluetoothSyncProtocol.ACTION_SYNC_LLM_TOKEN_USAGE
                         ),
                         onClientAccepted = {
+                            beginMediaKeepAliveSession()
                             updateTransferInProgress(true)
                         }
                     ).acceptOnce(timeoutMs = FOREGROUND_ACCEPT_TIMEOUT_MS)
                 }
             }
             updateTransferInProgress(false)
+            scheduleMediaKeepAliveRelease()
             result.onSuccess { syncResult ->
                 Log.i(
                     TAG,
@@ -215,6 +222,22 @@ class WatchBluetoothForegroundSyncManager(
         if (!inProgress && !shouldListen()) scheduleStopListening()
     }
 
+    private fun beginMediaKeepAliveSession() {
+        mediaReleaseJob?.cancel()
+        mediaReleaseJob = null
+        mediaKeepAlive.acquire(MEDIA_KEEP_ALIVE_OWNER)
+    }
+
+    private fun scheduleMediaKeepAliveRelease() {
+        mediaReleaseJob?.cancel()
+        mediaReleaseJob = scope.launch {
+            // Keep playback continuous across the RFCOMM bootstrap -> IP handoff. The IP
+            // transport acquires its own lease as soon as its first request arrives.
+            delay(MEDIA_KEEP_ALIVE_HANDOFF_GRACE_MS)
+            mediaKeepAlive.release(MEDIA_KEEP_ALIVE_OWNER)
+        }
+    }
+
     private fun hasBluetoothPermission(): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return true
         return ContextCompat.checkSelfPermission(
@@ -240,5 +263,7 @@ class WatchBluetoothForegroundSyncManager(
         private const val FOREGROUND_ACCEPT_TIMEOUT_MS = 120_000L
         private const val RETRY_DELAY_MS = 500L
         private const val LISTENER_STOP_GRACE_MS = 2_500L
+        private const val MEDIA_KEEP_ALIVE_OWNER = "rfcomm-bootstrap"
+        private const val MEDIA_KEEP_ALIVE_HANDOFF_GRACE_MS = 30_000L
     }
 }

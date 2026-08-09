@@ -24,9 +24,11 @@ class AdvancedSettingsActivity : BaseWatchActivity() {
                     cacheLimitMb = viewModel.cacheLimitMb,
                     cacheUsageMb = viewModel.cacheUsageMb,
                     shareUseSystem = viewModel.shareUseSystem,
+                    syncMediaKeepAliveEnabled = viewModel.syncMediaKeepAliveEnabled,
                     rssInlineImagePrefetchMode = viewModel.rssInlineImagePrefetchMode,
                     onSelectCacheLimit = viewModel::updateCacheLimitMb,
                     onToggleShareMode = viewModel::toggleShareUseSystem,
+                    onToggleSyncMediaKeepAlive = viewModel::toggleSyncMediaKeepAlive,
                     onSelectRssInlineImagePrefetchMode = viewModel::updateRssInlineImagePrefetchMode
                 )
             }

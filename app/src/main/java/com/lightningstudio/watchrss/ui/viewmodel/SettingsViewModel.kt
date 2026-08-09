@@ -9,6 +9,7 @@ import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_CONTROL_E
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
 import com.lightningstudio.watchrss.data.settings.DEFAULT_READING_FONT_SIZE_SP
 import com.lightningstudio.watchrss.data.settings.DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE
+import com.lightningstudio.watchrss.data.settings.DEFAULT_SYNC_MEDIA_KEEP_ALIVE_ENABLED
 import com.lightningstudio.watchrss.data.settings.MB_BYTES
 import com.lightningstudio.watchrss.data.settings.RssInlineImagePrefetchMode
 import com.lightningstudio.watchrss.data.settings.SettingsRepository
@@ -43,6 +44,13 @@ class SettingsViewModel(
 
     val phoneConnectionEnabled: StateFlow<Boolean> = settingsRepository.phoneConnectionEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
+
+    val syncMediaKeepAliveEnabled: StateFlow<Boolean> = settingsRepository.syncMediaKeepAliveEnabled
+        .stateIn(
+            viewModelScope,
+            SharingStarted.WhileSubscribed(5_000),
+            DEFAULT_SYNC_MEDIA_KEEP_ALIVE_ENABLED
+        )
 
     val mediaVolumeControlEnabled: StateFlow<Boolean> = settingsRepository.mediaVolumeControlEnabled
         .stateIn(
@@ -124,6 +132,12 @@ class SettingsViewModel(
         viewModelScope.launch {
             val current = mediaVolumeControlEnabled.value
             settingsRepository.setMediaVolumeControlEnabled(!current)
+        }
+    }
+
+    fun toggleSyncMediaKeepAlive() {
+        viewModelScope.launch {
+            settingsRepository.setSyncMediaKeepAliveEnabled(!syncMediaKeepAliveEnabled.value)
         }
     }
 
