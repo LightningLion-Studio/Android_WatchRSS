@@ -2,6 +2,7 @@ package com.lightningstudio.watchrss
 
 import android.os.Bundle
 import android.os.SystemClock
+import android.text.format.DateUtils
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.clickable
@@ -13,16 +14,22 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -43,6 +50,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -52,6 +60,7 @@ import com.lightningstudio.watchrss.data.note.WatchNoteEntity
 import com.lightningstudio.watchrss.phoneconnection.WatchDeviceIdentity
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
+import com.lightningstudio.watchrss.ui.screen.rss.DetailActionButton
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -69,12 +78,14 @@ class NotesActivity : BaseWatchActivity() {
         setContent {
             WatchRSSTheme {
                 val notes by repository.observe().collectAsState(initial = emptyList())
-                var editing by remember { mutableStateOf<WatchNoteEntity?>(null) }
+                var selectedNoteId by remember { mutableStateOf<String?>(null) }
+                var editingNoteId by remember { mutableStateOf<String?>(null) }
                 var creating by remember { mutableStateOf(false) }
                 WatchSurface(pureBlack = true) {
                     val safeInset = notesSafeInset()
-                    val selected = editing
-                    if (selected == null && !creating) {
+                    val selected = selectedNoteId?.let { id -> notes.firstOrNull { it.noteId == id } }
+                    val editing = editingNoteId?.let { id -> notes.firstOrNull { it.noteId == id } }
+                    if (selected == null && editing == null && !creating) {
                         val listState = rememberLazyListState()
                         InstallDigitalCrownLazyListHandler(listState)
                         LazyColumn(
@@ -115,27 +126,28 @@ class NotesActivity : BaseWatchActivity() {
                                 }
                             }
                             items(notes, key = { it.noteId }) { note ->
-                                Card(Modifier.fillMaxWidth().clickable {
+                                NoteListCard(note = note, onClick = {
                                     creating = false
-                                    editing = note
-                                }) {
-                                    Column(Modifier.padding(12.dp)) {
-                                        Text(note.title.ifBlank { "未命名笔记" })
-                                        Spacer(Modifier.height(4.dp))
-                                        Text(note.plainText.take(100))
-                                    }
-                                }
+                                    selectedNoteId = note.noteId
+                                })
                             }
                         }
+                    } else if (selected != null && editing == null && !creating) {
+                        WatchNoteReader(
+                            note = selected,
+                            safeInset = safeInset,
+                            onBack = { selectedNoteId = null },
+                            onEdit = { editingNoteId = selected.noteId }
+                        )
                     } else {
                         WatchNoteRawEditor(
-                            note = selected,
+                            note = editing,
                             safeInset = safeInset,
                             saveDraft = { noteId, markdown ->
                                 repository.saveRawMarkdown(noteId, markdown, deviceId)
                             },
                             onClose = {
-                                editing = null
+                                editingNoteId = null
                                 creating = false
                             }
                         )
@@ -144,6 +156,128 @@ class NotesActivity : BaseWatchActivity() {
             }
         }
     }
+}
+
+@androidx.compose.runtime.Composable
+private fun NoteListCard(note: WatchNoteEntity, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (note.pinned) {
+                    Icon(
+                        imageVector = Icons.Default.PushPin,
+                        contentDescription = "已置顶",
+                        modifier = Modifier.size(14.dp),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(Modifier.width(5.dp))
+                }
+                Text(
+                    text = note.title.ifBlank { "未命名笔记" },
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            val preview = notePreview(note)
+            if (preview.isNotEmpty()) {
+                Spacer(Modifier.height(5.dp))
+                Text(
+                    text = preview,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(Modifier.height(7.dp))
+            Text(
+                text = noteMetadata(note),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelSmall
+            )
+        }
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun WatchNoteReader(
+    note: WatchNoteEntity,
+    safeInset: androidx.compose.ui.unit.Dp,
+    onBack: () -> Unit,
+    onEdit: () -> Unit
+) {
+    BackHandler(onBack = onBack)
+    val listState = rememberLazyListState()
+    InstallDigitalCrownLazyListHandler(listState)
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        state = listState,
+        contentPadding = PaddingValues(safeInset),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回备忘录列表")
+                    }
+                    Text(
+                        text = "阅读备忘录",
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(Modifier.size(48.dp))
+                }
+            }
+            item {
+                Text(
+                    text = note.title.ifBlank { "未命名笔记" },
+                    modifier = Modifier.fillMaxWidth(),
+                    style = MaterialTheme.typography.headlineSmall,
+                    textAlign = TextAlign.Start
+                )
+            }
+            item {
+                Text(
+                    text = noteMetadata(note),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelSmall
+                )
+            }
+            item {
+                DetailActionButton(
+                    text = "编辑",
+                    fontSize = MaterialTheme.typography.bodyLarge.fontSize,
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    borderColor = MaterialTheme.colorScheme.outlineVariant,
+                    onClick = onEdit
+                )
+            }
+            item {
+                SelectionContainer {
+                    Text(
+                        text = note.plainText.ifBlank { "这条备忘录还没有正文。" },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = if (note.plainText.isBlank()) {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
+                        style = MaterialTheme.typography.bodyLarge,
+                        lineHeight = MaterialTheme.typography.bodyLarge.lineHeight * 1.2f
+                    )
+                }
+            }
+        }
 }
 
 @androidx.compose.runtime.Composable
@@ -300,8 +434,28 @@ private fun notesSafeInset(): androidx.compose.ui.unit.Dp {
     }
 }
 
+internal fun notePreview(note: WatchNoteEntity): String = notePreview(note.title, note.plainText)
+
+internal fun notePreview(title: String, plainText: String): String {
+    val lines = plainText.lineSequence().map(String::trim).filter(String::isNotEmpty).toList()
+    val withoutRepeatedTitle = if (lines.firstOrNull() == title.trim()) lines.drop(1) else lines
+    return withoutRepeatedTitle.joinToString(" ").take(NOTE_PREVIEW_LENGTH)
+}
+
+private fun noteMetadata(note: WatchNoteEntity): String {
+    val relativeTime = DateUtils.getRelativeTimeSpanString(
+        note.updatedAt,
+        System.currentTimeMillis(),
+        DateUtils.MINUTE_IN_MILLIS,
+        DateUtils.FORMAT_ABBREV_RELATIVE
+    )
+    val characterCount = note.plainText.count { !it.isWhitespace() }
+    return "$relativeTime · $characterCount 字"
+}
+
 private const val ROUND_SCREEN_SAFE_INSET_FRACTION = 0.1465f
 private const val AUTO_SAVE_DELAY_MILLIS = 600L
+private const val NOTE_PREVIEW_LENGTH = 120
 
 private enum class DraftSaveState(val label: String) {
     EMPTY("输入后自动保存"),
