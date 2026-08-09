@@ -7,6 +7,7 @@ import org.jsoup.parser.Parser
 
 class WatchNoteRepository(private val dao: WatchNoteDao) {
     fun observe(): Flow<List<WatchNoteEntity>> = dao.observeNotes()
+    fun observe(noteId: String): Flow<WatchNoteEntity?> = dao.observeNote(noteId)
     suspend fun all(): List<WatchNoteEntity> = dao.all()
     suspend fun merge(notes: List<WatchNoteEntity>): Int {
         var changed = 0

@@ -49,7 +49,8 @@ fun InstallDigitalCrownScrollHandler(
 fun InstallDigitalCrownLazyListHandler(
     listState: LazyListState,
     enabled: Boolean = true,
-    reverseDirection: Boolean = false
+    reverseDirection: Boolean = false,
+    onScrollInput: (() -> Unit)? = null
 ) {
     val scope = rememberCoroutineScope()
     val stepPx = with(LocalDensity.current) { DIGITAL_CROWN_SCROLL_STEP.dp.toPx() }
@@ -58,6 +59,7 @@ fun InstallDigitalCrownLazyListHandler(
         if (amount == 0f) {
             false
         } else {
+            onScrollInput?.invoke()
             scope.launch {
                 listState.scrollBy(amount)
             }

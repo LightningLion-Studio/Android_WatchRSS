@@ -186,6 +186,7 @@ class FakeBiliRepository(
     val likeRequests = mutableListOf<Pair<Long, Boolean>>()
     val coinRequests = mutableListOf<Triple<Long, Int, Boolean>>()
     val remoteInteractionRequests = mutableListOf<Pair<Long?, String?>>()
+    val localInteractionStates = mutableMapOf<String, BiliInteractionState>()
 
     override suspend fun isLoggedIn(): Boolean = loggedIn
 
@@ -237,6 +238,28 @@ class FakeBiliRepository(
     ): BiliResult<BiliInteractionState> {
         remoteInteractionRequests += aid to bvid
         return remoteInteractionStateResult
+    }
+
+    override suspend fun readLocalInteractionState(aid: Long?, bvid: String?): BiliInteractionState {
+        return interactionKeys(aid, bvid)
+            .asSequence()
+            .mapNotNull(localInteractionStates::get)
+            .firstOrNull()
+            ?: BiliInteractionState()
+    }
+
+    override suspend fun writeLocalInteractionState(
+        aid: Long?,
+        bvid: String?,
+        state: BiliInteractionState
+    ) {
+        interactionKeys(aid, bvid).forEach { key ->
+            if (state.hasAnyInteraction) {
+                localInteractionStates[key] = state
+            } else {
+                localInteractionStates.remove(key)
+            }
+        }
     }
 
     override suspend fun fetchPlayUrlMp4(
@@ -412,6 +435,13 @@ class FakeBiliRepository(
 
     override suspend fun clearCachedPreview(aid: Long?, bvid: String?, cid: Long?) {
         clearedPreviewRequests += Triple(aid, bvid, cid)
+    }
+
+    private fun interactionKeys(aid: Long?, bvid: String?): List<String> {
+        return buildList {
+            bvid?.trim()?.takeIf { it.isNotEmpty() }?.let { add("bv:$it") }
+            aid?.let { add("av:$it") }
+        }
     }
 
     private fun matchesPlaybackIdentity(

@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.widget.Toast
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -35,6 +36,18 @@ class DetailActivity : BaseWatchActivity() {
 
     private val _isStartingActivity = MutableStateFlow(false)
     private val isStartingActivity = _isStartingActivity.asStateFlow()
+    private val autoScrollControlLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode != RESULT_OK) return@registerForActivityResult
+        val data = result.data ?: return@registerForActivityResult
+        if (!data.hasExtra(AutoScrollControlActivity.EXTRA_PLAYING_RESULT)) {
+            return@registerForActivityResult
+        }
+        viewModel.setReaderAutoScrollPlaying(
+            data.getBooleanExtra(AutoScrollControlActivity.EXTRA_PLAYING_RESULT, false)
+        )
+    }
 
     private var fromWatchLater: Boolean = false
     private var readStartedAt: Long = 0L
@@ -93,6 +106,7 @@ class DetailActivity : BaseWatchActivity() {
                     onOpenAiSummary = ::openAiSummary,
                     onOpenReadAloud = ::openReadAloud,
                     onOpenReadAloudControls = ::openReadAloudControls,
+                    onOpenAutoScrollControls = ::openAutoScrollControls,
                     onBack = { itemId, reachedBottom, isWatchLater ->
                         handleBackPress(itemId, reachedBottom, isWatchLater)
                     }
@@ -178,6 +192,16 @@ class DetailActivity : BaseWatchActivity() {
             ReadAloudPlaybackActivity.createIntent(
                 context = this@DetailActivity,
                 returnToArticle = true
+            )
+        )
+    }
+
+    private fun openAutoScrollControls(isPlaying: Boolean) {
+        _isStartingActivity.value = true
+        autoScrollControlLauncher.launch(
+            AutoScrollControlActivity.createReaderIntent(
+                context = this,
+                isPlaying = isPlaying
             )
         )
     }

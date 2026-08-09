@@ -66,6 +66,7 @@ class SettingsScreenTest {
                 onOpenDouyinCookieInput = {},
                 onOpenLlmConnectivity = {},
                 onOpenLlmPromptPreset = {},
+                onOpenLlmTokenUsage = {},
                 onBeianClick = {}
             )
         }
@@ -143,6 +144,7 @@ class SettingsScreenTest {
                 onOpenDouyinCookieInput = {},
                 onOpenLlmConnectivity = {},
                 onOpenLlmPromptPreset = {},
+                onOpenLlmTokenUsage = {},
                 onBeianClick = {}
             )
         }
@@ -205,6 +207,7 @@ class SettingsScreenTest {
                 onOpenDouyinCookieInput = {},
                 onOpenLlmConnectivity = {},
                 onOpenLlmPromptPreset = {},
+                onOpenLlmTokenUsage = {},
                 onBeianClick = {}
             )
         }

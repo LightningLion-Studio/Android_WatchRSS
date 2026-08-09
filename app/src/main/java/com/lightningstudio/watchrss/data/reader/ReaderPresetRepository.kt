@@ -44,7 +44,7 @@ class ReaderPresetRepository(
         ReaderPresetSelection(
             mode = preferences.getString(THEME_MODE_KEY, null)
                 ?.let { runCatching { ReaderThemeMode.valueOf(it) }.getOrNull() }
-                ?: ReaderThemeMode.SYSTEM,
+                ?: ReaderThemeMode.DARK,
             lightPresetId = preferences.getString(LIGHT_PRESET_KEY, legacyActivePresetId),
             darkPresetId = preferences.getString(DARK_PRESET_KEY, null),
             darkFollowsLight = preferences.getBoolean(
@@ -142,7 +142,7 @@ class ReaderPresetRepository(
         dao.upsertPresets(listOf(migrated.toEntity(), opposite.toEntity()))
         updateSelection(
             ReaderPresetSelection(
-                mode = ReaderThemeMode.SYSTEM,
+                mode = ReaderThemeMode.DARK,
                 lightPresetId = if (legacyDark) opposite.id else migrated.id,
                 darkPresetId = if (legacyDark) migrated.id else opposite.id,
                 darkFollowsLight = false

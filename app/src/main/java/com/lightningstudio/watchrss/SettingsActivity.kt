@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import com.lightningstudio.watchrss.debug.PerfEntryActivity
 import com.lightningstudio.watchrss.ui.screen.rss.SettingsScreenHost
+import com.lightningstudio.watchrss.ui.screen.rss.isDetailedTtsConfigurationVisible
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
 import com.lightningstudio.watchrss.ui.viewmodel.SettingsViewModel
@@ -29,6 +30,7 @@ class SettingsActivity : BaseWatchActivity() {
                     douyinRepository = douyinRepository,
                     rssRepository = rssRepository,
                     showPerformanceTools = false,
+                    showDetailedTtsConfiguration = isDetailedTtsConfigurationVisible(BuildConfig.BUILD_TYPE),
                     onOpenAdvanced = {
                         startActivity(Intent(this, AdvancedSettingsActivity::class.java))
                     },
@@ -37,6 +39,9 @@ class SettingsActivity : BaseWatchActivity() {
                     },
                     onOpenTtsSettings = {
                         startActivity(TtsSettingsActivity.createIntent(this))
+                    },
+                    onOpenAutoScrollSettings = {
+                        startActivity(AutoScrollControlActivity.createSettingsIntent(this))
                     },
                     onOpenOobe = {
                         startActivity(OobeActivity.createIntent(this, returnHomeOnFinish = false))

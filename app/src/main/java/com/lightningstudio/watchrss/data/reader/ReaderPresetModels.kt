@@ -130,6 +130,7 @@ data class ReaderPreset(
     val code: ReaderTextStyleOverride = ReaderTextStyleOverride(),
     val link: ReaderTextStyleOverride = ReaderTextStyleOverride(),
     val background: ReaderBackground = ReaderBackground(),
+    val codeBackgroundColorArgb: Long = defaultReaderCodeBackgroundColorArgb(0xFF000000),
     val accentColorArgb: Long = 0xFFFF5A36,
     val updatedAt: Long = System.currentTimeMillis(),
     val modifiedBy: String = "",
@@ -226,11 +227,25 @@ data class ReaderPreset(
             name = name,
             body = ReaderTextStyle(fontSizeSp = fontSizeSp, colorArgb = 0xFF221F1B),
             background = ReaderBackground(colorArgb = 0xFFF8F3EC),
+            codeBackgroundColorArgb = defaultReaderCodeBackgroundColorArgb(0xFFF8F3EC),
             accentColorArgb = 0xFFD94720
         )
 
         val fallback = darkDefault(id = FALLBACK_ID, name = "安全默认")
     }
+}
+
+fun defaultReaderCodeBackgroundColorArgb(backgroundColorArgb: Long): Long {
+    val warmYellow = 0xFFD8A52BL
+    fun blendChannel(shift: Int): Long {
+        val background = (backgroundColorArgb shr shift) and 0xFF
+        val warm = (warmYellow shr shift) and 0xFF
+        return (background * 82 + warm * 18 + 50) / 100
+    }
+    return 0xFF000000L or
+        (blendChannel(16) shl 16) or
+        (blendChannel(8) shl 8) or
+        blendChannel(0)
 }
 
 object ReaderPresetCodec {
@@ -248,6 +263,7 @@ object ReaderPresetCodec {
         put("code", preset.code.toJson())
         put("link", preset.link.toJson())
         put("background", preset.background.toJson())
+        put("codeBackgroundColorArgb", preset.codeBackgroundColorArgb)
         put("accentColorArgb", preset.accentColorArgb)
         put("updatedAt", preset.updatedAt)
         put("modifiedBy", preset.modifiedBy)
@@ -260,6 +276,7 @@ object ReaderPresetCodec {
         require(schemaVersion <= SCHEMA_VERSION) {
             "不支持的阅读器预设版本"
         }
+        val background = json.optJSONObject("background").toBackground()
         return ReaderPreset(
             id = json.getString("id"),
             name = json.getString("name"),
@@ -274,7 +291,11 @@ object ReaderPresetCodec {
             quote = json.optJSONObject("quote").toOverride(),
             code = json.optJSONObject("code").toOverride(),
             link = json.optJSONObject("link").toOverride(),
-            background = json.optJSONObject("background").toBackground(),
+            background = background,
+            codeBackgroundColorArgb = json.optLong(
+                "codeBackgroundColorArgb",
+                defaultReaderCodeBackgroundColorArgb(background.colorArgb)
+            ),
             accentColorArgb = json.optLong("accentColorArgb", 0xFFFF5A36),
             updatedAt = json.optLong("updatedAt"),
             modifiedBy = json.optString("modifiedBy"),
@@ -305,6 +326,9 @@ object ReaderPresetCodec {
                 "link" -> merged.copy(link = changes.getJSONObject(key).toOverride())
                 "background" -> merged.copy(
                     background = changes.getJSONObject(key).toBackground()
+                )
+                "codeBackgroundColorArgb" -> merged.copy(
+                    codeBackgroundColorArgb = changes.getLong(key)
                 )
                 "accentColorArgb" -> merged.copy(accentColorArgb = changes.getLong(key))
                 "updatedAt" -> merged.copy(updatedAt = changes.getLong(key))

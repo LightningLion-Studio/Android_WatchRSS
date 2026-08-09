@@ -7,6 +7,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import com.lightningstudio.watchrss.phoneconnection.PhoneConnectionAbility
 import com.lightningstudio.watchrss.ui.screen.rss.TtsSettingsScreen
+import com.lightningstudio.watchrss.ui.screen.rss.isDetailedTtsConfigurationVisible
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
 import com.lightningstudio.watchrss.ui.viewmodel.TtsSettingsViewModel
@@ -25,6 +26,7 @@ class TtsSettingsActivity : BaseWatchActivity() {
             WatchRSSTheme {
                 TtsSettingsScreen(
                     viewModel = viewModel,
+                    showDetailedConfiguration = isDetailedTtsConfigurationVisible(BuildConfig.BUILD_TYPE),
                     onOpenPhoneConfig = {
                         startActivity(
                             Intent(this, ServerActivity::class.java).apply {

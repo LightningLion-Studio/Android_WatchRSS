@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import com.lightningstudio.watchrss.WatchRssApplication
 import com.lightningstudio.watchrss.data.AppContainer
-import com.lightningstudio.watchrss.data.DefaultAppContainer
 import com.lightningstudio.watchrss.data.telemetry.OpenPanelAnalytics
 import com.lightningstudio.watchrss.data.telemetry.WatchUsageTelemetry
 import com.lightningstudio.watchrss.data.bili.BiliPlaybackCacheManager
@@ -19,12 +18,12 @@ import com.lightningstudio.watchrss.data.douyin.DouyinRecentWindowStoreContract
 import com.lightningstudio.watchrss.data.douyin.DouyinRepositoryContract
 import com.lightningstudio.watchrss.data.douyin.DouyinWatchHistoryStoreContract
 import com.lightningstudio.watchrss.data.network.InternetAvailabilityMonitor
+import com.lightningstudio.watchrss.data.note.WatchNoteRepository
 import com.lightningstudio.watchrss.data.rss.RssRepository
 import com.lightningstudio.watchrss.data.settings.LlmApiKeyStore
 import com.lightningstudio.watchrss.data.settings.SettingsRepository
 import com.lightningstudio.watchrss.data.settings.TtsApiKeyStore
 import com.lightningstudio.watchrss.data.tts.ReadAloudController
-import com.lightningstudio.watchrss.data.account.AccountStore
 import com.lightningstudio.watchrss.data.account.WatchAccountStore
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.rules.ExternalResource
@@ -39,7 +38,8 @@ class TestAppContainer(
     private val douyinRepositoryOverride: DouyinRepositoryContract? = null,
     private val internetAvailabilityMonitorOverride: InternetAvailabilityMonitor? = null
 ) : AppContainer {
-    private val fallback by lazy { DefaultAppContainer(context.applicationContext) }
+    private val fallback: AppContainer =
+        (context.applicationContext as WatchRssApplication).container
 
     override val openPanelAnalytics: OpenPanelAnalytics
         get() = fallback.openPanelAnalytics
@@ -56,8 +56,11 @@ class TestAppContainer(
     override val readAloudController: ReadAloudController
         get() = fallback.readAloudController
 
-    override val watchAccountStore: AccountStore
+    override val watchAccountStore: WatchAccountStore
         get() = fallback.watchAccountStore
+
+    override val watchNoteRepository: WatchNoteRepository
+        get() = fallback.watchNoteRepository
 
     override val readerPresetRepository: com.lightningstudio.watchrss.data.reader.ReaderPresetRepository
         get() = fallback.readerPresetRepository

@@ -48,6 +48,7 @@ import com.lightningstudio.watchrss.ui.viewmodel.TtsTestStatus
 @Composable
 fun TtsSettingsScreen(
     viewModel: TtsSettingsViewModel,
+    showDetailedConfiguration: Boolean,
     onOpenPhoneConfig: (() -> Unit)? = null
 ) {
     val state by viewModel.state.collectAsState()
@@ -59,7 +60,8 @@ fun TtsSettingsScreen(
         onIncreaseSpeed = viewModel::increaseSpeed,
         onDecreaseSpeed = viewModel::decreaseSpeed,
         onRunTest = viewModel::runTest,
-        onOpenPhoneConfig = onOpenPhoneConfig
+        onOpenPhoneConfig = onOpenPhoneConfig,
+        showDetailedConfiguration = showDetailedConfiguration
     )
 }
 
@@ -72,7 +74,8 @@ private fun TtsSettingsContent(
     onIncreaseSpeed: () -> Unit,
     onDecreaseSpeed: () -> Unit,
     onRunTest: () -> Unit,
-    onOpenPhoneConfig: (() -> Unit)?
+    onOpenPhoneConfig: (() -> Unit)?,
+    showDetailedConfiguration: Boolean
 ) {
     val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
     val entrySpacing = WatchDimens.hey_distance_8dp
@@ -92,11 +95,19 @@ private fun TtsSettingsContent(
                 .verticalScroll(scrollState)
                 .padding(safePadding)
         ) {
-            SettingsHeader(title = "朗读语音源")
+            SettingsHeader(
+                title = if (showDetailedConfiguration) "朗读语音源" else "朗读语速"
+            )
 
             Spacer(modifier = Modifier.height(WatchDimens.hey_content_horizontal_distance))
 
-            if (showEnginePicker) {
+            if (!showDetailedConfiguration) {
+                SpeechRateSetting(
+                    speed = state.speed,
+                    onIncreaseSpeed = onIncreaseSpeed,
+                    onDecreaseSpeed = onDecreaseSpeed
+                )
+            } else if (showEnginePicker) {
                 EnginePicker(
                     currentEngine = state.engine,
                     onSelect = { engine ->
@@ -177,31 +188,10 @@ private fun TtsSettingsContent(
 
                 Spacer(modifier = Modifier.height(entrySpacing))
 
-                WatchSettingsPillRow(label = "语速") {
-                    RoundIconButtonIcon(
-                        icon = Icons.Outlined.Remove,
-                        contentDescription = "减慢语速",
-                        enabled = state.speed > 0.55f,
-                        onClick = onDecreaseSpeed
-                    )
-                    Spacer(modifier = Modifier.width(WatchDimens.hey_distance_6dp))
-                    StepperValue(
-                        text = "${(state.speed * 10).toInt() / 10f}x",
-                        width = watchDimensionResource(R.dimen.watch_action_button_height)
-                    )
-                    Spacer(modifier = Modifier.width(WatchDimens.hey_distance_6dp))
-                    RoundIconButtonIcon(
-                        icon = Icons.Outlined.Add,
-                        contentDescription = "加快语速",
-                        enabled = state.speed < 1.95f,
-                        onClick = onIncreaseSpeed
-                    )
-                }
-                Text(
-                    text = "调节朗读语速",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+                SpeechRateSetting(
+                    speed = state.speed,
+                    onIncreaseSpeed = onIncreaseSpeed,
+                    onDecreaseSpeed = onDecreaseSpeed
                 )
 
                 Spacer(modifier = Modifier.height(entrySpacing))
@@ -310,6 +300,47 @@ private fun TtsSettingsContent(
             Spacer(modifier = Modifier.height(pillHeight))
         }
     }
+}
+
+@Composable
+private fun SpeechRateSetting(
+    speed: Float,
+    onIncreaseSpeed: () -> Unit,
+    onDecreaseSpeed: () -> Unit
+) {
+    val valueSpacing = WatchDimens.hey_distance_4dp
+    val valueIndent = WatchDimens.hey_distance_10dp
+
+    WatchSettingsPillRow(label = "语速") {
+        RoundIconButtonIcon(
+            icon = Icons.Outlined.Remove,
+            contentDescription = "减慢语速",
+            enabled = speed > 0.55f,
+            onClick = onDecreaseSpeed
+        )
+        Spacer(modifier = Modifier.width(WatchDimens.hey_distance_6dp))
+        StepperValue(
+            text = "${(speed * 10).toInt() / 10f}x",
+            width = watchDimensionResource(R.dimen.watch_action_button_height)
+        )
+        Spacer(modifier = Modifier.width(WatchDimens.hey_distance_6dp))
+        RoundIconButtonIcon(
+            icon = Icons.Outlined.Add,
+            contentDescription = "加快语速",
+            enabled = speed < 1.95f,
+            onClick = onIncreaseSpeed
+        )
+    }
+    Text(
+        text = "调节朗读语速",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+    )
+}
+
+internal fun isDetailedTtsConfigurationVisible(buildType: String): Boolean {
+    return buildType == "debug"
 }
 
 @Composable

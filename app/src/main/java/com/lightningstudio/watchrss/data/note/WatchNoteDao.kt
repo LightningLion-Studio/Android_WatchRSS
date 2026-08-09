@@ -14,6 +14,9 @@ interface WatchNoteDao {
     @Query("SELECT * FROM watch_notes WHERE noteId = :noteId LIMIT 1")
     suspend fun get(noteId: String): WatchNoteEntity?
 
+    @Query("SELECT * FROM watch_notes WHERE noteId = :noteId AND deleted = 0 LIMIT 1")
+    fun observeNote(noteId: String): Flow<WatchNoteEntity?>
+
     @Query("SELECT * FROM watch_notes")
     suspend fun all(): List<WatchNoteEntity>
 

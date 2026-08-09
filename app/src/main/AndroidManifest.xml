@@ -180,12 +180,21 @@
             android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
+            android:name=".AutoScrollControlActivity"
+            android:enableOnBackInvokedCallback="true"
+            android:exported="${debugActivityExported}"
+            android:theme="@style/Theme.WatchRSS.Translucent" />
+        <activity
             android:name=".ProfileActivity"
             android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".NotesActivity"
             android:exported="${debugActivityExported}"
+            android:theme="@style/Theme.WatchRSS.Translucent" />
+        <activity
+            android:name=".NoteDetailActivity"
+            android:exported="false"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".AccountStatusActivity"

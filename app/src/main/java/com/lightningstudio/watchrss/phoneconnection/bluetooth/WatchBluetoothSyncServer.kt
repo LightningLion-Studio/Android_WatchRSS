@@ -1289,6 +1289,10 @@ class WatchBluetoothSyncServer(
                     WatchNoteSyncPayload.response(localDeviceId, app.container.watchNoteRepository.all(), applied)
                 }
 
+                BluetoothSyncProtocol.ACTION_SYNC_NOTE_ASSET -> {
+                    WatchNoteAssetSyncPayload.apply(context, request)
+                }
+
                 else -> error("未知蓝牙同步动作：$action")
             }
         }.onSuccess { response ->

@@ -7,6 +7,74 @@ import org.junit.Test
 
 class NotesActivityTest {
     @Test
+    fun loadingIndicator_rotatesAndWrapsEveryCycle() {
+        assertEquals(0f, noteLoadingRotationDegrees(0L))
+        assertEquals(90f, noteLoadingRotationDegrees(200_000_000L))
+        assertEquals(180f, noteLoadingRotationDegrees(400_000_000L))
+        assertEquals(0f, noteLoadingRotationDegrees(800_000_000L))
+    }
+
+    @Test
+    fun editButton_hidesAndShowsAcrossLazyListItems() {
+        assertEquals(
+            false,
+            noteEditButtonVisibleAfterLazyScroll(
+                wasVisible = true,
+                previousItemIndex = 1,
+                previousItemOffset = 300,
+                currentItemIndex = 2,
+                currentItemOffset = 10
+            )
+        )
+        assertEquals(
+            true,
+            noteEditButtonVisibleAfterLazyScroll(
+                wasVisible = false,
+                previousItemIndex = 2,
+                previousItemOffset = 10,
+                currentItemIndex = 1,
+                currentItemOffset = 300
+            )
+        )
+    }
+
+    @Test
+    fun editButton_hidesWhileScrollingDownAndStaysHiddenAfterStop() {
+        val hiddenWhileScrolling = noteEditButtonVisibleAfterScroll(
+            wasVisible = true,
+            previousScrollValue = 20,
+            currentScrollValue = 40
+        )
+
+        assertEquals(
+            false,
+            noteEditButtonVisibleAfterScroll(
+                wasVisible = hiddenWhileScrolling,
+                previousScrollValue = 40,
+                currentScrollValue = 40
+            )
+        )
+    }
+
+    @Test
+    fun editButton_showsWhenScrollingUpAndStaysVisibleAfterStop() {
+        val visibleWhileScrolling = noteEditButtonVisibleAfterScroll(
+            wasVisible = false,
+            previousScrollValue = 40,
+            currentScrollValue = 20
+        )
+
+        assertEquals(
+            true,
+            noteEditButtonVisibleAfterScroll(
+                wasVisible = visibleWhileScrolling,
+                previousScrollValue = 20,
+                currentScrollValue = 20
+            )
+        )
+    }
+
+    @Test
     fun notePreview_doesNotRepeatTitle() {
         assertEquals(
             "第一段 第二段",
@@ -51,5 +119,68 @@ class NotesActivityTest {
         assertEquals(0, estimateNoteCursorForScroll(100, 0, 400))
         assertEquals(50, estimateNoteCursorForScroll(100, 200, 400))
         assertEquals(100, estimateNoteCursorForScroll(100, 400, 400))
+    }
+
+    @Test
+    fun cursorVisibility_scrollsOnlyEnoughToRevealCursorBelowViewport() {
+        assertEquals(
+            180,
+            noteCursorVisibleScrollTarget(
+                scrollValue = 100,
+                scrollMaxValue = 500,
+                bodyTopInRoot = 50f,
+                cursorTopInBody = 300f,
+                cursorBottomInBody = 330f,
+                visibleTopInRoot = 120f,
+                visibleBottomInRoot = 300f
+            )
+        )
+    }
+
+    @Test
+    fun cursorVisibility_scrollsOnlyEnoughToRevealCursorAboveViewport() {
+        assertEquals(
+            50,
+            noteCursorVisibleScrollTarget(
+                scrollValue = 100,
+                scrollMaxValue = 500,
+                bodyTopInRoot = -50f,
+                cursorTopInBody = 120f,
+                cursorBottomInBody = 150f,
+                visibleTopInRoot = 120f,
+                visibleBottomInRoot = 300f
+            )
+        )
+    }
+
+    @Test
+    fun cursorVisibility_keepsScrollWhenCursorIsAlreadyVisible() {
+        assertEquals(
+            100,
+            noteCursorVisibleScrollTarget(
+                scrollValue = 100,
+                scrollMaxValue = 500,
+                bodyTopInRoot = 50f,
+                cursorTopInBody = 100f,
+                cursorBottomInBody = 130f,
+                visibleTopInRoot = 120f,
+                visibleBottomInRoot = 300f
+            )
+        )
+    }
+
+    @Test
+    fun cursorCentering_usesPhysicalViewportCenterInsteadOfScrollFraction() {
+        assertEquals(
+            300,
+            noteCursorCenteredScrollTarget(
+                scrollValue = 100,
+                scrollMaxValue = 1_000,
+                bodyTopInRoot = -50f,
+                cursorTopInBody = 450f,
+                cursorBottomInBody = 470f,
+                viewportCenterInRoot = 210f
+            )
+        )
     }
 }

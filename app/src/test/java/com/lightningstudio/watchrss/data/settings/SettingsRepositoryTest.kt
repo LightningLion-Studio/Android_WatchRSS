@@ -3,6 +3,7 @@ package com.lightningstudio.watchrss.data.settings
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import kotlinx.coroutines.CoroutineScope
@@ -22,6 +23,48 @@ import java.io.File
 class SettingsRepositoryTest {
     @get:Rule
     val tempFolder = TemporaryFolder()
+
+    @Test
+    fun readerAutoScroll_defaultsToOffAndDefaultSpeed() = runBlocking {
+        val env = createRepository("reader-auto-scroll-default.preferences_pb")
+        try {
+            assertFalse(env.repository.readerAutoScrollEnabled.first())
+            assertEquals(
+                DEFAULT_READER_AUTO_SCROLL_LINES_PER_SECOND,
+                env.repository.readerAutoScrollLinesPerSecond.first()
+            )
+        } finally {
+            env.scope.cancel()
+        }
+    }
+
+    @Test
+    fun readerAutoScroll_persistsEnabledAndClampsSpeed() = runBlocking {
+        val env = createRepository("reader-auto-scroll-updated.preferences_pb")
+        val speedKey = floatPreferencesKey("reader_auto_scroll_lines_per_second")
+        try {
+            env.repository.setReaderAutoScrollEnabled(true)
+            assertTrue(env.repository.readerAutoScrollEnabled.first())
+
+            env.repository.setReaderAutoScrollLinesPerSecond(
+                MAX_READER_AUTO_SCROLL_LINES_PER_SECOND + 5f
+            )
+            assertEquals(
+                MAX_READER_AUTO_SCROLL_LINES_PER_SECOND,
+                env.repository.readerAutoScrollLinesPerSecond.first()
+            )
+
+            env.dataStore.edit { preferences ->
+                preferences[speedKey] = MIN_READER_AUTO_SCROLL_LINES_PER_SECOND - 5f
+            }
+            assertEquals(
+                MIN_READER_AUTO_SCROLL_LINES_PER_SECOND,
+                env.repository.readerAutoScrollLinesPerSecond.first()
+            )
+        } finally {
+            env.scope.cancel()
+        }
+    }
 
     @Test
     fun oobeSeenVersion_defaultsToZero() = runBlocking {

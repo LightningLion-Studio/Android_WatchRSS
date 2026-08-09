@@ -2,6 +2,7 @@ package com.lightningstudio.watchrss.data.note
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -103,6 +104,8 @@ private class FakeWatchNoteDao(vararg initial: WatchNoteEntity) : WatchNoteDao {
     private val flow = MutableStateFlow(notes.values.toList())
 
     override fun observeNotes(): Flow<List<WatchNoteEntity>> = flow
+    override fun observeNote(noteId: String): Flow<WatchNoteEntity?> =
+        flow.map { current -> current.firstOrNull { it.noteId == noteId && !it.deleted } }
     override suspend fun get(noteId: String): WatchNoteEntity? = notes[noteId]
     override suspend fun all(): List<WatchNoteEntity> = notes.values.toList()
     override suspend fun upsert(notes: List<WatchNoteEntity>) {

@@ -76,6 +76,7 @@ internal fun DetailTextBlock(
     highlightRange: DetailTextHighlightRange? = null,
     highlightColor: Color = Color.Transparent,
     onTap: (() -> Unit)? = null,
+    onDoubleTap: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null
 ) {
@@ -108,12 +109,13 @@ internal fun DetailTextBlock(
             highlightColor = highlightColor
         )
     }
-    val gestureModifier = if (onLongClick == null && onTap == null) {
+    val gestureModifier = if (onLongClick == null && onTap == null && onDoubleTap == null) {
         Modifier
     } else {
-        Modifier.pointerInput(onTap, onLongClick) {
+        Modifier.pointerInput(onTap, onDoubleTap, onLongClick) {
             detectTapGestures(
                 onTap = { onTap?.invoke() },
+                onDoubleTap = { onDoubleTap?.invoke() },
                 onLongPress = {
                     onLongClick?.invoke()
                 }

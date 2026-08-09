@@ -121,6 +121,15 @@ class DetailViewModel(
             DEFAULT_READER_AUTO_SCROLL_LINES_PER_SECOND
         )
 
+    private val readerAutoScrollPlayingOverride = MutableStateFlow<Boolean?>(null)
+
+    val readerAutoScrollPlaying = combine(
+        readerAutoScrollEnabled,
+        readerAutoScrollPlayingOverride
+    ) { autoStartEnabled, playingOverride ->
+        playingOverride ?: autoStartEnabled
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
     val shareUseSystem = settingsRepository.shareUseSystem
 
     val llmEnabled = settingsRepository.llmEnabled
@@ -145,6 +154,10 @@ class DetailViewModel(
 
     fun setReaderAutoScrollLinesPerSecond(value: Float) {
         viewModelScope.launch { settingsRepository.setReaderAutoScrollLinesPerSecond(value) }
+    }
+
+    fun setReaderAutoScrollPlaying(value: Boolean) {
+        readerAutoScrollPlayingOverride.value = value
     }
 
     private val requestedOriginalIds = mutableSetOf<Long>()

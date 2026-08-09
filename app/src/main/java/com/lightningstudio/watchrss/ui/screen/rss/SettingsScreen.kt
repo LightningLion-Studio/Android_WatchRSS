@@ -93,6 +93,7 @@ fun SettingsScreen(
     llmShowTokenUsage: StateFlow<Boolean>,
     llmPromptPreset: StateFlow<Int>,
     showPerformanceTools: Boolean,
+    showDetailedTtsConfiguration: Boolean = true,
     onSelectCacheLimit: (Long) -> Unit,
     onToggleReadingTheme: () -> Unit,
     onToggleShareMode: () -> Unit,
@@ -115,6 +116,7 @@ fun SettingsScreen(
     onBeianClick: () -> Unit,
     onOpenReaderPresets: () -> Unit = {},
     onOpenTtsSettings: () -> Unit = {},
+    onOpenAutoScrollSettings: () -> Unit = {},
     onOpenAdvanced: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
@@ -153,6 +155,7 @@ fun SettingsScreen(
             llmShowTokenUsage = llmTokenUsage,
             llmPromptPreset = llmPreset,
             showPerformanceTools = showPerformanceTools,
+            showDetailedTtsConfiguration = showDetailedTtsConfiguration,
             onToggleReadingTheme = onToggleReadingTheme,
             onSelectFontSize = onSelectFontSize,
             onToggleMediaVolumeControl = onToggleMediaVolumeControl,
@@ -170,6 +173,7 @@ fun SettingsScreen(
             },
             onOpenReaderPresets = onOpenReaderPresets,
             onOpenTtsSettings = onOpenTtsSettings,
+            onOpenAutoScrollSettings = onOpenAutoScrollSettings,
             onOpenOobe = onOpenOobe,
             onOpenPerfLargeList = onOpenPerfLargeList,
             onOpenPerfLargeArticle = onOpenPerfLargeArticle,
@@ -242,6 +246,7 @@ private fun MainSettingsPage(
     llmShowTokenUsage: Boolean,
     llmPromptPreset: Int,
     showPerformanceTools: Boolean,
+    showDetailedTtsConfiguration: Boolean,
     onToggleReadingTheme: () -> Unit,
     onSelectFontSize: (Int) -> Unit,
     onToggleMediaVolumeControl: () -> Unit,
@@ -252,6 +257,7 @@ private fun MainSettingsPage(
     onToggleLlmShowTokenUsage: () -> Unit,
     onOpenReaderPresets: () -> Unit,
     onOpenTtsSettings: () -> Unit,
+    onOpenAutoScrollSettings: () -> Unit,
     onOpenAdvanced: () -> Unit,
     onOpenOobe: () -> Unit,
     onOpenPerfLargeList: () -> Unit,
@@ -321,13 +327,32 @@ private fun MainSettingsPage(
             Spacer(modifier = Modifier.height(entrySpacing))
 
             WatchSettingsPillRow(
-                label = "朗读语音源",
+                label = if (showDetailedTtsConfiguration) "朗读语音源" else "朗读语速",
                 onClick = onOpenTtsSettings
             ) {
                 Text("配置")
             }
             Text(
-                text = "本地 TTS、应用默认语音或第三方语音",
+                text = if (showDetailedTtsConfiguration) {
+                    "本地 TTS、应用默认语音或第三方语音"
+                } else {
+                    "调节朗读语速"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+            )
+
+            Spacer(modifier = Modifier.height(entrySpacing))
+
+            WatchSettingsPillRow(
+                label = "自动滚动",
+                onClick = onOpenAutoScrollSettings
+            ) {
+                Text("配置")
+            }
+            Text(
+                text = "设置自动开始和滚动速度",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = valueIndent, top = valueSpacing)

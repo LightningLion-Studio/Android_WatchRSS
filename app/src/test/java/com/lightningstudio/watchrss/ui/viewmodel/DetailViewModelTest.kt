@@ -32,6 +32,40 @@ class DetailViewModelTest {
     val tempFolder = TemporaryFolder()
 
     @Test
+    fun readerAutoScroll_sessionPlaybackCanOverrideAutoStartSetting() = runTest {
+        val repo = TestRssRepository(initialChannels = listOf(sampleRssChannel(id = 7L))).apply {
+            setChannelItems(7L, listOf(sampleRssItem(id = 42L, channelId = 7L)))
+        }
+        val env = createSettingsRepository("detail-auto-scroll.preferences_pb")
+
+        try {
+            env.repository.setReaderAutoScrollEnabled(true)
+            val viewModel = DetailViewModel(
+                savedStateHandle = SavedStateHandle(mapOf("itemId" to 42L)),
+                repository = repo,
+                settingsRepository = env.repository
+            )
+            val collection = collectFlow(viewModel.readerAutoScrollPlaying)
+            advanceUntilIdle()
+
+            assertTrue(viewModel.readerAutoScrollPlaying.value)
+
+            viewModel.setReaderAutoScrollPlaying(false)
+            advanceUntilIdle()
+            assertFalse(viewModel.readerAutoScrollPlaying.value)
+
+            env.repository.setReaderAutoScrollEnabled(false)
+            viewModel.setReaderAutoScrollPlaying(true)
+            advanceUntilIdle()
+            assertTrue(viewModel.readerAutoScrollPlaying.value)
+
+            collection.cancel()
+        } finally {
+            env.scope.cancel()
+        }
+    }
+
+    @Test
     fun retryOfflineMedia_updatesLoadingStateImmediately_and_ignoresDuplicateClicks() = runTest {
         val repo = TestRssRepository(initialChannels = listOf(sampleRssChannel(id = 7L))).apply {
             setChannelItems(7L, listOf(sampleRssItem(id = 42L, channelId = 7L)))

@@ -20,6 +20,36 @@ class ReaderPresetModelsTest {
         assertEquals(18f, decoded.body.fontSizeSp)
         assertTrue(decoded.categoryTypographyEnabled)
         assertEquals(ReaderBackgroundType.SOLID, decoded.background.type)
+        assertEquals(0xFFF2E5C9, decoded.codeBackgroundColorArgb)
+    }
+
+    @Test
+    fun phoneCodeBackgroundField_roundTripsAndLegacyPresetGetsDerivedDefault() {
+        val source = ReaderPreset.lightDefault(name = "手机同步预设").copy(
+            codeBackgroundColorArgb = 0xFFF1E1B8
+        )
+        val encoded = JSONObject(ReaderPresetCodec.encode(source))
+
+        assertEquals(
+            0xFFF1E1B8,
+            ReaderPresetCodec.decode(encoded.toString()).codeBackgroundColorArgb
+        )
+
+        encoded.remove("codeBackgroundColorArgb")
+        assertEquals(
+            0xFFF2E5C9,
+            ReaderPresetCodec.decode(encoded.toString()).codeBackgroundColorArgb
+        )
+    }
+
+    @Test
+    fun livePhonePreview_canApplyCodeBackgroundChange() {
+        val changed = ReaderPresetCodec.applyChanges(
+            ReaderPreset.lightDefault(name = "实时预览"),
+            JSONObject().put("codeBackgroundColorArgb", 0xFFEFD89A)
+        )
+
+        assertEquals(0xFFEFD89A, changed.codeBackgroundColorArgb)
     }
 
     @Test

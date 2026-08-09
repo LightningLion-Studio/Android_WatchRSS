@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,6 +43,7 @@ import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntSize
 import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.components.WatchSurface
@@ -51,6 +53,19 @@ import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
+
+private sealed interface ImagePreviewLoadState {
+    data object Loading : ImagePreviewLoadState
+    data class Loaded(val bitmap: Bitmap) : ImagePreviewLoadState
+    data object Failed : ImagePreviewLoadState
+}
+
+internal fun imagePreviewFailureMessage(url: String): String =
+    if (url.startsWith("/") || url.startsWith("file://")) {
+        "图片未同步\n请在手机端重新同步"
+    } else {
+        "图片加载失败\n请稍后重试"
+    }
 
 @Composable
 fun ImagePreviewScreen(
@@ -99,10 +114,17 @@ fun ImagePreviewScreen(
                 containerHeightPx.roundToInt().coerceAtLeast(1)
             )
 
-            val bitmap by produceState<Bitmap?>(initialValue = null, url, containerSize) {
+            val loadState by produceState<ImagePreviewLoadState>(
+                initialValue = ImagePreviewLoadState.Loading,
+                url,
+                containerSize
+            ) {
                 val maxWidthPx = Int.MAX_VALUE
                 value = RssImageLoader.loadBitmap(context, url, maxWidthPx)
+                    ?.let(ImagePreviewLoadState::Loaded)
+                    ?: ImagePreviewLoadState.Failed
             }
+            val bitmap = (loadState as? ImagePreviewLoadState.Loaded)?.bitmap
             val imageSize = bitmap?.let { IntSize(it.width, it.height) } ?: IntSize.Zero
             val baseSize = remember(containerSize, imageSize) {
                 calculateBaseSize(containerSize, imageSize)
@@ -133,9 +155,20 @@ fun ImagePreviewScreen(
                 onPanStateChange(offset.x, rangeX)
             }
 
-            if (bitmap == null) {
-                WatchCircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                return@BoxWithConstraints
+            when (loadState) {
+                ImagePreviewLoadState.Loading -> {
+                    WatchCircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                    return@BoxWithConstraints
+                }
+                ImagePreviewLoadState.Failed -> {
+                    Text(
+                        text = imagePreviewFailureMessage(url),
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f),
+                        textAlign = TextAlign.Center
+                    )
+                    return@BoxWithConstraints
+                }
+                is ImagePreviewLoadState.Loaded -> Unit
             }
 
             val renderScale = sanitizeScale(scale, minScale, maxScale)
@@ -370,7 +403,7 @@ fun ImagePreviewScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Image(
-                    bitmap = bitmap!!.asImageBitmap(),
+                    bitmap = requireNotNull(bitmap).asImageBitmap(),
                     contentDescription = alt,
                     contentScale = ContentScale.Fit,
                     modifier = imageModifier
