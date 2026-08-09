@@ -5,8 +5,10 @@ import android.os.SystemClock
 import android.text.format.DateUtils
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -20,16 +22,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Redo
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PushPin
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -46,6 +47,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
@@ -60,8 +62,10 @@ import com.lightningstudio.watchrss.data.note.WatchNoteEntity
 import com.lightningstudio.watchrss.phoneconnection.WatchDeviceIdentity
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
-import com.lightningstudio.watchrss.ui.screen.rss.DetailActionButton
+import com.lightningstudio.watchrss.ui.reader.ReaderPageLayout
+import com.lightningstudio.watchrss.ui.screen.rss.DetailTitle
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
+import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -82,47 +86,39 @@ class NotesActivity : BaseWatchActivity() {
                 var editingNoteId by remember { mutableStateOf<String?>(null) }
                 var creating by remember { mutableStateOf(false) }
                 WatchSurface(pureBlack = true) {
-                    val safeInset = notesSafeInset()
+                    val editorSafeInset = notesEditorSafeInset()
                     val selected = selectedNoteId?.let { id -> notes.firstOrNull { it.noteId == id } }
                     val editing = editingNoteId?.let { id -> notes.firstOrNull { it.noteId == id } }
                     if (selected == null && editing == null && !creating) {
+                        val listSafePadding = watchDimensionResource(R.dimen.watch_safe_padding)
+                        val itemSpacing = watchDimensionResource(R.dimen.hey_distance_6dp)
                         val listState = rememberLazyListState()
                         InstallDigitalCrownLazyListHandler(listState)
                         LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = listSafePadding),
                             state = listState,
-                            contentPadding = PaddingValues(safeInset),
-                            verticalArrangement = if (notes.isEmpty()) {
-                                Arrangement.spacedBy(8.dp, Alignment.CenterVertically)
-                            } else {
-                                Arrangement.spacedBy(8.dp)
-                            },
+                            contentPadding = PaddingValues(
+                                top = listSafePadding,
+                                bottom = listSafePadding + itemSpacing
+                            ),
+                            verticalArrangement = Arrangement.spacedBy(itemSpacing),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             item {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.Center,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "备忘录",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        textAlign = TextAlign.Center
-                                    )
-                                    IconButton(onClick = { creating = true }) {
-                                        Icon(Icons.Default.Add, contentDescription = "新建备忘录")
-                                    }
-                                }
+                                Text(
+                                    text = "备忘录",
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = itemSpacing),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    textAlign = TextAlign.Center
+                                )
                             }
                             if (notes.isEmpty()) {
                                 item {
-                                    Text(
-                                        text = "可在手表直接新建，或从手机同步。",
-                                        modifier = Modifier.fillMaxWidth(),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        textAlign = TextAlign.Center
-                                    )
+                                    NotesEmptyCard()
                                 }
                             }
                             items(notes, key = { it.noteId }) { note ->
@@ -131,18 +127,20 @@ class NotesActivity : BaseWatchActivity() {
                                     selectedNoteId = note.noteId
                                 })
                             }
+                            item {
+                                NewNoteButton(onClick = { creating = true })
+                            }
                         }
                     } else if (selected != null && editing == null && !creating) {
                         WatchNoteReader(
                             note = selected,
-                            safeInset = safeInset,
                             onBack = { selectedNoteId = null },
                             onEdit = { editingNoteId = selected.noteId }
                         )
                     } else {
                         WatchNoteRawEditor(
                             note = editing,
-                            safeInset = safeInset,
+                            safeInset = editorSafeInset,
                             saveDraft = { noteId, markdown ->
                                 repository.saveRawMarkdown(noteId, markdown, deviceId)
                             },
@@ -160,13 +158,16 @@ class NotesActivity : BaseWatchActivity() {
 
 @androidx.compose.runtime.Composable
 private fun NoteListCard(note: WatchNoteEntity, onClick: () -> Unit) {
-    Card(
+    val shape = RoundedCornerShape(watchDimensionResource(R.dimen.hey_card_normal_bg_radius))
+    val contentPadding = watchDimensionResource(R.dimen.hey_content_horizontal_distance)
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surface)
+            .clickable(onClick = onClick)
     ) {
-        Column(Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+        Column(Modifier.padding(contentPadding)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (note.pinned) {
                     Icon(
@@ -207,77 +208,131 @@ private fun NoteListCard(note: WatchNoteEntity, onClick: () -> Unit) {
 }
 
 @androidx.compose.runtime.Composable
+private fun NotesEmptyCard() {
+    val shape = RoundedCornerShape(watchDimensionResource(R.dimen.hey_card_normal_bg_radius))
+    val contentPadding = watchDimensionResource(R.dimen.hey_content_horizontal_distance)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(contentPadding)
+    ) {
+        Text(text = "还没有备忘录", style = MaterialTheme.typography.titleSmall)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = "点击下方按钮新建，或从手机同步。",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            style = MaterialTheme.typography.bodySmall
+        )
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun NewNoteButton(onClick: () -> Unit) {
+    val buttonSize = watchDimensionResource(R.dimen.hey_button_height)
+    val verticalPadding = watchDimensionResource(R.dimen.hey_distance_4dp)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = verticalPadding),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(buttonSize)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Default.Add, contentDescription = "新建备忘录")
+        }
+    }
+}
+
+@androidx.compose.runtime.Composable
 private fun WatchNoteReader(
     note: WatchNoteEntity,
-    safeInset: androidx.compose.ui.unit.Dp,
     onBack: () -> Unit,
     onEdit: () -> Unit
 ) {
     BackHandler(onBack = onBack)
     val listState = rememberLazyListState()
     InstallDigitalCrownLazyListHandler(listState)
+    val horizontalPadding = ReaderPageLayout.horizontalPadding
+    val titlePadding = ReaderPageLayout.titleHorizontalPadding
+    val verticalPadding = ReaderPageLayout.topSafePadding
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         state = listState,
-        contentPadding = PaddingValues(safeInset),
+        contentPadding = PaddingValues(
+            horizontal = horizontalPadding,
+            vertical = verticalPadding
+        ),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-            item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回备忘录列表")
-                    }
-                    Text(
-                        text = "阅读备忘录",
-                        modifier = Modifier.weight(1f),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(Modifier.size(48.dp))
-                }
-            }
-            item {
+        item {
+            Text(
+                text = "阅读备忘录",
+                modifier = Modifier.fillMaxWidth(),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+        }
+        item {
+            DetailTitle(
+                title = note.title.ifBlank { "未命名笔记" },
+                titlePadding = titlePadding,
+                textColor = MaterialTheme.colorScheme.onSurface
+            )
+        }
+        item {
+            Text(
+                text = noteMetadata(note),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelSmall
+            )
+        }
+        item {
+            CompactEditButton(onClick = onEdit)
+        }
+        item {
+            SelectionContainer {
                 Text(
-                    text = note.title.ifBlank { "未命名笔记" },
+                    text = note.plainText.ifBlank { "这条备忘录还没有正文。" },
                     modifier = Modifier.fillMaxWidth(),
-                    style = MaterialTheme.typography.headlineSmall,
-                    textAlign = TextAlign.Start
+                    color = if (note.plainText.isBlank()) {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                    style = MaterialTheme.typography.bodyLarge.copy(textAlign = TextAlign.Justify),
+                    lineHeight = MaterialTheme.typography.bodyLarge.lineHeight * 1.2f
                 )
-            }
-            item {
-                Text(
-                    text = noteMetadata(note),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.labelSmall
-                )
-            }
-            item {
-                DetailActionButton(
-                    text = "编辑",
-                    fontSize = MaterialTheme.typography.bodyLarge.fontSize,
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    contentColor = MaterialTheme.colorScheme.onSurface,
-                    borderColor = MaterialTheme.colorScheme.outlineVariant,
-                    onClick = onEdit
-                )
-            }
-            item {
-                SelectionContainer {
-                    Text(
-                        text = note.plainText.ifBlank { "这条备忘录还没有正文。" },
-                        modifier = Modifier.fillMaxWidth(),
-                        color = if (note.plainText.isBlank()) {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
-                        },
-                        style = MaterialTheme.typography.bodyLarge,
-                        lineHeight = MaterialTheme.typography.bodyLarge.lineHeight * 1.2f
-                    )
-                }
             }
         }
+    }
+}
+
+@androidx.compose.runtime.Composable
+private fun CompactEditButton(onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .height(32.dp)
+            .clip(RoundedCornerShape(50))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "编辑",
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.labelMedium
+        )
+    }
 }
 
 @androidx.compose.runtime.Composable
@@ -424,7 +479,7 @@ private fun WatchNoteRawEditor(
 }
 
 @androidx.compose.runtime.Composable
-private fun notesSafeInset(): androidx.compose.ui.unit.Dp {
+private fun notesEditorSafeInset(): androidx.compose.ui.unit.Dp {
     val configuration = LocalConfiguration.current
     return if (configuration.isScreenRound) {
         // Keep every control inside the largest square that fits in a circular display.
