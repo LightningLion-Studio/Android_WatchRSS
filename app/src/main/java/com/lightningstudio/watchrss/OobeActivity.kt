@@ -54,19 +54,19 @@ class OobeActivity : BaseWatchActivity() {
                     onContinueFromIntro = viewModel::completeOobe,
                     onOpenUserAgreement = {
                         startActivity(
-                            InfoActivity.createIntent(
+                            InfoActivity.createRemoteIntent(
                                 context = this,
                                 title = "用户协议",
-                                contentRawResId = R.raw.user_agreement
+                                path = InfoActivity.WATCH_USER_AGREEMENT_PATH
                             )
                         )
                     },
                     onOpenPrivacy = {
                         startActivity(
-                            InfoActivity.createIntent(
+                            InfoActivity.createRemoteIntent(
                                 context = this,
                                 title = "隐私政策",
-                                contentRawResId = R.raw.privacy_policy
+                                path = InfoActivity.WATCH_PRIVACY_POLICY_PATH
                             )
                         )
                     }

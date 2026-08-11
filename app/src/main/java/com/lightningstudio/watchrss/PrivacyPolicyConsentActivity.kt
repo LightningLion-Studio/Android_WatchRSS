@@ -30,10 +30,10 @@ class PrivacyPolicyConsentActivity : BaseWatchActivity() {
                 PrivacyPolicyConsentScreen(
                     onOpenPrivacy = {
                         startActivity(
-                            InfoActivity.createIntent(
+                            InfoActivity.createRemoteIntent(
                                 context = this@PrivacyPolicyConsentActivity,
                                 title = "隐私政策",
-                                contentRawResId = R.raw.privacy_policy
+                                path = InfoActivity.WATCH_PRIVACY_POLICY_PATH
                             )
                         )
                     },

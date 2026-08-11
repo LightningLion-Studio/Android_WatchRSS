@@ -18,10 +18,22 @@ class AboutActivity : BaseWatchActivity() {
                         openInfo("项目自介", getString(R.string.about_intro_content))
                     },
                     onPrivacyClick = {
-                        startActivity(InfoActivity.createIntent(this, "隐私政策", R.raw.privacy_policy))
+                        startActivity(
+                            InfoActivity.createRemoteIntent(
+                                this,
+                                "隐私政策",
+                                InfoActivity.WATCH_PRIVACY_POLICY_PATH
+                            )
+                        )
                     },
                     onTermsClick = {
-                        startActivity(InfoActivity.createIntent(this, "用户协议", R.raw.user_agreement))
+                        startActivity(
+                            InfoActivity.createRemoteIntent(
+                                this,
+                                "用户协议",
+                                InfoActivity.WATCH_USER_AGREEMENT_PATH
+                            )
+                        )
                     },
                     onLicensesClick = {
                         openInfo("开源许可与清单", getString(R.string.about_licenses_content))
