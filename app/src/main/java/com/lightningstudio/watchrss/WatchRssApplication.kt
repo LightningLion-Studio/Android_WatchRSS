@@ -71,7 +71,8 @@ class WatchRssApplication : Application() {
         WatchCloudSyncService(
             context = this,
             accountStore = accountStore,
-            repository = container.rssRepository
+            repository = container.rssRepository,
+            tokenManager = watchTokenManager
         )
     }
 

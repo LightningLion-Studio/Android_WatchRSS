@@ -122,7 +122,9 @@ class WatchAccountStore(
                 ),
                 watchRefreshToken = json.optString("watchRefreshToken").trim(),
                 refreshTokenExpiresAtMillis = json.optLong("refreshTokenExpiresAtMillis"),
-                backendBaseUrl = json.optString("backendBaseUrl").trim(),
+                backendBaseUrl = BackendEndpointPolicy.requireSecure(
+                    json.optString("backendBaseUrl")
+                ),
                 posthogHost = json.optString("posthogHost").trim(),
                 posthogProjectApiKey = json.optString("posthogProjectApiKey").trim(),
                 entitlement = decodeEntitlement(json.optJSONObject("entitlement")),

@@ -17,10 +17,7 @@ class WatchCloudSyncWorker(
 ) : CoroutineWorker(appContext, parameters) {
     override suspend fun doWork(): Result {
         val app = applicationContext as WatchRssApplication
-        val account = app.accountStore.read() ?: return Result.success()
-        if (account.entitlement.plan != "member" || !account.entitlement.active) {
-            return Result.success()
-        }
+        app.accountStore.read() ?: return Result.success()
         return if (app.cloudSyncService.syncNow()) Result.success()
         else if (runAttemptCount < 3) Result.retry() else Result.failure()
     }

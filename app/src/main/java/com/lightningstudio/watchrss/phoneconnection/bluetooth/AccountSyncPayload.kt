@@ -1,6 +1,7 @@
 package com.lightningstudio.watchrss.phoneconnection.bluetooth
 
 import com.lightningstudio.watchrss.data.account.WatchAccountState
+import com.lightningstudio.watchrss.data.account.BackendEndpointPolicy
 import com.lightningstudio.watchrss.data.account.WatchEntitlementSnapshot
 import com.lightningstudio.watchrss.data.account.WatchTelemetryConfig
 import org.json.JSONArray
@@ -24,7 +25,9 @@ object AccountSyncPayload {
             ),
             watchRefreshToken = account.optString("watchRefreshToken").trim(),
             refreshTokenExpiresAtMillis = account.optLong("refreshTokenExpiresAt"),
-            backendBaseUrl = account.optString("backendBaseUrl").trim(),
+            backendBaseUrl = BackendEndpointPolicy.requireSecure(
+                account.optString("backendBaseUrl")
+            ),
             posthogHost = account.optString("posthogHost").trim(),
             posthogProjectApiKey = account.optString("posthogProjectApiKey").trim(),
             entitlement = WatchEntitlementSnapshot(

@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.os.Build
 import com.lightningstudio.watchrss.data.account.AccountStore
+import com.lightningstudio.watchrss.data.account.WatchTokenManager
 import com.lightningstudio.watchrss.phoneconnection.WatchDeviceIdentity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,6 +34,7 @@ class WatchCloudSyncService(
     context: Context,
     private val accountStore: AccountStore,
     repository: com.lightningstudio.watchrss.data.rss.RssRepository,
+    private val tokenManager: WatchTokenManager = WatchTokenManager(accountStore),
     private val client: WatchCloudClient = WatchCloudClient(),
     private val codec: WatchCloudCodec = WatchCloudCodec()
 ) {
@@ -50,9 +52,11 @@ class WatchCloudSyncService(
         try {
             val connectivity = appContext.getSystemService(ConnectivityManager::class.java)
             val fullTransfer = manual || !connectivity.isActiveNetworkMetered
-            val account = accountStore.read() ?: return@withLock false
-            require(account.entitlement.plan == "member" && account.entitlement.active) {
-                "当前账号没有云中继会员权限"
+            val storedAccount = accountStore.read() ?: return@withLock false
+            val account = if (storedAccount.watchRefreshToken.isNotBlank()) {
+                tokenManager.freshAccount(forceRefresh = true)
+            } else {
+                storedAccount
             }
             set(WatchCloudPhase.REGISTERING, "正在登记手表")
             val publicKey = keyManager.publicKeySpki(account.userId, deviceId)

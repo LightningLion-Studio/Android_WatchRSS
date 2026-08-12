@@ -22,15 +22,18 @@ class WatchTokenManager(
 ) {
     private val refreshMutex = Mutex()
 
-    suspend fun freshAccessToken(forceRefresh: Boolean = false): String = refreshMutex.withLock {
+    suspend fun freshAccessToken(forceRefresh: Boolean = false): String =
+        freshAccount(forceRefresh).watchDeviceToken
+
+    suspend fun freshAccount(forceRefresh: Boolean = false): WatchAccountState = refreshMutex.withLock {
         val state = store.read() ?: error("手表尚未绑定腕上RSS账号")
         val refreshEarlyAt = System.currentTimeMillis() + REFRESH_SKEW_MILLIS
         if (!forceRefresh && state.tokenExpiresAtMillis > refreshEarlyAt) {
-            return@withLock state.watchDeviceToken
+            return@withLock state
         }
         require(state.watchRefreshToken.isNotBlank()) { "登录已过期，请用手机重新同步账号" }
         require(!state.isRefreshTokenExpired) { "登录已过期，请用手机重新同步账号" }
-        refresh(state).watchDeviceToken
+        refresh(state)
     }
 
     private suspend fun refresh(state: WatchAccountState): WatchAccountState =
@@ -43,6 +46,7 @@ class WatchTokenManager(
             client.newCall(request).execute().use { response ->
                 val raw = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
+                    if (response.code == 401) store.clear()
                     throw IOException("手表令牌刷新失败：HTTP ${response.code}")
                 }
                 val json = JSONObject(raw)
@@ -51,12 +55,27 @@ class WatchTokenManager(
                     tokenExpiresAtMillis = json.getLong("accessTokenExpiresAt"),
                     watchRefreshToken = json.getString("watchRefreshToken"),
                     refreshTokenExpiresAtMillis = json.getLong("refreshTokenExpiresAt"),
+                    entitlement = decodeEntitlement(json.getJSONObject("entitlement")),
                     updatedAtMillis = System.currentTimeMillis()
                 )
                 store.save(updated)
                 updated
             }
         }
+
+    internal fun decodeEntitlement(json: JSONObject): WatchEntitlementSnapshot =
+        WatchEntitlementSnapshot(
+            plan = json.optString("plan").ifBlank { "free" },
+            active = json.optBoolean("active", false),
+            expiresAtMillis = json.optLong("expiresAt"),
+            features = json.optJSONArray("features")?.let { array ->
+                buildList {
+                    for (index in 0 until array.length()) {
+                        array.optString(index).trim().takeIf { it.isNotBlank() }?.let(::add)
+                    }
+                }
+            }.orEmpty()
+        )
 
     companion object {
         private const val REFRESH_PATH = "/functions/v1/account/watch-token/refresh"
