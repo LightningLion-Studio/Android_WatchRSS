@@ -4,6 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import com.lightningstudio.watchrss.data.network.withWatchRssAppVersionHeader
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -41,6 +42,7 @@ class WatchTokenManager(
             val body = JSONObject().put("refreshToken", state.watchRefreshToken).toString()
             val request = Request.Builder()
                 .url(state.backendBaseUrl.trimEnd('/') + REFRESH_PATH)
+                .withWatchRssAppVersionHeader()
                 .post(body.toRequestBody(JSON_MEDIA_TYPE))
                 .build()
             client.newCall(request).execute().use { response ->

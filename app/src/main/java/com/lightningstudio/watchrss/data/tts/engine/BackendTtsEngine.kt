@@ -2,6 +2,7 @@ package com.lightningstudio.watchrss.data.tts.engine
 
 import android.content.Context
 import com.lightningstudio.watchrss.data.account.AccountStore
+import com.lightningstudio.watchrss.data.network.withWatchRssAppVersionHeader
 import com.lightningstudio.watchrss.data.tts.ReadAloudSegment
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -69,6 +70,7 @@ class BackendTtsEngine(
 
         val request = Request.Builder()
             .url(url)
+            .withWatchRssAppVersionHeader()
             .addHeader("Authorization", "Bearer $token")
             .addHeader("Content-Type", "application/json")
             .post(body.toRequestBody("application/json".toMediaType()))

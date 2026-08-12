@@ -3,6 +3,7 @@ package com.lightningstudio.watchrss.data.push
 import android.content.Context
 import android.content.SharedPreferences
 import com.lightningstudio.watchrss.BuildConfig
+import com.lightningstudio.watchrss.data.network.withWatchRssAppVersionHeader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -29,6 +30,7 @@ class PushNotificationRepository(context: Context) {
     suspend fun fetchNewMessages(topic: String = "watchrss", limit: Int = 10): List<PushMessage> = withContext(Dispatchers.IO) {
         val request = Request.Builder()
             .url("${BuildConfig.WATCHRSS_BACKEND_URL}/api/notify/$topic?limit=$limit")
+            .withWatchRssAppVersionHeader()
             .get()
             .build()
         try {

@@ -41,6 +41,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.CacheControl
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import com.lightningstudio.watchrss.data.network.withWatchRssAppVersionHeader
 
 class InfoActivity : BaseWatchActivity() {
     private val settingsRepository by lazy { (application as WatchRssApplication).container.settingsRepository }
@@ -206,6 +207,7 @@ internal class LegalDocumentRepository(
         if (baseUrl.isBlank()) throw IOException("legal document service unavailable")
         val request = Request.Builder()
             .url(baseUrl + path)
+            .withWatchRssAppVersionHeader()
             .cacheControl(CacheControl.Builder().noCache().noStore().build())
             .get()
             .build()

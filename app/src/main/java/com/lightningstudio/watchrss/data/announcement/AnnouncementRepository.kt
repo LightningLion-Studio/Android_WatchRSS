@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import android.util.Log
 import androidx.core.content.edit
 import com.lightningstudio.watchrss.BuildConfig
+import com.lightningstudio.watchrss.data.network.withWatchRssAppVersionHeader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -31,6 +32,7 @@ class AnnouncementRepository(context: Context) {
     suspend fun checkAnnouncement(): Announcement? = withContext(Dispatchers.IO) {
         val request = Request.Builder()
             .url("${BuildConfig.WATCHRSS_BACKEND_URL}/functions/v1/announcement?client=android_watch")
+            .withWatchRssAppVersionHeader()
             .get()
             .build()
         try {

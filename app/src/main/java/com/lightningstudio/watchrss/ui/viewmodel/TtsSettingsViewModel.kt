@@ -18,6 +18,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import com.lightningstudio.watchrss.data.network.withWatchRssAppVersionHeader
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
@@ -285,6 +286,7 @@ class TtsSettingsViewModel(
 
             val request = Request.Builder()
                 .url(url)
+                .withWatchRssAppVersionHeader()
                 .addHeader("Authorization", "Bearer $token")
                 .addHeader("Content-Type", "application/json")
                 .post(body.toRequestBody("application/json".toMediaType()))

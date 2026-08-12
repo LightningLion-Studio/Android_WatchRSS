@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
+import com.lightningstudio.watchrss.data.network.withWatchRssAppVersionHeader
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
@@ -372,6 +373,7 @@ class WatchCloudClient(private val http: OkHttpClient = OkHttpClient()) {
             }
             http.newCall(
                 builder
+                    .withWatchRssAppVersionHeader()
                     .header("authorization", "Bearer ${account.watchDeviceToken}")
                     .header("accept", "application/json")
                     .build()
