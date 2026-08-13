@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import com.lightningstudio.watchrss.WatchRssApplication
 import com.lightningstudio.watchrss.data.AppContainer
-import com.lightningstudio.watchrss.data.telemetry.OpenPanelAnalytics
 import com.lightningstudio.watchrss.data.telemetry.WatchUsageTelemetry
 import com.lightningstudio.watchrss.data.bili.BiliPlaybackCacheManager
 import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
@@ -41,8 +40,6 @@ class TestAppContainer(
     private val fallback: AppContainer =
         (context.applicationContext as WatchRssApplication).container
 
-    override val openPanelAnalytics: OpenPanelAnalytics
-        get() = fallback.openPanelAnalytics
 
     override val watchUsageTelemetry: WatchUsageTelemetry
         get() = fallback.watchUsageTelemetry

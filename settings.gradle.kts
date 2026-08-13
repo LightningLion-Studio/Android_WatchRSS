@@ -35,4 +35,3 @@ rootProject.name = "WatchRSS"
 include(":app")
 include(":sdk:bili")
 include(":sdk:douyin")
-include(":openpanel")

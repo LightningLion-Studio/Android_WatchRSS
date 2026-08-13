@@ -1,6 +1,5 @@
 package com.lightningstudio.watchrss.data
 
-import com.lightningstudio.watchrss.data.telemetry.OpenPanelAnalytics
 import com.lightningstudio.watchrss.data.telemetry.WatchInstallationIdentity
 import com.lightningstudio.watchrss.data.telemetry.WatchUsageTelemetry
 
@@ -60,7 +59,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 interface AppContainer {
-    val openPanelAnalytics: OpenPanelAnalytics
     val watchUsageTelemetry: WatchUsageTelemetry
     val rssRepository: RssRepository
     val settingsRepository: SettingsRepository
@@ -128,16 +126,13 @@ class DefaultAppContainer(context: Context) : AppContainer {
         WatchInstallationIdentity(appContext)
     }
 
-    override val openPanelAnalytics: OpenPanelAnalytics by lazy {
-        OpenPanelAnalytics(appContext, appScope)
-    }
-
     override val watchUsageTelemetry: WatchUsageTelemetry by lazy {
         WatchUsageTelemetry(
             context = appContext,
             installationIdentity = installationIdentity,
+            deviceId = deviceIdentity.deviceId,
+            accountStore = watchAccountStore,
             appScope = appScope,
-            openPanelAnalytics = openPanelAnalytics
         )
     }
 
