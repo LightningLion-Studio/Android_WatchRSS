@@ -20,14 +20,12 @@ import com.lightningstudio.watchrss.util.AppLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.supervisorScope
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
 
@@ -147,7 +145,10 @@ class WatchIpSyncManager(
             null
         } else {
             runCatching { bleDiscovery.discover() }
-                .onFailure { AppLogger.w(TAG, "BLE 端点发现失败，保留已有通道", it) }
+                .onFailure {
+                    if (it is CancellationException) throw it
+                    AppLogger.w(TAG, "BLE 端点发现失败，保留已有通道", it)
+                }
                 .getOrNull()
         }
         if (discovered != null) descriptor = discovered
@@ -174,33 +175,37 @@ class WatchIpSyncManager(
             .take(IpSyncProtocol.MAX_PROBE_CANDIDATES)
         if (candidates.isEmpty()) return
 
-        val successes = supervisorScope {
-            candidates.map { endpoint ->
-                async {
-                    runCatching {
-                        probe.connect(
-                            descriptor = current,
-                            endpoint = endpoint,
-                            network = routeResolver.networkFor(endpoint.address),
-                            watchDeviceId = watchDeviceId,
-                            resumeSessionId = previous?.sessionId,
-                            lastAckSeq = lastAckSeq,
-                            onClosed = ::onConnectionClosed
-                        )
-                    }.onFailure {
-                        cooldownUntil[endpoint.endpointId] =
-                            now() + IpSyncProtocol.FAILED_ENDPOINT_COOLDOWN_MS
-                    }.getOrNull()
-                }
-            }.awaitAll().filterNotNull()
+        var selected: WatchIpSyncConnection? = null
+        for (endpoint in candidates) {
+            selected = runCatching {
+                probe.connect(
+                    descriptor = current,
+                    endpoint = endpoint,
+                    network = routeResolver.networkFor(endpoint.address),
+                    watchDeviceId = watchDeviceId,
+                    resumeSessionId = previous?.sessionId,
+                    lastAckSeq = lastAckSeq,
+                    onClosed = ::onConnectionClosed
+                )
+            }.onFailure {
+                if (it is CancellationException) throw it
+                cooldownUntil[endpoint.endpointId] =
+                    now() + IpSyncProtocol.FAILED_ENDPOINT_COOLDOWN_MS
+                AppLogger.w(
+                    TAG,
+                    "IP candidate failed kind=${endpoint.transportKind.wireName} " +
+                        "endpoint=${endpoint.endpointId}",
+                    it
+                )
+            }.getOrNull()
+            if (selected != null) break
         }
         if (transferInProgress) {
-            successes.forEach(WatchIpSyncConnection::close)
+            selected?.close()
             AppLogger.i(TAG, "IP route switch deferred after probe because sync started")
             return
         }
-        val selected = successes.maxByOrNull(::connectionPriority) ?: return
-        successes.filter { it !== selected }.forEach(WatchIpSyncConnection::close)
+        selected ?: return
         if (previous != null && connectionPriority(previous) > connectionPriority(selected)) {
             selected.close()
             return

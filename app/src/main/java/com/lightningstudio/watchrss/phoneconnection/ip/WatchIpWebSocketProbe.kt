@@ -25,10 +25,14 @@ internal class WatchIpWebSocketProbe {
         lastAckSeq: Long,
         onClosed: (WatchIpSyncConnection) -> Unit
     ): WatchIpSyncConnection {
+        val probeTimeoutMs = when (endpoint.transportKind) {
+            IpTransportKind.WIFI_LAN -> IpSyncProtocol.WIFI_LAN_PROBE_TIMEOUT_MS
+            else -> IpSyncProtocol.FALLBACK_IP_PROBE_TIMEOUT_MS
+        }
         val result = CompletableDeferred<WatchIpSyncConnection>()
         val connectionRef = AtomicReference<WatchIpSyncConnection?>()
         val clientBuilder = OkHttpClient.Builder()
-            .connectTimeout(IpSyncProtocol.CONNECT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+            .connectTimeout(probeTimeoutMs, TimeUnit.MILLISECONDS)
             .readTimeout(0, TimeUnit.MILLISECONDS)
             .pingInterval(15, TimeUnit.SECONDS)
         if (network != null) clientBuilder.socketFactory(network.socketFactory)
@@ -100,9 +104,7 @@ internal class WatchIpWebSocketProbe {
         }
         val socket = client.newWebSocket(request, listener)
         return try {
-            withTimeout(
-                IpSyncProtocol.CONNECT_TIMEOUT_MS + IpSyncProtocol.HANDSHAKE_TIMEOUT_MS
-            ) { result.await() }
+            withTimeout(probeTimeoutMs) { result.await() }
         } catch (error: Throwable) {
             socket.cancel()
             client.dispatcher.executorService.shutdown()

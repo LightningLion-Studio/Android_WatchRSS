@@ -10,13 +10,11 @@ import android.bluetooth.BluetoothGattService
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.le.ScanCallback
-import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
-import android.os.ParcelUuid
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -38,7 +36,16 @@ internal class WatchIpBleEndpointDiscovery(context: Context) {
         val scanCallback = object : ScanCallback() {
             override fun onScanResult(callbackType: Int, result: ScanResult) {
                 val device = result.device ?: return
-                if (device.bondState == BluetoothDevice.BOND_BONDED) {
+                val record = result.scanRecord ?: return
+                val advertisesService = record.serviceUuids.orEmpty().any {
+                    it.uuid == IpSyncProtocol.ADVERTISED_BLE_SERVICE_UUID
+                }
+                val marker = record.getManufacturerSpecificData(ADVERTISEMENT_MANUFACTURER_ID)
+                if (
+                    device.bondState == BluetoothDevice.BOND_BONDED &&
+                    advertisesService &&
+                    marker?.contentEquals(ADVERTISEMENT_MARKER) == true
+                ) {
                     deviceDeferred.complete(device)
                 }
             }
@@ -49,11 +56,10 @@ internal class WatchIpBleEndpointDiscovery(context: Context) {
                 )
             }
         }
-        val filter = ScanFilter.Builder()
-            .setServiceUuid(ParcelUuid(IpSyncProtocol.ADVERTISED_BLE_SERVICE_UUID))
-            .build()
+        // Some vendor stacks report zero results when a 128-bit UUID is installed as a
+        // controller-side filter. Scan without hardware filters and validate every field here.
         scanner.startScan(
-            listOf(filter),
+            null,
             ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build(),
             scanCallback
         )
@@ -168,6 +174,10 @@ internal class WatchIpBleEndpointDiscovery(context: Context) {
     }
 
     companion object {
+        private const val ADVERTISEMENT_MANUFACTURER_ID = 0xffff
+        private val ADVERTISEMENT_MARKER = byteArrayOf(
+            'W'.code.toByte(), 'R'.code.toByte(), 'S'.code.toByte(), '3'.code.toByte()
+        )
         private const val SCAN_TIMEOUT_MS = 8_000L
         private const val GATT_TIMEOUT_MS = 12_000L
     }

@@ -78,6 +78,30 @@ class WatchNoteRepositoryTest {
         assertEquals("加粗", watchNoteTitle(html))
     }
 
+    @Test
+    fun managementUpdates_preserveContentAndCreateSyncTombstone() = runTest {
+        val original = note(
+            markdown = "正文",
+            contentHash = "original-hash",
+            baseContentHash = "remote-base-hash",
+            baseMarkdown = "remote base"
+        )
+        val dao = FakeWatchNoteDao(original)
+        val repository = WatchNoteRepository(dao)
+
+        val moved = repository.move(original.noteId, "folder-1", "watch", now = 100L)
+        val pinned = repository.setPinned(original.noteId, true, "watch", now = 200L)
+        val deleted = repository.delete(original.noteId, "watch", now = 300L)
+
+        assertEquals("folder-1", moved.folderId)
+        assertEquals(original.markdown, moved.markdown)
+        assertEquals(original.baseMarkdown, moved.baseMarkdown)
+        assertTrue(pinned.pinned)
+        assertTrue(deleted.deleted)
+        assertEquals(300L, deleted.deletedAt)
+        assertEquals("watch", deleted.modifiedBy)
+    }
+
     private fun note(
         markdown: String,
         contentHash: String,
@@ -103,6 +127,7 @@ private class FakeWatchNoteDao(vararg initial: WatchNoteEntity) : WatchNoteDao {
     private val notes = LinkedHashMap(initial.associateBy { it.noteId })
     private val flow = MutableStateFlow(notes.values.toList())
 
+    override fun observeFolders(): Flow<List<WatchNoteFolderEntity>> = MutableStateFlow(emptyList())
     override fun observeNotes(): Flow<List<WatchNoteEntity>> = flow
     override fun observeNote(noteId: String): Flow<WatchNoteEntity?> =
         flow.map { current -> current.firstOrNull { it.noteId == noteId && !it.deleted } }

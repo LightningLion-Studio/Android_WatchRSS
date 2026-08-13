@@ -48,8 +48,8 @@ data class IpEndpointDescriptor(
     val expiresAt: Long,
     val port: Int,
     val endpoints: List<IpEndpointCandidate>,
-    val nonce: String,
-    val authToken: String,
+    val challengeId: String,
+    val challengeSecret: String,
     val hmac: String
 ) {
     fun canonicalPayload(): String = buildString {
@@ -67,7 +67,7 @@ data class IpEndpointDescriptor(
             append(endpoint.transportKind.wireName).append(',')
             append(endpoint.priority).append(';')
         }
-        append('|').append(nonce).append('|').append(authToken)
+        append('|').append(challengeId).append('|').append(challengeSecret)
     }
 
     fun verify(nowMillis: Long = System.currentTimeMillis()): Boolean {
@@ -76,7 +76,7 @@ data class IpEndpointDescriptor(
             expiresAt < nowMillis || endpoints.isEmpty()
         ) return false
         return IpSyncProtocol.constantTimeEquals(
-            IpSyncProtocol.hmac(authToken, canonicalPayload()),
+            IpSyncProtocol.hmac(challengeSecret, canonicalPayload()),
             hmac
         )
     }
@@ -118,8 +118,8 @@ data class IpEndpointDescriptor(
                 expiresAt = json.optLong("expiresAt", json.optLong("x")),
                 port = json.optInt("port", json.optInt("p")),
                 endpoints = endpoints,
-                nonce = json.optString("nonce", json.optString("n")),
-                authToken = json.optString("authToken", json.optString("k")),
+                challengeId = json.optString("challengeId", json.optString("c")),
+                challengeSecret = json.optString("challengeSecret", json.optString("k")),
                 hmac = json.optString("hmac", json.optString("h"))
             )
         }
@@ -156,13 +156,13 @@ data class IpHelloAck(
 }
 
 object IpSyncProtocol {
-    const val VERSION = 1
+    const val VERSION = 2
     const val TYPE_HELLO = "hello"
     const val TYPE_HELLO_ACK = "helloAck"
     const val TYPE_ERROR = "error"
     const val SERVICE_TYPE = "_watchrss-sync._tcp."
-    const val CONNECT_TIMEOUT_MS = 2_000L
-    const val HANDSHAKE_TIMEOUT_MS = 2_000L
+    const val WIFI_LAN_PROBE_TIMEOUT_MS = 1_000L
+    const val FALLBACK_IP_PROBE_TIMEOUT_MS = 4_000L
     const val FAILED_ENDPOINT_COOLDOWN_MS = 10_000L
     const val MAX_PROBE_CANDIDATES = 3
     val ADVERTISED_BLE_SERVICE_UUID: UUID =
@@ -182,6 +182,7 @@ object IpSyncProtocol {
         val canonical = listOf(
             VERSION.toString(),
             watchDeviceId,
+            descriptor.challengeId,
             descriptor.epoch.toString(),
             clientNonce,
             resumeSessionId.orEmpty(),
@@ -191,18 +192,19 @@ object IpSyncProtocol {
             put("type", TYPE_HELLO)
             put("version", VERSION)
             put("watchDeviceId", watchDeviceId)
+            put("challengeId", descriptor.challengeId)
             put("endpointEpoch", descriptor.epoch)
             put("clientNonce", clientNonce)
             resumeSessionId?.let { put("resumeSessionId", it) }
             put("lastAckSeq", lastAckSeq)
-            put("hmac", hmac(descriptor.authToken, canonical))
+            put("hmac", hmac(descriptor.challengeSecret, canonical))
         }
     }
 
     fun verifyAck(descriptor: IpEndpointDescriptor, ack: IpHelloAck): Boolean =
         ack.serverDeviceId == descriptor.serverDeviceId &&
             ack.sessionId.isNotBlank() &&
-            constantTimeEquals(hmac(descriptor.authToken, ack.canonicalPayload()), ack.hmac)
+            constantTimeEquals(hmac(descriptor.challengeSecret, ack.canonicalPayload()), ack.hmac)
 
     fun hmac(base64Key: String, payload: String): String {
         val key = Base64.getUrlDecoder().decode(base64Key)

@@ -7,6 +7,7 @@ import org.jsoup.parser.Parser
 
 class WatchNoteRepository(private val dao: WatchNoteDao) {
     fun observe(): Flow<List<WatchNoteEntity>> = dao.observeNotes()
+    fun observeFolders(): Flow<List<WatchNoteFolderEntity>> = dao.observeFolders()
     fun observe(noteId: String): Flow<WatchNoteEntity?> = dao.observeNote(noteId)
     suspend fun all(): List<WatchNoteEntity> = dao.all()
     suspend fun merge(notes: List<WatchNoteEntity>): Int {
@@ -46,6 +47,40 @@ class WatchNoteRepository(private val dao: WatchNoteDao) {
             deleted = false,
             deletedAt = 0L
         ).also { dao.upsert(listOf(it)) }
+    }
+
+    suspend fun move(
+        noteId: String,
+        folderId: String?,
+        deviceId: String,
+        now: Long = System.currentTimeMillis()
+    ): WatchNoteEntity = updateMetadata(noteId, deviceId, now) { it.copy(folderId = folderId) }
+
+    suspend fun setPinned(
+        noteId: String,
+        pinned: Boolean,
+        deviceId: String,
+        now: Long = System.currentTimeMillis()
+    ): WatchNoteEntity = updateMetadata(noteId, deviceId, now) { it.copy(pinned = pinned) }
+
+    suspend fun delete(
+        noteId: String,
+        deviceId: String,
+        now: Long = System.currentTimeMillis()
+    ): WatchNoteEntity = updateMetadata(noteId, deviceId, now) {
+        it.copy(deleted = true, deletedAt = now)
+    }
+
+    private suspend fun updateMetadata(
+        noteId: String,
+        deviceId: String,
+        now: Long,
+        transform: (WatchNoteEntity) -> WatchNoteEntity
+    ): WatchNoteEntity {
+        val local = dao.get(noteId) ?: error("笔记不存在")
+        return transform(local).copy(updatedAt = now, modifiedBy = deviceId).also {
+            dao.upsert(listOf(it))
+        }
     }
 }
 

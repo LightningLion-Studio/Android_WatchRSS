@@ -131,6 +131,7 @@ class NotesActivity : BaseWatchActivity() {
                         NotesFeedList(
                             notes = notes,
                             onNoteClick = { note -> openNote(note.noteId) },
+                            onNoteLongClick = { note -> openNoteActions(note) },
                             onCreateNote = ::createNote
                         )
                     }
@@ -145,6 +146,10 @@ class NotesActivity : BaseWatchActivity() {
 
     private fun createNote() {
         startActivity(NoteDetailActivity.createNewIntent(this))
+    }
+
+    private fun openNoteActions(note: WatchNoteEntity) {
+        startActivity(NoteActionsActivity.createIntent(this, note.noteId, note.title))
     }
 }
 
@@ -322,6 +327,7 @@ private fun NoteMissingScreen(onBack: () -> Unit) {
 private fun NotesFeedList(
     notes: List<WatchNoteEntity>,
     onNoteClick: (WatchNoteEntity) -> Unit,
+    onNoteLongClick: (WatchNoteEntity) -> Unit,
     onCreateNote: () -> Unit
 ) {
     val baseDensity = LocalDensity.current
@@ -376,7 +382,7 @@ private fun NotesFeedList(
                             onDragStart = {},
                             onDragEnd = {},
                             onClick = { onNoteClick(note) },
-                            onLongClick = { onNoteClick(note) },
+                            onLongClick = { onNoteLongClick(note) },
                             onFavoriteClick = {},
                             onWatchLaterClick = {},
                             swipeActionsEnabled = false,

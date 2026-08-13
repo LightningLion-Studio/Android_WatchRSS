@@ -6,6 +6,15 @@ import org.junit.Test
 
 class WatchIpSyncManagerTest {
     @Test
+    fun wifiLanProbe_hasOneSecondHardBudget() {
+        assertTrue(IpSyncProtocol.WIFI_LAN_PROBE_TIMEOUT_MS == 1_000L)
+        assertTrue(
+            IpSyncProtocol.FALLBACK_IP_PROBE_TIMEOUT_MS >
+                IpSyncProtocol.WIFI_LAN_PROBE_TIMEOUT_MS
+        )
+    }
+
+    @Test
     fun backgroundDisplayTimeout_doesNotStopAnActiveTransfer() {
         assertFalse(shouldStopIpTransport(resumedCount = 0, transferInProgress = true))
     }

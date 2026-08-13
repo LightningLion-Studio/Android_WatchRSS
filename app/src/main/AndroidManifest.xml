@@ -109,6 +109,10 @@
             android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
+            android:name=".NoteActionsActivity"
+            android:exported="${debugActivityExported}"
+            android:theme="@style/Theme.WatchRSS.Translucent" />
+        <activity
             android:name=".DetailActivity"
             android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />

@@ -8,6 +8,9 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface WatchNoteDao {
+    @Query("SELECT * FROM watch_note_folders WHERE deleted = 0 ORDER BY sortOrder ASC, name ASC")
+    fun observeFolders(): Flow<List<WatchNoteFolderEntity>>
+
     @Query("SELECT * FROM watch_notes WHERE deleted = 0 ORDER BY pinned DESC, updatedAt DESC")
     fun observeNotes(): Flow<List<WatchNoteEntity>>
 

@@ -12,7 +12,7 @@ class IpSyncProtocolTest {
     fun parsesAndVerifiesPhoneCompactDescriptor() {
         val unsigned = descriptor(hmac = "")
         val signed = unsigned.copy(
-            hmac = IpSyncProtocol.hmac(unsigned.authToken, unsigned.canonicalPayload())
+            hmac = IpSyncProtocol.hmac(unsigned.challengeSecret, unsigned.canonicalPayload())
         )
         val compact = JSONObject().apply {
             put("v", signed.version)
@@ -31,8 +31,8 @@ class IpSyncProtocolTest {
                     )
                 }
             })
-            put("n", signed.nonce)
-            put("k", signed.authToken)
+            put("c", signed.challengeId)
+            put("k", signed.challengeSecret)
             put("h", signed.hmac)
         }
 
@@ -47,7 +47,7 @@ class IpSyncProtocolTest {
     fun helloAndResumeAckUseSameAuthenticatedCanonicalFields() {
         val unsigned = descriptor(hmac = "")
         val descriptor = unsigned.copy(
-            hmac = IpSyncProtocol.hmac(unsigned.authToken, unsigned.canonicalPayload())
+            hmac = IpSyncProtocol.hmac(unsigned.challengeSecret, unsigned.canonicalPayload())
         )
         val hello = IpSyncProtocol.buildHello(
             descriptor = descriptor,
@@ -58,8 +58,8 @@ class IpSyncProtocolTest {
         )
         assertEquals(
             IpSyncProtocol.hmac(
-                descriptor.authToken,
-                "1|watch-device|7|client-nonce|session-1|42"
+                descriptor.challengeSecret,
+                "2|watch-device|challenge-1|7|client-nonce|session-1|42"
             ),
             hello.getString("hmac")
         )
@@ -73,7 +73,7 @@ class IpSyncProtocolTest {
             hmac = ""
         )
         val ack = unsignedAck.copy(
-            hmac = IpSyncProtocol.hmac(descriptor.authToken, unsignedAck.canonicalPayload())
+            hmac = IpSyncProtocol.hmac(descriptor.challengeSecret, unsignedAck.canonicalPayload())
         )
         assertTrue(IpSyncProtocol.verifyAck(descriptor, ack))
         assertFalse(IpSyncProtocol.verifyAck(descriptor, ack.copy(acceptedResumeSeq = 41)))
@@ -101,8 +101,8 @@ class IpSyncProtocolTest {
                 priority = IpTransportKind.BLUETOOTH_BRIDGE.priority
             )
         ),
-        nonce = "descriptor-nonce",
-        authToken = Base64.getUrlEncoder().encodeToString(ByteArray(32) { it.toByte() }),
+        challengeId = "challenge-1",
+        challengeSecret = Base64.getUrlEncoder().encodeToString(ByteArray(32) { it.toByte() }),
         hmac = hmac
     )
 }
