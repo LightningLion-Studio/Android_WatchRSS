@@ -16,6 +16,7 @@ import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
@@ -47,6 +48,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntSize
 import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.components.WatchSurface
+import com.lightningstudio.watchrss.ui.components.DownloadPhoneAppCompactLink
 import com.lightningstudio.watchrss.ui.util.RssImageLoader
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -161,11 +163,16 @@ fun ImagePreviewScreen(
                     return@BoxWithConstraints
                 }
                 ImagePreviewLoadState.Failed -> {
-                    Text(
-                        text = imagePreviewFailureMessage(url),
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f),
-                        textAlign = TextAlign.Center
-                    )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = imagePreviewFailureMessage(url),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f),
+                            textAlign = TextAlign.Center
+                        )
+                        if (url.startsWith("/") || url.startsWith("file://")) {
+                            DownloadPhoneAppCompactLink(operation = "同步备忘录")
+                        }
+                    }
                     return@BoxWithConstraints
                 }
                 is ImagePreviewLoadState.Loaded -> Unit

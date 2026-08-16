@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImagePainter
 import coil.compose.rememberAsyncImagePainter
 import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
+import com.lightningstudio.watchrss.ui.components.DownloadPhoneAppCompactLink
 import com.lightningstudio.watchrss.ui.reader.LocalReaderPresetRuntime
 import com.lightningstudio.watchrss.ui.reader.ReaderPageLayout
 import com.lightningstudio.watchrss.ui.reader.ReaderTextRole
@@ -342,12 +343,17 @@ private fun WatchNoteImageBlock(
                 is AsyncImagePainter.State.Loading -> WatchCircularProgressIndicator(
                     modifier = Modifier.size(28.dp)
                 )
-                is AsyncImagePainter.State.Error -> Text(
-                    text = "图片未同步\n请在手机端重新同步",
-                    style = readerTextStyle(ReaderTextRole.SUBTITLE),
-                    color = readerTextStyle(ReaderTextRole.SUBTITLE).color.copy(alpha = 0.76f),
-                    textAlign = TextAlign.Center
-                )
+                is AsyncImagePainter.State.Error -> Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "图片未同步\n请在手机端重新同步",
+                        style = readerTextStyle(ReaderTextRole.SUBTITLE),
+                        color = readerTextStyle(ReaderTextRole.SUBTITLE).color.copy(alpha = 0.76f),
+                        textAlign = TextAlign.Center
+                    )
+                    DownloadPhoneAppCompactLink(operation = "同步备忘录")
+                }
                 is AsyncImagePainter.State.Success -> Unit
             }
         }

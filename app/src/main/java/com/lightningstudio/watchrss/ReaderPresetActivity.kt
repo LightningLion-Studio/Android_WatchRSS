@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import com.lightningstudio.watchrss.ui.components.DownloadPhoneAppButton
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -151,6 +152,7 @@ private fun WatchReaderPresetSelector(repository: ReaderPresetRepository) {
             "手表端只选择手机同步的预设，不提供新建或编辑。",
             style = MaterialTheme.typography.bodySmall
         )
+        DownloadPhoneAppButton(operation = "同步阅读器预设")
         Text("当前：${active.name}", fontWeight = FontWeight.SemiBold)
 
         Text("显示方式")

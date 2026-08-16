@@ -6,6 +6,7 @@ import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.lifecycle.lifecycleScope
+import com.lightningstudio.watchrss.phoneconnection.PhoneConnectionAbility
 import com.lightningstudio.watchrss.ui.screen.rss.LlmConnectivityScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
@@ -28,7 +29,23 @@ class LlmConnectivityActivity : BaseWatchActivity() {
 
         setContent {
             WatchRSSTheme {
-                LlmConnectivityScreen(viewModel = viewModel)
+                LlmConnectivityScreen(
+                    viewModel = viewModel,
+                    onOpenPhoneConfig = {
+                        startActivity(
+                            Intent(this, ServerActivity::class.java).apply {
+                                putExtra(
+                                    ServerActivity.EXTRA_SERVER_TYPE,
+                                    ServerActivity.ServerType.LLM_CONFIG.name
+                                )
+                                putExtra(
+                                    ServerActivity.EXTRA_PREFERRED_ABILITY,
+                                    PhoneConnectionAbility.LLM_SUMMARY_CONFIG.name
+                                )
+                            }
+                        )
+                    }
+                )
             }
         }
     }

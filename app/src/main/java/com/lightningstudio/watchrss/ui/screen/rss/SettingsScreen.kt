@@ -117,6 +117,7 @@ fun SettingsScreen(
     onOpenReaderPresets: () -> Unit = {},
     onOpenTtsSettings: () -> Unit = {},
     onOpenAutoScrollSettings: () -> Unit = {},
+    onOpenRemoteInput: () -> Unit = {},
     onOpenAdvanced: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
@@ -174,6 +175,7 @@ fun SettingsScreen(
             onOpenReaderPresets = onOpenReaderPresets,
             onOpenTtsSettings = onOpenTtsSettings,
             onOpenAutoScrollSettings = onOpenAutoScrollSettings,
+            onOpenRemoteInput = onOpenRemoteInput,
             onOpenOobe = onOpenOobe,
             onOpenPerfLargeList = onOpenPerfLargeList,
             onOpenPerfLargeArticle = onOpenPerfLargeArticle,
@@ -258,6 +260,7 @@ private fun MainSettingsPage(
     onOpenReaderPresets: () -> Unit,
     onOpenTtsSettings: () -> Unit,
     onOpenAutoScrollSettings: () -> Unit,
+    onOpenRemoteInput: () -> Unit,
     onOpenAdvanced: () -> Unit,
     onOpenOobe: () -> Unit,
     onOpenPerfLargeList: () -> Unit,
@@ -353,6 +356,22 @@ private fun MainSettingsPage(
             }
             Text(
                 text = "设置自动开始和滚动速度",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+            )
+
+            Spacer(modifier = Modifier.height(entrySpacing))
+
+            WatchSettingsPillRow(
+                label = "从手机输入",
+                testTag = SettingsTestTags.PHONE_REMOTE_INPUT_ENTRY,
+                onClick = onOpenRemoteInput
+            ) {
+                Text("扫码")
+            }
+            Text(
+                text = "用手机版输入 RSS 地址并同步到手表",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
@@ -548,6 +567,20 @@ private fun MainSettingsPage(
 
             Spacer(modifier = Modifier.height(entrySpacing))
 
+            WatchSettingsPillRow(
+                label = "AI 连通性",
+                testTag = SettingsTestTags.PHONE_AI_CONNECTIVITY_ENTRY,
+                onClick = onOpenLlmConnectivity
+            )
+            Text(
+                text = "配置大模型服务商与 API Key",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+            )
+
+            Spacer(modifier = Modifier.height(entrySpacing))
+
             if (BuildConfig.DEBUG) {
                 WatchSettingsPillRow(
                     label = "新手引导",
@@ -601,16 +634,6 @@ private fun MainSettingsPage(
                 )
 
                 Spacer(modifier = Modifier.height(entrySpacing))
-                WatchSettingsPillRow(
-                    label = "AI 连通性",
-                    onClick = onOpenLlmConnectivity
-                )
-                Text(
-                    text = "配置大模型服务商与 API Key",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
-                )
 
                 if (llmEnabled) {
                     Spacer(modifier = Modifier.height(entrySpacing))

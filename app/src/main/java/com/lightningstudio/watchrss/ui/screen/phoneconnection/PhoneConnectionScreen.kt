@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import com.lightningstudio.watchrss.R
+import com.lightningstudio.watchrss.ui.components.DownloadPhoneAppButton
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownScrollHandler
 import com.lightningstudio.watchrss.ui.testing.PhoneConnectionTestTags
@@ -58,6 +59,10 @@ fun PhoneConnectionScreen() {
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
             )
+
+            Spacer(modifier = Modifier.height(sectionSpacing))
+
+            DownloadPhoneAppButton(operation = "手机连接同步")
 
             Spacer(modifier = Modifier.height(trailingSpacerHeight))
         }

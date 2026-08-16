@@ -5,6 +5,7 @@ import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import com.lightningstudio.watchrss.debug.PerfEntryActivity
+import com.lightningstudio.watchrss.phoneconnection.PhoneConnectionAbility
 import com.lightningstudio.watchrss.ui.screen.rss.SettingsScreenHost
 import com.lightningstudio.watchrss.ui.screen.rss.isDetailedTtsConfigurationVisible
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
@@ -42,6 +43,20 @@ class SettingsActivity : BaseWatchActivity() {
                     },
                     onOpenAutoScrollSettings = {
                         startActivity(AutoScrollControlActivity.createSettingsIntent(this))
+                    },
+                    onOpenRemoteInput = {
+                        startActivity(
+                            Intent(this, ServerActivity::class.java).apply {
+                                putExtra(
+                                    ServerActivity.EXTRA_SERVER_TYPE,
+                                    ServerActivity.ServerType.REMOTE_INPUT.name
+                                )
+                                putExtra(
+                                    ServerActivity.EXTRA_PREFERRED_ABILITY,
+                                    PhoneConnectionAbility.REMOTE_INPUT.name
+                                )
+                            }
+                        )
                     },
                     onOpenOobe = {
                         startActivity(OobeActivity.createIntent(this, returnHomeOnFinish = false))

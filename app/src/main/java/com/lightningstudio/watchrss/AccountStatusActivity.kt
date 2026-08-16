@@ -23,6 +23,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.data.account.WatchAccountState
 import com.lightningstudio.watchrss.data.cloud.WatchCloudSyncService
+import com.lightningstudio.watchrss.ui.components.DownloadPhoneAppButton
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownScrollHandler
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
@@ -85,6 +86,8 @@ private fun AccountStatusScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Spacer(modifier = Modifier.height(8.dp))
+                DownloadPhoneAppButton(operation = "登录账号与云同步")
             } else {
                 Text(
                     text = state.phoneMasked.ifBlank { "已绑定账号" },

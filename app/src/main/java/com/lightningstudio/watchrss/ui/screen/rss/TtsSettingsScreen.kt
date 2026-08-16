@@ -196,21 +196,6 @@ private fun TtsSettingsContent(
 
                 Spacer(modifier = Modifier.height(entrySpacing))
 
-                if (onOpenPhoneConfig != null) {
-                    WatchSettingsPillRow(
-                        label = "手机扫码配置语音",
-                        onClick = onOpenPhoneConfig
-                    )
-                    Text(
-                        text = "在手机端选择音色、输入 API Key 并同步到手表",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
-                    )
-
-                    Spacer(modifier = Modifier.height(entrySpacing))
-                }
-
                 val canTest = when (state.engine) {
                     TtsProviderCatalog.ENGINE_LOCAL -> true
                     TtsProviderCatalog.ENGINE_BACKEND_DEFAULT -> state.isLoggedIn
@@ -295,6 +280,20 @@ private fun TtsSettingsContent(
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
+            }
+
+            if (onOpenPhoneConfig != null) {
+                Spacer(modifier = Modifier.height(entrySpacing))
+                WatchSettingsPillRow(
+                    label = "手机扫码配置语音",
+                    onClick = onOpenPhoneConfig
+                )
+                Text(
+                    text = "在手机端选择音色、输入 API Key 并同步到手表",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+                )
             }
 
             Spacer(modifier = Modifier.height(pillHeight))

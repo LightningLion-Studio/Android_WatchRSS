@@ -2,7 +2,6 @@ package com.lightningstudio.watchrss
 
 import android.content.Intent
 import android.os.Bundle
-import android.widget.Toast
 import androidx.activity.compose.setContent
 import com.lightningstudio.watchrss.phoneconnection.PhoneConnectionFeature
 import com.lightningstudio.watchrss.ui.screen.ProfileScreen
@@ -41,11 +40,8 @@ class ProfileActivity : BaseWatchActivity() {
                         startActivity(intent)
                     },
                     onPhoneConnectionClick = {
-                        Toast.makeText(
-                            this,
-                            "请在与手表蓝牙配对了的手机上下载并打开腕上RSS手机端后操作",
-                            Toast.LENGTH_LONG
-                        ).show()
+                        if (!allowNavigation()) return@ProfileScreen
+                        startActivity(PhoneConnectionActivity.createIntent(this))
                     },
                     onSettingsClick = {
                         if (!allowNavigation()) return@ProfileScreen

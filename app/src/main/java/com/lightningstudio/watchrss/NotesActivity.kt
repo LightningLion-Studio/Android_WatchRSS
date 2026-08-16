@@ -90,6 +90,7 @@ import com.lightningstudio.watchrss.data.note.WatchNoteEntity
 import com.lightningstudio.watchrss.data.note.watchPlainText
 import com.lightningstudio.watchrss.data.rss.RssItem
 import com.lightningstudio.watchrss.phoneconnection.WatchDeviceIdentity
+import com.lightningstudio.watchrss.ui.components.DownloadPhoneAppButton
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownHandler
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
@@ -360,6 +361,12 @@ private fun NotesFeedList(
                         onClick = {}
                     )
                 }
+            }
+            item(key = "phone_sync_prompt") {
+                DownloadPhoneAppButton(
+                    operation = "同步备忘录",
+                    modifier = Modifier.padding(bottom = itemSpacing)
+                )
             }
             if (notes.isEmpty()) {
                 item(key = "empty") {

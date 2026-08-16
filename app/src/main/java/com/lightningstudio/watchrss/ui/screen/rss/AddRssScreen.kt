@@ -41,6 +41,7 @@ import com.lightningstudio.watchrss.data.rss.RssChannel
 import com.lightningstudio.watchrss.ui.components.QrCodePanel
 import com.lightningstudio.watchrss.ui.components.WatchButton
 import com.lightningstudio.watchrss.ui.components.WatchSurface
+import com.lightningstudio.watchrss.ui.components.DownloadPhoneAppCompactLink
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownScrollHandler
 import com.lightningstudio.watchrss.ui.theme.ActionButtonTextStyle
@@ -436,7 +437,11 @@ fun AddRssScreen(
                                     .semantics { contentDescription = "二维码扫描面板" },
                             )
 
-                            Spacer(modifier = Modifier.height(16.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            DownloadPhoneAppCompactLink(operation = "从手机输入 RSS")
+
+                            Spacer(modifier = Modifier.height(12.dp))
 
                             WatchButton(
                                 onClick = onBackToInput,

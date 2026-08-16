@@ -112,4 +112,15 @@ object SettingsTestTags {
     const val IMAGE_PREFETCH_VALUE = "settings/image_prefetch_value"
     const val IMAGE_PREFETCH_INCREASE_BUTTON = "settings/image_prefetch_increase_button"
     const val BEIAN_ENTRY = "settings/beian_entry"
+    const val PHONE_REMOTE_INPUT_ENTRY = "settings/phone_remote_input_entry"
+    const val PHONE_AI_CONNECTIVITY_ENTRY = "settings/phone_ai_connectivity_entry"
 }
+
+object DownloadPhoneAppTestTags {
+    const val DIALOG = "download_phone_app/dialog"
+    const val QR_IMAGE = "download_phone_app/qr_image"
+    const val OPEN_BROWSER_BUTTON = "download_phone_app/open_browser_button"
+    const val CLOSE_BUTTON = "download_phone_app/close_button"
+}
+
+

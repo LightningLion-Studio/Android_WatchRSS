@@ -45,6 +45,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import com.lightningstudio.watchrss.R
+import com.lightningstudio.watchrss.ui.components.DownloadPhoneAppCompactLink
 import com.lightningstudio.watchrss.ui.components.WatchButton
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.theme.ActionButtonTextStyle
@@ -135,6 +136,11 @@ fun ServerScreen(
                             contentDescription = "状态：正在启动服务器"
                         }
                     )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    DownloadPhoneAppCompactLink(
+                        operation = title,
+                        color = textColor.copy(alpha = 0.8f)
+                    )
                 }
                 networkError -> {
                     // 网络错误
@@ -175,6 +181,11 @@ fun ServerScreen(
                             textAlign = TextAlign.Center
                         )
                     }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    DownloadPhoneAppCompactLink(
+                        operation = title,
+                        color = textColor.copy(alpha = 0.8f)
+                    )
                 }
                 else -> {
                     // 正常显示QR码
@@ -222,17 +233,12 @@ fun ServerScreen(
                                 textAlign = TextAlign.Center
                             )
                         }
-                    } else {
-                        Text(
-                            text = "请使用手机版扫码",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = textColor.copy(alpha = 0.7f),
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.semantics {
-                                contentDescription = "提示：请使用手机版腕上RSS扫码"
-                            }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        DownloadPhoneAppCompactLink(
+                            operation = title,
+                            color = textColor.copy(alpha = 0.8f)
                         )
-                        Spacer(modifier = Modifier.height(6.dp))
+                    } else {
                         Text(
                             text = hint,
                             style = MaterialTheme.typography.bodySmall,
@@ -242,6 +248,11 @@ fun ServerScreen(
                                 liveRegion = LiveRegionMode.Polite
                                 contentDescription = "操作说明：$hint"
                             }
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        DownloadPhoneAppCompactLink(
+                            operation = title,
+                            color = textColor.copy(alpha = 0.8f)
                         )
                     }
                 }
