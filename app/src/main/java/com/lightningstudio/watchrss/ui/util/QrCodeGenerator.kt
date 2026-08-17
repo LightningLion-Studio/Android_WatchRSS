@@ -2,10 +2,10 @@ package com.lightningstudio.watchrss.ui.util
 
 import androidx.core.graphics.createBitmap
 import android.graphics.Bitmap
-import android.util.Base64
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
+import com.lightningstudio.watchrss.phoneconnection.ConfigPairingProtocol
 
 object QrCodeGenerator {
     fun create(text: String, size: Int): Bitmap? {
@@ -38,11 +38,24 @@ object QrCodeGenerator {
      * @param size 二维码尺寸
      * @return 二维码 Bitmap
      */
-    fun createWatchRssQrCode(data: String, size: Int): Bitmap? {
-        // 使用 URL fragment (#) 而不是查询参数 (?) 来添加用户提示
-        // 原因：fragment 不会被发送到服务器，只在客户端（扫码应用）显示
-        // 这样可以给用户提示，同时保持服务器端简洁，不污染服务器日志
-        val qrContent = "http://$data/#请将手机和手表连上同一个WiFi再扫码"
-        return create(qrContent, size)
+    fun createWatchRssQrCode(
+        data: String,
+        size: Int,
+        pairingToken: String? = null
+    ): Bitmap? {
+        return create(buildWatchRssQrContent(data, pairingToken), size)
     }
+}
+
+/**
+ * Uses a URL fragment so the pairing secret stays in the scanner and is never sent in an HTTP URL.
+ */
+internal fun buildWatchRssQrContent(data: String, pairingToken: String?): String {
+    val fragment = if (pairingToken != null) {
+        require(ConfigPairingProtocol.isValidPairingToken(pairingToken)) { "Invalid pairing token" }
+        "watchrss_pair=$pairingToken&protocol=${ConfigPairingProtocol.PROTOCOL_ID}"
+    } else {
+        "请将手机和手表连上同一个WiFi再扫码"
+    }
+    return "http://$data/#$fragment"
 }

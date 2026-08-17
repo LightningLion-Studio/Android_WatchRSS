@@ -10,7 +10,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 private val SENSITIVE_HEADER_PATTERN =
-    Regex("""(?i)\b((?:set-)?cookie|authorization|proxy-authorization)\s*([:=])\s*[^\r\n]*""")
+    Regex("""(?i)\b((?:set-)?cookie|authorization|proxy-authorization|x-watchrss-pairing-auth)\s*([:=])\s*[^\r\n]*""")
 private val BEARER_TOKEN_PATTERN =
     Regex("""(?i)\b(Bearer\s+)[A-Za-z0-9._~+/\-=]+""")
 private val SENSITIVE_VALUE_PATTERN = Regex(
@@ -41,7 +41,8 @@ private val SENSITIVE_VALUE_PATTERN = Regex(
         "ssid_ucp_v1",
         "ttwid",
         "uid_tt",
-        "uid_tt_ss"
+        "uid_tt_ss",
+        "watchrss_pair"
     ).joinToString("|") { Regex.escape(it) } + """)\s*=\s*([^;\s,\]\)}]+)"""
 )
 

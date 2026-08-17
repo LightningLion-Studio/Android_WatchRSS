@@ -26,6 +26,7 @@ class ServerActivity : BaseWatchActivity() {
     private var returnRemoteInputToCaller by mutableStateOf(false)
     private var preferredAbility: PhoneConnectionAbility? by mutableStateOf(null)
     private var llmSummaryItemId by mutableStateOf(0L)
+    private var pairingToken by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -46,6 +47,7 @@ class ServerActivity : BaseWatchActivity() {
                     synced = synced,
                     title = resolveTitle(),
                     hint = resolveHint(),
+                    pairingToken = pairingToken,
                     onDismiss = { finish() }
                 )
             }
@@ -90,6 +92,7 @@ class ServerActivity : BaseWatchActivity() {
                         }
                     }
                 }
+                pairingToken = server?.pairingToken
                 server?.start()
                 port = server?.listeningPort ?: 0
             } catch (e: Exception) {

@@ -27,7 +27,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -37,12 +36,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.dialog
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
@@ -54,6 +53,8 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.screen.rss.openExternalLink
 import com.lightningstudio.watchrss.ui.settings.WatchSettingsPillRow
@@ -67,6 +68,27 @@ const val PHONE_APP_DOWNLOAD_URL = "https://app.cdo.oppomobile.com/home/detail?a
 
 /** 「下载手机端App以完成{operation}」提示文案（纯函数，可测）。 */
 fun phoneAppDownloadPrompt(operation: String): String = "下载手机端App以完成$operation"
+
+private const val DOWNLOAD_PHONE_DIALOG_BASE_SIZE_DP = 466f
+private const val DOWNLOAD_PHONE_QR_BASE_SIZE_DP = 176f
+
+internal val DOWNLOAD_PHONE_APP_DIALOG_PROPERTIES = DialogProperties(
+    dismissOnBackPress = true,
+    dismissOnClickOutside = false,
+    usePlatformDefaultWidth = false,
+    decorFitsSystemWindows = false
+)
+
+/**
+ * Keeps the QR code square and proportional to the circular dialog.
+ *
+ * The explicit size is important: an empty weighted child has no intrinsic size when
+ * measured with `fill = false`, so deriving the QR size from that child can stay at zero.
+ */
+internal fun downloadPhoneAppQrSize(containerSize: Dp): Dp {
+    val scale = (containerSize.value / DOWNLOAD_PHONE_DIALOG_BASE_SIZE_DP).coerceIn(0f, 1f)
+    return (DOWNLOAD_PHONE_QR_BASE_SIZE_DP * scale).dp
+}
 
 /**
  * 胶囊入口（设置行样式），自带弹窗状态。
@@ -115,7 +137,7 @@ fun DownloadPhoneAppCompactLink(
 /**
  * 下载手机端 App 的圆形弹窗：标题 + 副标题 + 自适应二维码 + 浏览器兜底按钮。
  * 壳复制自 WatchConfirmDialog（DeleteConfirmDialog.kt），两处刻意偏差：
- * 上下 padding 收窄到 56/20 给二维码让空间；二维码放 weight(1f) Box 自适应剩余直径。
+ * 上下 padding 收窄到 56/20 给二维码让空间；二维码按圆形容器直径等比缩放。
  */
 @Composable
 fun DownloadPhoneAppDialog(
@@ -124,154 +146,157 @@ fun DownloadPhoneAppDialog(
 ) {
     val context = LocalContext.current
     val density = LocalDensity.current
-    var qrSizePx by remember { mutableIntStateOf(0) }
     var qrBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
-    LaunchedEffect(qrSizePx) {
-        if (qrSizePx <= 0) return@LaunchedEffect
-        qrBitmap = withContext(Dispatchers.IO) {
-            QrCodeGenerator.create(PHONE_APP_DOWNLOAD_URL, qrSizePx)
-        }
-    }
-
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DOWNLOAD_PHONE_APP_DIALOG_PROPERTIES
     ) {
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.92f))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = {}
-                )
-        )
-        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            val maxSize = minOf(maxWidth, maxHeight)
-            val containerSize = minOf(maxSize, 466.dp)
-            val scale = (containerSize.value / 466f).coerceAtMost(1f)
-            val scaleDp: (Dp) -> Dp = { value -> (value.value * scale).dp }
-            val fontFamily = FontFamily(Font(R.font.watch_sans))
-
-            Column(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
                 modifier = Modifier
-                    .size(containerSize)
-                    .clip(CircleShape)
-                    .background(Color.Black)
-                    .padding(top = scaleDp(56.dp), bottom = scaleDp(20.dp))
-                    .testTag(DownloadPhoneAppTestTags.DIALOG),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(scaleDp(8.dp))
-            ) {
-                Text(
-                    text = "下载手机端App",
-                    fontFamily = fontFamily,
-                    fontWeight = FontWeight.Medium,
-                    fontSize = (34f * scale).sp,
-                    lineHeight = (46f * scale).sp,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textAlign = TextAlign.Center,
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.92f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = {}
+                    )
+                    .testTag(DownloadPhoneAppTestTags.SCRIM)
+            )
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val maxSize = minOf(maxWidth, maxHeight)
+                val containerSize = minOf(maxSize, DOWNLOAD_PHONE_DIALOG_BASE_SIZE_DP.dp)
+                val scale = (containerSize.value / DOWNLOAD_PHONE_DIALOG_BASE_SIZE_DP).coerceAtMost(1f)
+                val scaleDp: (Dp) -> Dp = { value -> (value.value * scale).dp }
+                val qrSize = downloadPhoneAppQrSize(containerSize)
+                val qrSizePx = with(density) { qrSize.roundToPx().coerceAtLeast(1) }
+                val fontFamily = FontFamily(Font(R.font.watch_sans))
+
+                LaunchedEffect(qrSizePx) {
+                    qrBitmap = withContext(Dispatchers.IO) {
+                        QrCodeGenerator.create(PHONE_APP_DOWNLOAD_URL, qrSizePx)
+                    }
+                }
+
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .basicMarquee(iterations = Int.MAX_VALUE)
-                        .semantics { heading() }
-                )
-                // 副标题在 360dp 以上容器才显示：248dp 圆屏放不下
-                if (containerSize >= 360.dp) {
+                        .size(containerSize)
+                        .clip(CircleShape)
+                        .background(Color.Black)
+                        .padding(top = scaleDp(56.dp), bottom = scaleDp(20.dp))
+                        .testTag(DownloadPhoneAppTestTags.DIALOG)
+                        .semantics { dialog() },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(scaleDp(8.dp))
+                ) {
                     Text(
-                        text = "以完成$operation",
+                        text = "下载手机端App",
                         fontFamily = fontFamily,
-                        fontWeight = FontWeight.Normal,
-                        fontSize = (28f * scale).sp,
-                        lineHeight = (40f * scale).sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Medium,
+                        fontSize = (34f * scale).sp,
+                        lineHeight = (46f * scale).sp,
+                        color = MaterialTheme.colorScheme.onSurface,
                         textAlign = TextAlign.Center,
                         modifier = Modifier
                             .fillMaxWidth()
                             .basicMarquee(iterations = Int.MAX_VALUE)
+                            .semantics { heading() }
                     )
-                }
-                Box(
-                    modifier = Modifier
-                        .weight(1f, fill = false)
-                        .onSizeChanged { size ->
-                            val side = minOf(size.width, size.height)
-                            if (side > 0 && side != qrSizePx) qrSizePx = side
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    val bitmap = qrBitmap
-                    if (bitmap != null) {
-                        Image(
-                            bitmap = bitmap.asImageBitmap(),
-                            contentDescription = "下载手机端App二维码",
-                            contentScale = ContentScale.Fit,
+                    // 副标题在 360dp 以上容器才显示：248dp 圆屏放不下
+                    if (containerSize >= 360.dp) {
+                        Text(
+                            text = "以完成$operation",
+                            fontFamily = fontFamily,
+                            fontWeight = FontWeight.Normal,
+                            fontSize = (28f * scale).sp,
+                            lineHeight = (40f * scale).sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
                             modifier = Modifier
-                                .size(with(density) { qrSizePx.toDp() })
-                                .testTag(DownloadPhoneAppTestTags.QR_IMAGE)
-                                .semantics {
-                                    role = Role.Image
-                                    contentDescription = "下载手机端App二维码"
-                                }
+                                .fillMaxWidth()
+                                .basicMarquee(iterations = Int.MAX_VALUE)
                         )
-                    } else if (qrSizePx > 0) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = PHONE_APP_DOWNLOAD_URL,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .basicMarquee(iterations = Int.MAX_VALUE)
-                            )
-                            Text(
-                                text = "二维码生成失败，请点击下方按钮打开下载页",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                textAlign = TextAlign.Center
-                            )
-                        }
                     }
-                }
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(scaleDp(16.dp)),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
                     Box(
                         modifier = Modifier
-                            .size(scaleDp(104.dp))
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .clickable(onClick = onDismiss)
-                            .testTag(DownloadPhoneAppTestTags.CLOSE_BUTTON),
+                            .size(qrSize),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Filled.Close,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.size(scaleDp(48.dp))
-                        )
+                        val bitmap = qrBitmap
+                        if (bitmap != null) {
+                            Image(
+                                bitmap = bitmap.asImageBitmap(),
+                                contentDescription = "下载手机端App二维码",
+                                contentScale = ContentScale.Fit,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .testTag(DownloadPhoneAppTestTags.QR_IMAGE)
+                                    .semantics {
+                                        role = Role.Image
+                                        contentDescription = "下载手机端App二维码"
+                                    }
+                            )
+                        } else if (qrSizePx > 0) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = PHONE_APP_DOWNLOAD_URL,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .basicMarquee(iterations = Int.MAX_VALUE)
+                                )
+                                Text(
+                                    text = "二维码生成失败，请点击下方按钮打开下载页",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
                     }
-                    WatchButton(
-                        onClick = {
-                            runCatching { openExternalLink(context, PHONE_APP_DOWNLOAD_URL) }
-                        },
-                        contentPadding = PaddingValues(horizontal = scaleDp(8.dp)),
-                        modifier = Modifier
-                            .width(scaleDp(232.dp))
-                            .height(scaleDp(104.dp))
-                            .testTag(DownloadPhoneAppTestTags.OPEN_BROWSER_BUTTON)
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(scaleDp(16.dp)),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "浏览器打开下载页",
-                            fontSize = (22f * scale).sp,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE)
-                        )
+                        Box(
+                            modifier = Modifier
+                                .size(scaleDp(104.dp))
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .clickable(onClick = onDismiss)
+                                .testTag(DownloadPhoneAppTestTags.CLOSE_BUTTON),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Close,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(scaleDp(48.dp))
+                            )
+                        }
+                        WatchButton(
+                            onClick = {
+                                runCatching { openExternalLink(context, PHONE_APP_DOWNLOAD_URL) }
+                            },
+                            contentPadding = PaddingValues(horizontal = scaleDp(8.dp)),
+                            modifier = Modifier
+                                .width(scaleDp(232.dp))
+                                .height(scaleDp(104.dp))
+                                .testTag(DownloadPhoneAppTestTags.OPEN_BROWSER_BUTTON)
+                        ) {
+                            Text(
+                                text = "浏览器打开下载页",
+                                fontSize = (22f * scale).sp,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE)
+                            )
+                        }
                     }
                 }
             }

@@ -29,7 +29,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.WatchSwitch
-import com.lightningstudio.watchrss.ui.components.DownloadPhoneAppButton
+import com.lightningstudio.watchrss.ui.components.PhoneSyncActions
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownScrollHandler
 import com.lightningstudio.watchrss.ui.theme.watchColorResource
@@ -117,8 +117,9 @@ fun BiliSettingsScreen(
             }
 
             if (onSyncBiliWatchRecords != null) {
-                DownloadPhoneAppButton(
+                PhoneSyncActions(
                     operation = "同步B站观看记录",
+                    onStartSync = onSyncBiliWatchRecords,
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(entrySpacing))

@@ -70,7 +70,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.BlurFadeVisibility
-import com.lightningstudio.watchrss.ui.components.DownloadPhoneAppButton
+import com.lightningstudio.watchrss.ui.components.PhoneSyncActions
 import com.lightningstudio.watchrss.data.rss.SavedItem
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
@@ -153,8 +153,9 @@ fun SavedItemsScreen(
                 SavedHeader(title = title, hint = hint)
             }
             item(key = "phone_sync_prompt") {
-                DownloadPhoneAppButton(
+                PhoneSyncActions(
                     operation = syncOperationLabel,
+                    onStartSync = onSyncFromPhone,
                     modifier = Modifier.padding(top = itemSpacing)
                 )
             }

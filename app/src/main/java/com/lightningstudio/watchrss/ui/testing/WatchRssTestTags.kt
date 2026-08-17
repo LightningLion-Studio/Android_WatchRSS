@@ -117,10 +117,13 @@ object SettingsTestTags {
 }
 
 object DownloadPhoneAppTestTags {
+    const val SCRIM = "download_phone_app/scrim"
     const val DIALOG = "download_phone_app/dialog"
     const val QR_IMAGE = "download_phone_app/qr_image"
     const val OPEN_BROWSER_BUTTON = "download_phone_app/open_browser_button"
     const val CLOSE_BUTTON = "download_phone_app/close_button"
 }
 
-
+object PhoneSyncActionsTestTags {
+    const val START_SYNC_BUTTON = "phone_sync_actions/start_sync_button"
+}

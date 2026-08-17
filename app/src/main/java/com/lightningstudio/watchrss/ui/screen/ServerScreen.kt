@@ -60,6 +60,7 @@ fun ServerScreen(
     synced: Boolean,
     title: String,
     hint: String,
+    pairingToken: String? = null,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -76,10 +77,10 @@ fun ServerScreen(
         label = "background_transition"
     )
 
-    LaunchedEffect(port) {
+    LaunchedEffect(port, pairingToken) {
         if (port > 0) {
             qrBitmap = withContext(Dispatchers.IO) {
-                generateQrCode(context, port)
+                generateQrCode(context, port, pairingToken)
             }
             networkError = qrBitmap == null
         }
@@ -261,8 +262,8 @@ fun ServerScreen(
     }
 }
 
-private fun generateQrCode(context: Context, port: Int): Bitmap? {
+private fun generateQrCode(context: Context, port: Int, pairingToken: String?): Bitmap? {
     val ipAddress = NetworkUtils.getLocalIpAddress(context) ?: return null
     val ipPort = "$ipAddress:$port"
-    return QrCodeGenerator.createWatchRssQrCode(ipPort, 400)
+    return QrCodeGenerator.createWatchRssQrCode(ipPort, 400, pairingToken)
 }

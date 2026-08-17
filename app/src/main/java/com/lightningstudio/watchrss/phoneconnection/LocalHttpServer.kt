@@ -72,14 +72,15 @@ import org.json.JSONObject
  * | GET  /getWatchlaterList       | SYNC_WATCH_LATER       | 手机端拉取手表稍后阅读数据                 |
  * | GET  /getBiliWatchHistory     | SYNC_BILI_WATCH_RECORDS | 手机端拉取手表上的 B 站观看历史             |
  * | GET  /getBiliPlaybackProgress | SYNC_BILI_WATCH_RECORDS | 手机端拉取手表本地 B 站断点续播进度         |
- * | GET  /getLLMSummaryConfig     | LLM_SUMMARY_CONFIG     | 手机端读取手表当前 LLM 配置（API Key 脱敏）|
- * | POST /setLLMSummaryConfig     | LLM_SUMMARY_CONFIG     | 手机端写入 LLM 配置到手表                  |
- * | GET  /getTtsConfig            | TTS_CONFIG             | 手机端读取手表当前 TTS 配置（API Key 脱敏）|
- * | POST /setTtsConfig            | TTS_CONFIG             | 手机端写入 TTS 配置到手表                  |
+ * | GET  /getLLMSummaryConfig     | LLM_SUMMARY_CONFIG     | 配对认证后返回 AES-GCM 加密的 LLM 配置     |
+ * | POST /setLLMSummaryConfig     | LLM_SUMMARY_CONFIG     | 配对认证后接收 AES-GCM 加密的 LLM 配置     |
+ * | GET  /getTtsConfig            | TTS_CONFIG             | 配对认证后返回 AES-GCM 加密的 TTS 配置     |
+ * | POST /setTtsConfig            | TTS_CONFIG             | 配对认证后接收 AES-GCM 加密的 TTS 配置     |
  *
  * ## 版本协商
  *
- * `/getCurrentActivationAbility` 与 `/getAbilities` 均返回 `version` 字段（当前固定为 "0.0.1"）。
+ * `/getCurrentActivationAbility` 与 `/getAbilities` 均返回 `version` 字段；配置配对协议为 "0.0.2"，
+ * 其余既有能力保持 "0.0.1"。
  * 手机端使用该版本号与自身版本比较：若手表端更新则提示手机端升级；若手机端更新则提示手表端升级。
  *
  * ## 线程模型
@@ -98,6 +99,18 @@ class LocalHttpServer private constructor(
     private val onLlmConfigSaved: (() -> Unit)? = null,
     private val onTtsConfigSaved: (() -> Unit)? = null
 ) : NanoHTTPD(port) {
+
+    private val configPairingSession: ConfigPairingSession? = when (serverType) {
+        ServerType.LLM_CONFIG, ServerType.TTS_CONFIG -> ConfigPairingSession.create()
+        else -> null
+    }
+
+    /**
+     * Ephemeral secret to embed in the QR fragment for configuration sessions only.
+     * Never put this value in a query parameter, log message, or HTTP request header.
+     */
+    val pairingToken: String?
+        get() = configPairingSession?.pairingToken
 
     /**
      * 服务器类型，决定该实例对外暴露的能力集合。
@@ -169,16 +182,20 @@ class LocalHttpServer private constructor(
                 handleGetBiliPlaybackProgress()
             }
             uri == "/getLLMSummaryConfig" && supports(PhoneConnectionAbility.LLM_SUMMARY_CONFIG) -> {
-                handleGetLlmSummaryConfig()
+                withConfigAuthentication(session, requestBody = "") { pairing ->
+                    handleGetLlmSummaryConfig(pairing)
+                }
             }
             uri == "/setLLMSummaryConfig" && supports(PhoneConnectionAbility.LLM_SUMMARY_CONFIG) -> {
-                handleSetLlmSummaryConfig(session)
+                handleEncryptedConfigWrite(session, ::handleSetLlmSummaryConfig)
             }
             uri == "/getTtsConfig" && supports(PhoneConnectionAbility.TTS_CONFIG) -> {
-                handleGetTtsConfig()
+                withConfigAuthentication(session, requestBody = "") { pairing ->
+                    handleGetTtsConfig(pairing)
+                }
             }
             uri == "/setTtsConfig" && supports(PhoneConnectionAbility.TTS_CONFIG) -> {
-                handleSetTtsConfig(session)
+                handleEncryptedConfigWrite(session, ::handleSetTtsConfig)
             }
             else -> {
                 newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "Not Found")
@@ -187,6 +204,107 @@ class LocalHttpServer private constructor(
     }
 
     private fun supports(ability: PhoneConnectionAbility): Boolean = ability in abilities
+
+    private fun abilityVersion(ability: PhoneConnectionAbility): String {
+        return if (ability == PhoneConnectionAbility.LLM_SUMMARY_CONFIG ||
+            ability == PhoneConnectionAbility.TTS_CONFIG
+        ) {
+            CONFIG_PAIRING_ABILITY_VERSION
+        } else {
+            BASE_ABILITY_VERSION
+        }
+    }
+
+    override fun stop() {
+        configPairingSession?.invalidate()
+        super.stop()
+    }
+
+    private fun withConfigAuthentication(
+        session: IHTTPSession,
+        requestBody: String,
+        block: (ConfigPairingSession) -> Response
+    ): Response {
+        val pairing = configPairingSession ?: return configAuthError(Response.Status.NOT_FOUND)
+        val nonce = session.header(ConfigPairingProtocol.NONCE_HEADER)
+        val proof = session.header(ConfigPairingProtocol.AUTH_HEADER)
+        val authenticated = pairing.authenticate(
+            method = session.method.name,
+            uri = session.uri,
+            nonce = nonce,
+            requestBody = requestBody,
+            requestProof = proof
+        )
+        if (!authenticated) return configAuthError(Response.Status.UNAUTHORIZED)
+        return block(pairing)
+    }
+
+    private fun handleEncryptedConfigWrite(
+        session: IHTTPSession,
+        handler: (String, ConfigPairingSession) -> Response
+    ): Response {
+        val declaredLength = session.header("Content-Length")?.toLongOrNull()
+        if (declaredLength != null && declaredLength > MAX_CONFIG_BODY_BYTES) {
+            return configJsonResponse(Response.Status.BAD_REQUEST) {
+                put("success", false)
+                put("message", "加密配置正文过大")
+            }
+        }
+        val encryptedBody = try {
+            val params = mutableMapOf<String, String>()
+            session.parseBody(params)
+            params["postData"].orEmpty()
+        } catch (_: Exception) {
+            return configJsonResponse(Response.Status.BAD_REQUEST) {
+                put("success", false)
+                put("message", "请求正文无效")
+            }
+        }
+        if (encryptedBody.isBlank() || encryptedBody.toByteArray().size > MAX_CONFIG_BODY_BYTES) {
+            return configJsonResponse(Response.Status.BAD_REQUEST) {
+                put("success", false)
+                put("message", "加密配置正文缺失或过大")
+            }
+        }
+
+        return withConfigAuthentication(session, encryptedBody) { pairing ->
+            val plaintext = runCatching {
+                pairing.decryptRequest(session.method.name, session.uri, encryptedBody)
+            }.getOrElse {
+                return@withConfigAuthentication configJsonResponse(Response.Status.BAD_REQUEST) {
+                    put("success", false)
+                    put("message", "无法解密配置正文")
+                }
+            }
+            handler(plaintext, pairing)
+        }
+    }
+
+    private fun IHTTPSession.header(name: String): String? {
+        return headers.entries.firstOrNull { (key, _) -> key.equals(name, ignoreCase = true) }?.value
+    }
+
+    private fun configAuthError(status: Response.Status): Response {
+        return configJsonResponse(status) {
+            put("success", false)
+            put("message", "配对认证失败，请重新扫描手表上的二维码")
+        }.apply {
+            addHeader("WWW-Authenticate", ConfigPairingProtocol.PROTOCOL_ID)
+        }
+    }
+
+    private inline fun configJsonResponse(
+        status: Response.Status,
+        block: JSONObject.() -> Unit
+    ): Response {
+        return newFixedLengthResponse(
+            status,
+            "application/json",
+            JSONObject().apply(block).toString()
+        ).apply {
+            addHeader("Cache-Control", "no-store")
+        }
+    }
 
     private fun handleRootPage(): Response {
         val html = """
@@ -374,7 +492,11 @@ class LocalHttpServer private constructor(
             JSONObject().apply {
                 put("code", code)
                 put("name", name)
-                put("version", "0.0.1")
+                put("version", current?.let(::abilityVersion) ?: BASE_ABILITY_VERSION)
+                if (configPairingSession != null) {
+                    put("requiresPairingAuth", true)
+                    put("pairingProtocol", ConfigPairingProtocol.PROTOCOL_ID)
+                }
             }.toString()
         )
     }
@@ -387,7 +509,13 @@ class LocalHttpServer private constructor(
                     put(JSONObject().apply {
                         put("code", ability.wireCode)
                         put("name", ability.displayName)
-                        put("version", "0.0.1")
+                        put("version", abilityVersion(ability))
+                        if (ability == PhoneConnectionAbility.LLM_SUMMARY_CONFIG ||
+                            ability == PhoneConnectionAbility.TTS_CONFIG
+                        ) {
+                            put("requiresPairingAuth", true)
+                            put("pairingProtocol", ConfigPairingProtocol.PROTOCOL_ID)
+                        }
                     })
                 }
         }
@@ -635,7 +763,7 @@ class LocalHttpServer private constructor(
         )
     }
 
-    private fun handleGetLlmSummaryConfig(): Response {
+    private fun handleGetLlmSummaryConfig(pairing: ConfigPairingSession): Response {
         return try {
             val settingsRepository = container.settingsRepository
             val apiKeyStore = container.llmApiKeyStore
@@ -666,33 +794,31 @@ class LocalHttpServer private constructor(
                 JSONObject.NULL
             }
 
-            newFixedLengthResponse(
-                Response.Status.OK,
-                "application/json",
-                JSONObject().apply {
-                    put("success", true)
-                    put("data", dataObj)
-                }.toString()
+            val plaintext = JSONObject().apply {
+                put("success", true)
+                put("data", dataObj)
+            }.toString()
+            encryptedConfigResponse(
+                pairing = pairing,
+                method = "GET",
+                uri = "/getLLMSummaryConfig",
+                plaintext = plaintext
             )
         } catch (e: Exception) {
             AppLogger.e("LocalHttpServer", "handleGetLlmSummaryConfig failed", e)
-            newFixedLengthResponse(
-                Response.Status.INTERNAL_ERROR,
-                "application/json",
-                JSONObject().apply {
-                    put("success", false)
-                    put("data", JSONObject.NULL)
-                }.toString()
-            )
+            configJsonResponse(Response.Status.INTERNAL_ERROR) {
+                put("success", false)
+                put("data", JSONObject.NULL)
+            }
         }
     }
 
-    private fun handleSetLlmSummaryConfig(session: IHTTPSession): Response {
+    private fun handleSetLlmSummaryConfig(
+        plaintext: String,
+        pairing: ConfigPairingSession
+    ): Response {
         return try {
-            val params = mutableMapOf<String, String>()
-            session.parseBody(params)
-            val postData = params["postData"] ?: ""
-            val json = JSONObject(postData)
+            val json = JSONObject(plaintext)
 
             val provider = json.optString("provider", "")
             val apiKey = json.optString("apiKey", "")
@@ -701,24 +827,19 @@ class LocalHttpServer private constructor(
             val enabled = json.optBoolean("enabled", false)
 
             if (provider.isEmpty()) {
-                return newFixedLengthResponse(
-                    Response.Status.BAD_REQUEST,
-                    "application/json",
-                    JSONObject().apply {
-                        put("success", false)
-                        put("message", "provider 不能为空")
-                    }.toString()
-                )
+                return configJsonResponse(Response.Status.BAD_REQUEST) {
+                    put("success", false)
+                    put("message", "provider 不能为空")
+                }
             }
             if (apiKey.isEmpty()) {
-                return newFixedLengthResponse(
-                    Response.Status.BAD_REQUEST,
-                    "application/json",
-                    JSONObject().apply {
-                        put("success", false)
-                        put("message", "apiKey 不能为空")
-                    }.toString()
-                )
+                return configJsonResponse(Response.Status.BAD_REQUEST) {
+                    put("success", false)
+                    put("message", "apiKey 不能为空")
+                }
+            }
+            if (!pairing.claimWrite()) {
+                return configAuthError(Response.Status.UNAUTHORIZED)
             }
 
             container.llmApiKeyStore.setApiKey(apiKey)
@@ -730,30 +851,23 @@ class LocalHttpServer private constructor(
                     enabled = enabled
                 )
             }
+            val response = configJsonResponse(Response.Status.OK) {
+                put("success", true)
+                put("message", "配置已保存")
+            }
             onLlmConfigSaved?.invoke()
-
-            newFixedLengthResponse(
-                Response.Status.OK,
-                "application/json",
-                JSONObject().apply {
-                    put("success", true)
-                    put("message", "配置已保存")
-                }.toString()
-            )
-        } catch (e: Exception) {
-            AppLogger.e("LocalHttpServer", "handleSetLlmSummaryConfig failed", e)
-            newFixedLengthResponse(
-                Response.Status.INTERNAL_ERROR,
-                "application/json",
-                JSONObject().apply {
-                    put("success", false)
-                    put("message", e.message ?: "Unknown error")
-                }.toString()
-            )
+            response
+        } catch (_: Exception) {
+            // Decrypted configuration may include an API key; never attach exception messages here.
+            AppLogger.e("LocalHttpServer", "handleSetLlmSummaryConfig failed")
+            configJsonResponse(Response.Status.INTERNAL_ERROR) {
+                put("success", false)
+                put("message", "配置保存失败")
+            }
         }
     }
 
-    private fun handleGetTtsConfig(): Response {
+    private fun handleGetTtsConfig(pairing: ConfigPairingSession): Response {
         return try {
             val settingsRepository = container.settingsRepository
             val apiKeyStore = container.ttsApiKeyStore
@@ -788,33 +902,31 @@ class LocalHttpServer private constructor(
                 }
             }
 
-            newFixedLengthResponse(
-                Response.Status.OK,
-                "application/json",
-                JSONObject().apply {
-                    put("success", true)
-                    put("data", dataObj)
-                }.toString()
+            val plaintext = JSONObject().apply {
+                put("success", true)
+                put("data", dataObj)
+            }.toString()
+            encryptedConfigResponse(
+                pairing = pairing,
+                method = "GET",
+                uri = "/getTtsConfig",
+                plaintext = plaintext
             )
         } catch (e: Exception) {
             AppLogger.e("LocalHttpServer", "handleGetTtsConfig failed", e)
-            newFixedLengthResponse(
-                Response.Status.INTERNAL_ERROR,
-                "application/json",
-                JSONObject().apply {
-                    put("success", false)
-                    put("data", JSONObject.NULL)
-                }.toString()
-            )
+            configJsonResponse(Response.Status.INTERNAL_ERROR) {
+                put("success", false)
+                put("data", JSONObject.NULL)
+            }
         }
     }
 
-    private fun handleSetTtsConfig(session: IHTTPSession): Response {
+    private fun handleSetTtsConfig(
+        plaintext: String,
+        pairing: ConfigPairingSession
+    ): Response {
         return try {
-            val params = mutableMapOf<String, String>()
-            session.parseBody(params)
-            val postData = params["postData"] ?: ""
-            val json = JSONObject(postData)
+            val json = JSONObject(plaintext)
 
             val engine = json.optString("engine", "")
             val apiKey = json.optString("apiKey", "")
@@ -824,28 +936,23 @@ class LocalHttpServer private constructor(
             val baseUrl = json.optString("baseUrl", "")
 
             if (engine.isEmpty()) {
-                return newFixedLengthResponse(
-                    Response.Status.BAD_REQUEST,
-                    "application/json",
-                    JSONObject().apply {
-                        put("success", false)
-                        put("message", "engine 不能为空")
-                    }.toString()
-                )
+                return configJsonResponse(Response.Status.BAD_REQUEST) {
+                    put("success", false)
+                    put("message", "engine 不能为空")
+                }
             }
 
             val isBackendDefault = TtsProviderCatalog.isBackendDefault(engine)
             val needsApiKey = TtsProviderCatalog.needsApiKey(engine)
 
             if (needsApiKey && apiKey.isEmpty()) {
-                return newFixedLengthResponse(
-                    Response.Status.BAD_REQUEST,
-                    "application/json",
-                    JSONObject().apply {
-                        put("success", false)
-                        put("message", "apiKey 不能为空")
-                    }.toString()
-                )
+                return configJsonResponse(Response.Status.BAD_REQUEST) {
+                    put("success", false)
+                    put("message", "apiKey 不能为空")
+                }
+            }
+            if (!pairing.claimWrite()) {
+                return configAuthError(Response.Status.UNAUTHORIZED)
             }
 
             if (needsApiKey && apiKey.isNotEmpty()) {
@@ -865,26 +972,31 @@ class LocalHttpServer private constructor(
                     baseUrl = effectiveBaseUrl
                 )
             }
+            val response = configJsonResponse(Response.Status.OK) {
+                put("success", true)
+                put("message", "配置已保存")
+            }
             onTtsConfigSaved?.invoke()
+            response
+        } catch (_: Exception) {
+            // Decrypted configuration may include an API key; never attach exception messages here.
+            AppLogger.e("LocalHttpServer", "handleSetTtsConfig failed")
+            configJsonResponse(Response.Status.INTERNAL_ERROR) {
+                put("success", false)
+                put("message", "配置保存失败")
+            }
+        }
+    }
 
-            newFixedLengthResponse(
-                Response.Status.OK,
-                "application/json",
-                JSONObject().apply {
-                    put("success", true)
-                    put("message", "配置已保存")
-                }.toString()
-            )
-        } catch (e: Exception) {
-            AppLogger.e("LocalHttpServer", "handleSetTtsConfig failed", e)
-            newFixedLengthResponse(
-                Response.Status.INTERNAL_ERROR,
-                "application/json",
-                JSONObject().apply {
-                    put("success", false)
-                    put("message", e.message ?: "Unknown error")
-                }.toString()
-            )
+    private fun encryptedConfigResponse(
+        pairing: ConfigPairingSession,
+        method: String,
+        uri: String,
+        plaintext: String
+    ): Response {
+        val encrypted = pairing.encryptResponse(method, uri, plaintext)
+        return newFixedLengthResponse(Response.Status.OK, "application/json", encrypted).apply {
+            addHeader("Cache-Control", "no-store")
         }
     }
 
@@ -894,6 +1006,9 @@ class LocalHttpServer private constructor(
          * 启动后通过 [NanoHTTPD.listeningPort] 读取实际分配的端口，用于生成二维码。
          */
         private const val DEFAULT_PORT = 0
+        private const val MAX_CONFIG_BODY_BYTES = 64 * 1024
+        private const val BASE_ABILITY_VERSION = "0.0.1"
+        private const val CONFIG_PAIRING_ABILITY_VERSION = "0.0.2"
 
         /**
          * 创建"远程输入 RSS URL"专用服务器。
@@ -986,8 +1101,8 @@ class LocalHttpServer private constructor(
          * 创建"LLM 配置"专用服务器。
          *
          * 手表屏幕无法便捷输入 API Key 等长字符串，因此通过此服务器让手机端代劳：
-         * - GET  `/getLLMSummaryConfig`：手机端读取当前配置，API Key 以 `****xxxx` 形式脱敏返回。
-         * - POST `/setLLMSummaryConfig`：手机端将完整配置（含明文 API Key）写入手表，
+         * - GET  `/getLLMSummaryConfig`：认证后返回 AES-GCM 加密配置，解密后 API Key 仍脱敏。
+         * - POST `/setLLMSummaryConfig`：认证后解密完整配置，API Key 不以明文 HTTP 正文传输，
          *   Key 存储在 [com.lightningstudio.watchrss.data.settings.LlmApiKeyStore]，
          *   其余字段持久化到 DataStore。
          *
@@ -1010,8 +1125,8 @@ class LocalHttpServer private constructor(
          * 创建"TTS 配置"专用服务器。
          *
          * 与 LLM 配置服务器类似，手表端通过二维码让手机端代为输入音色、模型和 API Key：
-         * - GET  `/getTtsConfig`：手机端读取当前 TTS 配置，API Key 以 `****xxxx` 形式脱敏返回。
-         * - POST `/setTtsConfig`：手机端将完整配置（含明文 API Key）写入手表，
+         * - GET  `/getTtsConfig`：认证后返回 AES-GCM 加密配置，解密后 API Key 仍脱敏。
+         * - POST `/setTtsConfig`：认证后解密完整配置，API Key 不以明文 HTTP 正文传输，
          *   Key 存储在 [com.lightningstudio.watchrss.data.settings.TtsApiKeyStore]，
          *   其余字段持久化到 DataStore。
          */

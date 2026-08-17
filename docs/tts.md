@@ -110,7 +110,7 @@ Content-Type: application/json
 
 ## 5. 手机扫码配置
 
-手表屏幕输入长字符串体验差，因此提供二维码配置能力。手表端启动 `ServerActivity` 的 `TTS_CONFIG` 模式，手机端扫码后通过局域网 HTTP 读写配置。
+手表屏幕输入长字符串体验差，因此提供二维码配置能力。手表端启动 `ServerActivity` 的 `TTS_CONFIG` 模式，手机端扫码后通过局域网 HTTP 读写配置。配置内容不以明文 HTTP 正文传输，使用下述配对协议做请求认证和应用层加密。
 
 ### 5.1 能力标识
 
@@ -123,8 +123,21 @@ Content-Type: application/json
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/getTtsConfig` | 读取当前 TTS 配置，API Key 脱敏返回 |
-| POST | `/setTtsConfig` | 写入 TTS 配置（含明文 API Key） |
+| GET | `/getTtsConfig` | 认证后读取当前 TTS 配置，加密响应（解密后 API Key 仍脱敏） |
+| POST | `/setTtsConfig` | 认证后写入 AES-256-GCM 加密的 TTS 配置 |
+
+所有请求遵循 [`watchrss-config-pairing-v1`](config-pairing-protocol.md)：
+
+- 每次打开二维码页面生成新的 256-bit 配对密钥，并只放在二维码 URL fragment 的
+  `watchrss_pair` 中；fragment 不会随 HTTP URL 发给服务器或进入访问日志。
+- 每个请求生成新的 16-byte nonce，通过 `X-WatchRSS-Pairing-Nonce` 发送，并在
+  `X-WatchRSS-Pairing-Auth` 中发送绑定方法、路径、nonce 和正文摘要的 HMAC-SHA256。
+- 配置正文和读取响应是 `{ "protocol", "iv", "ciphertext" }` AES-256-GCM 信封，AAD 绑定
+  请求方法和路径；下列示例是解密后的业务 JSON。
+- nonce 不可重放。第一次有效写入被接受或离开二维码页面后，会话立即失效。
+
+剩余边界：底层仍是局域网 HTTP，旁路设备可观察 IP、端口、请求时序与密文长度；二维码密钥被
+旁人拍摄，或手机/手表端点已经被攻陷时，应用层加密无法提供保护。只应扫描手表现场显示的最新二维码。
 
 ### 5.3 数据格式
 
@@ -144,7 +157,7 @@ Content-Type: application/json
 }
 ```
 
-`/setTtsConfig` 请求示例：
+`/setTtsConfig` 解密后的请求示例：
 
 ```json
 {

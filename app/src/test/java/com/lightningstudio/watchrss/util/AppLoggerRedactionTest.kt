@@ -29,4 +29,16 @@ class AppLoggerRedactionTest {
         assertTrue(redacted.contains("SESSDATA=<redacted>"))
         assertTrue(redacted.contains("Bearer <redacted>"))
     }
+
+    @Test
+    fun redactsConfigPairingSecretAndProof() {
+        val raw = "url=#watchrss_pair=secret123 X-WatchRSS-Pairing-Auth: proof456"
+
+        val redacted = redactSensitiveLogContent(raw)
+
+        assertFalse(redacted.contains("secret123"))
+        assertFalse(redacted.contains("proof456"))
+        assertTrue(redacted.contains("watchrss_pair=<redacted>"))
+        assertTrue(redacted.contains("X-WatchRSS-Pairing-Auth:<redacted>"))
+    }
 }
