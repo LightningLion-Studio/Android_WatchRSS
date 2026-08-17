@@ -92,7 +92,6 @@ import android.text.TextPaint
 import androidx.core.content.res.ResourcesCompat
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.rss.RssChannel
-import com.lightningstudio.watchrss.data.rss.ImportedContentIds
 import com.lightningstudio.watchrss.data.rss.RssItem
 import com.lightningstudio.watchrss.data.rss.RssUrlResolver
 import com.lightningstudio.watchrss.ui.components.BlurFadeVisibility
@@ -928,51 +927,20 @@ private fun FeedCardTitle(
     title: String,
     isRead: Boolean,
     fontSize: TextUnit,
-    modifier: Modifier = Modifier,
-    showNewBadge: Boolean = false
+    modifier: Modifier = Modifier
 ) {
     val unreadIndicatorId = "feed_unread_indicator"
-    val newBadgeId = "feed_new_badge"
-    val showBadge = !isRead && showNewBadge
-    val text = remember(title, isRead, showBadge) {
+    val text = remember(title, isRead) {
         buildAnnotatedString {
-            if (showBadge) {
-                appendInlineContent(newBadgeId, "[new]")
-                append(' ')
-            } else if (!isRead) {
+            if (!isRead) {
                 appendInlineContent(unreadIndicatorId, "[unread]")
                 append(' ')
             }
             append(title)
         }
     }
-    val inlineContent = when {
-        showBadge -> mapOf(
-            newBadgeId to InlineTextContent(
-                placeholder = Placeholder(
-                    width = 1.5.em,
-                    height = 0.95.em,
-                    placeholderVerticalAlign = PlaceholderVerticalAlign.Center
-                )
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(RoundedCornerShape(50))
-                        .background(MaterialTheme.colorScheme.primary),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "新",
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        fontSize = fontSize * 0.62f,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1
-                    )
-                }
-            }
-        )
-        !isRead -> mapOf(
+    val inlineContent = if (!isRead) {
+        mapOf(
             unreadIndicatorId to InlineTextContent(
                 placeholder = Placeholder(
                     width = 0.5.em,
@@ -988,7 +956,8 @@ private fun FeedCardTitle(
                 )
             }
         )
-        else -> emptyMap()
+    } else {
+        emptyMap()
     }
 
     Text(
@@ -1001,7 +970,6 @@ private fun FeedCardTitle(
         modifier = modifier
             .semantics {
                 contentDescription = when {
-                    showBadge -> "新：$title"
                     isRead -> title
                     else -> "未读：$title"
                 }
@@ -1056,8 +1024,7 @@ private fun FeedTextCard(
             FeedCardTitle(
                 title = item.title,
                 isRead = item.isRead,
-                fontSize = titleSize,
-                showNewBadge = ImportedContentIds.isImportedContentUrl(item.link)
+                fontSize = titleSize
             )
             Text(
                 text = summary,
@@ -1143,8 +1110,7 @@ private fun FeedImageCard(
             FeedCardTitle(
                 title = item.title,
                 isRead = item.isRead,
-                fontSize = titleSize,
-                showNewBadge = ImportedContentIds.isImportedContentUrl(item.link)
+                fontSize = titleSize
             )
             Text(
                 text = summary,
