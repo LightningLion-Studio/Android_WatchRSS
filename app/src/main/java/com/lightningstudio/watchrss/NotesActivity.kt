@@ -188,6 +188,7 @@ class NoteDetailActivity : BaseWatchActivity() {
                     }
                     var editing by remember { mutableStateOf(createMode) }
                     var editorAnchorOffset by remember { mutableStateOf<Int?>(null) }
+                    val readerListState = rememberLazyListState()
 
                     LaunchedEffect(createMode, noteId) {
                         if (!createMode) {
@@ -247,7 +248,7 @@ class NoteDetailActivity : BaseWatchActivity() {
                                 WatchNoteReader(
                                     note = loadedNote,
                                     preparedBlocks = preparedBlocks,
-                                    listState = rememberLazyListState(),
+                                    listState = readerListState,
                                     onBack = ::finish,
                                     onEdit = { markdownOffset ->
                                         editorAnchorOffset = markdownOffset
