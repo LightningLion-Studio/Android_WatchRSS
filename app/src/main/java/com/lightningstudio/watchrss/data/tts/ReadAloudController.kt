@@ -789,7 +789,7 @@ class ReadAloudController(
         preferOriginalContent: Boolean?
     ): List<QueueEntry> {
         val items = rssRepository.observeItemsPaged(channel.id, QUEUE_LIMIT).first()
-        val initial = if (items.any { it.id == item.id }) items else listOf(item) + items
+        val initial = replaceCurrentQueueItemSnapshot(items, item)
         return initial
             .distinctBy { it.id }
             .map { queueItem ->
@@ -1228,6 +1228,17 @@ class ReadAloudController(
         private companion object {
             val SENTENCE_ENDINGS = setOf('。', '！', '？', '!', '?', ';', '；', '.', ':', '：')
         }
+    }
+}
+
+internal fun replaceCurrentQueueItemSnapshot(
+    queueItems: List<RssItem>,
+    currentItem: RssItem
+): List<RssItem> {
+    return if (queueItems.any { it.id == currentItem.id }) {
+        queueItems.map { item -> if (item.id == currentItem.id) currentItem else item }
+    } else {
+        listOf(currentItem) + queueItems
     }
 }
 
