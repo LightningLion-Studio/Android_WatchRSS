@@ -81,6 +81,9 @@ internal fun WatchNoteRichText(
     val preset = LocalReaderPresetRuntime.current.preset
     val codeBackground = Color(preset.codeBackgroundColorArgb)
     val blocks = remember(markup) { parseWatchNotePreviewBlocks(markup) }
+    val blockSourceOffsets = remember(markup, blocks) {
+        watchNoteBlockSourceOffsets(markup, blocks)
+    }
     val context = LocalContext.current
     val imageLoader = remember(context) { WatchNoteImageLoader(context.filesDir) }
 
@@ -107,6 +110,7 @@ internal fun WatchNoteRichText(
                         linkColor = linkStyle.color,
                         imageLoader = imageLoader,
                         layoutKey = "rich-$index",
+                        sourceStartOffset = blockSourceOffsets[index],
                         onTextBlockLayout = onTextBlockLayout,
                         onTextBlockDisposed = {},
                         modifier = Modifier
@@ -167,6 +171,9 @@ internal fun WatchNoteRichTextLazyColumn(
     val codeBackground = Color(preset.codeBackgroundColorArgb)
     val context = LocalContext.current
     val imageLoader = remember(context) { WatchNoteImageLoader(context.filesDir) }
+    val blockSourceOffsets = remember(markup, blocks) {
+        watchNoteBlockSourceOffsets(markup, blocks)
+    }
 
     LazyColumn(
         state = listState,
@@ -220,6 +227,7 @@ internal fun WatchNoteRichTextLazyColumn(
                         linkColor = linkStyle.color,
                         imageLoader = imageLoader,
                         layoutKey = "rich-$index",
+                        sourceStartOffset = blockSourceOffsets[index],
                         onTextBlockLayout = onTextBlockLayout,
                         onTextBlockDisposed = onTextBlockDisposed,
                         modifier = Modifier
@@ -264,6 +272,7 @@ private fun WatchNoteRichTextBlock(
     linkColor: Color,
     imageLoader: ImageLoader,
     layoutKey: String,
+    sourceStartOffset: Int?,
     onTextBlockLayout: (WatchNoteRenderedTextLayout) -> Unit,
     onTextBlockDisposed: (String) -> Unit,
     modifier: Modifier = Modifier
@@ -292,6 +301,8 @@ private fun WatchNoteRichTextBlock(
                     WatchNoteRenderedTextLayout(
                         layoutKey,
                         renderedText,
+                        markup,
+                        sourceStartOffset,
                         layout,
                         position.x,
                         position.y
@@ -448,6 +459,8 @@ private fun WatchNoteTable(
                                         WatchNoteRenderedTextLayout(
                                             layoutKey,
                                             renderedText.text,
+                                            cell,
+                                            null,
                                             layout,
                                             position.x,
                                             position.y
@@ -515,6 +528,8 @@ private val WATCH_NOTE_INLINE_CODE_REGEX = Regex("`([^`\\n]+)`")
 internal data class WatchNoteRenderedTextLayout(
     val key: String,
     val renderedText: String,
+    val sourceMarkup: String,
+    val sourceStartOffset: Int?,
     val layout: TextLayoutResult,
     val leftInRoot: Float,
     val topInRoot: Float
@@ -568,6 +583,20 @@ internal fun parseWatchNotePreviewBlocks(markup: String): List<WatchNotePreviewB
 
 internal fun prepareWatchNotePreviewBlocks(markup: String): List<WatchNotePreviewBlock> =
     chunkWatchNotePreviewBlocks(parseWatchNotePreviewBlocks(markup))
+
+internal fun watchNoteBlockSourceOffsets(
+    markup: String,
+    blocks: List<WatchNotePreviewBlock>
+): List<Int?> {
+    var searchFrom = 0
+    return blocks.map { block ->
+        val source = (block as? WatchNotePreviewBlock.RichText)?.markup
+            ?: return@map null
+        val offset = markup.indexOf(source, startIndex = searchFrom).takeIf { it >= 0 }
+        if (offset != null) searchFrom = offset + source.length
+        offset
+    }
+}
 
 internal fun chunkWatchNotePreviewBlocks(
     blocks: List<WatchNotePreviewBlock>,

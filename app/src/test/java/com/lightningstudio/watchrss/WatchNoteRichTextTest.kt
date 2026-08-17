@@ -219,4 +219,19 @@ class WatchNoteRichTextTest {
 
         assertEquals(markdown.indexOf("刚才"), markdownOffset)
     }
+
+    @Test
+    fun blockSourceOffsets_keepRepeatedChunksAtTheirActualOccurrence() {
+        val markup = "重复内容\n\n中间内容\n\n重复内容"
+        val blocks = listOf(
+            WatchNotePreviewBlock.RichText("重复内容"),
+            WatchNotePreviewBlock.RichText("中间内容"),
+            WatchNotePreviewBlock.RichText("重复内容")
+        )
+
+        assertEquals(
+            listOf(0, markup.indexOf("中间内容"), markup.lastIndexOf("重复内容")),
+            watchNoteBlockSourceOffsets(markup, blocks)
+        )
+    }
 }

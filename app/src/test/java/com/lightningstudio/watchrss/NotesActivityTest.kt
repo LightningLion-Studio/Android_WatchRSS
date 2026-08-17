@@ -115,6 +115,38 @@ class NotesActivityTest {
     }
 
     @Test
+    fun activatedCursor_rejectsSelectionOnlyResetFromInputMethod() {
+        val current = TextFieldValue("第一行\n第二行", selection = TextRange(7))
+        val reset = current.copy(selection = TextRange.Zero)
+
+        assertEquals(
+            TextRange(7),
+            preserveActivatedNoteSelection(
+                current = current,
+                incoming = reset,
+                preservedSelection = TextRange(7),
+                focused = true
+            ).selection
+        )
+    }
+
+    @Test
+    fun activatedCursor_acceptsRealTextChangeAndUserSelection() {
+        val current = TextFieldValue("正文内容", selection = TextRange(3))
+        val typed = TextFieldValue("正文新内容", selection = TextRange(3))
+        val selectedStart = current.copy(selection = TextRange.Zero)
+
+        assertEquals(
+            typed,
+            preserveActivatedNoteSelection(current, typed, TextRange(3), focused = true)
+        )
+        assertEquals(
+            selectedStart,
+            preserveActivatedNoteSelection(current, selectedStart, null, focused = true)
+        )
+    }
+
+    @Test
     fun initialCursor_roughlyTracksPreservedScrollPosition() {
         assertEquals(0, estimateNoteCursorForScroll(100, 0, 400))
         assertEquals(50, estimateNoteCursorForScroll(100, 200, 400))

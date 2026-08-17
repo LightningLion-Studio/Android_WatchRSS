@@ -11,7 +11,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.ScrollState
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.layout.Arrangement
@@ -74,8 +75,11 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.input.TextFieldValue
@@ -85,6 +89,8 @@ import androidx.compose.ui.unit.Density
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.lightningstudio.watchrss.data.note.RawTextUndoManager
 import com.lightningstudio.watchrss.data.note.WatchNoteEntity
 import com.lightningstudio.watchrss.data.note.watchPlainText
@@ -516,11 +522,19 @@ private fun WatchNoteReader(
                     .coerceIn(0f, block.layout.size.height.toFloat())
             )
         )
-        return mapNoteTextAnchorOffset(
+        val localOffset = mapNoteTextAnchorOffset(
             sourceText = block.renderedText,
-            targetText = note.markdown,
+            targetText = block.sourceMarkup,
             sourceOffset = renderedOffset
         )
+        return block.sourceStartOffset
+            ?.plus(localOffset)
+            ?.coerceIn(0, note.markdown.length)
+            ?: mapNoteTextAnchorOffset(
+                sourceText = block.renderedText,
+                targetText = note.markdown,
+                sourceOffset = renderedOffset
+            )
     }
 
     BackHandler(onBack = onBack)
@@ -547,6 +561,8 @@ private fun WatchNoteReader(
                 onTextBlockLayout = { block ->
                     textBlocks[block.key] = NoteReaderAnchorBlock(
                         renderedText = block.renderedText,
+                        sourceMarkup = block.sourceMarkup,
+                        sourceStartOffset = block.sourceStartOffset,
                         layout = block.layout,
                         leftInRoot = block.leftInRoot,
                         topInRoot = block.topInRoot
@@ -669,10 +685,42 @@ private fun WatchNoteRawEditor(
     }
     var selectionToRestoreOnFocus by remember(note?.noteId) { mutableStateOf<TextRange?>(null) }
     val editorFocusRequester = remember(note?.noteId) { FocusRequester() }
+    val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    val editorView = LocalView.current
+    var inputMethodVisible by remember(editorView) { mutableStateOf(false) }
+    var inputMethodWasVisible by remember(note?.noteId) { mutableStateOf(false) }
+    val latestEditorValueForGesture by rememberUpdatedState(editorValue)
+    val latestTextLayoutForGesture by rememberUpdatedState(textLayoutResult)
+
+    DisposableEffect(editorView) {
+        val listener = android.view.ViewTreeObserver.OnGlobalLayoutListener {
+            inputMethodVisible = ViewCompat.getRootWindowInsets(editorView)
+                ?.isVisible(WindowInsetsCompat.Type.ime()) == true
+        }
+        editorView.viewTreeObserver.addOnGlobalLayoutListener(listener)
+        onDispose {
+            if (editorView.viewTreeObserver.isAlive) {
+                editorView.viewTreeObserver.removeOnGlobalLayoutListener(listener)
+            }
+        }
+    }
+
+    LaunchedEffect(textFieldFocused, inputMethodVisible) {
+        when {
+            !textFieldFocused -> inputMethodWasVisible = false
+            inputMethodVisible -> inputMethodWasVisible = true
+            inputMethodWasVisible -> {
+                selectionToRestoreOnFocus = null
+                inputMethodWasVisible = false
+                focusManager.clearFocus(force = true)
+            }
+        }
+    }
 
     InstallDigitalCrownHandler(supportsDigitalCrown = true) { delta ->
         if (delta == 0f) return@InstallDigitalCrownHandler false
+        selectionToRestoreOnFocus = null
         val steps = crownAccelerator.consume(-delta, SystemClock.uptimeMillis())
         if (steps == 0) return@InstallDigitalCrownHandler true
         val direction = if (steps > 0) 1 else -1
@@ -757,13 +805,17 @@ private fun WatchNoteRawEditor(
     LaunchedEffect(textFieldFocused, selectionToRestoreOnFocus) {
         val preservedSelection = selectionToRestoreOnFocus
         if (textFieldFocused && preservedSelection != null) {
-            if (editorValue.selection != preservedSelection) {
+            keyboardController?.show()
+            if (latestEditorValueForGesture.selection != preservedSelection) {
                 editorValue = history.record(
-                    editorValue.copy(selection = preservedSelection, composition = null),
+                    latestEditorValueForGesture.copy(
+                        selection = preservedSelection,
+                        composition = null
+                    ),
                     SystemClock.uptimeMillis()
                 )
             }
-            keyboardController?.show()
+        } else if (!textFieldFocused) {
             selectionToRestoreOnFocus = null
         }
     }
@@ -834,14 +886,24 @@ private fun WatchNoteRawEditor(
             Box(modifier = Modifier.fillMaxWidth()) {
                 BasicTextField(
                     value = editorValue,
-                    onValueChange = {
-                        editorValue = history.record(it, SystemClock.uptimeMillis())
-                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = minimumBodyHeight)
                         .focusRequester(editorFocusRequester)
-                        .onFocusChanged { textFieldFocused = it.isFocused }
+                        .pointerInput(textFieldFocused, note?.noteId) {
+                            if (!textFieldFocused) return@pointerInput
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                                    if (event.changes.any { it.pressed && !it.previousPressed }) {
+                                        selectionToRestoreOnFocus = null
+                                    }
+                                }
+                            }
+                        }
+                        .onFocusChanged {
+                            textFieldFocused = it.isFocused
+                        }
                         .onGloballyPositioned { coordinates ->
                             editorBodyTopInDocument =
                                 coordinates.positionInRoot().y + scrollState.value
@@ -871,6 +933,24 @@ private fun WatchNoteRawEditor(
                         },
                     textStyle = bodyTextStyle,
                     cursorBrush = SolidColor(cursorColor),
+                    onValueChange = { incoming ->
+                        val current = editorValue
+                        val preservedSelection = selectionToRestoreOnFocus
+                        val corrected = preserveActivatedNoteSelection(
+                            current = current,
+                            incoming = incoming,
+                            preservedSelection = preservedSelection,
+                            focused = textFieldFocused
+                        )
+                        if (
+                            corrected.selection == incoming.selection &&
+                            preservedSelection != null &&
+                            (incoming.text != current.text || incoming.selection != preservedSelection)
+                        ) {
+                            selectionToRestoreOnFocus = null
+                        }
+                        editorValue = history.record(corrected, SystemClock.uptimeMillis())
+                    },
                     onTextLayout = { textLayoutResult = it },
                     decorationBox = { innerTextField ->
                         if (editorValue.text.isEmpty()) {
@@ -887,10 +967,60 @@ private fun WatchNoteRawEditor(
                     Box(
                         modifier = Modifier
                             .matchParentSize()
-                            .pointerInput(editorFocusRequester) {
-                                detectTapGestures {
-                                    selectionToRestoreOnFocus = editorValue.selection
-                                    editorFocusRequester.requestFocus()
+                            .pointerInput(note?.noteId) {
+                                val stepPx = NOTE_CURSOR_SWIPE_STEP.toPx()
+                                awaitEachGesture {
+                                    val down = awaitFirstDown(requireUnconsumed = false)
+                                    var previousY = down.position.y
+                                    var totalDragY = 0f
+                                    var accumulatedDrag = 0f
+                                    var dragging = false
+                                    var gestureValue = latestEditorValueForGesture
+                                    while (true) {
+                                        val event = awaitPointerEvent()
+                                        val change = event.changes.firstOrNull { it.id == down.id }
+                                            ?: break
+                                        if (!change.pressed) {
+                                            if (!dragging) {
+                                                val activationSelection =
+                                                    latestEditorValueForGesture.selection
+                                                selectionToRestoreOnFocus = activationSelection
+                                                editorFocusRequester.requestFocus()
+                                            }
+                                            break
+                                        }
+                                        val dragAmount = change.position.y - previousY
+                                        previousY = change.position.y
+                                        totalDragY += dragAmount
+                                        if (!dragging && kotlin.math.abs(totalDragY) > viewConfiguration.touchSlop) {
+                                            dragging = true
+                                        }
+                                        if (dragging) {
+                                            change.consume()
+                                            accumulatedDrag -= dragAmount
+                                            val steps = (accumulatedDrag / stepPx).toInt()
+                                            if (steps != 0) {
+                                                accumulatedDrag -= steps * stepPx
+                                                val direction = if (steps > 0) 1 else -1
+                                                var next = gestureValue
+                                                val layout = latestTextLayoutForGesture
+                                                repeat(kotlin.math.abs(steps)) {
+                                                    next = if (layout == null) {
+                                                        moveNoteCursor(next, direction)
+                                                    } else {
+                                                        moveNoteCursorByVisualLine(next, layout, direction)
+                                                    }
+                                                }
+                                                if (next.selection != latestEditorValueForGesture.selection) {
+                                                    gestureValue = next
+                                                    editorValue = history.record(
+                                                        next,
+                                                        SystemClock.uptimeMillis()
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                     )
@@ -996,6 +1126,8 @@ private fun NoteEditorBottomOverlay(
 
 private data class NoteReaderAnchorBlock(
     val renderedText: String,
+    val sourceMarkup: String,
+    val sourceStartOffset: Int?,
     val layout: TextLayoutResult,
     val leftInRoot: Float,
     val topInRoot: Float
@@ -1121,6 +1253,46 @@ internal fun moveNoteCursor(value: TextFieldValue, direction: Int): TextFieldVal
     return value.copy(selection = TextRange(target), composition = null)
 }
 
+internal fun preserveActivatedNoteSelection(
+    current: TextFieldValue,
+    incoming: TextFieldValue,
+    preservedSelection: TextRange?,
+    focused: Boolean
+): TextFieldValue {
+    val inputMethodResetSelection =
+        focused &&
+            preservedSelection != null &&
+            incoming.text == current.text &&
+            incoming.selection != preservedSelection
+    return if (inputMethodResetSelection) {
+        incoming.copy(selection = preservedSelection, composition = null)
+    } else {
+        incoming
+    }
+}
+
+internal fun moveNoteCursorByVisualLine(
+    value: TextFieldValue,
+    layout: TextLayoutResult,
+    direction: Int
+): TextFieldValue {
+    if (direction == 0 || value.text.isEmpty() || layout.lineCount <= 0) {
+        return value.copy(composition = null)
+    }
+    val anchor = (if (direction > 0) value.selection.max else value.selection.min)
+        .coerceIn(0, value.text.length)
+    val currentLine = layout.getLineForOffset(anchor)
+    val targetLine = (currentLine + direction).coerceIn(0, layout.lineCount - 1)
+    if (targetLine == currentLine) {
+        return value.copy(selection = TextRange(anchor), composition = null)
+    }
+    val horizontal = layout.getHorizontalPosition(anchor, usePrimaryDirection = true)
+    val targetY = (layout.getLineTop(targetLine) + layout.getLineBottom(targetLine)) / 2f
+    val target = layout.getOffsetForPosition(Offset(horizontal, targetY))
+        .coerceIn(0, value.text.length)
+    return value.copy(selection = TextRange(target), composition = null)
+}
+
 @androidx.compose.runtime.Composable
 private fun notesEditorSafeInset(): androidx.compose.ui.unit.Dp {
     val configuration = LocalConfiguration.current
@@ -1162,6 +1334,7 @@ private const val NEW_NOTE_DOCUMENT_KEY = "__new_note__"
 private val NOTE_TOOL_OVERLAY_HEIGHT = 56.dp
 private val NOTE_DOCUMENT_BOTTOM_PADDING = 64.dp
 private val NOTE_CURSOR_VISIBLE_MARGIN = 8.dp
+private val NOTE_CURSOR_SWIPE_STEP = 24.dp
 
 private enum class DraftSaveState(val label: String) {
     EMPTY("输入后自动保存"),
