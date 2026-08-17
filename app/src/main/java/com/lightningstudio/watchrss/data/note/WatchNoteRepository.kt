@@ -25,16 +25,21 @@ class WatchNoteRepository(private val dao: WatchNoteDao) {
         noteId: String?,
         rawMarkdown: String,
         deviceId: String,
+        rawTitle: String? = null,
         now: Long = System.currentTimeMillis()
     ): WatchNoteEntity {
         val markdown = rawMarkdown.replace("\r\n", "\n").replace('\r', '\n')
         val old = noteId?.let { dao.get(it) ?: error("笔记不存在") }
-        require(old != null || markdown.isNotBlank()) { "新建备忘录不能为空" }
+        require(old != null || markdown.isNotBlank() || !rawTitle.isNullOrBlank()) {
+            "新建备忘录不能为空"
+        }
         val hash = watchNoteHash(markdown)
         return WatchNoteEntity(
             noteId = old?.noteId ?: UUID.randomUUID().toString(),
             folderId = old?.folderId,
-            title = old?.title?.takeIf(String::isNotBlank) ?: watchNoteTitle(markdown),
+            title = rawTitle
+                ?: old?.title?.takeIf(String::isNotBlank)
+                ?: watchNoteTitle(markdown),
             markdown = markdown,
             plainText = watchPlainText(markdown),
             contentHash = hash,

@@ -147,6 +147,16 @@ class NotesActivityTest {
     }
 
     @Test
+    fun titleInput_replacesLineBreaksAndKeepsSelectionInBounds() {
+        val input = TextFieldValue("第一行\n第二行", selection = TextRange(7))
+
+        assertEquals(
+            TextFieldValue("第一行 第二行", selection = TextRange(7)),
+            normalizeWatchNoteTitleInput(input)
+        )
+    }
+
+    @Test
     fun initialCursor_roughlyTracksPreservedScrollPosition() {
         assertEquals(0, estimateNoteCursorForScroll(100, 0, 400))
         assertEquals(50, estimateNoteCursorForScroll(100, 200, 400))

@@ -54,6 +54,33 @@ class WatchNoteRepositoryTest {
     }
 
     @Test
+    fun saveRawMarkdown_persistsExplicitTitleSeparatelyFromBody() = runTest {
+        val dao = FakeWatchNoteDao()
+        val repository = WatchNoteRepository(dao)
+
+        val created = repository.saveRawMarkdown(
+            noteId = null,
+            rawMarkdown = "",
+            rawTitle = "独立标题",
+            deviceId = "watch",
+            now = 100L
+        )
+        val renamed = repository.saveRawMarkdown(
+            noteId = created.noteId,
+            rawMarkdown = created.markdown,
+            rawTitle = "修改后的标题",
+            deviceId = "watch",
+            now = 200L
+        )
+
+        assertEquals("独立标题", created.title)
+        assertEquals("", created.markdown)
+        assertEquals("修改后的标题", renamed.title)
+        assertEquals(created.contentHash, renamed.contentHash)
+        assertEquals(200L, renamed.updatedAt)
+    }
+
+    @Test
     fun saveRawMarkdown_allowsClearingAnExistingNote() = runTest {
         val original = note(
             markdown = "正文",

@@ -15,6 +15,8 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -83,6 +85,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Density
@@ -216,11 +219,12 @@ class NoteDetailActivity : BaseWatchActivity() {
                                         ScrollState(0)
                                     },
                                     initialAnchorOffset = editorAnchorOffset,
-                                    saveDraft = { persistedNoteId, markdown ->
+                                    saveDraft = { persistedNoteId, title, markdown ->
                                         repository.saveRawMarkdown(
                                             persistedNoteId,
                                             markdown,
-                                            deviceId
+                                            deviceId,
+                                            rawTitle = title
                                         ).also { saved ->
                                             note = saved
                                             preparedBlocks = withContext(Dispatchers.Default) {
@@ -592,6 +596,7 @@ private fun NoteDocumentContent(
     title: String,
     metadata: String?,
     scrollState: ScrollState,
+    titleContent: (@androidx.compose.runtime.Composable () -> Unit)? = null,
     body: @androidx.compose.runtime.Composable () -> Unit
 ) {
     val horizontalPadding = ReaderPageLayout.horizontalPadding
@@ -607,11 +612,15 @@ private fun NoteDocumentContent(
             .padding(top = verticalPadding, bottom = NOTE_DOCUMENT_BOTTOM_PADDING),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        DetailTitle(
-            title = title,
-            titlePadding = titlePadding,
-            textColor = titleTextColor
-        )
+        if (titleContent == null) {
+            DetailTitle(
+                title = title,
+                titlePadding = titlePadding,
+                textColor = titleTextColor
+            )
+        } else {
+            titleContent()
+        }
         if (metadata != null) {
             Text(
                 text = metadata,
@@ -649,7 +658,7 @@ private fun WatchNoteRawEditor(
     safeInset: androidx.compose.ui.unit.Dp,
     scrollState: ScrollState,
     initialAnchorOffset: Int?,
-    saveDraft: suspend (noteId: String?, markdown: String) -> WatchNoteEntity,
+    saveDraft: suspend (noteId: String?, title: String, markdown: String) -> WatchNoteEntity,
     onClose: (markdown: String, markdownOffset: Int?) -> Unit
 ) {
     val initialValue = remember(note?.noteId, initialAnchorOffset) {
@@ -668,8 +677,13 @@ private fun WatchNoteRawEditor(
     }
     val history = remember(note?.noteId) { RawTextUndoManager(initialValue) }
     var editorValue by remember(note?.noteId) { mutableStateOf(initialValue) }
+    var titleValue by remember(note?.noteId) {
+        val title = note?.title.orEmpty()
+        mutableStateOf(TextFieldValue(title, selection = TextRange(title.length)))
+    }
     var persistedNoteId by remember(note?.noteId) { mutableStateOf(note?.noteId) }
     var lastSavedText by remember(note?.noteId) { mutableStateOf(note?.markdown.orEmpty()) }
+    var lastSavedTitle by remember(note?.noteId) { mutableStateOf(note?.title.orEmpty()) }
     var saveState by remember(note?.noteId) {
         mutableStateOf(if (note == null) DraftSaveState.EMPTY else DraftSaveState.SAVED)
     }
@@ -679,15 +693,22 @@ private fun WatchNoteRawEditor(
     val crownAccelerator = remember(note?.noteId) { NoteCursorCrownAccelerator() }
     var textLayoutResult by remember(note?.noteId) { mutableStateOf<TextLayoutResult?>(null) }
     var textFieldFocused by remember(note?.noteId) { mutableStateOf(false) }
+    var titleFieldFocused by remember(note?.noteId) { mutableStateOf(false) }
     var editorBodyTopInDocument by remember(note?.noteId) { mutableStateOf<Float?>(null) }
     var centerInitialAnchor by remember(note?.noteId, initialAnchorOffset) {
         mutableStateOf(initialAnchorOffset != null)
     }
     var selectionToRestoreOnFocus by remember(note?.noteId) { mutableStateOf<TextRange?>(null) }
+    var titleSelectionToRestoreOnFocus by remember(note?.noteId) {
+        mutableStateOf<TextRange?>(null)
+    }
     val editorFocusRequester = remember(note?.noteId) { FocusRequester() }
+    val titleFocusRequester = remember(note?.noteId) { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val editorView = LocalView.current
+    val density = LocalDensity.current
+    val cursorBoundaryScrollStepPx = with(density) { NOTE_CURSOR_SWIPE_STEP.toPx() }
     var inputMethodVisible by remember(editorView) { mutableStateOf(false) }
     var inputMethodWasVisible by remember(note?.noteId) { mutableStateOf(false) }
     val latestEditorValueForGesture by rememberUpdatedState(editorValue)
@@ -706,12 +727,14 @@ private fun WatchNoteRawEditor(
         }
     }
 
-    LaunchedEffect(textFieldFocused, inputMethodVisible) {
+    val anyEditorFieldFocused = textFieldFocused || titleFieldFocused
+    LaunchedEffect(anyEditorFieldFocused, inputMethodVisible) {
         when {
-            !textFieldFocused -> inputMethodWasVisible = false
+            !anyEditorFieldFocused -> inputMethodWasVisible = false
             inputMethodVisible -> inputMethodWasVisible = true
             inputMethodWasVisible -> {
                 selectionToRestoreOnFocus = null
+                titleSelectionToRestoreOnFocus = null
                 inputMethodWasVisible = false
                 focusManager.clearFocus(force = true)
             }
@@ -720,35 +743,53 @@ private fun WatchNoteRawEditor(
 
     InstallDigitalCrownHandler(supportsDigitalCrown = true) { delta ->
         if (delta == 0f) return@InstallDigitalCrownHandler false
+        if (titleFieldFocused) {
+            val direction = if (delta < 0f) 1 else -1
+            titleValue = moveNoteCursor(titleValue, direction)
+            return@InstallDigitalCrownHandler true
+        }
         selectionToRestoreOnFocus = null
         val steps = crownAccelerator.consume(-delta, SystemClock.uptimeMillis())
         if (steps == 0) return@InstallDigitalCrownHandler true
         val direction = if (steps > 0) 1 else -1
         var next = editorValue
+        var boundarySteps = 0
         repeat(kotlin.math.abs(steps)) {
-            next = moveNoteCursor(next, direction)
+            val moved = moveNoteCursor(next, direction)
+            if (direction < 0 && moved.selection == next.selection) {
+                boundarySteps++
+            } else {
+                next = moved
+            }
         }
         if (next.selection != editorValue.selection) {
             editorValue = history.record(next, SystemClock.uptimeMillis())
         }
+        if (boundarySteps > 0) {
+            scrollState.dispatchRawDelta(-boundarySteps * cursorBoundaryScrollStepPx)
+        }
         true
     }
 
-    suspend fun persist(markdown: String): Boolean = saveMutex.withLock {
-        if (markdown == lastSavedText) {
+    suspend fun persist(title: String, markdown: String): Boolean = saveMutex.withLock {
+        if (title == lastSavedTitle && markdown == lastSavedText) {
             saveState = if (persistedNoteId == null) DraftSaveState.EMPTY else DraftSaveState.SAVED
             return@withLock true
         }
-        if (persistedNoteId == null && markdown.isBlank()) {
+        if (persistedNoteId == null && title.isBlank() && markdown.isBlank()) {
             saveState = DraftSaveState.EMPTY
             return@withLock true
         }
         saveState = DraftSaveState.SAVING
         try {
-            val saved = saveDraft(persistedNoteId, markdown)
+            val saved = saveDraft(persistedNoteId, title, markdown)
             persistedNoteId = saved.noteId
+            lastSavedTitle = saved.title
             lastSavedText = saved.markdown
-            saveState = if (editorValue.text == saved.markdown) {
+            saveState = if (
+                titleValue.text == saved.title &&
+                editorValue.text == saved.markdown
+            ) {
                 DraftSaveState.SAVED
             } else {
                 DraftSaveState.PENDING
@@ -766,7 +807,7 @@ private fun WatchNoteRawEditor(
         if (closing) return
         closing = true
         scope.launch {
-            if (persist(editorValue.text)) {
+            if (persist(titleValue.text, editorValue.text)) {
                 onClose(editorValue.text, editorValue.selection.end)
             } else {
                 closing = false
@@ -774,27 +815,31 @@ private fun WatchNoteRawEditor(
         }
     }
 
-    LaunchedEffect(editorValue.text) {
+    LaunchedEffect(titleValue.text, editorValue.text) {
+        val pendingTitle = titleValue.text
         val pendingText = editorValue.text
         when {
-            pendingText == lastSavedText -> {
+            pendingTitle == lastSavedTitle && pendingText == lastSavedText -> {
                 saveState = if (persistedNoteId == null) DraftSaveState.EMPTY else DraftSaveState.SAVED
             }
-            persistedNoteId == null && pendingText.isBlank() -> saveState = DraftSaveState.EMPTY
+            persistedNoteId == null && pendingTitle.isBlank() && pendingText.isBlank() -> {
+                saveState = DraftSaveState.EMPTY
+            }
             else -> {
                 saveState = DraftSaveState.PENDING
                 delay(AUTO_SAVE_DELAY_MILLIS)
-                persist(pendingText)
+                persist(pendingTitle, pendingText)
             }
         }
     }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     val latestEditorValue by rememberUpdatedState(editorValue)
+    val latestTitleValue by rememberUpdatedState(titleValue)
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_STOP) {
-                scope.launch { persist(latestEditorValue.text) }
+                scope.launch { persist(latestTitleValue.text, latestEditorValue.text) }
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -819,14 +864,30 @@ private fun WatchNoteRawEditor(
             selectionToRestoreOnFocus = null
         }
     }
+    LaunchedEffect(titleFieldFocused, titleSelectionToRestoreOnFocus) {
+        val preservedSelection = titleSelectionToRestoreOnFocus
+        if (titleFieldFocused && preservedSelection != null) {
+            keyboardController?.show()
+            if (titleValue.selection != preservedSelection) {
+                titleValue = titleValue.copy(
+                    selection = preservedSelection,
+                    composition = null
+                )
+            }
+        } else if (!titleFieldFocused) {
+            titleSelectionToRestoreOnFocus = null
+        }
+    }
     val bodyTextStyle = MaterialTheme.typography.bodyLarge.copy(
         color = MaterialTheme.colorScheme.onSurface,
         textAlign = TextAlign.Start,
         lineHeight = MaterialTheme.typography.bodyLarge.lineHeight * 1.2f
     )
+    val titleTextStyle = readerTextStyle(ReaderTextRole.TITLE).copy(
+        textAlign = TextAlign.Center
+    )
     val cursorColor = MaterialTheme.colorScheme.primary
     val configuration = LocalConfiguration.current
-    val density = LocalDensity.current
     val minimumBodyHeight = configuration.screenHeightDp.dp * 0.58f
     val screenCenterY = with(density) { configuration.screenHeightDp.dp.toPx() / 2f }
     val cursorVisibleTopPx = with(density) {
@@ -879,9 +940,95 @@ private fun WatchNoteRawEditor(
     val rubberBandOffset = LocalRubberBandOverscrollOffset.current
     Box(modifier = Modifier.fillMaxSize()) {
         NoteDocumentContent(
-            title = note?.title?.ifBlank { "未命名笔记" } ?: "新建备忘录",
+            title = titleValue.text.ifBlank {
+                if (note == null) "新建备忘录" else "未命名笔记"
+            },
             metadata = note?.let(::noteMetadata),
-            scrollState = scrollState
+            scrollState = scrollState,
+            titleContent = {
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    BasicTextField(
+                        value = titleValue,
+                        onValueChange = { incoming ->
+                            val normalized = normalizeWatchNoteTitleInput(incoming)
+                            val preservedSelection = titleSelectionToRestoreOnFocus
+                            val corrected = preserveActivatedNoteSelection(
+                                current = titleValue,
+                                incoming = normalized,
+                                preservedSelection = preservedSelection,
+                                focused = titleFieldFocused
+                            )
+                            if (
+                                corrected.selection == normalized.selection &&
+                                preservedSelection != null &&
+                                (
+                                    normalized.text != titleValue.text ||
+                                        normalized.selection != preservedSelection
+                                )
+                            ) {
+                                titleSelectionToRestoreOnFocus = null
+                            }
+                            titleValue = corrected
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = ReaderPageLayout.titleHorizontalPadding)
+                            .focusRequester(titleFocusRequester)
+                            .pointerInput(titleFieldFocused, note?.noteId) {
+                                awaitPointerEventScope {
+                                    while (true) {
+                                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                                        if (event.changes.any { it.pressed && !it.previousPressed }) {
+                                            titleSelectionToRestoreOnFocus = null
+                                        }
+                                    }
+                                }
+                            }
+                            .onFocusChanged { titleFieldFocused = it.isFocused },
+                        singleLine = true,
+                        textStyle = titleTextStyle,
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(
+                            onDone = {
+                                keyboardController?.hide()
+                                focusManager.clearFocus(force = true)
+                            }
+                        ),
+                        decorationBox = { innerTextField ->
+                            Box(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (titleValue.text.isEmpty()) {
+                                    Text(
+                                        text = if (note == null) {
+                                            "新建备忘录"
+                                        } else {
+                                            "未命名笔记"
+                                        },
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        style = titleTextStyle
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        }
+                    )
+                    if (!titleFieldFocused) {
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .clickable {
+                            val endSelection = TextRange(titleValue.text.length)
+                            titleValue = titleValue.copy(selection = endSelection)
+                            titleSelectionToRestoreOnFocus = endSelection
+                            titleFocusRequester.requestFocus()
+                                }
+                        )
+                    }
+                }
+            }
         ) {
             Box(modifier = Modifier.fillMaxWidth()) {
                 BasicTextField(
@@ -1003,12 +1150,21 @@ private fun WatchNoteRawEditor(
                                                 accumulatedDrag -= steps * stepPx
                                                 val direction = if (steps > 0) 1 else -1
                                                 var next = gestureValue
+                                                var boundarySteps = 0
                                                 val layout = latestTextLayoutForGesture
                                                 repeat(kotlin.math.abs(steps)) {
-                                                    next = if (layout == null) {
+                                                    val moved = if (layout == null) {
                                                         moveNoteCursor(next, direction)
                                                     } else {
                                                         moveNoteCursorByVisualLine(next, layout, direction)
+                                                    }
+                                                    if (
+                                                        direction < 0 &&
+                                                        moved.selection == next.selection
+                                                    ) {
+                                                        boundarySteps++
+                                                    } else {
+                                                        next = moved
                                                     }
                                                 }
                                                 if (next.selection != latestEditorValueForGesture.selection) {
@@ -1016,6 +1172,11 @@ private fun WatchNoteRawEditor(
                                                     editorValue = history.record(
                                                         next,
                                                         SystemClock.uptimeMillis()
+                                                    )
+                                                }
+                                                if (boundarySteps > 0) {
+                                                    scrollState.dispatchRawDelta(
+                                                        -boundarySteps * stepPx
                                                     )
                                                 }
                                             }
@@ -1269,6 +1430,16 @@ internal fun preserveActivatedNoteSelection(
     } else {
         incoming
     }
+}
+
+internal fun normalizeWatchNoteTitleInput(value: TextFieldValue): TextFieldValue {
+    val normalized = value.text.replace(Regex("[\\r\\n]+"), " ")
+    if (normalized == value.text) return value
+    return value.copy(
+        text = normalized,
+        selection = TextRange(value.selection.start.coerceAtMost(normalized.length)),
+        composition = null
+    )
 }
 
 internal fun moveNoteCursorByVisualLine(
