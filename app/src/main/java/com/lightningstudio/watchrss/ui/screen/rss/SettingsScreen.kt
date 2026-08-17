@@ -61,6 +61,7 @@ import com.lightningstudio.watchrss.data.settings.formatMediaPlaybackStartVolume
 import com.lightningstudio.watchrss.data.settings.nextMediaPlaybackStartVolumeLimitPercent
 import com.lightningstudio.watchrss.data.settings.previousMediaPlaybackStartVolumeLimitPercent
 import com.lightningstudio.watchrss.data.settings.RssInlineImagePrefetchMode
+import com.lightningstudio.watchrss.ui.components.ContentEditingDownloadPhoneAppButton
 import com.lightningstudio.watchrss.ui.components.WatchSwitch
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.settings.WatchSettingsPillRow
@@ -117,7 +118,6 @@ fun SettingsScreen(
     onOpenReaderPresets: () -> Unit = {},
     onOpenTtsSettings: () -> Unit = {},
     onOpenAutoScrollSettings: () -> Unit = {},
-    onOpenRemoteInput: () -> Unit = {},
     onOpenAdvanced: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
@@ -175,7 +175,6 @@ fun SettingsScreen(
             onOpenReaderPresets = onOpenReaderPresets,
             onOpenTtsSettings = onOpenTtsSettings,
             onOpenAutoScrollSettings = onOpenAutoScrollSettings,
-            onOpenRemoteInput = onOpenRemoteInput,
             onOpenOobe = onOpenOobe,
             onOpenPerfLargeList = onOpenPerfLargeList,
             onOpenPerfLargeArticle = onOpenPerfLargeArticle,
@@ -260,7 +259,6 @@ private fun MainSettingsPage(
     onOpenReaderPresets: () -> Unit,
     onOpenTtsSettings: () -> Unit,
     onOpenAutoScrollSettings: () -> Unit,
-    onOpenRemoteInput: () -> Unit,
     onOpenAdvanced: () -> Unit,
     onOpenOobe: () -> Unit,
     onOpenPerfLargeList: () -> Unit,
@@ -363,18 +361,9 @@ private fun MainSettingsPage(
 
             Spacer(modifier = Modifier.height(entrySpacing))
 
-            WatchSettingsPillRow(
-                label = "从手机输入",
-                testTag = SettingsTestTags.PHONE_REMOTE_INPUT_ENTRY,
-                onClick = onOpenRemoteInput
-            ) {
-                Text("扫码")
-            }
-            Text(
-                text = "用手机版输入 RSS 地址并同步到手表",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+            ContentEditingDownloadPhoneAppButton(
+                operation = "从手机输入 RSS",
+                testTag = SettingsTestTags.PHONE_REMOTE_INPUT_ENTRY
             )
 
             Spacer(modifier = Modifier.height(entrySpacing))
@@ -581,8 +570,7 @@ private fun MainSettingsPage(
 
             Spacer(modifier = Modifier.height(entrySpacing))
 
-            if (BuildConfig.DEBUG) {
-                WatchSettingsPillRow(
+            WatchSettingsPillRow(
                     label = "新手引导",
                     testTag = SettingsTestTags.OPEN_OOBE_ENTRY,
                     onClick = onOpenOobe
@@ -592,15 +580,6 @@ private fun MainSettingsPage(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
-                )
-
-                Spacer(modifier = Modifier.height(entrySpacing))
-
-                Text(
-                    text = "开发者选项",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(start = valueIndent)
                 )
 
                 Spacer(modifier = Modifier.height(entrySpacing))
@@ -697,7 +676,7 @@ private fun MainSettingsPage(
                     )
                 }
 
-                if (showPerformanceTools) {
+                if (BuildConfig.DEBUG && showPerformanceTools) {
                     Spacer(modifier = Modifier.height(entrySpacing))
                     Text(
                         text = "性能测试",
@@ -723,8 +702,7 @@ private fun MainSettingsPage(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(entrySpacing))
-            }
+            Spacer(modifier = Modifier.height(entrySpacing))
 
             Box(
                 modifier = Modifier.fillMaxWidth(),

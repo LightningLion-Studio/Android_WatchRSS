@@ -59,6 +59,7 @@ import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.screen.rss.openExternalLink
 import com.lightningstudio.watchrss.ui.settings.WatchSettingsPillRow
 import com.lightningstudio.watchrss.ui.testing.DownloadPhoneAppTestTags
+import com.lightningstudio.watchrss.ui.theme.WatchDimens
 import com.lightningstudio.watchrss.ui.util.QrCodeGenerator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -109,6 +110,22 @@ fun DownloadPhoneAppButton(
     if (showDialog) {
         DownloadPhoneAppDialog(operation = operation, onDismiss = { showDialog = false })
     }
+}
+
+/** Full-width phone companion entry used for content editing and configuration. */
+@Composable
+fun ContentEditingDownloadPhoneAppButton(
+    operation: String,
+    modifier: Modifier = Modifier,
+    testTag: String? = null
+) {
+    DownloadPhoneAppButton(
+        operation = operation,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(bottom = WatchDimens.hey_distance_8dp),
+        testTag = testTag
+    )
 }
 
 /**

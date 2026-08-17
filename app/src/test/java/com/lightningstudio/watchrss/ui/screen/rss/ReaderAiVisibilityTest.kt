@@ -6,31 +6,21 @@ import org.junit.Test
 
 class ReaderAiVisibilityTest {
     @Test
-    fun aiSummaryEntryIsOnlyVisibleInEligibleDebugReaders() {
+    fun aiSummaryEntryIsVisibleInEligibleProductionReaders() {
         assertTrue(
             isReaderAiSummaryEntryVisible(
-                isDebugBuild = true,
                 llmEnabled = true,
                 isNovelContent = false
             )
         )
         assertFalse(
             isReaderAiSummaryEntryVisible(
-                isDebugBuild = false,
-                llmEnabled = true,
-                isNovelContent = false
-            )
-        )
-        assertFalse(
-            isReaderAiSummaryEntryVisible(
-                isDebugBuild = true,
                 llmEnabled = false,
                 isNovelContent = false
             )
         )
         assertFalse(
             isReaderAiSummaryEntryVisible(
-                isDebugBuild = true,
                 llmEnabled = true,
                 isNovelContent = true
             )

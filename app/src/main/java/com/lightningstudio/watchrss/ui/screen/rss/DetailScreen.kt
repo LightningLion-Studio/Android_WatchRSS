@@ -224,10 +224,9 @@ internal fun wholePixelAutoScrollDelta(pendingDeltaPx: Float): Float =
     pendingDeltaPx.coerceAtLeast(0f).toInt().toFloat()
 
 internal fun isReaderAiSummaryEntryVisible(
-    isDebugBuild: Boolean,
     llmEnabled: Boolean,
     isNovelContent: Boolean
-): Boolean = isDebugBuild && llmEnabled && !isNovelContent
+): Boolean = llmEnabled && !isNovelContent
 
 @OptIn(FlowPreview::class)
 @Composable
@@ -486,7 +485,6 @@ internal fun DetailContent(
         )
     }
     val showAiSummaryEntry = isReaderAiSummaryEntryVisible(
-        isDebugBuild = BuildConfig.DEBUG,
         llmEnabled = llmEnabled,
         isNovelContent = isNovelContent
     )
