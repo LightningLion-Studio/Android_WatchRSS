@@ -33,8 +33,12 @@ class AzureTtsEngine(
         return apiKeyProvider.getApiKey(TtsEngineKeys.AZURE).isNotBlank()
     }
 
-    override suspend fun speak(segment: ReadAloudSegment, rate: Float, listener: TtsUtteranceListener): String {
-        val utteranceId = "azure:${System.nanoTime()}"
+    override suspend fun speak(
+        segment: ReadAloudSegment,
+        rate: Float,
+        utteranceId: String,
+        listener: TtsUtteranceListener
+    ) {
         val apiKey = apiKeyProvider.getApiKey(TtsEngineKeys.AZURE)
         if (apiKey.isBlank()) {
             throw IllegalStateException("未配置 Azure API Key")
@@ -52,7 +56,6 @@ class AzureTtsEngine(
         )
         listener.onStart(utteranceId)
         audioPlayer.play()
-        return utteranceId
     }
 
     private fun synthesize(apiKey: String, text: String, speed: Float): ByteArray {

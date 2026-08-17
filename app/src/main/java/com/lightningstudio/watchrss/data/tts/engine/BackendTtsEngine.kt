@@ -32,8 +32,12 @@ class BackendTtsEngine(
         return watchAccountStore.read()?.watchDeviceToken?.isNotBlank() == true
     }
 
-    override suspend fun speak(segment: ReadAloudSegment, rate: Float, listener: TtsUtteranceListener): String {
-        val utteranceId = "backend:${System.nanoTime()}"
+    override suspend fun speak(
+        segment: ReadAloudSegment,
+        rate: Float,
+        utteranceId: String,
+        listener: TtsUtteranceListener
+    ) {
         val account = watchAccountStore.read()
             ?: throw IllegalStateException("使用默认语音前请先登录")
         val backendBaseUrl = account.backendBaseUrl
@@ -57,7 +61,6 @@ class BackendTtsEngine(
         )
         listener.onStart(utteranceId)
         audioPlayer.play()
-        return utteranceId
     }
 
     private fun synthesize(backendBaseUrl: String, token: String, text: String): ByteArray {

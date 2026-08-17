@@ -34,8 +34,12 @@ class DoubaoTtsEngine(
         return apiKeyProvider.getApiKey(TtsEngineKeys.DOUBAO).isNotBlank()
     }
 
-    override suspend fun speak(segment: ReadAloudSegment, rate: Float, listener: TtsUtteranceListener): String {
-        val utteranceId = "doubao:${System.nanoTime()}"
+    override suspend fun speak(
+        segment: ReadAloudSegment,
+        rate: Float,
+        utteranceId: String,
+        listener: TtsUtteranceListener
+    ) {
         val apiKey = apiKeyProvider.getApiKey(TtsEngineKeys.DOUBAO)
         if (apiKey.isBlank()) {
             throw IllegalStateException("未配置豆包 API Key")
@@ -53,7 +57,6 @@ class DoubaoTtsEngine(
         )
         listener.onStart(utteranceId)
         audioPlayer.play()
-        return utteranceId
     }
 
     private fun synthesize(apiKey: String, text: String, speed: Float): ByteArray {

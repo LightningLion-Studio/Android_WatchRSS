@@ -20,14 +20,15 @@ interface TtsEngine {
      *
      * @param segment 要朗读的段落
      * @param rate 语速，1.0 为正常语速
+     * @param utteranceId 由调用方生成的本次朗读标识；所有回调必须原样返回该标识
      * @param listener 朗读进度与生命周期回调
-     * @return 本次朗读的 utterance id
      */
     suspend fun speak(
         segment: ReadAloudSegment,
         rate: Float,
+        utteranceId: String,
         listener: TtsUtteranceListener
-    ): String
+    )
 
     /** 停止当前朗读。 */
     fun stop()

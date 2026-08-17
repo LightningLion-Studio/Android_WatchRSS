@@ -524,7 +524,12 @@ class ReadAloudController(
             rangeEnd = initialFallbackRange.end,
             isFallback = true
         )
-        ensureEngine().speak(segment, speechRate, ttsEngineListener)
+        ensureEngine().speak(
+            segment = segment,
+            rate = speechRate,
+            utteranceId = utteranceId,
+            listener = ttsEngineListener
+        )
         queue.getOrNull(index)?.let { entry ->
             updateState(
                 entry = entry,

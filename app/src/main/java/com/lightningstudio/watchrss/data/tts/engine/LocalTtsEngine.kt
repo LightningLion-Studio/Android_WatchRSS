@@ -78,14 +78,14 @@ class LocalTtsEngine(context: Context) : TtsEngine {
     override suspend fun speak(
         segment: ReadAloudSegment,
         rate: Float,
+        utteranceId: String,
         listener: TtsUtteranceListener
-    ): String {
+    ) {
         val engine = prepare()
         require(engine) { "本地 TTS 未就绪" }
 
-        return withContext(Dispatchers.Main) {
+        withContext(Dispatchers.Main) {
             val currentTts = tts ?: error("TTS 未初始化")
-            val utteranceId = "local:${System.nanoTime()}"
             currentTts.setOnUtteranceProgressListener(LocalUtteranceListener(listener))
 
             val result = if (currentTts.setSpeechRate(rate) == TextToSpeech.ERROR) {
@@ -94,7 +94,6 @@ class LocalTtsEngine(context: Context) : TtsEngine {
                 currentTts.speak(segment.text, TextToSpeech.QUEUE_FLUSH, Bundle(), utteranceId)
             }
             require(result != TextToSpeech.ERROR) { "本地 TTS 无法朗读当前段落" }
-            utteranceId
         }
     }
 

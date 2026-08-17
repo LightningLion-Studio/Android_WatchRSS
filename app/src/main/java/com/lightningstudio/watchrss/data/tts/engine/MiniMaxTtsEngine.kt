@@ -34,8 +34,12 @@ class MiniMaxTtsEngine(
         return apiKeyProvider.getApiKey(TtsEngineKeys.MINIMAX).isNotBlank()
     }
 
-    override suspend fun speak(segment: ReadAloudSegment, rate: Float, listener: TtsUtteranceListener): String {
-        val utteranceId = "minimax:${System.nanoTime()}"
+    override suspend fun speak(
+        segment: ReadAloudSegment,
+        rate: Float,
+        utteranceId: String,
+        listener: TtsUtteranceListener
+    ) {
         val apiKey = apiKeyProvider.getApiKey(TtsEngineKeys.MINIMAX)
         if (apiKey.isBlank()) {
             throw IllegalStateException("未配置 MiniMax API Key")
@@ -53,7 +57,6 @@ class MiniMaxTtsEngine(
         )
         listener.onStart(utteranceId)
         audioPlayer.play()
-        return utteranceId
     }
 
     private fun synthesize(apiKey: String, text: String, speed: Float): ByteArray {
