@@ -10,7 +10,7 @@ class ReleaseFeatureVisibilityGuardTest {
         val profileActivity = source("ProfileActivity.kt")
         val settingsScreen = source("ui/screen/rss/SettingsScreen.kt")
 
-        assertTrue(profileActivity.contains("showAccountEntry = BuildConfig.DEBUG"))
+        assertTrue(profileActivity.contains("showAccountEntry = true"))
 
         val debugGate = settingsScreen.indexOf("if (BuildConfig.DEBUG)")
         val oobe = settingsScreen.indexOf("label = \"新手引导\"")

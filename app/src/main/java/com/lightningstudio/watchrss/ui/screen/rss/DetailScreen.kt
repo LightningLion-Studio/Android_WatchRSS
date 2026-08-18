@@ -2,6 +2,7 @@ package com.lightningstudio.watchrss.ui.screen.rss
 
 import android.os.SystemClock
 import android.view.View
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -106,7 +107,6 @@ import com.lightningstudio.watchrss.data.tts.ReadAloudHighlightRange
 import com.lightningstudio.watchrss.data.tts.ReadAloudTextSegmenter
 import com.lightningstudio.watchrss.data.tts.ReadAloudUiState
 import com.lightningstudio.watchrss.ui.components.BlurFadeVisibility
-import com.lightningstudio.watchrss.ui.components.DownloadPhoneAppDialog
 import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.reader.LocalReaderPresetRuntime
@@ -484,7 +484,6 @@ internal fun DetailContent(
     val showAiSummaryEntry = isReaderAiSummaryEntryVisible(
         llmEnabled = llmEnabled
     )
-    var showAiPurchaseDialog by rememberSaveable(item?.id) { mutableStateOf(false) }
     var aiSummaryExpanded by rememberSaveable(item?.id) { mutableStateOf(false) }
     LaunchedEffect(item?.id, showAiSummaryEntry, hasPaidAiAuthorization, llmAutoSummarize) {
         if (showAiSummaryEntry && hasPaidAiAuthorization && llmAutoSummarize) {
@@ -492,6 +491,12 @@ internal fun DetailContent(
         }
     }
     val showAiSummaryParagraph = showAiSummaryEntry && aiSummaryExpanded
+    val aiSummaryError = llmSummaryState.status as? SummaryStatus.Error
+    LaunchedEffect(aiSummaryError?.message) {
+        aiSummaryError?.message?.let { message ->
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+    }
     val showReadAloudAction = item != null && !ImportedContentIds.isImportedContentUrl(link)
     val articleActionItemCount = if (
         canToggleOriginalContent || showAiSummaryEntry || showReadAloudAction
@@ -1290,10 +1295,6 @@ internal fun DetailContent(
                                 loading = llmSummaryState.status == SummaryStatus.WaitingForContent ||
                                     llmSummaryState.status == SummaryStatus.Generating,
                                 onClick = {
-                                    if (!hasPaidAiAuthorization) {
-                                        showAiPurchaseDialog = true
-                                        return@AiSummaryButton
-                                    }
                                     val expanding = !aiSummaryExpanded
                                     aiSummaryExpanded = expanding
                                     if (expanding &&
@@ -1716,12 +1717,6 @@ internal fun DetailContent(
         }
     }
 
-    if (showAiPurchaseDialog) {
-        DownloadPhoneAppDialog(
-            operation = "购买并使用 AI 总结",
-            onDismiss = { showAiPurchaseDialog = false }
-        )
-    }
 }
 
 @Composable
