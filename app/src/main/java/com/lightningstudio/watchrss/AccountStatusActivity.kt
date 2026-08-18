@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
@@ -87,7 +88,10 @@ private fun AccountStatusScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                DownloadPhoneAppButton(operation = "登录账号与云同步")
+                DownloadPhoneAppButton(
+                    operation = "登录账号与云同步",
+                    modifier = Modifier.offset(y = (-4).dp)
+                )
             } else {
                 Text(
                     text = state.phoneMasked.ifBlank { "已绑定账号" },
