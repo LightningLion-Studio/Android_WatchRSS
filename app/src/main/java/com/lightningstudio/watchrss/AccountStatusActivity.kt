@@ -12,12 +12,10 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -28,7 +26,6 @@ import com.lightningstudio.watchrss.ui.components.DownloadPhoneAppButton
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownScrollHandler
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
-import kotlinx.coroutines.launch
 
 class AccountStatusActivity : BaseWatchActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -58,7 +55,6 @@ private fun AccountStatusScreen(
 ) {
     val scrollState = androidx.compose.foundation.rememberScrollState()
     val cloudStatus by cloudSyncService.status.collectAsState()
-    val scope = rememberCoroutineScope()
     InstallDigitalCrownScrollHandler(scrollState)
     WatchSurface(pureBlack = true) {
         Column(
@@ -117,12 +113,6 @@ private fun AccountStatusScreen(
                                 "${cloudStatus.quotaBytes / 1048576} MiB"
                         )
                     }
-                    Button(
-                        onClick = { scope.launch { cloudSyncService.syncNow(manual = true) } },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("立即云同步")
-                    }
                     Text(
                         "首次使用需在手机会员云空间中批准这块手表。",
                         style = MaterialTheme.typography.bodySmall,
@@ -136,6 +126,7 @@ private fun AccountStatusScreen(
                     )
                 }
             }
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }

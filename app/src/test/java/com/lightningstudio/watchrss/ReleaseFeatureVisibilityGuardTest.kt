@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss
 
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -38,6 +39,14 @@ class ReleaseFeatureVisibilityGuardTest {
 
         val bluetoothDiagnostics = source("DebugBluetoothSyncActivity.kt")
         assertTrue(bluetoothDiagnostics.contains("ApplicationInfo.FLAG_DEBUGGABLE"))
+    }
+
+    @Test
+    fun `account page omits manual cloud sync and keeps bottom spacing`() {
+        val accountStatus = source("AccountStatusActivity.kt")
+
+        assertFalse(accountStatus.contains("立即云同步"))
+        assertTrue(accountStatus.contains("Spacer(modifier = Modifier.height(24.dp))"))
     }
 
     private fun source(relativePath: String): String =
