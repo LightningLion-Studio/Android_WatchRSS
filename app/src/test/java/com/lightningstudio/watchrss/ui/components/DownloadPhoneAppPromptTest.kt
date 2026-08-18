@@ -32,9 +32,9 @@ class DownloadPhoneAppPromptTest {
     }
 
     @Test
-    fun `download url points at the oppo store page`() {
+    fun `download url points at the oppo official link`() {
         assertEquals(
-            "https://app.cdo.oppomobile.com/home/detail?app_id=37262051",
+            "https://m.malink.cn/s/U7zQBr",
             PHONE_APP_DOWNLOAD_URL
         )
     }

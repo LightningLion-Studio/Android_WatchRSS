@@ -66,8 +66,8 @@ import com.lightningstudio.watchrss.ui.util.QrCodeGenerator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/** 手机端 App 的 OPPO 应用商店下载页。 */
-const val PHONE_APP_DOWNLOAD_URL = "https://app.cdo.oppomobile.com/home/detail?app_id=37262051"
+/** 手机端 App 的 OPPO 官方统一链接（malink）下载页。 */
+const val PHONE_APP_DOWNLOAD_URL = "https://m.malink.cn/s/U7zQBr"
 
 /** 手机端 App 下载提示文案（纯函数，可测）。 */
 fun phoneAppDownloadPrompt(operation: String): String = when (operation) {
