@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -138,6 +139,7 @@ private fun AutoScrollReaderControlContent(
                 contentDescription = if (isPlaying) "暂停自动滚动" else "启动自动滚动",
                 size = 46.dp,
                 selected = true,
+                modifier = Modifier.offset(x = (-2).dp),
                 onClick = { onPlayingChange(!isPlaying) }
             )
         }
@@ -317,6 +319,7 @@ private fun AutoScrollRoundIconButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String,
     size: Dp,
+    modifier: Modifier = Modifier,
     selected: Boolean = false,
     enabled: Boolean = true,
     onClick: () -> Unit
@@ -332,7 +335,7 @@ private fun AutoScrollRoundIconButton(
         Color.White
     }
     Box(
-        modifier = Modifier
+        modifier = modifier
             .size(size)
             .clip(CircleShape)
             .background(background.copy(alpha = if (enabled) 1f else 0.45f))

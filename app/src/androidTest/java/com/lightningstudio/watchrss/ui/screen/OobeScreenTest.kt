@@ -1,6 +1,8 @@
 package com.lightningstudio.watchrss.ui.screen
 
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.assertIsOff
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -99,14 +101,39 @@ class OobeScreenTest {
         composeRule.onNodeWithText("使用滚轮调节音量").assertExists()
         composeRule.onNodeWithText("音量调节防干扰").assertExists()
         composeRule.onNodeWithText("静音开播").assertExists()
-        composeRule.onNodeWithTag(OobeTestTags.CUSTOM_THEME_TOGGLE, useUnmergedTree = true).assertExists()
         composeRule.onNodeWithTag(OobeTestTags.CUSTOM_FONT_VALUE, useUnmergedTree = true).assertExists()
+        composeRule.onNodeWithTag(OobeTestTags.CUSTOM_THEME_TOGGLE, useUnmergedTree = true).assertExists()
         composeRule.onNodeWithTag(OobeTestTags.CUSTOM_MEDIA_VOLUME_CONTROL_SWITCH, useUnmergedTree = true).assertExists()
         composeRule.onNodeWithTag(OobeTestTags.CUSTOM_MEDIA_GUARD_SWITCH, useUnmergedTree = true)
             .assertExists()
             .assertIsOff()
         composeRule.onNodeWithTag(OobeTestTags.CUSTOM_PLAYBACK_START_VOLUME_VALUE, useUnmergedTree = true).assertExists()
         composeRule.onNodeWithText("无限制").assertExists()
+    }
+
+    @Test
+    fun customPage_themeToggleUpdatesReaderDisplayMode() {
+        var toggleCount = 0
+
+        composeRule.setWatchContent {
+            OobeScreen(
+                uiState = OobeUiState(introPage = 2),
+                onSetIntroPage = {},
+                onContinueFromIntro = {},
+                onOpenUserAgreement = {},
+                onOpenPrivacy = {},
+                readerDisplayDark = true,
+                onToggleReaderDisplayMode = { toggleCount += 1 }
+            )
+        }
+
+        composeRule.onNodeWithTag(OobeTestTags.CUSTOM_THEME_TOGGLE, useUnmergedTree = true)
+            .performScrollTo()
+            .performClick()
+
+        composeRule.runOnIdle {
+            assertEquals(1, toggleCount)
+        }
     }
 
     @Test

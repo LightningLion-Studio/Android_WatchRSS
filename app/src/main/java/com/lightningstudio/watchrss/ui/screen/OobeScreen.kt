@@ -76,8 +76,8 @@ import com.lightningstudio.watchrss.ui.components.internetAvailabilityGuidanceMe
 import com.lightningstudio.watchrss.ui.components.internetAvailabilityStatusMessage
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownScrollHandler
 import com.lightningstudio.watchrss.ui.settings.MainSettingsCatalog
-import com.lightningstudio.watchrss.ui.settings.MainSettingInfo
 import com.lightningstudio.watchrss.ui.settings.WatchReadingThemeToggle
+import com.lightningstudio.watchrss.ui.settings.MainSettingInfo
 import com.lightningstudio.watchrss.ui.settings.WatchRoundIconButtonIcon
 import com.lightningstudio.watchrss.ui.settings.WatchSettingsPillRow
 import com.lightningstudio.watchrss.ui.settings.WatchStepperValue
@@ -105,7 +105,9 @@ fun OobeScreen(
     onSetIntroPage: (Int) -> Unit,
     onContinueFromIntro: () -> Unit,
     onOpenUserAgreement: () -> Unit,
-    onOpenPrivacy: () -> Unit
+    onOpenPrivacy: () -> Unit,
+    readerDisplayDark: Boolean = true,
+    onToggleReaderDisplayMode: () -> Unit = {}
 ) {
     BackHandler(enabled = uiState.introPage > 0) {
         onSetIntroPage(uiState.introPage - 1)
@@ -117,7 +119,9 @@ fun OobeScreen(
             onSetIntroPage = onSetIntroPage,
             onContinue = onContinueFromIntro,
             onOpenUserAgreement = onOpenUserAgreement,
-            onOpenPrivacy = onOpenPrivacy
+            onOpenPrivacy = onOpenPrivacy,
+            readerDisplayDark = readerDisplayDark,
+            onToggleReaderDisplayMode = onToggleReaderDisplayMode
         )
     }
 }
@@ -128,7 +132,9 @@ private fun OobeIntroStep(
     onSetIntroPage: (Int) -> Unit,
     onContinue: () -> Unit,
     onOpenUserAgreement: () -> Unit,
-    onOpenPrivacy: () -> Unit
+    onOpenPrivacy: () -> Unit,
+    readerDisplayDark: Boolean,
+    onToggleReaderDisplayMode: () -> Unit
 ) {
     val horizontalSafePadding = WatchDimens.watch_safe_padding
     val topSafePadding = WatchDimens.hey_distance_8dp
@@ -199,7 +205,9 @@ private fun OobeIntroStep(
                             .fillMaxWidth()
                             .weight(1f)
                             .testTag(OobeTestTags.CUSTOM_PAGE),
-                        onNext = { onSetIntroPage(OOBE_INTERNET_PAGE) }
+                        onNext = { onSetIntroPage(OOBE_INTERNET_PAGE) },
+                        readerDisplayDark = readerDisplayDark,
+                        onToggleReaderDisplayMode = onToggleReaderDisplayMode
                     )
                 }
 
@@ -364,7 +372,9 @@ private fun OobeAgreementStep(
 @Composable
 private fun OobeCustomizationStep(
     modifier: Modifier = Modifier,
-    onNext: () -> Unit
+    onNext: () -> Unit,
+    readerDisplayDark: Boolean,
+    onToggleReaderDisplayMode: () -> Unit
 ) {
     val scrollState = rememberScrollState()
     val readingThemeInfo = remember { MainSettingsCatalog.readingTheme }
@@ -379,7 +389,6 @@ private fun OobeCustomizationStep(
     val compactStepperSpacing = WatchDimens.hey_distance_4dp
     val stepperValueWidth = watchDimensionResource(R.dimen.watch_action_button_height)
     val playbackStartVolumeValueWidth = stepperValueWidth + compactStepperSpacing
-    var previewReadingThemeDark by rememberSaveable { mutableStateOf(true) }
     var previewFontSizeSp by rememberSaveable { mutableStateOf(DEFAULT_READING_FONT_SIZE_SP) }
     var previewMediaVolumeControlEnabled by rememberSaveable {
         mutableStateOf(DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED)
@@ -431,9 +440,9 @@ private fun OobeCustomizationStep(
             endPaddingMultiplier = 1.5f
         ) {
             WatchReadingThemeToggle(
-                isDark = previewReadingThemeDark,
+                isDark = readerDisplayDark,
                 modifier = Modifier.testTag(OobeTestTags.CUSTOM_THEME_TOGGLE),
-                onToggle = { previewReadingThemeDark = !previewReadingThemeDark }
+                onToggle = onToggleReaderDisplayMode
             )
         }
 

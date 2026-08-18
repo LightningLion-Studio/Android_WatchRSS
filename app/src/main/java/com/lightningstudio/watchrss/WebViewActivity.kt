@@ -7,7 +7,6 @@ import android.animation.ValueAnimator
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
@@ -25,10 +24,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.graphics.Color as ComposeColor
+import androidx.compose.ui.graphics.toArgb
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewFeature
 import com.lightningstudio.watchrss.ui.screen.WebViewScreen
+import com.lightningstudio.watchrss.ui.reader.readerChromeStyle
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.util.getWebViewUnavailableMessage
 import com.lightningstudio.watchrss.ui.util.hasValidatedInternetConnection
@@ -39,8 +39,6 @@ import com.lightningstudio.watchrss.ui.util.showAppToast
 import com.lightningstudio.watchrss.ui.widget.ProgressRingView
 import com.lightningstudio.watchrss.util.AppLogger
 import java.io.File
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
 
 enum class WebViewScaleMode {
     Standard,
@@ -57,7 +55,9 @@ enum class WebViewScaleMode {
 }
 
 class WebViewActivity : BaseWatchActivity() {
-    private val settingsRepository by lazy { (application as WatchRssApplication).container.settingsRepository }
+    private val readerPresetRepository by lazy {
+        (application as WatchRssApplication).container.readerPresetRepository
+    }
     private lateinit var webView: WebView
     private lateinit var loadingRing: ProgressRingView
     private var progressAnimator: ValueAnimator? = null
@@ -65,16 +65,15 @@ class WebViewActivity : BaseWatchActivity() {
     private val progressInterpolator = DecelerateInterpolator()
     private var webViewInitialized = false
     private var ringInitialized = false
-    private var activityReadingThemeDark = true
     private var currentScaleMode = WebViewScaleMode.Standard
 
     override fun onCreate(savedInstanceState: Bundle?) {
         currentScaleMode = savedInstanceState?.getString(KEY_SCALE_MODE)
             ?.let { value -> runCatching { WebViewScaleMode.valueOf(value) }.getOrNull() }
             ?: WebViewScaleMode.Standard
-        activityReadingThemeDark = runBlocking { settingsRepository.readingThemeDark.first() }
+        val initialReaderChrome = readerPresetRepository.activePreset.value.readerChromeStyle()
         setTheme(
-            if (activityReadingThemeDark) {
+            if (initialReaderChrome.isDark) {
                 R.style.Theme_WatchRSS_Translucent_Dark
             } else {
                 R.style.Theme_WatchRSS_Translucent_Light
@@ -91,9 +90,10 @@ class WebViewActivity : BaseWatchActivity() {
 
         val initialWebViewError = getWebViewUnavailableMessage(this)
         setContent {
-            val readingThemeDark by settingsRepository.readingThemeDark.collectAsState(initial = activityReadingThemeDark)
+            val activePreset by readerPresetRepository.activePreset.collectAsState()
+            val readerChrome = activePreset.readerChromeStyle()
 
-            WatchRSSTheme(darkTheme = readingThemeDark) {
+            WatchRSSTheme(darkTheme = readerChrome.isDark) {
                 var errorMessage by remember { mutableStateOf(initialWebViewError) }
                 var warningMessage by remember { mutableStateOf(initialWebViewError) }
                 var scaleMode by rememberSaveable { mutableStateOf(currentScaleMode) }
@@ -108,20 +108,17 @@ class WebViewActivity : BaseWatchActivity() {
                     currentScaleMode = scaleMode
                 }
 
-                LaunchedEffect(readingThemeDark) {
-                    if (readingThemeDark != activityReadingThemeDark) {
-                        if (webViewInitialized) {
-                            val currentUrl = webView.url
-                            if (!currentUrl.isNullOrBlank()) {
-                                intent.putExtra(EXTRA_URL, currentUrl)
-                            }
-                        }
-                        recreate()
+                LaunchedEffect(readerChrome) {
+                    if (webViewInitialized) {
+                        applyWebThemePreference(
+                            isDark = readerChrome.isDark,
+                            backgroundColor = readerChrome.backgroundColor.toArgb()
+                        )
                     }
                 }
 
                 WebViewScreen(
-                    backgroundColor = if (readingThemeDark) ComposeColor.Black else ComposeColor.White,
+                    backgroundColor = readerChrome.backgroundColor,
                     errorMessage = errorMessage,
                     scaleMode = scaleMode,
                     onToggleScaleMode = { scaleMode = scaleMode.next() },
@@ -131,7 +128,10 @@ class WebViewActivity : BaseWatchActivity() {
                             webView = view
                             try {
                                 setupWebView()
-                                applyWebThemePreference(readingThemeDark)
+                                applyWebThemePreference(
+                                    isDark = readerChrome.isDark,
+                                    backgroundColor = readerChrome.backgroundColor.toArgb()
+                                )
                                 webView.loadUrl(url)
                             } catch (throwable: Throwable) {
                                 AppLogger.e("WebViewActivity", "Failed to load WebView url: $url", throwable)
@@ -168,8 +168,8 @@ class WebViewActivity : BaseWatchActivity() {
     }
 
     @Suppress("DEPRECATION")
-    private fun applyWebThemePreference(readingThemeDark: Boolean) {
-        webView.setBackgroundColor(if (readingThemeDark) Color.BLACK else Color.WHITE)
+    private fun applyWebThemePreference(isDark: Boolean, backgroundColor: Int) {
+        webView.setBackgroundColor(backgroundColor)
         val settings = webView.settings
         if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK_STRATEGY)) {
             WebSettingsCompat.setForceDarkStrategy(
@@ -180,7 +180,7 @@ class WebViewActivity : BaseWatchActivity() {
         if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
             WebSettingsCompat.setForceDark(
                 settings,
-                if (readingThemeDark) {
+                if (isDark) {
                     WebSettingsCompat.FORCE_DARK_ON
                 } else {
                     WebSettingsCompat.FORCE_DARK_OFF
@@ -188,7 +188,7 @@ class WebViewActivity : BaseWatchActivity() {
             )
         }
         if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
-            WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, readingThemeDark)
+            WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, isDark)
         }
     }
 

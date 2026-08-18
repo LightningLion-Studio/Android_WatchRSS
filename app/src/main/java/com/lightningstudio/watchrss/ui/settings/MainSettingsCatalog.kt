@@ -32,7 +32,6 @@ object MainSettingsCatalog {
     )
 
     val standardEntries: List<MainSettingInfo> = listOf(
-        readingTheme,
         fontSize,
         mediaVolumeControl,
         mediaVolumeGuard,

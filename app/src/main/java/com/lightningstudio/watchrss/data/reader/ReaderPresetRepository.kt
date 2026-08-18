@@ -142,7 +142,7 @@ class ReaderPresetRepository(
         dao.upsertPresets(listOf(migrated.toEntity(), opposite.toEntity()))
         updateSelection(
             ReaderPresetSelection(
-                mode = ReaderThemeMode.DARK,
+                mode = legacyReaderThemeMode(legacyDark),
                 lightPresetId = if (legacyDark) opposite.id else migrated.id,
                 darkPresetId = if (legacyDark) migrated.id else opposite.id,
                 darkFollowsLight = false
@@ -409,6 +409,9 @@ class ReaderPresetRepository(
         const val DELETION_KIND_PRESET = "preset"
     }
 }
+
+internal fun legacyReaderThemeMode(legacyDark: Boolean): ReaderThemeMode =
+    if (legacyDark) ReaderThemeMode.DARK else ReaderThemeMode.LIGHT
 
 data class ReaderPresetSnapshot(
     val presets: List<ReaderPresetEntity>,

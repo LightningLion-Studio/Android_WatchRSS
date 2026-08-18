@@ -99,7 +99,7 @@ import com.lightningstudio.watchrss.data.note.WatchNoteEntity
 import com.lightningstudio.watchrss.data.note.watchPlainText
 import com.lightningstudio.watchrss.data.rss.RssItem
 import com.lightningstudio.watchrss.phoneconnection.WatchDeviceIdentity
-import com.lightningstudio.watchrss.ui.components.DownloadPhoneAppButton
+import com.lightningstudio.watchrss.ui.components.ContentEditingDownloadPhoneAppButton
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownHandler
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
@@ -113,6 +113,7 @@ import com.lightningstudio.watchrss.ui.screen.rss.DetailTitle
 import com.lightningstudio.watchrss.ui.screen.rss.FeedEmptyState
 import com.lightningstudio.watchrss.ui.screen.rss.FeedHeader
 import com.lightningstudio.watchrss.ui.screen.rss.FeedItemEntry
+import com.lightningstudio.watchrss.ui.theme.WatchDimens
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.theme.LocalRubberBandOverscrollOffset
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
@@ -374,10 +375,7 @@ private fun NotesFeedList(
                 }
             }
             item(key = "phone_sync_prompt") {
-                DownloadPhoneAppButton(
-                    operation = "同步备忘录",
-                    modifier = Modifier.padding(bottom = itemSpacing)
-                )
+                ContentEditingDownloadPhoneAppButton(operation = "同步备忘录")
             }
             if (notes.isEmpty()) {
                 item(key = "empty") {
@@ -597,6 +595,7 @@ private fun NoteDocumentContent(
     title: String,
     metadata: String?,
     scrollState: ScrollState,
+    additionalTopPadding: androidx.compose.ui.unit.Dp = 0.dp,
     titleContent: (@androidx.compose.runtime.Composable () -> Unit)? = null,
     body: @androidx.compose.runtime.Composable () -> Unit
 ) {
@@ -610,7 +609,10 @@ private fun NoteDocumentContent(
             .fillMaxWidth()
             .verticalScroll(scrollState)
             .padding(horizontal = horizontalPadding)
-            .padding(top = verticalPadding, bottom = NOTE_DOCUMENT_BOTTOM_PADDING),
+            .padding(
+                top = verticalPadding + additionalTopPadding,
+                bottom = NOTE_DOCUMENT_BOTTOM_PADDING
+            ),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         if (titleContent == null) {
@@ -885,6 +887,7 @@ private fun WatchNoteRawEditor(
         lineHeight = MaterialTheme.typography.bodyLarge.lineHeight * 1.2f
     )
     val titleTextStyle = readerTextStyle(ReaderTextRole.TITLE).copy(
+        color = MaterialTheme.colorScheme.onSurface,
         textAlign = TextAlign.Center
     )
     val cursorColor = MaterialTheme.colorScheme.primary
@@ -946,6 +949,7 @@ private fun WatchNoteRawEditor(
             },
             metadata = note?.let(::noteMetadata),
             scrollState = scrollState,
+            additionalTopPadding = NOTE_EDITOR_TITLE_CLEARANCE,
             titleContent = {
                 Box(modifier = Modifier.fillMaxWidth()) {
                     BasicTextField(
@@ -1507,6 +1511,7 @@ private val NOTE_TOOL_OVERLAY_HEIGHT = 56.dp
 private val NOTE_DOCUMENT_BOTTOM_PADDING = 64.dp
 private val NOTE_CURSOR_VISIBLE_MARGIN = 8.dp
 private val NOTE_CURSOR_SWIPE_STEP = 24.dp
+private val NOTE_EDITOR_TITLE_CLEARANCE = 20.dp
 
 private enum class DraftSaveState(val label: String) {
     EMPTY("输入后自动保存"),

@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.PlatformTextStyle
@@ -66,6 +67,23 @@ data class ReaderPresetRuntime(
     val fontFile: (String?) -> File? = { null },
     val backgroundFile: (String?) -> File? = { null }
 )
+
+data class ReaderChromeStyle(
+    val backgroundColor: Color,
+    val contentColor: Color,
+    val accentColor: Color,
+    val isDark: Boolean
+)
+
+fun ReaderPreset.readerChromeStyle(): ReaderChromeStyle {
+    val backgroundColor = Color(background.colorArgb)
+    return ReaderChromeStyle(
+        backgroundColor = backgroundColor,
+        contentColor = Color(body.colorArgb),
+        accentColor = Color(accentColorArgb),
+        isDark = backgroundColor.luminance() < 0.5f
+    )
+}
 
 val LocalReaderPresetRuntime = staticCompositionLocalOf {
     ReaderPresetRuntime(ReaderPreset.fallback)

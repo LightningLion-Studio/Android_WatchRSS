@@ -25,6 +25,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.asImageBitmap
@@ -77,7 +78,7 @@ internal fun DetailTextBlock(
     highlightColor: Color = Color.Transparent,
     onTap: (() -> Unit)? = null,
     onDoubleTap: (() -> Unit)? = null,
-    onLongClick: (() -> Unit)? = null,
+    onLongClick: ((Offset) -> Unit)? = null,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null
 ) {
     if (isDetailTracingEnabled()) {
@@ -116,8 +117,8 @@ internal fun DetailTextBlock(
             detectTapGestures(
                 onTap = { onTap?.invoke() },
                 onDoubleTap = { onDoubleTap?.invoke() },
-                onLongPress = {
-                    onLongClick?.invoke()
+                onLongPress = { offset ->
+                    onLongClick?.invoke(offset)
                 }
             )
         }

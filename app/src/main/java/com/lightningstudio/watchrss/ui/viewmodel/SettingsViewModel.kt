@@ -33,9 +33,6 @@ class SettingsViewModel(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0L)
 
-    val readingThemeDark: StateFlow<Boolean> = settingsRepository.readingThemeDark
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
-
     val readingFontSizeSp: StateFlow<Int> = settingsRepository.readingFontSizeSp
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DEFAULT_READING_FONT_SIZE_SP)
 
@@ -98,13 +95,6 @@ class SettingsViewModel(
         viewModelScope.launch {
             settingsRepository.setCacheLimitBytes(value * MB_BYTES)
             rssRepository.trimCacheToLimit()
-        }
-    }
-
-    fun toggleReadingTheme() {
-        viewModelScope.launch {
-            val current = readingThemeDark.value
-            settingsRepository.setReadingThemeDark(!current)
         }
     }
 

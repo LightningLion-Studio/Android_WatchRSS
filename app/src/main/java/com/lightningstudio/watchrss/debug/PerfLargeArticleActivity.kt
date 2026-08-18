@@ -53,7 +53,6 @@ class PerfLargeArticleActivity : BaseWatchActivity() {
                         isFavorite = false,
                         isWatchLater = false,
                         originalContentEnabled = false,
-                        readingThemeDark = true,
                         readingFontSizeSp = 18,
                         shareUseSystem = true,
                         rssInlineImagePrefetchMode = DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE,

@@ -5,13 +5,10 @@ import android.view.View
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.updateTransition
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -59,12 +56,12 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Color
@@ -109,14 +106,13 @@ import com.lightningstudio.watchrss.data.tts.ReadAloudHighlightRange
 import com.lightningstudio.watchrss.data.tts.ReadAloudTextSegmenter
 import com.lightningstudio.watchrss.data.tts.ReadAloudUiState
 import com.lightningstudio.watchrss.ui.components.BlurFadeVisibility
+import com.lightningstudio.watchrss.ui.components.DownloadPhoneAppDialog
 import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.reader.LocalReaderPresetRuntime
+import com.lightningstudio.watchrss.ui.reader.readerChromeStyle
 import com.lightningstudio.watchrss.ui.screen.WarningConfirmDialog
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
-import com.lightningstudio.watchrss.ui.theme.WatchReadingBackgroundLight
-import com.lightningstudio.watchrss.ui.theme.WatchReadingTextLight
-import com.lightningstudio.watchrss.ui.theme.WatchTextPrimary
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import com.lightningstudio.watchrss.ui.util.ContentBlock
 import com.lightningstudio.watchrss.ui.util.RssImageLoader
@@ -150,7 +146,7 @@ fun DetailScreen(
     llmSummaryState: LlmSummaryUiState = LlmSummaryUiState(),
     readAloudState: ReadAloudUiState = ReadAloudUiState(),
     isStartingActivity: Boolean = false,
-    onOpenAiSummary: () -> Unit = {},
+    onRequestAiSummary: () -> Unit = {},
     onOpenReadAloud: (ReadAloudStartAnchor?, Boolean) -> Unit = { _, _ -> },
     onOpenReadAloudControls: (ReadAloudStartAnchor?, Boolean) -> Unit = { _, _ -> },
     onOpenAutoScrollControls: (Boolean) -> Unit = {},
@@ -163,7 +159,6 @@ fun DetailScreen(
     val isRetryingOfflineMedia by viewModel.isRetryingOfflineMedia.collectAsState()
     val contentBlocks by viewModel.contentBlocks.collectAsState()
     val importedTextReader by viewModel.importedTextReader.collectAsState()
-    val readingThemeDark by viewModel.readingThemeDark.collectAsState()
     val readingFontSizeSp by viewModel.readingFontSizeSp.collectAsState()
     val readerAutoScrollLinesPerSecond by viewModel.readerAutoScrollLinesPerSecond.collectAsState()
     val readerAutoScrollPlaying by viewModel.readerAutoScrollPlaying.collectAsState()
@@ -192,7 +187,6 @@ fun DetailScreen(
             isFavorite = savedState.isFavorite,
             isWatchLater = savedState.isWatchLater,
             originalContentEnabled = effectiveUseOriginalContent,
-            readingThemeDark = readingThemeDark,
             readingFontSizeSp = readingFontSizeSp,
             readerAutoScrollLinesPerSecond = readerAutoScrollLinesPerSecond,
             readerAutoScrollPlaying = readerAutoScrollPlaying,
@@ -209,7 +203,7 @@ fun DetailScreen(
             onSaveReadingProgress = viewModel::saveReadingProgress,
             onLoadImportedTextChunk = viewModel::loadImportedTextChunk,
             onReaderAutoScrollPlayingChange = viewModel::setReaderAutoScrollPlaying,
-            onOpenAiSummary = onOpenAiSummary,
+            onRequestAiSummary = onRequestAiSummary,
             onOpenReadAloud = onOpenReadAloud,
             onOpenReadAloudControls = onOpenReadAloudControls,
             onOpenAutoScrollControls = onOpenAutoScrollControls,
@@ -224,9 +218,8 @@ internal fun wholePixelAutoScrollDelta(pendingDeltaPx: Float): Float =
     pendingDeltaPx.coerceAtLeast(0f).toInt().toFloat()
 
 internal fun isReaderAiSummaryEntryVisible(
-    llmEnabled: Boolean,
-    hasPaidAuthorization: Boolean
-): Boolean = llmEnabled && hasPaidAuthorization
+    llmEnabled: Boolean
+): Boolean = llmEnabled
 
 @OptIn(FlowPreview::class)
 @Composable
@@ -241,7 +234,6 @@ internal fun DetailContent(
     isFavorite: Boolean,
     isWatchLater: Boolean,
     originalContentEnabled: Boolean,
-    readingThemeDark: Boolean,
     readingFontSizeSp: Int,
     readerAutoScrollLinesPerSecond: Float = 2f,
     readerAutoScrollPlaying: Boolean = false,
@@ -258,7 +250,7 @@ internal fun DetailContent(
     onSaveReadingProgress: suspend (Float) -> Unit,
     onLoadImportedTextChunk: suspend (String, Int) -> String? = { _, _ -> null },
     onReaderAutoScrollPlayingChange: (Boolean) -> Unit = {},
-    onOpenAiSummary: () -> Unit = {},
+    onRequestAiSummary: () -> Unit = {},
     onOpenReadAloud: (ReadAloudStartAnchor?, Boolean) -> Unit = { _, _ -> },
     onOpenReadAloudControls: (ReadAloudStartAnchor?, Boolean) -> Unit = { _, _ -> },
     onOpenAutoScrollControls: (Boolean) -> Unit = {},
@@ -281,31 +273,33 @@ internal fun DetailContent(
     val actionIconPadding = watchDimensionResource(R.dimen.hey_distance_6dp)
     val extraSafePadding = 0.dp
 
-    val backgroundColor = if (readingThemeDark) Color.Black else WatchReadingBackgroundLight
-    val textColor = if (readingThemeDark) WatchTextPrimary else WatchReadingTextLight
-    val activeColor = MaterialTheme.colorScheme.primary
+    val activePreset = LocalReaderPresetRuntime.current.preset
+    val readerChrome = activePreset.readerChromeStyle()
+    val backgroundColor = readerChrome.backgroundColor
+    val textColor = readerChrome.contentColor
+    val activeColor = readerChrome.accentColor
     val normalIconColor = textColor
-    val actionContainerColor = if (readingThemeDark) {
+    val actionContainerColor = if (readerChrome.isDark) {
         MaterialTheme.colorScheme.surfaceVariant
     } else {
         Color.White.copy(alpha = 0.96f)
     }
-    val actionBorderColor = if (readingThemeDark) {
+    val actionBorderColor = if (readerChrome.isDark) {
         Color.Transparent
     } else {
         Color(0xFFD9CFC3)
     }
-    val activeActionContainerColor = if (readingThemeDark) {
+    val activeActionContainerColor = if (readerChrome.isDark) {
         MaterialTheme.colorScheme.surfaceVariant
     } else {
         Color(0xFFFFF0E6)
     }
-    val activeActionBorderColor = if (readingThemeDark) {
+    val activeActionBorderColor = if (readerChrome.isDark) {
         Color.Transparent
     } else {
         activeColor.copy(alpha = 0.6f)
     }
-    val mediaCardContainerColor = if (readingThemeDark) {
+    val mediaCardContainerColor = if (readerChrome.isDark) {
         MaterialTheme.colorScheme.surface
     } else {
         Color.White
@@ -356,7 +350,7 @@ internal fun DetailContent(
                         range.useOriginalContent == originalContentEnabled
                     )
         }
-    val readAloudHighlightColor = if (readingThemeDark) {
+    val readAloudHighlightColor = if (readerChrome.isDark) {
         activeColor.copy(alpha = 0.34f)
     } else {
         activeColor.copy(alpha = 0.22f)
@@ -486,29 +480,33 @@ internal fun DetailContent(
     }
     val accountState by (context.applicationContext as com.lightningstudio.watchrss.WatchRssApplication)
         .container.watchAccountStore.state.collectAsState()
+    val hasPaidAiAuthorization = accountState?.watchDeviceToken?.isNotBlank() == true
     val showAiSummaryEntry = isReaderAiSummaryEntryVisible(
-        llmEnabled = llmEnabled,
-        hasPaidAuthorization = accountState?.watchDeviceToken?.isNotBlank() == true
+        llmEnabled = llmEnabled
     )
-    val showAiBanner = showAiSummaryEntry && llmAutoSummarize &&
-        (llmSummaryState.status == SummaryStatus.WaitingForContent ||
-            llmSummaryState.status == SummaryStatus.Generating ||
-            llmSummaryState.text.isNotBlank() ||
-            llmSummaryState.status is SummaryStatus.Error)
-    val showAiButton = showAiSummaryEntry && !llmAutoSummarize
+    var showAiPurchaseDialog by rememberSaveable(item?.id) { mutableStateOf(false) }
+    var aiSummaryExpanded by rememberSaveable(item?.id) { mutableStateOf(false) }
+    LaunchedEffect(item?.id, showAiSummaryEntry, hasPaidAiAuthorization, llmAutoSummarize) {
+        if (showAiSummaryEntry && hasPaidAiAuthorization && llmAutoSummarize) {
+            aiSummaryExpanded = true
+        }
+    }
+    val showAiSummaryParagraph = showAiSummaryEntry && aiSummaryExpanded
     val showReadAloudAction = item != null && !ImportedContentIds.isImportedContentUrl(link)
-    val articleActionItemCount = if (canToggleOriginalContent || showReadAloudAction) 1 else 0
+    val articleActionItemCount = if (
+        canToggleOriginalContent || showAiSummaryEntry || showReadAloudAction
+    ) 1 else 0
     val importedTextFirstItemIndex = remember(
         articleActionItemCount,
         hasOfflineFailures,
         isRetryingOfflineMedia,
-        showAiBanner,
+        showAiSummaryParagraph,
         showOriginalLoadingNotice
     ) {
         DETAIL_CONTENT_START_ITEM_INDEX +
             articleActionItemCount +
             (if (hasOfflineFailures || isRetryingOfflineMedia) 1 else 0) +
-            (if (showAiBanner) 1 else 0) +
+            (if (showAiSummaryParagraph) 1 else 0) +
             (if (showOriginalLoadingNotice) 1 else 0) +
             DETAIL_LOADING_SKELETON_ITEM_COUNT
     }
@@ -684,6 +682,9 @@ internal fun DetailContent(
         val now = SystemClock.uptimeMillis()
         if (now - lastReadAloudLongPressAt < READ_ALOUD_LONG_PRESS_DEBOUNCE_MS) return
         lastReadAloudLongPressAt = now
+        if (readerAutoScrollPlayingState.value) {
+            setAutoScrollPlaying(playing = false)
+        }
         onOpenReadAloudControls(startAnchor, originalContentEnabled)
     }
 
@@ -835,7 +836,7 @@ internal fun DetailContent(
         )
     }
 
-    LaunchedEffect(readingFontSizeSp, readingThemeDark) {
+    LaunchedEffect(readingFontSizeSp, activePreset) {
         if (item == null || !hasRestoredPosition) return@LaunchedEffect
         pendingRestoreProgress = currentReadingProgress() ?: return@LaunchedEffect
         hasRestoredPosition = false
@@ -1257,34 +1258,74 @@ internal fun DetailContent(
                     }
                 }
             }
-            if (canToggleOriginalContent || showReadAloudAction) {
+            if (canToggleOriginalContent || showAiSummaryEntry || showReadAloudAction) {
                 item(key = "articleActions") {
                     Spacer(modifier = Modifier.height(blockSpacing))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (canToggleOriginalContent) {
-                            DetailActionButton(
-                                text = if (originalContentEnabled) "取消阅读原文" else "阅读原文",
-                                fontSize = bodyFontSize,
-                                containerColor = actionContainerColor,
-                                contentColor = textColor,
-                                borderColor = actionBorderColor,
-                                onClick = onToggleOriginalContent,
-                                onLongClick = { showOriginalModeWarning = true }
-                            )
+                        Box(
+                            modifier = Modifier.weight(1f),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            if (canToggleOriginalContent) {
+                                DetailActionButton(
+                                    text = if (originalContentEnabled) "阅读RSS" else "阅读原文",
+                                    fontSize = bodyFontSize,
+                                    containerColor = actionContainerColor,
+                                    contentColor = textColor,
+                                    borderColor = actionBorderColor,
+                                    onClick = onToggleOriginalContent,
+                                    onLongClick = { showOriginalModeWarning = true }
+                                )
+                            }
                         }
-                        if (showReadAloudAction) {
-                            Spacer(modifier = Modifier.weight(1f))
-                            DetailActionButton(
-                                text = "大声朗读",
-                                fontSize = bodyFontSize,
-                                containerColor = activeActionContainerColor,
-                                contentColor = activeColor,
-                                borderColor = activeActionBorderColor,
-                                onClick = { onOpenReadAloud(null, originalContentEnabled) }
+                        if (showAiSummaryEntry) {
+                            AiSummaryButton(
+                                activeColor = activeColor,
+                                containerColor = actionContainerColor,
+                                borderColor = actionBorderColor,
+                                expanded = aiSummaryExpanded,
+                                loading = llmSummaryState.status == SummaryStatus.WaitingForContent ||
+                                    llmSummaryState.status == SummaryStatus.Generating,
+                                onClick = {
+                                    if (!hasPaidAiAuthorization) {
+                                        showAiPurchaseDialog = true
+                                        return@AiSummaryButton
+                                    }
+                                    val expanding = !aiSummaryExpanded
+                                    aiSummaryExpanded = expanding
+                                    if (expanding &&
+                                        (llmSummaryState.status == SummaryStatus.Idle ||
+                                            llmSummaryState.status is SummaryStatus.Error)
+                                    ) {
+                                        onRequestAiSummary()
+                                    }
+                                }
                             )
+                        } else {
+                            Spacer(modifier = Modifier.size(38.dp))
+                        }
+                        Box(
+                            modifier = Modifier.weight(1f),
+                            contentAlignment = Alignment.CenterEnd
+                        ) {
+                            if (showReadAloudAction) {
+                                DetailActionButton(
+                                    text = "大声朗读",
+                                    fontSize = bodyFontSize,
+                                    containerColor = activeActionContainerColor,
+                                    contentColor = activeColor,
+                                    borderColor = activeActionBorderColor,
+                                    onClick = {
+                                        if (readerAutoScrollPlayingState.value) {
+                                            setAutoScrollPlaying(playing = false)
+                                        }
+                                        onOpenReadAloud(null, originalContentEnabled)
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -1303,15 +1344,14 @@ internal fun DetailContent(
                     )
                 }
             }
-            if (showAiBanner) {
-                item(key = "aiSummaryBanner") {
+            if (showAiSummaryParagraph) {
+                item(key = "aiSummaryParagraph") {
                     Spacer(modifier = Modifier.height(blockSpacing))
-                    AiSummaryBanner(
+                    AiSummaryParagraph(
                         summaryState = llmSummaryState,
                         textColor = textColor,
-                        backgroundColor = backgroundColor,
                         activeColor = activeColor,
-                        onClick = onOpenAiSummary
+                        onRetry = onRequestAiSummary
                     )
                 }
             }
@@ -1334,7 +1374,7 @@ internal fun DetailContent(
                         isScrolling = isScrolling,
                         onTap = ::toggleAutoScroll,
                         onDoubleTap = ::openAutoScrollControls,
-                        onLongClick = ::openReadAloudFromVisibleAnchor
+                        onLongClick = { openReadAloudFromVisibleAnchor() }
                     )
                 }
             }
@@ -1397,7 +1437,25 @@ internal fun DetailContent(
                             highlightColor = readAloudHighlightColor,
                             onTap = ::toggleAutoScroll,
                             onDoubleTap = ::openAutoScrollControls,
-                            onLongClick = ::openReadAloudFromVisibleAnchor,
+                            onLongClick = { pressPosition ->
+                                val pressedCharOffset = importedTextChunkLayouts[index]
+                                    ?.getOffsetForPosition(pressPosition)
+                                AppLogger.d(
+                                    "ReadAloudTouch",
+                                    "imported chunk=$index position=$pressPosition offset=$pressedCharOffset " +
+                                        "text=${pressedCharOffset?.let { text.drop(it).take(40) }}"
+                                )
+                                openReadAloudControlsOnce(
+                                    pressedCharOffset?.let { charOffset ->
+                                        importedTextReadAloudStartAnchorAtCharOffset(
+                                            chunkIndex = index,
+                                            chunkText = text,
+                                            pressedCharOffset = charOffset,
+                                            byteLength = importedTextReader.byteLength
+                                        )
+                                    } ?: currentReadAloudStartAnchor()
+                                )
+                            },
                             onTextLayout = { importedTextChunkLayouts[index] = it }
                         )
                     }
@@ -1455,7 +1513,24 @@ internal fun DetailContent(
                                 highlightColor = readAloudHighlightColor,
                                 onTap = ::toggleAutoScroll,
                                 onDoubleTap = ::openAutoScrollControls,
-                                onLongClick = ::openReadAloudFromVisibleAnchor,
+                                onLongClick = { pressPosition ->
+                                    val pressedCharOffset = contentTextBlockLayouts[index]
+                                        ?.getOffsetForPosition(pressPosition)
+                                    AppLogger.d(
+                                        "ReadAloudTouch",
+                                        "content block=$index position=$pressPosition offset=$pressedCharOffset " +
+                                            "text=${pressedCharOffset?.let { block.text.drop(it).take(40) }}"
+                                    )
+                                    openReadAloudControlsOnce(
+                                        pressedCharOffset?.let { charOffset ->
+                                            contentReadAloudStartAnchorAtCharOffset(
+                                                contentBlocks = contentBlocks,
+                                                blockIndex = index,
+                                                pressedCharOffset = charOffset
+                                            )
+                                        } ?: currentReadAloudStartAnchor()
+                                    )
+                                },
                                 onTextLayout = { contentTextBlockLayouts[index] = it }
                             )
                         }
@@ -1601,56 +1676,9 @@ internal fun DetailContent(
                         .fillMaxWidth()
                         .height(
                             com.lightningstudio.watchrss.ui.reader.ReaderPageLayout
-                                .bottomPadding(showAiButton)
+                                .bottomPadding(hasFloatingAction = false)
                         )
                         .readerGestureTarget(::openReadAloudFromVisibleAnchor)
-                )
-            }
-        }
-
-        val aiButtonVisible = showAiButton && !isScrolling
-        val aiTransition = updateTransition(targetState = aiButtonVisible, label = "AiButton")
-        val aiScale by aiTransition.animateFloat(
-            transitionSpec = {
-                if (targetState) {
-                    spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessMediumLow
-                    )
-                } else {
-                    tween(160)
-                }
-            },
-            label = "aiScale"
-        ) { if (it) 1f else 0.72f }
-        val aiAlpha by aiTransition.animateFloat(
-            transitionSpec = { if (targetState) tween(200) else tween(160) },
-            label = "aiAlpha"
-        ) { if (it) 1f else 0f }
-        val aiBlurDp by aiTransition.animateFloat(
-            transitionSpec = { if (targetState) tween(220) else tween(160) },
-            label = "aiBlur"
-        ) { if (it) 0f else 6f }
-
-        if (aiTransition.currentState || aiTransition.targetState) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(bottom = 14.dp),
-                contentAlignment = Alignment.BottomCenter
-            ) {
-                AiFloatingButton(
-                    activeColor = activeColor,
-                    containerColor = actionContainerColor,
-                    borderColor = actionBorderColor,
-                    modifier = Modifier
-                        .graphicsLayer {
-                            scaleX = aiScale
-                            scaleY = aiScale
-                            alpha = aiAlpha
-                        }
-                        .then(if (aiBlurDp > 0f) Modifier.blur(aiBlurDp.dp) else Modifier),
-                    onClick = onOpenAiSummary
                 )
             }
         }
@@ -1686,6 +1714,13 @@ internal fun DetailContent(
                 onCancel = { showOriginalModeWarning = false }
             )
         }
+    }
+
+    if (showAiPurchaseDialog) {
+        DownloadPhoneAppDialog(
+            operation = "购买并使用 AI 总结",
+            onDismiss = { showAiPurchaseDialog = false }
+        )
     }
 }
 
@@ -2441,6 +2476,58 @@ private fun currentContentTextReadAloudStartAnchor(
     )
 }
 
+internal fun importedTextReadAloudStartAnchorAtCharOffset(
+    chunkIndex: Int,
+    chunkText: String,
+    pressedCharOffset: Int,
+    byteLength: Long
+): ReadAloudStartAnchor {
+    val anchorCharOffset = readAloudPressedCharOffset(chunkText, pressedCharOffset)
+    val byteOffsetInChunk = utf8ByteCountBeforeCharOffset(chunkText, anchorCharOffset)
+    val absoluteByte = (chunkIndex.toLong() * ARTICLE_TEXT_CHUNK_BYTES.toLong() + byteOffsetInChunk)
+        .coerceIn(0L, byteLength.coerceAtLeast(0L))
+    val progress = if (byteLength > 0L) {
+        (absoluteByte.toDouble() / byteLength.toDouble()).toFloat().coerceIn(0f, 1f)
+    } else {
+        null
+    }
+    return ReadAloudStartAnchor(
+        textSnippet = readAloudAnchorSnippet(chunkText, anchorCharOffset),
+        progress = progress,
+        importedChunkIndex = chunkIndex,
+        importedCharOffset = anchorCharOffset
+    )
+}
+
+internal fun contentReadAloudStartAnchorAtCharOffset(
+    contentBlocks: List<ContentBlock>,
+    blockIndex: Int,
+    pressedCharOffset: Int
+): ReadAloudStartAnchor? {
+    val textBlock = contentBlocks.getOrNull(blockIndex) as? ContentBlock.Text ?: return null
+    val anchorCharOffset = readAloudPressedCharOffset(textBlock.text, pressedCharOffset)
+    val totalTextBytes = contentBlocks.sumOf { block ->
+        (block as? ContentBlock.Text)?.text?.let(::utf8ByteCount) ?: 0
+    }
+    val bytesBeforeBlock = contentBlocks.asSequence()
+        .take(blockIndex)
+        .sumOf { block -> (block as? ContentBlock.Text)?.text?.let(::utf8ByteCount) ?: 0 }
+    val byteOffsetInBlock = utf8ByteCountBeforeCharOffset(textBlock.text, anchorCharOffset)
+    val progress = if (totalTextBytes > 0) {
+        ((bytesBeforeBlock + byteOffsetInBlock).toDouble() / totalTextBytes.toDouble())
+            .toFloat()
+            .coerceIn(0f, 1f)
+    } else {
+        null
+    }
+    return ReadAloudStartAnchor(
+        textSnippet = readAloudAnchorSnippet(textBlock.text, anchorCharOffset),
+        progress = progress,
+        contentBlockIndex = blockIndex,
+        contentCharOffset = anchorCharOffset
+    )
+}
+
 private fun firstVisibleImportedTextChunkWithLayout(
     listState: androidx.compose.foundation.lazy.LazyListState,
     marker: String,
@@ -2519,6 +2606,14 @@ private fun readAloudBoundaryStartOffset(text: String, startCharOffset: Int): In
         index++
     }
     return startCharOffset.coerceIn(0, text.length)
+}
+
+internal fun readAloudPressedCharOffset(text: String, pressedCharOffset: Int): Int {
+    var index = pressedCharOffset.coerceIn(0, text.length)
+    while (index < text.length && text[index].isWhitespace()) {
+        index++
+    }
+    return index
 }
 
 private fun readAloudAnchorSnippet(text: String, charOffset: Int): String? {

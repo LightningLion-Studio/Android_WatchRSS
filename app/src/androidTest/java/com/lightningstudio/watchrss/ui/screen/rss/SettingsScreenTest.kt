@@ -35,7 +35,6 @@ class SettingsScreenTest {
             SettingsScreen(
                 cacheLimitMb = MutableStateFlow(1024L),
                 cacheUsageMb = MutableStateFlow(256L),
-                readingThemeDark = MutableStateFlow(true),
                 shareUseSystem = MutableStateFlow(false),
                 readingFontSizeSp = MutableStateFlow(14),
                 syncMediaKeepAliveEnabled = MutableStateFlow(false),
@@ -49,7 +48,6 @@ class SettingsScreenTest {
                 llmPromptPreset = MutableStateFlow(0),
                 showPerformanceTools = false,
                 onSelectCacheLimit = {},
-                onToggleReadingTheme = {},
                 onToggleShareMode = {},
                 onSelectFontSize = {},
                 onToggleSyncMediaKeepAlive = {},
@@ -71,7 +69,7 @@ class SettingsScreenTest {
         }
 
         composeRule.onNodeWithTag(SettingsTestTags.ROOT).assertExists()
-        composeRule.onNodeWithTag(SettingsTestTags.THEME_SWITCH, useUnmergedTree = true).assertExists()
+        composeRule.onAllNodesWithText("阅读主题").assertCountEquals(0)
         composeRule.onNodeWithTag(SettingsTestTags.FONT_VALUE, useUnmergedTree = true).assertExists()
         composeRule.onNodeWithTag(SettingsTestTags.MEDIA_VOLUME_CONTROL_SWITCH, useUnmergedTree = true).performScrollTo().assertExists()
         composeRule.onNodeWithTag(SettingsTestTags.MEDIA_VOLUME_GUARD_SWITCH, useUnmergedTree = true).performScrollTo().assertExists()
@@ -103,7 +101,6 @@ class SettingsScreenTest {
     fun settingsScreen_interactionsInvokeCallbacks() {
         val cacheSelections = mutableListOf<Long>()
         val fontSelections = mutableListOf<Int>()
-        var themeToggleCount = 0
         var mediaVolumeControlToggleCount = 0
         var mediaVolumeGuardToggleCount = 0
         val playbackStartVolumeSelections = mutableListOf<Int?>()
@@ -112,7 +109,6 @@ class SettingsScreenTest {
             SettingsScreen(
                 cacheLimitMb = MutableStateFlow(1024L),
                 cacheUsageMb = MutableStateFlow(256L),
-                readingThemeDark = MutableStateFlow(true),
                 shareUseSystem = MutableStateFlow(false),
                 readingFontSizeSp = MutableStateFlow(14),
                 syncMediaKeepAliveEnabled = MutableStateFlow(false),
@@ -126,7 +122,6 @@ class SettingsScreenTest {
                 llmPromptPreset = MutableStateFlow(0),
                 showPerformanceTools = false,
                 onSelectCacheLimit = { cacheSelections += it },
-                onToggleReadingTheme = { themeToggleCount += 1 },
                 onToggleShareMode = {},
                 onSelectFontSize = { fontSelections += it },
                 onToggleSyncMediaKeepAlive = {},
@@ -147,7 +142,6 @@ class SettingsScreenTest {
             )
         }
 
-        composeRule.onNodeWithTag(SettingsTestTags.THEME_SWITCH, useUnmergedTree = true).performClick()
         composeRule.onNodeWithTag(SettingsTestTags.FONT_DECREASE_BUTTON, useUnmergedTree = true).performScrollTo().performClick()
         composeRule.onNodeWithTag(SettingsTestTags.FONT_INCREASE_BUTTON, useUnmergedTree = true).performScrollTo().performClick()
         composeRule.onNodeWithTag(SettingsTestTags.MEDIA_VOLUME_CONTROL_SWITCH, useUnmergedTree = true).performScrollTo().performClick()
@@ -161,7 +155,6 @@ class SettingsScreenTest {
         composeRule.runOnIdle {
             assertEquals(listOf(768L, 1536L), cacheSelections)
             assertEquals(listOf(12, 16), fontSelections)
-            assertEquals(1, themeToggleCount)
             assertEquals(1, mediaVolumeControlToggleCount)
             assertEquals(1, mediaVolumeGuardToggleCount)
             assertEquals(listOf<Int?>(5, 15), playbackStartVolumeSelections)
@@ -174,7 +167,6 @@ class SettingsScreenTest {
             SettingsScreen(
                 cacheLimitMb = MutableStateFlow(1024L),
                 cacheUsageMb = MutableStateFlow(256L),
-                readingThemeDark = MutableStateFlow(true),
                 shareUseSystem = MutableStateFlow(false),
                 readingFontSizeSp = MutableStateFlow(14),
                 syncMediaKeepAliveEnabled = MutableStateFlow(false),
@@ -188,7 +180,6 @@ class SettingsScreenTest {
                 llmPromptPreset = MutableStateFlow(0),
                 showPerformanceTools = false,
                 onSelectCacheLimit = {},
-                onToggleReadingTheme = {},
                 onToggleShareMode = {},
                 onSelectFontSize = {},
                 onToggleSyncMediaKeepAlive = {},

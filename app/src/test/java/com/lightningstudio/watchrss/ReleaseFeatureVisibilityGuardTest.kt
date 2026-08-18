@@ -25,7 +25,7 @@ class ReleaseFeatureVisibilityGuardTest {
         assertTrue(ttsSettings.contains("buildType == \"debug\""))
 
         val detailScreen = source("ui/screen/rss/DetailScreen.kt")
-        assertTrue(detailScreen.contains("): Boolean = llmEnabled && hasPaidAuthorization"))
+        assertTrue(detailScreen.contains("): Boolean = llmEnabled"))
     }
 
     @Test

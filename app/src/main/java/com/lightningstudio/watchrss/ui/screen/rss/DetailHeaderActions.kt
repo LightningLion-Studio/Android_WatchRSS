@@ -17,6 +17,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -29,7 +30,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material3.MaterialTheme
@@ -52,6 +52,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -73,33 +75,30 @@ import kotlinx.coroutines.launch
 import kotlin.math.max
 
 @Composable
-internal fun AiSummaryBanner(
+internal fun AiSummaryParagraph(
     summaryState: LlmSummaryUiState,
     textColor: Color,
-    backgroundColor: Color,
     activeColor: Color,
-    onClick: () -> Unit
+    onRetry: () -> Unit
 ) {
-    val isGenerating = summaryState.status == SummaryStatus.Generating
+    val isLoading = summaryState.status == SummaryStatus.WaitingForContent ||
+        summaryState.status == SummaryStatus.Generating
     val hasText = summaryState.text.isNotBlank()
     val isError = summaryState.status is SummaryStatus.Error
-    val bannerBg = activeColor.copy(alpha = 0.10f).compositeOver(backgroundColor)
 
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(WatchDimens.hey_card_normal_bg_radius))
-            .background(bannerBg)
-            .clickableWithRipple(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 8.dp)
+            .then(if (isError) Modifier.clickableWithRipple(onClick = onRetry) else Modifier)
+            .padding(horizontal = 4.dp)
     ) {
         androidx.compose.foundation.layout.Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
         ) {
-            if (isGenerating && !hasText) {
+            if (isLoading && !hasText) {
                 WatchCircularProgressIndicator(
-                    modifier = Modifier.size(12.dp),
+                    modifier = Modifier.size(14.dp),
                     color = activeColor,
                     strokeWidth = 1.5.dp
                 )
@@ -108,47 +107,45 @@ internal fun AiSummaryBanner(
                     imageVector = Icons.Outlined.AutoAwesome,
                     contentDescription = null,
                     tint = activeColor,
-                    modifier = Modifier.size(12.dp)
+                    modifier = Modifier.size(14.dp)
                 )
             }
             Spacer(modifier = Modifier.width(6.dp))
-    val displayText = when {
-        isError -> "总结失败，点击重试"
-        hasText -> summaryState.firstLine
-        summaryState.status == SummaryStatus.WaitingForContent -> "等待原文加载..."
-        isGenerating -> "正在生成总结..."
-        else -> "AI 总结"
-    }
             Text(
-                text = displayText,
+                text = "AI 总结",
                 style = MaterialTheme.typography.bodySmall,
-                color = if (isError) Color(0xFFFF8A80) else textColor.copy(alpha = 0.9f),
-                modifier = Modifier.weight(1f),
-                maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-            )
-            Spacer(modifier = Modifier.width(4.dp))
-            androidx.compose.material3.Icon(
-                imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-                contentDescription = "查看详情",
-                tint = textColor.copy(alpha = 0.5f),
-                modifier = Modifier.size(14.dp)
+                color = activeColor
             )
         }
+        Spacer(modifier = Modifier.size(6.dp))
+        val displayText = when {
+            isError -> "总结失败，点击重试"
+            hasText -> summaryState.text
+            summaryState.status == SummaryStatus.WaitingForContent -> "正在等待原文加载..."
+            summaryState.status == SummaryStatus.Generating -> "正在生成总结..."
+            else -> "正在准备总结..."
+        }
+        Text(
+            text = displayText,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (isError) Color(0xFFFF8A80) else textColor.copy(alpha = 0.92f)
+        )
     }
 }
 
 @Composable
-internal fun AiFloatingButton(
+internal fun AiSummaryButton(
     activeColor: Color,
     containerColor: Color,
     borderColor: Color,
+    expanded: Boolean,
+    loading: Boolean,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val backgroundColor = if (isPressed) {
+    val backgroundColor = if (isPressed || expanded) {
         activeColor.copy(alpha = 0.18f).compositeOver(containerColor)
     } else {
         containerColor
@@ -157,6 +154,13 @@ internal fun AiFloatingButton(
     Box(
         modifier = modifier
             .size(38.dp)
+            .semantics {
+                contentDescription = when {
+                    loading -> "AI 总结加载中"
+                    expanded -> "收起 AI 总结"
+                    else -> "展开 AI 总结"
+                }
+            }
             .clip(CircleShape)
             .background(backgroundColor)
             .then(
@@ -166,14 +170,22 @@ internal fun AiFloatingButton(
             .clickableWithRipple(interactionSource = interactionSource, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        androidx.compose.material3.Icon(
-            imageVector = Icons.Outlined.AutoAwesome,
-            contentDescription = "AI 总结",
-            tint = activeColor,
-            modifier = Modifier
-                .size(38.dp)
-                .padding(watchDimensionResource(R.dimen.hey_distance_6dp))
-        )
+        if (loading) {
+            WatchCircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                color = activeColor,
+                strokeWidth = 2.dp
+            )
+        } else {
+            androidx.compose.material3.Icon(
+                imageVector = Icons.Outlined.AutoAwesome,
+                contentDescription = null,
+                tint = activeColor,
+                modifier = Modifier
+                    .size(38.dp)
+                    .padding(watchDimensionResource(R.dimen.hey_distance_6dp))
+            )
+        }
     }
 }
 

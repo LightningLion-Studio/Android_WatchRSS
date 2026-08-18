@@ -82,6 +82,8 @@ class LlmSummaryViewModel(
     private var pendingTitle = ""
     private var pendingContent = ""
     private var pendingContentHash = ""
+    private var contentReady = false
+    private var manualStartRequested = false
     private var generationJob: Job? = null
     private var preparationJob: Job? = null
 
@@ -96,14 +98,20 @@ class LlmSummaryViewModel(
     }
 
     fun startIfIdle() {
-        if (_state.value.status != SummaryStatus.Idle) return
-        startGeneration()
+        if (_state.value.status != SummaryStatus.Idle &&
+            _state.value.status != SummaryStatus.WaitingForContent
+        ) return
+        manualStartRequested = true
+        if (contentReady) {
+            startGeneration()
+        } else {
+            _state.update { it.copy(status = SummaryStatus.WaitingForContent, text = "") }
+        }
     }
 
     /** 加载内容并立即开始生成（不依赖 autoSummarize 设置，适用于用户主动触发的场景）。 */
     fun prepareAndStart(itemId: Long) {
         if (_state.value.itemId == itemId) {
-            if (_state.value.status == SummaryStatus.WaitingForContent) return
             startIfIdle()
             return
         }
@@ -116,6 +124,11 @@ class LlmSummaryViewModel(
         generationJob = null
         preparationJob?.cancel()
         preparationJob = null
+        pendingTitle = ""
+        pendingContent = ""
+        pendingContentHash = ""
+        contentReady = false
+        manualStartRequested = forceStartWhenReady
         _state.value = LlmSummaryUiState(itemId = itemId)
 
         preparationJob = viewModelScope.launch {
@@ -149,6 +162,7 @@ class LlmSummaryViewModel(
                     rawHtml.isBlank()
                 if (waitingForOriginalContent) {
                     pendingContent = ""
+                    contentReady = false
                     if (_state.value.status == SummaryStatus.Idle ||
                         _state.value.status == SummaryStatus.WaitingForContent
                     ) {
@@ -169,8 +183,9 @@ class LlmSummaryViewModel(
                 } else {
                     ""
                 }
+                contentReady = true
 
-                if (autoStart &&
+                if ((autoStart || manualStartRequested) &&
                     (_state.value.status == SummaryStatus.Idle ||
                         _state.value.status == SummaryStatus.WaitingForContent)
                 ) {
@@ -190,6 +205,7 @@ class LlmSummaryViewModel(
     }
 
     private fun startGeneration() {
+        manualStartRequested = false
         _state.update { it.copy(status = SummaryStatus.Generating, text = "") }
         generationJob?.cancel()
         generationJob = viewModelScope.launch(Dispatchers.IO) {

@@ -80,7 +80,6 @@ private enum class SettingsPage {
 fun SettingsScreen(
     cacheLimitMb: StateFlow<Long>,
     cacheUsageMb: StateFlow<Long>,
-    readingThemeDark: StateFlow<Boolean>,
     shareUseSystem: StateFlow<Boolean>,
     readingFontSizeSp: StateFlow<Int>,
     syncMediaKeepAliveEnabled: StateFlow<Boolean>,
@@ -96,7 +95,6 @@ fun SettingsScreen(
     showDetailedTtsConfiguration: Boolean = true,
     hasPaidAiAccess: Boolean = false,
     onSelectCacheLimit: (Long) -> Unit,
-    onToggleReadingTheme: () -> Unit,
     onToggleShareMode: () -> Unit,
     onSelectFontSize: (Int) -> Unit,
     onToggleSyncMediaKeepAlive: () -> Unit,
@@ -123,7 +121,6 @@ fun SettingsScreen(
     val context = LocalContext.current
     val cacheLimit by cacheLimitMb.collectAsState()
     val usage by cacheUsageMb.collectAsState()
-    val themeDark by readingThemeDark.collectAsState()
     val useSystemShare by shareUseSystem.collectAsState()
     val fontSizeSp by readingFontSizeSp.collectAsState()
     val syncMediaKeepAlive by syncMediaKeepAliveEnabled.collectAsState()
@@ -146,7 +143,6 @@ fun SettingsScreen(
 
     when (currentPage) {
         SettingsPage.Main -> MainSettingsPage(
-            readingThemeDark = themeDark,
             readingFontSizeSp = fontSizeSp,
             mediaVolumeControlEnabled = mediaVolumeControl,
             mediaVolumeGuardEnabled = mediaVolumeGuard,
@@ -158,7 +154,6 @@ fun SettingsScreen(
             showPerformanceTools = showPerformanceTools,
             showDetailedTtsConfiguration = showDetailedTtsConfiguration,
             hasPaidAiAccess = hasPaidAiAccess,
-            onToggleReadingTheme = onToggleReadingTheme,
             onSelectFontSize = onSelectFontSize,
             onToggleMediaVolumeControl = onToggleMediaVolumeControl,
             onToggleMediaVolumeGuard = onToggleMediaVolumeGuard,
@@ -238,7 +233,6 @@ fun AdvancedSettingsScreen(
 
 @Composable
 private fun MainSettingsPage(
-    readingThemeDark: Boolean,
     readingFontSizeSp: Int,
     mediaVolumeControlEnabled: Boolean,
     mediaVolumeGuardEnabled: Boolean,
@@ -250,7 +244,6 @@ private fun MainSettingsPage(
     showPerformanceTools: Boolean,
     showDetailedTtsConfiguration: Boolean,
     hasPaidAiAccess: Boolean,
-    onToggleReadingTheme: () -> Unit,
     onSelectFontSize: (Int) -> Unit,
     onToggleMediaVolumeControl: () -> Unit,
     onToggleMediaVolumeGuard: () -> Unit,
@@ -286,7 +279,6 @@ private fun MainSettingsPage(
     val pillHeight = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_multiple_item_height
     val scrollState = rememberScrollState()
     val context = LocalContext.current
-    val readingThemeInfo = remember { MainSettingsCatalog.readingTheme }
     val fontSizeInfo = remember { MainSettingsCatalog.fontSize }
     val mediaVolumeControlInfo = remember { MainSettingsCatalog.mediaVolumeControl }
     val mediaVolumeGuardInfo = remember { MainSettingsCatalog.mediaVolumeGuard }
@@ -376,30 +368,6 @@ private fun MainSettingsPage(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
             )
-
-            Spacer(modifier = Modifier.height(entrySpacing))
-
-            WatchSettingsPillRow(label = readingThemeInfo.title, endPaddingMultiplier = 1.5f) {
-                ReadingThemeToggle(
-                    isDark = readingThemeDark,
-                    modifier = Modifier.testTag(SettingsTestTags.THEME_SWITCH),
-                    onToggle = onToggleReadingTheme
-                )
-            }
-            Text(
-                text = if (readingThemeDark) "深色" else "浅色",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
-            )
-            Text(
-                text = readingThemeInfo.description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
-            )
-
-            Spacer(modifier = Modifier.height(entrySpacing))
 
             WatchSettingsPillRow(label = fontSizeInfo.title) {
                 RoundIconButtonIcon(
@@ -632,7 +600,7 @@ private fun MainSettingsPage(
                         )
                     }
                     Text(
-                        text = if (llmAutoSummarize) "进入文章时自动在顶部显示总结" else "详情页底部显示总结按钮，手动触发",
+                        text = if (llmAutoSummarize) "进入文章时自动在顶部显示总结" else "详情页顶部显示总结按钮，手动触发",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
@@ -906,48 +874,6 @@ private fun AdvancedSettingsPage(
 
             Spacer(modifier = Modifier.height(pillHeight))
         }
-    }
-}
-
-@Composable
-private fun ReadingThemeToggle(
-    isDark: Boolean,
-    modifier: Modifier = Modifier,
-    onToggle: () -> Unit
-) {
-    val outerSize = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_20dp
-    val innerInset = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_2dp
-    val innerSize = outerSize - (innerInset * 2f)
-    val orange = watchColorResource(R.color.brand_orange)
-    val fillColor = if (isDark) androidx.compose.ui.graphics.Color.Black else androidx.compose.ui.graphics.Color.White
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val borderColor = if (isPressed) lerp(orange, androidx.compose.ui.graphics.Color.White, 0.12f) else orange
-
-    Box(
-        modifier = modifier
-            .size(outerSize)
-            .semantics {
-                contentDescription = "阅读主题"
-                stateDescription = if (isDark) "深色" else "浅色"
-            }
-            .clip(CircleShape)
-            .background(borderColor)
-            .toggleable(
-                value = isDark,
-                role = Role.Switch,
-                interactionSource = interactionSource,
-                indication = null,
-                onValueChange = { onToggle() }
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        Box(
-            modifier = Modifier
-                .size(innerSize)
-                .clip(CircleShape)
-                .background(fillColor)
-        )
     }
 }
 

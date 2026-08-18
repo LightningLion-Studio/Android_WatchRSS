@@ -70,7 +70,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.BlurFadeVisibility
-import com.lightningstudio.watchrss.ui.components.PhoneSyncActions
+import com.lightningstudio.watchrss.ui.components.ContentEditingDownloadPhoneAppButton
 import com.lightningstudio.watchrss.data.rss.SavedItem
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
@@ -91,8 +91,7 @@ fun SavedItemsScreen(
     onItemClick: (SavedItem) -> Unit,
     onItemRemove: (SavedItem) -> Unit,
     onItemsReordered: (List<Long>) -> Unit,
-    syncOperationLabel: String,
-    onSyncFromPhone: () -> Unit
+    syncOperationLabel: String
 ) {
     val safePadding = WatchDimens.watch_safe_padding
     val extraBottomPadding = 40.dp
@@ -153,10 +152,11 @@ fun SavedItemsScreen(
                 SavedHeader(title = title, hint = hint)
             }
             item(key = "phone_sync_prompt") {
-                PhoneSyncActions(
+                ContentEditingDownloadPhoneAppButton(
                     operation = syncOperationLabel,
-                    onStartSync = onSyncFromPhone,
-                    modifier = Modifier.padding(top = itemSpacing)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = itemSpacing)
                 )
             }
             if (hasLoadedItems && displayItems.isEmpty()) {

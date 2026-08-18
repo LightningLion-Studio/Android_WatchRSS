@@ -15,7 +15,6 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
 import com.lightningstudio.watchrss.data.rss.SaveType
 import com.lightningstudio.watchrss.data.rss.SavedItem
-import com.lightningstudio.watchrss.phoneconnection.PhoneConnectionAbility
 import com.lightningstudio.watchrss.ui.screen.rss.SavedItemsScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
@@ -52,8 +51,6 @@ class SavedItemsActivity : BaseWatchActivity() {
                 val title = if (viewModel.saveType == SaveType.FAVORITE) "我的收藏" else "稍后再看"
                 val hint = "保存在本地，离线可读，长按可拖动排序"
                 val emptyMessage = if (viewModel.saveType == SaveType.FAVORITE) "暂无收藏" else "暂无稍后再看"
-                val isFavorite = viewModel.saveType == SaveType.FAVORITE
-
                 SavedItemsScreen(
                     title = title,
                     hint = hint,
@@ -61,28 +58,10 @@ class SavedItemsActivity : BaseWatchActivity() {
                     hasLoadedItems = hasLoadedItems,
                     items = items,
                     undoVisible = lastRemoved != null,
-                    syncOperationLabel = if (isFavorite) "同步收藏" else "同步稍后再看",
-                    onSyncFromPhone = {
-                        startActivity(
-                            Intent(this, ServerActivity::class.java).apply {
-                                putExtra(
-                                    ServerActivity.EXTRA_SERVER_TYPE,
-                                    if (isFavorite) {
-                                        ServerActivity.ServerType.SYNC_FAVORITES.name
-                                    } else {
-                                        ServerActivity.ServerType.SYNC_WATCH_LATER.name
-                                    }
-                                )
-                                putExtra(
-                                    ServerActivity.EXTRA_PREFERRED_ABILITY,
-                                    if (isFavorite) {
-                                        PhoneConnectionAbility.SYNC_FAVORITES.name
-                                    } else {
-                                        PhoneConnectionAbility.SYNC_WATCH_LATER.name
-                                    }
-                                )
-                            }
-                        )
+                    syncOperationLabel = if (viewModel.saveType == SaveType.FAVORITE) {
+                        "同步收藏"
+                    } else {
+                        "同步稍后再看"
                     },
                     onUndoClick = { handleUndo() },
                     onItemClick = { savedItem ->

@@ -44,7 +44,6 @@ fun SettingsScreenHost(
     SettingsScreen(
         cacheLimitMb = viewModel.cacheLimitMb,
         cacheUsageMb = viewModel.cacheUsageMb,
-        readingThemeDark = viewModel.readingThemeDark,
         shareUseSystem = viewModel.shareUseSystem,
         readingFontSizeSp = viewModel.readingFontSizeSp,
         syncMediaKeepAliveEnabled = viewModel.syncMediaKeepAliveEnabled,
@@ -60,7 +59,6 @@ fun SettingsScreenHost(
         showDetailedTtsConfiguration = showDetailedTtsConfiguration,
         hasPaidAiAccess = hasPaidAiAccess,
         onSelectCacheLimit = viewModel::updateCacheLimitMb,
-        onToggleReadingTheme = viewModel::toggleReadingTheme,
         onToggleShareMode = viewModel::toggleShareUseSystem,
         onSelectFontSize = viewModel::updateReadingFontSizeSp,
         onToggleSyncMediaKeepAlive = viewModel::toggleSyncMediaKeepAlive,

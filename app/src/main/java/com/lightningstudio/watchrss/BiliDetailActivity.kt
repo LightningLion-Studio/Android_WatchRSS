@@ -47,7 +47,6 @@ class BiliDetailActivity : BaseWatchActivity() {
                     val useSystemShare = remember(context, shareUseSystem) {
                         shareUseSystem && isSystemShareSettingSupported(context)
                     }
-                    val readingThemeDark by settingsRepository.readingThemeDark.collectAsState(initial = true)
                     val readingFontSizeSp by settingsRepository.readingFontSizeSp.collectAsState(initial = 14)
 
                     LaunchedEffect(uiState.message) {
@@ -97,7 +96,6 @@ class BiliDetailActivity : BaseWatchActivity() {
                     if (rssMode) {
                         BiliRssDetailScreen(
                             uiState = uiState,
-                            readingThemeDark = readingThemeDark,
                             readingFontSizeSp = readingFontSizeSp,
                             onPlayClick = onPlay,
                             onFavorite = viewModel::favorite,

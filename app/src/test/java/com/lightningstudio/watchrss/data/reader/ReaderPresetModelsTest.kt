@@ -8,6 +8,12 @@ import org.json.JSONObject
 
 class ReaderPresetModelsTest {
     @Test
+    fun legacyThemeMigrationPreservesLightAndDarkChoice() {
+        assertEquals(ReaderThemeMode.LIGHT, legacyReaderThemeMode(legacyDark = false))
+        assertEquals(ReaderThemeMode.DARK, legacyReaderThemeMode(legacyDark = true))
+    }
+
+    @Test
     fun legacyMigrationStyle_roundTrips() {
         val source = ReaderPreset.lightDefault(
             id = "migrated",

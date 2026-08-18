@@ -17,6 +17,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -66,6 +68,64 @@ class LlmSummaryViewModelTest {
 
             assertEquals(SummaryStatus.WaitingForContent, viewModel.state.value.status)
             assertTrue(viewModel.state.value.text.isBlank())
+        } finally {
+            env.scope.cancel()
+        }
+    }
+
+    @Test
+    fun prepareAndStart_keepsManualRequestUntilOriginalContentIsReady() = runTest {
+        val channelId = 7L
+        val itemId = 42L
+        val repo = TestRssRepository(
+            initialChannels = listOf(sampleRssChannel(id = channelId, useOriginalContent = true))
+        ).apply {
+            setChannelItems(
+                channelId,
+                listOf(
+                    sampleRssItem(
+                        id = itemId,
+                        channelId = channelId,
+                        description = null,
+                        content = null
+                    )
+                )
+            )
+        }
+        val env = createSettingsRepository("llm-summary-manual-start.preferences_pb")
+
+        try {
+            val viewModel = LlmSummaryViewModel(
+                rssRepository = repo,
+                settingsRepository = env.repository,
+                tokenUsageRepository = LlmTokenUsageRepository(FakeLlmTokenUsageDao()),
+                watchAccountStore = FakeAccountStore()
+            )
+
+            viewModel.prepare(itemId)
+            advanceUntilIdle()
+            viewModel.prepareAndStart(itemId)
+            assertEquals(SummaryStatus.WaitingForContent, viewModel.state.value.status)
+
+            repo.setChannelItems(
+                channelId,
+                listOf(
+                    sampleRssItem(
+                        id = itemId,
+                        channelId = channelId,
+                        description = null,
+                        content = null,
+                        originalContent = "<p>原文正文已经加载完成。</p>"
+                    )
+                )
+            )
+            val startedStatus = viewModel.state
+                .map { it.status }
+                .first { it != SummaryStatus.WaitingForContent }
+            assertTrue(
+                "manual request should start after original content arrives, was $startedStatus",
+                startedStatus == SummaryStatus.Generating || startedStatus is SummaryStatus.Error
+            )
         } finally {
             env.scope.cancel()
         }

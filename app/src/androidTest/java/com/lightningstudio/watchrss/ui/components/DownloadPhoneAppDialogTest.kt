@@ -12,6 +12,8 @@ import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.unit.dp
 import androidx.test.espresso.Espresso.pressBack
@@ -27,6 +29,18 @@ import org.junit.runner.RunWith
 class DownloadPhoneAppDialogTest {
     @get:Rule
     val composeRule = createComposeRule()
+
+    @Test
+    fun contentEditingEntryUsesMemoPrompt_andKeepsItsOperationInDialog() {
+        composeRule.setWatchContent {
+            ContentEditingDownloadPhoneAppButton(operation = "配置大模型")
+        }
+
+        composeRule.onNodeWithText(phoneAppDownloadPrompt("同步备忘录")).performClick()
+
+        composeRule.onNodeWithTag(DownloadPhoneAppTestTags.DIALOG).assertIsDisplayed()
+        composeRule.onNodeWithText("以完成配置大模型").assertIsDisplayed()
+    }
 
     @Test
     fun dialogEscapesConstrainedParent_andBackDismissesIt() {

@@ -16,6 +16,14 @@ class DownloadPhoneAppPromptTest {
     }
 
     @Test
+    fun `memo prompt explains phone editing and sync`() {
+        assertEquals(
+            "下载手机端app以在手机上编辑和同步内容",
+            phoneAppDownloadPrompt("同步备忘录")
+        )
+    }
+
+    @Test
     fun `prompt survives blank operation`() {
         assertEquals(
             "下载手机端App以完成",

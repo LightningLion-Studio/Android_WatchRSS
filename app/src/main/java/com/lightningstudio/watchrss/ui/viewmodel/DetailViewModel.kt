@@ -101,9 +101,6 @@ class DetailViewModel(
     private val _isRetryingOfflineMedia = MutableStateFlow(false)
     val isRetryingOfflineMedia = _isRetryingOfflineMedia.asStateFlow()
 
-    val readingThemeDark = settingsRepository.readingThemeDark
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
-
     val readingFontSizeSp = settingsRepository.readingFontSizeSp
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DEFAULT_READING_FONT_SIZE_SP)
 

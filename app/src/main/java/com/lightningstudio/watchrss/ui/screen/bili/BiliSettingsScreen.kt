@@ -29,7 +29,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.WatchSwitch
-import com.lightningstudio.watchrss.ui.components.PhoneSyncActions
+import com.lightningstudio.watchrss.ui.components.ContentEditingDownloadPhoneAppButton
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownScrollHandler
 import com.lightningstudio.watchrss.ui.theme.watchColorResource
@@ -46,8 +46,7 @@ fun BiliSettingsScreen(
     onToggleContinuePlaybackInBackground: () -> Unit,
     deleteEnabled: Boolean,
     onDelete: () -> Unit,
-    onLogout: () -> Unit,
-    onSyncBiliWatchRecords: (() -> Unit)? = null
+    onLogout: () -> Unit
 ) {
     val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
     val titleSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_6dp
@@ -116,14 +115,7 @@ fun BiliSettingsScreen(
                 Spacer(modifier = Modifier.height(entrySpacing))
             }
 
-            if (onSyncBiliWatchRecords != null) {
-                PhoneSyncActions(
-                    operation = "同步B站观看记录",
-                    onStartSync = onSyncBiliWatchRecords,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Spacer(modifier = Modifier.height(entrySpacing))
-            }
+            ContentEditingDownloadPhoneAppButton(operation = "同步B站观看记录")
 
             SettingsDangerRow(
                 label = "退出登录",

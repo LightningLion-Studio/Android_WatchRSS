@@ -11,6 +11,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.lightningstudio.watchrss.ui.screen.OobeScreen
+import com.lightningstudio.watchrss.data.reader.ReaderThemeMode
+import com.lightningstudio.watchrss.ui.reader.readerChromeStyle
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
 import com.lightningstudio.watchrss.ui.viewmodel.OobeEvent
@@ -18,6 +20,9 @@ import com.lightningstudio.watchrss.ui.viewmodel.OobeViewModel
 import kotlinx.coroutines.launch
 
 class OobeActivity : BaseWatchActivity() {
+    private val readerPresetRepository by lazy {
+        (application as WatchRssApplication).container.readerPresetRepository
+    }
     private val viewModel: OobeViewModel by viewModels {
         AppViewModelFactory((application as WatchRssApplication).container)
     }
@@ -48,6 +53,8 @@ class OobeActivity : BaseWatchActivity() {
         setContent {
             WatchRSSTheme {
                 val uiState by viewModel.uiState.collectAsState()
+                val activeReaderPreset by readerPresetRepository.activePreset.collectAsState()
+                val readerChrome = activeReaderPreset.readerChromeStyle()
                 OobeScreen(
                     uiState = uiState,
                     onSetIntroPage = viewModel::setIntroPage,
@@ -68,6 +75,16 @@ class OobeActivity : BaseWatchActivity() {
                                 title = "隐私政策",
                                 path = InfoActivity.WATCH_PRIVACY_POLICY_PATH
                             )
+                        )
+                    },
+                    readerDisplayDark = readerChrome.isDark,
+                    onToggleReaderDisplayMode = {
+                        readerPresetRepository.setThemeMode(
+                            if (readerChrome.isDark) {
+                                ReaderThemeMode.LIGHT
+                            } else {
+                                ReaderThemeMode.DARK
+                            }
                         )
                     }
                 )

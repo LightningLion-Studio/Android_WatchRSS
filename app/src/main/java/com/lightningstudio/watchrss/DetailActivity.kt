@@ -103,7 +103,7 @@ class DetailActivity : BaseWatchActivity() {
                     llmSummaryState = llmSummaryState,
                     readAloudState = readAloudState,
                     isStartingActivity = isStartingActivity.collectAsState().value,
-                    onOpenAiSummary = ::openAiSummary,
+                    onRequestAiSummary = ::requestAiSummary,
                     onOpenReadAloud = ::openReadAloud,
                     onOpenReadAloudControls = ::openReadAloudControls,
                     onOpenAutoScrollControls = ::openAutoScrollControls,
@@ -148,12 +148,16 @@ class DetailActivity : BaseWatchActivity() {
         }
     }
 
-    private fun openAiSummary() {
+    private fun requestAiSummary() {
         val itemId = intent.getLongExtra(EXTRA_ITEM_ID, 0L)
         if (itemId <= 0L) return
-
-        _isStartingActivity.value = true
-        startActivity(LlmSummaryActivity.createIntent(this, itemId))
+        if (llmSummaryViewModel.state.value.status is
+            com.lightningstudio.watchrss.ui.viewmodel.SummaryStatus.Error
+        ) {
+            llmSummaryViewModel.retry()
+        } else {
+            llmSummaryViewModel.prepareAndStart(itemId)
+        }
     }
 
     private fun openReadAloud(startAnchor: ReadAloudStartAnchor?, preferOriginalContent: Boolean) {

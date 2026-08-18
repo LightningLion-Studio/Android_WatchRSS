@@ -16,7 +16,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -44,7 +43,6 @@ import okhttp3.Request
 import com.lightningstudio.watchrss.data.network.withWatchRssAppVersionHeader
 
 class InfoActivity : BaseWatchActivity() {
-    private val settingsRepository by lazy { (application as WatchRssApplication).container.settingsRepository }
     private val readerPresetRepository by lazy { (application as WatchRssApplication).container.readerPresetRepository }
     private var isNavigating by mutableStateOf(false)
 
@@ -68,8 +66,6 @@ class InfoActivity : BaseWatchActivity() {
             WatchRSSTheme {
                 ProvideReaderPreset(readerPresetRepository) {
                 val baseDensity = LocalDensity.current
-                val readingThemeDark by settingsRepository.readingThemeDark.collectAsState(initial = true)
-                val readingFontSizeSp by settingsRepository.readingFontSizeSp.collectAsState(initial = 14)
                 var reloadKey by rememberSaveable { mutableIntStateOf(0) }
                 var content by rememberSaveable(remotePath) { mutableStateOf(initialContent) }
                 var isLoading by rememberSaveable(remotePath) {
@@ -96,8 +92,6 @@ class InfoActivity : BaseWatchActivity() {
                             else -> InfoScreen(
                                 title = title,
                                 content = content.orEmpty(),
-                                readingThemeDark = readingThemeDark,
-                                readingFontSizeSp = readingFontSizeSp,
                                 onBeianClick = {
                                     isNavigating = true
                                     startActivity(BeianActivity.createIntent(this@InfoActivity))

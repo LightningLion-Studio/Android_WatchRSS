@@ -1,9 +1,37 @@
 package com.lightningstudio.watchrss.ui.screen.rss
 
+import com.lightningstudio.watchrss.ui.util.ContentBlock
+import com.lightningstudio.watchrss.ui.util.TextStyle
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class DetailBehaviorSupportTest {
+    @Test
+    fun contentReadAloudAnchor_startsAtPressedCharacterInPressedBlock() {
+        val blocks = listOf(
+            ContentBlock.Text("第一段不会被朗读。", TextStyle.BODY),
+            ContentBlock.Text("第二段开头。这里是长按的位置。后面继续。", TextStyle.BODY)
+        )
+        val pressedOffset = blocks[1].let { block ->
+            (block as ContentBlock.Text).text.indexOf("长按")
+        }
+
+        val anchor = contentReadAloudStartAnchorAtCharOffset(
+            contentBlocks = blocks,
+            blockIndex = 1,
+            pressedCharOffset = pressedOffset
+        )
+
+        assertEquals(1, anchor?.contentBlockIndex)
+        assertEquals(pressedOffset, anchor?.contentCharOffset)
+        assertEquals("长按的位置。后面继续。", anchor?.textSnippet)
+    }
+
+    @Test
+    fun readAloudPressedCharOffset_skipsWhitespaceAtTouchPoint() {
+        assertEquals(5, readAloudPressedCharOffset("正文   从这里开始", 2))
+    }
+
     @Test
     fun importedTextRestoreTarget_mapsProgressToChunkAndOffsetAfterHeaderItems() {
         val target = importedTextRestoreTarget(

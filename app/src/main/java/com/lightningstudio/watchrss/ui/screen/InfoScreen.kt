@@ -33,8 +33,6 @@ import androidx.compose.material3.Text
 fun InfoScreen(
     title: String,
     content: String,
-    readingThemeDark: Boolean,
-    readingFontSizeSp: Int,
     onBeianClick: () -> Unit
 ) {
     val density = LocalDensity.current

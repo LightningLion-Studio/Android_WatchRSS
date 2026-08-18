@@ -95,22 +95,7 @@ class BiliSettingsActivity : BaseWatchActivity() {
                                     showDeleteConfirm = true
                                 }
                             },
-                            onLogout = viewModel::logout,
-                            onSyncBiliWatchRecords = {
-                                startActivity(
-                                    Intent(this@BiliSettingsActivity, ServerActivity::class.java).apply {
-                                        putExtra(
-                                            ServerActivity.EXTRA_SERVER_TYPE,
-                                            ServerActivity.ServerType.SYNC_BILI_WATCH_RECORDS.name
-                                        )
-                                        putExtra(
-                                            ServerActivity.EXTRA_PREFERRED_ABILITY,
-                                            com.lightningstudio.watchrss.phoneconnection
-                                                .PhoneConnectionAbility.SYNC_BILI_WATCH_RECORDS.name
-                                        )
-                                    }
-                                )
-                            }
+                            onLogout = viewModel::logout
                         )
 
                         if (showDeleteConfirm) {

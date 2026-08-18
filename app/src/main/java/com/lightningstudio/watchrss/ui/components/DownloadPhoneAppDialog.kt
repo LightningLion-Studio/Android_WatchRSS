@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
@@ -34,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -67,8 +69,11 @@ import kotlinx.coroutines.withContext
 /** 手机端 App 的 OPPO 应用商店下载页。 */
 const val PHONE_APP_DOWNLOAD_URL = "https://app.cdo.oppomobile.com/home/detail?app_id=37262051"
 
-/** 「下载手机端App以完成{operation}」提示文案（纯函数，可测）。 */
-fun phoneAppDownloadPrompt(operation: String): String = "下载手机端App以完成$operation"
+/** 手机端 App 下载提示文案（纯函数，可测）。 */
+fun phoneAppDownloadPrompt(operation: String): String = when (operation) {
+    "同步备忘录" -> "下载手机端app以在手机上编辑和同步内容"
+    else -> "下载手机端App以完成$operation"
+}
 
 private const val DOWNLOAD_PHONE_DIALOG_BASE_SIZE_DP = 466f
 private const val DOWNLOAD_PHONE_QR_BASE_SIZE_DP = 176f
@@ -98,12 +103,15 @@ internal fun downloadPhoneAppQrSize(containerSize: Dp): Dp {
 fun DownloadPhoneAppButton(
     operation: String,
     modifier: Modifier = Modifier,
+    shape: Shape = RoundedCornerShape(WatchDimens.hey_button_default_radius),
+    prompt: String = phoneAppDownloadPrompt(operation),
     testTag: String? = null
 ) {
     var showDialog by remember { mutableStateOf(false) }
     WatchSettingsPillRow(
-        label = phoneAppDownloadPrompt(operation),
+        label = prompt,
         modifier = modifier,
+        shape = shape,
         testTag = testTag,
         onClick = { showDialog = true }
     )
@@ -112,7 +120,7 @@ fun DownloadPhoneAppButton(
     }
 }
 
-/** Full-width phone companion entry used for content editing and configuration. */
+/** 与备忘录列表一致的手机端内容编辑与同步入口。 */
 @Composable
 fun ContentEditingDownloadPhoneAppButton(
     operation: String,
@@ -124,6 +132,8 @@ fun ContentEditingDownloadPhoneAppButton(
         modifier = modifier
             .fillMaxWidth()
             .padding(bottom = WatchDimens.hey_distance_8dp),
+        shape = RoundedCornerShape(WatchDimens.hey_card_normal_bg_radius),
+        prompt = phoneAppDownloadPrompt("同步备忘录"),
         testTag = testTag
     )
 }

@@ -42,7 +42,6 @@ class DouyinDetailActivity : BaseWatchActivity() {
                 ProvideReaderPreset(readerPresetRepository) {
                 val baseDensity = LocalDensity.current
                 CompositionLocalProvider(LocalDensity provides Density(2f, baseDensity.fontScale)) {
-                    val readingThemeDark by settingsRepository.readingThemeDark.collectAsState(initial = true)
                     val readingFontSizeSp by settingsRepository.readingFontSizeSp.collectAsState(initial = 14)
                     val shareUseSystem by settingsRepository.shareUseSystem.collectAsState(initial = false)
                     var isFavorite by remember(awemeId) { mutableStateOf(false) }
@@ -77,7 +76,6 @@ class DouyinDetailActivity : BaseWatchActivity() {
                         isFavorite = isFavorite,
                         isWatchLater = false,
                         originalContentEnabled = false,
-                        readingThemeDark = readingThemeDark,
                         readingFontSizeSp = readingFontSizeSp,
                         shareUseSystem = shareUseSystem,
                         rssInlineImagePrefetchMode = DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE,

@@ -1,6 +1,8 @@
 package com.lightningstudio.watchrss.ui.activity
 
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -54,7 +56,7 @@ class SettingsActivityTest {
     @Test
     fun settingsActivity_rendersInjectedState() {
         composeRule.onNodeWithTag(SettingsTestTags.ROOT).assertExists()
-        composeRule.onNodeWithTag(SettingsTestTags.THEME_SWITCH, useUnmergedTree = true).assertExists()
+        composeRule.onAllNodesWithText("阅读主题").assertCountEquals(0)
         composeRule.onNodeWithTag(SettingsTestTags.MEDIA_VOLUME_CONTROL_SWITCH, useUnmergedTree = true).performScrollTo().assertExists()
         composeRule.onNodeWithTag(SettingsTestTags.MEDIA_VOLUME_GUARD_SWITCH, useUnmergedTree = true).performScrollTo().assertExists()
         composeRule.onNodeWithText("自动滚动").performScrollTo().assertExists()

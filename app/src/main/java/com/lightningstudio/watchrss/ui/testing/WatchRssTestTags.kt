@@ -93,7 +93,6 @@ object SettingsTestTags {
     const val CACHE_DECREASE_BUTTON = "settings/cache_decrease_button"
     const val CACHE_VALUE = "settings/cache_value"
     const val CACHE_INCREASE_BUTTON = "settings/cache_increase_button"
-    const val THEME_SWITCH = "settings/theme_switch"
     const val SHARE_SWITCH = "settings/share_switch"
     const val FONT_DECREASE_BUTTON = "settings/font_decrease_button"
     const val FONT_VALUE = "settings/font_value"

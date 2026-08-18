@@ -57,10 +57,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
+import com.lightningstudio.watchrss.ui.reader.LocalReaderPresetRuntime
+import com.lightningstudio.watchrss.ui.reader.readerChromeStyle
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
-import com.lightningstudio.watchrss.ui.theme.WatchReadingBackgroundLight
-import com.lightningstudio.watchrss.ui.theme.WatchReadingTextLight
-import com.lightningstudio.watchrss.ui.theme.WatchTextPrimary
 import com.lightningstudio.watchrss.ui.util.RssImageLoader
 import com.lightningstudio.watchrss.ui.viewmodel.BiliDetailUiState
 import com.lightningstudio.watchrss.ui.screen.rss.DetailTitle
@@ -68,7 +67,6 @@ import com.lightningstudio.watchrss.ui.screen.rss.DetailTitle
 @Composable
 fun BiliRssDetailScreen(
     uiState: BiliDetailUiState,
-    readingThemeDark: Boolean,
     readingFontSizeSp: Int,
     onPlayClick: () -> Unit,
     onFavorite: () -> Unit,
@@ -82,40 +80,41 @@ fun BiliRssDetailScreen(
     val isScrolling by remember(listState) {
         derivedStateOf { listState.isScrollInProgress }
     }
-    val backgroundColor = if (readingThemeDark) Color.Black else WatchReadingBackgroundLight
-    val textColor = if (readingThemeDark) WatchTextPrimary else WatchReadingTextLight
+    val readerChrome = LocalReaderPresetRuntime.current.preset.readerChromeStyle()
+    val backgroundColor = readerChrome.backgroundColor
+    val textColor = readerChrome.contentColor
     val bodySize = readingFontSizeSp.sp
     val titleSize = textSize(R.dimen.hey_m_title)
     val actionTopSpacing = 15.dp
     val actionIconSize = 32.dp
     val actionIconPadding = watchDimensionResource(R.dimen.hey_distance_6dp)
-    val activeColor = MaterialTheme.colorScheme.primary
-    val actionContainerColor = if (readingThemeDark) {
+    val activeColor = readerChrome.accentColor
+    val actionContainerColor = if (readerChrome.isDark) {
         MaterialTheme.colorScheme.surfaceVariant
     } else {
         Color.White.copy(alpha = 0.96f)
     }
-    val actionBorderColor = if (readingThemeDark) {
+    val actionBorderColor = if (readerChrome.isDark) {
         Color.Transparent
     } else {
         Color(0xFFD9CFC3)
     }
-    val activeActionContainerColor = if (readingThemeDark) {
+    val activeActionContainerColor = if (readerChrome.isDark) {
         MaterialTheme.colorScheme.surfaceVariant
     } else {
         Color(0xFFFFF0E6)
     }
-    val activeActionBorderColor = if (readingThemeDark) {
+    val activeActionBorderColor = if (readerChrome.isDark) {
         Color.Transparent
     } else {
         activeColor.copy(alpha = 0.6f)
     }
-    val mediaCardContainerColor = if (readingThemeDark) {
+    val mediaCardContainerColor = if (readerChrome.isDark) {
         MaterialTheme.colorScheme.surface
     } else {
         Color.White
     }
-    val mediaCardBorderColor = if (readingThemeDark) {
+    val mediaCardBorderColor = if (readerChrome.isDark) {
         Color.Transparent
     } else {
         Color.Transparent
