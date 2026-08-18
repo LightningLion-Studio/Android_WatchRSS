@@ -3,6 +3,8 @@ package com.lightningstudio.watchrss.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lightningstudio.watchrss.data.account.AccountStore
+import com.lightningstudio.watchrss.data.account.WatchAccountState
+import com.lightningstudio.watchrss.data.account.WatchTokenManager
 import com.lightningstudio.watchrss.data.llm.LlmTokenUsageRepository
 import com.lightningstudio.watchrss.data.rss.ImportedContentIds
 import com.lightningstudio.watchrss.data.rss.RssRepository
@@ -27,6 +29,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import com.lightningstudio.watchrss.data.network.withWatchRssAppVersionHeader
 import okhttp3.Request
+import okhttp3.Response
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
@@ -73,7 +76,8 @@ class LlmSummaryViewModel(
     private val rssRepository: RssRepository,
     private val settingsRepository: SettingsRepository,
     private val tokenUsageRepository: LlmTokenUsageRepository,
-    private val watchAccountStore: AccountStore
+    private val watchAccountStore: AccountStore,
+    private val watchTokenManager: WatchTokenManager
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(LlmSummaryUiState())
@@ -231,16 +235,10 @@ class LlmSummaryViewModel(
             _state.update { it.copy(status = SummaryStatus.Error("账号后端地址未配置")) }
             return
         }
-        val token = account.watchDeviceToken
-        if (token.isBlank()) {
-            _state.update { it.copy(status = SummaryStatus.Error("手机授权令牌无效")) }
-            return
-        }
+        var freshAccount = watchTokenManager.freshAccount()
 
         val presetIndex = settingsRepository.llmPromptPreset.first()
             .takeIf { it in 1..4 } ?: 1
-        val url = "${backendBaseUrl.trimEnd('/')}/api/v1/llm/default-model/article-summary"
-
         val body = JSONObject().apply {
             put("title", pendingTitle)
             put("content", pendingContent)
@@ -251,29 +249,29 @@ class LlmSummaryViewModel(
             put("stream", false)
         }.toString()
 
-        val request = Request.Builder()
-            .url(url)
-            .withWatchRssAppVersionHeader()
-            .addHeader("Authorization", "Bearer $token")
-            .addHeader("Content-Type", "application/json")
-            .post(body.toRequestBody("application/json".toMediaType()))
-            .build()
-
-        val response = client.newCall(request).execute()
-        if (!response.isSuccessful) {
-            val errorBody = response.body?.string().orEmpty()
-            val errorJson = runCatching { JSONObject(errorBody) }.getOrElse { JSONObject() }
-            val errMsg = when (response.code) {
-                402 -> "AI 总结仅限已购买 6 元授权的用户"
-                401, 403 -> "账号授权已失效，请从手机重新同步"
-                else -> errorJson.optString("detail").ifBlank {
-                    errorJson.optString("error").ifBlank { "HTTP ${response.code}" }
-                }
-            }
-            _state.update { it.copy(status = SummaryStatus.Error(errMsg)) }
-            return
+        var response = executeSummaryRequest(freshAccount, body)
+        if (response.code == 401 || response.code == 403) {
+            response.close()
+            freshAccount = watchTokenManager.freshAccount(forceRefresh = true)
+            response = executeSummaryRequest(freshAccount, body)
         }
-        val json = JSONObject(response.body?.string().orEmpty())
+
+        val json = response.use { currentResponse ->
+            val responseBody = currentResponse.body?.string().orEmpty()
+            if (!currentResponse.isSuccessful) {
+                val errorJson = runCatching { JSONObject(responseBody) }.getOrElse { JSONObject() }
+                val errMsg = when (currentResponse.code) {
+                    402 -> "AI 总结仅限已购买 6 元授权的用户"
+                    401, 403 -> "账号授权已失效，请从手机重新同步"
+                    else -> errorJson.optString("detail").ifBlank {
+                        errorJson.optString("error").ifBlank { "HTTP ${currentResponse.code}" }
+                    }
+                }
+                _state.update { it.copy(status = SummaryStatus.Error(errMsg)) }
+                return
+            }
+            JSONObject(responseBody)
+        }
         val usage = json.optJSONObject("usage")
         val promptTokens = usage?.optInt("inputTokens")?.takeIf { it > 0 }
         val completionTokens = usage?.optInt("outputTokens")?.takeIf { it > 0 }
@@ -294,6 +292,18 @@ class LlmSummaryViewModel(
                 totalTokens = totalTokens
             )
         }
+    }
+
+    private fun executeSummaryRequest(account: WatchAccountState, body: String): Response {
+        val url = "${account.backendBaseUrl.trimEnd('/')}/api/v1/llm/default-model/article-summary"
+        val request = Request.Builder()
+            .url(url)
+            .withWatchRssAppVersionHeader()
+            .addHeader("Authorization", "Bearer ${account.watchDeviceToken}")
+            .addHeader("Content-Type", "application/json")
+            .post(body.toRequestBody("application/json".toMediaType()))
+            .build()
+        return client.newCall(request).execute()
     }
 
     companion object {

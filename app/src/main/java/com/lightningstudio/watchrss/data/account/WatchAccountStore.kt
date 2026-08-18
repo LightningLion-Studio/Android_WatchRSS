@@ -1,6 +1,5 @@
 package com.lightningstudio.watchrss.data.account
 
-import androidx.core.content.edit
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
@@ -26,20 +25,25 @@ class WatchAccountStore(
 
     override fun read(): WatchAccountState? = synchronized(lock) {
         withPrefsLocked { prefs ->
-            prefs.getString(KEY_STATE, null)?.let(::decodeState)
+            val raw = prefs.getString(KEY_STATE, null)
+            raw?.let(::decodeState)
         }
     }
 
     override fun save(state: WatchAccountState) = synchronized(lock) {
         withPrefsLocked { prefs ->
-            prefs.edit {putString(KEY_STATE, encodeState(state))}
+            check(prefs.edit().putString(KEY_STATE, encodeState(state)).commit()) {
+                "无法保存手表账号状态"
+            }
         }
         _state.value = state
     }
 
     override fun clear() = synchronized(lock) {
         withPrefsLocked { prefs ->
-            prefs.edit {remove(KEY_STATE)}
+            check(prefs.edit().remove(KEY_STATE).commit()) {
+                "无法清除手表账号状态"
+            }
         }
         _state.value = null
     }
@@ -108,8 +112,8 @@ class WatchAccountStore(
             })
         }.toString()
 
-    private fun decodeState(raw: String): WatchAccountState? =
-        runCatching {
+    private fun decodeState(raw: String): WatchAccountState? {
+        return runCatching {
             val json = JSONObject(raw)
             WatchAccountState(
                 userId = json.optString("userId").trim(),
@@ -131,7 +135,10 @@ class WatchAccountStore(
                 telemetryConfig = decodeTelemetryConfig(json.optJSONObject("telemetryConfig")),
                 updatedAtMillis = json.optLong("updatedAtMillis")
             ).takeIf { it.userId.isNotBlank() && it.watchDeviceToken.isNotBlank() }
+        }.onFailure { error ->
+            Log.w(TAG, "Stored watch account state could not be decoded", error)
         }.getOrNull()
+    }
 
     private fun decodeEntitlement(json: JSONObject?): WatchEntitlementSnapshot {
         if (json == null) return WatchEntitlementSnapshot()

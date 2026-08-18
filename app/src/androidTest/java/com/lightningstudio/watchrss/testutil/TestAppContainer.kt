@@ -24,6 +24,7 @@ import com.lightningstudio.watchrss.data.settings.SettingsRepository
 import com.lightningstudio.watchrss.data.settings.TtsApiKeyStore
 import com.lightningstudio.watchrss.data.tts.ReadAloudController
 import com.lightningstudio.watchrss.data.account.WatchAccountStore
+import com.lightningstudio.watchrss.data.account.WatchTokenManager
 import androidx.test.platform.app.InstrumentationRegistry
 import org.junit.rules.ExternalResource
 import java.io.File
@@ -55,6 +56,9 @@ class TestAppContainer(
 
     override val watchAccountStore: WatchAccountStore
         get() = fallback.watchAccountStore
+
+    override val watchTokenManager: WatchTokenManager
+        get() = fallback.watchTokenManager
 
     override val watchNoteRepository: WatchNoteRepository
         get() = fallback.watchNoteRepository

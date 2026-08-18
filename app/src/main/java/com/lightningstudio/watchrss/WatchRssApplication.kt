@@ -8,7 +8,6 @@ import android.os.SystemClock
 import com.lightningstudio.watchrss.data.AppContainer
 import com.lightningstudio.watchrss.data.DefaultAppContainer
 import com.lightningstudio.watchrss.data.account.WatchAccountStore
-import com.lightningstudio.watchrss.data.account.WatchTokenManager
 import com.lightningstudio.watchrss.data.cloud.WatchCloudSyncService
 import com.lightningstudio.watchrss.data.cloud.WatchCloudSyncWorker
 import com.lightningstudio.watchrss.data.reader.WatchReaderPresetPreviewSession
@@ -42,7 +41,9 @@ class WatchRssApplication : Application() {
     private var testContainerOverride: AppContainer? = null
     private val bluetoothForegroundSyncManager: WatchBluetoothForegroundSyncManager by lazy {
         WatchBluetoothForegroundSyncManager(this) {
-            appScope.launch { cloudSyncService.syncNow() }
+            if (BuildConfig.DEBUG) {
+                appScope.launch { cloudSyncService.syncNow() }
+            }
         }
     }
     internal val syncMediaKeepAlive: SyncMediaKeepAlive by lazy { SyncMediaKeepAlive() }
@@ -60,9 +61,8 @@ class WatchRssApplication : Application() {
     val accountStore: WatchAccountStore by lazy {
         (container as DefaultAppContainer).watchAccountStore
     }
-    val watchTokenManager: WatchTokenManager by lazy {
-        WatchTokenManager(accountStore)
-    }
+    val watchTokenManager
+        get() = container.watchTokenManager
 
     val usageTelemetry: WatchUsageTelemetry
         get() = container.watchUsageTelemetry
@@ -97,8 +97,16 @@ class WatchRssApplication : Application() {
                 syncMediaKeepAlive::setEnabled
             )
         }
-        WatchCloudSyncWorker.schedule(this)
+        if (BuildConfig.DEBUG) {
+            WatchCloudSyncWorker.schedule(this)
+            installCloudSyncTriggers()
+        } else {
+            WatchCloudSyncWorker.cancel(this)
+        }
         usageTelemetry.recordAppLaunch()
+    }
+
+    private fun installCloudSyncTriggers() {
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             override fun onActivityResumed(activity: Activity) {
                 val now = SystemClock.elapsedRealtime()

@@ -36,7 +36,11 @@ class AccountStatusActivity : BaseWatchActivity() {
                 val state by (application as WatchRssApplication).accountStore.state.collectAsState()
                 AccountStatusScreen(
                     state,
-                    (application as WatchRssApplication).cloudSyncService
+                    if (BuildConfig.DEBUG) {
+                        (application as WatchRssApplication).cloudSyncService
+                    } else {
+                        null
+                    }
                 )
             }
         }
@@ -51,10 +55,9 @@ class AccountStatusActivity : BaseWatchActivity() {
 @Composable
 private fun AccountStatusScreen(
     state: WatchAccountState?,
-    cloudSyncService: WatchCloudSyncService
+    cloudSyncService: WatchCloudSyncService?
 ) {
     val scrollState = androidx.compose.foundation.rememberScrollState()
-    val cloudStatus by cloudSyncService.status.collectAsState()
     InstallDigitalCrownScrollHandler(scrollState)
     WatchSurface(pureBlack = true) {
         Column(
@@ -85,7 +88,7 @@ private fun AccountStatusScreen(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 DownloadPhoneAppButton(
-                    operation = "登录账号与云同步",
+                    operation = if (BuildConfig.DEBUG) "登录账号与云同步" else "登录账号",
                     modifier = Modifier.offset(y = (-4).dp)
                 )
             } else {
@@ -105,25 +108,28 @@ private fun AccountStatusScreen(
                         else -> "有效"
                     }}"
                 )
-                if (state.entitlement.plan == "member" && state.entitlement.active) {
-                    Text("云中继：${cloudStatus.message}")
-                    if (cloudStatus.quotaBytes > 0) {
+                cloudSyncService?.let { service ->
+                    val cloudStatus by service.status.collectAsState()
+                    if (state.entitlement.plan == "member" && state.entitlement.active) {
+                        Text("云中继：${cloudStatus.message}")
+                        if (cloudStatus.quotaBytes > 0) {
+                            Text(
+                                "空间：${cloudStatus.usedBytes / 1048576} / " +
+                                    "${cloudStatus.quotaBytes / 1048576} MiB"
+                            )
+                        }
                         Text(
-                            "空间：${cloudStatus.usedBytes / 1048576} / " +
-                                "${cloudStatus.quotaBytes / 1048576} MiB"
+                            "首次使用需在手机会员云空间中批准这块手表。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        Text(
+                            "云存储：会员可用；本地资料与蓝牙同步不受影响。",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    Text(
-                        "首次使用需在手机会员云空间中批准这块手表。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else {
-                    Text(
-                        "云存储：会员可用；本地资料与蓝牙同步不受影响。",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                 }
             }
             Spacer(modifier = Modifier.height(24.dp))

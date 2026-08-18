@@ -54,7 +54,7 @@ class WatchCloudSyncService(
             val fullTransfer = manual || !connectivity.isActiveNetworkMetered
             val storedAccount = accountStore.read() ?: return@withLock false
             val account = if (storedAccount.watchRefreshToken.isNotBlank()) {
-                tokenManager.freshAccount(forceRefresh = true)
+                tokenManager.freshAccount()
             } else {
                 storedAccount
             }

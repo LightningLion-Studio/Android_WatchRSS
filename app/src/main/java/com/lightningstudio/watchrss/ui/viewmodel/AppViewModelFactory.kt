@@ -59,7 +59,8 @@ class AppViewModelFactory(private val container: AppContainer) : ViewModelProvid
                     container.rssRepository,
                     container.settingsRepository,
                     container.llmTokenUsageRepository,
-                    container.watchAccountStore
+                    container.watchAccountStore,
+                    container.watchTokenManager
                 )
             }
             modelClass.isAssignableFrom(LlmTokenUsageViewModel::class.java) -> {

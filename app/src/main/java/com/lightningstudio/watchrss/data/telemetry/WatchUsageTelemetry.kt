@@ -24,11 +24,11 @@ class WatchUsageTelemetry(
     private val installationIdentity: WatchInstallationIdentity,
     private val deviceId: String,
     accountStore: AccountStore,
+    private val tokenManager: WatchTokenManager = WatchTokenManager(accountStore),
     private val appScope: CoroutineScope,
     private val httpClient: OkHttpClient = defaultHttpClient()
 ) : UsageTelemetry {
     private val store = DailyTelemetryStore(context)
-    private val tokenManager = WatchTokenManager(accountStore)
     private val uploadScheduled = AtomicBoolean(false)
     private val generation = AtomicLong(0L)
 

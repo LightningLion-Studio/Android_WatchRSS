@@ -44,6 +44,7 @@ import com.lightningstudio.watchrss.data.rss.RssRepository
 import com.lightningstudio.watchrss.data.reader.ReaderPresetRepository
 import com.lightningstudio.watchrss.data.account.AccountStore
 import com.lightningstudio.watchrss.data.account.WatchAccountStore
+import com.lightningstudio.watchrss.data.account.WatchTokenManager
 import com.lightningstudio.watchrss.data.settings.LlmApiKeyStore
 import com.lightningstudio.watchrss.data.settings.SettingsRepository
 import com.lightningstudio.watchrss.data.settings.TtsApiKeyStore
@@ -66,6 +67,7 @@ interface AppContainer {
     val ttsApiKeyStore: TtsApiKeyStore
     val readAloudController: ReadAloudController
     val watchAccountStore: WatchAccountStore
+    val watchTokenManager: WatchTokenManager
     val managedCacheService: ManagedCacheService
     val biliPlaybackCacheManager: BiliPlaybackCacheManager
     val biliRepository: BiliRepositoryContract
@@ -132,6 +134,7 @@ class DefaultAppContainer(context: Context) : AppContainer {
             installationIdentity = installationIdentity,
             deviceId = deviceIdentity.deviceId,
             accountStore = watchAccountStore,
+            tokenManager = watchTokenManager,
             appScope = appScope,
         )
     }
@@ -170,6 +173,10 @@ class DefaultAppContainer(context: Context) : AppContainer {
 
     override val watchAccountStore: WatchAccountStore by lazy {
         WatchAccountStore(appContext)
+    }
+
+    override val watchTokenManager: WatchTokenManager by lazy {
+        WatchTokenManager(watchAccountStore)
     }
 
     override val managedCacheService: ManagedCacheService by lazy {

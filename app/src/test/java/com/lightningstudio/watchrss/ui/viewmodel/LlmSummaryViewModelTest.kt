@@ -3,6 +3,7 @@ package com.lightningstudio.watchrss.ui.viewmodel
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import com.lightningstudio.watchrss.data.account.AccountStore
 import com.lightningstudio.watchrss.data.account.WatchAccountState
+import com.lightningstudio.watchrss.data.account.WatchTokenManager
 import com.lightningstudio.watchrss.data.db.LlmTokenUsageDao
 import com.lightningstudio.watchrss.data.llm.LlmTokenUsageRepository
 import com.lightningstudio.watchrss.data.settings.SettingsRepository
@@ -56,11 +57,13 @@ class LlmSummaryViewModelTest {
         val env = createSettingsRepository("llm-summary-view-model.preferences_pb")
 
         try {
+            val accountStore = FakeAccountStore()
             val viewModel = LlmSummaryViewModel(
                 rssRepository = repo,
                 settingsRepository = env.repository,
                 tokenUsageRepository = LlmTokenUsageRepository(FakeLlmTokenUsageDao()),
-                watchAccountStore = FakeAccountStore()
+                watchAccountStore = accountStore,
+                watchTokenManager = WatchTokenManager(accountStore)
             )
 
             viewModel.prepare(42L)
@@ -95,11 +98,13 @@ class LlmSummaryViewModelTest {
         val env = createSettingsRepository("llm-summary-manual-start.preferences_pb")
 
         try {
+            val accountStore = FakeAccountStore()
             val viewModel = LlmSummaryViewModel(
                 rssRepository = repo,
                 settingsRepository = env.repository,
                 tokenUsageRepository = LlmTokenUsageRepository(FakeLlmTokenUsageDao()),
-                watchAccountStore = FakeAccountStore()
+                watchAccountStore = accountStore,
+                watchTokenManager = WatchTokenManager(accountStore)
             )
 
             viewModel.prepare(itemId)

@@ -21,8 +21,6 @@ class WatchTokenManager(
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
 ) {
-    private val refreshMutex = Mutex()
-
     suspend fun freshAccessToken(forceRefresh: Boolean = false): String =
         freshAccount(forceRefresh).watchDeviceToken
 
@@ -48,7 +46,12 @@ class WatchTokenManager(
             client.newCall(request).execute().use { response ->
                 val raw = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
-                    if (response.code == 401) store.clear()
+                    if (
+                        response.code == 401 &&
+                        store.read()?.watchRefreshToken == state.watchRefreshToken
+                    ) {
+                        store.clear()
+                    }
                     throw IOException("手表令牌刷新失败：HTTP ${response.code}")
                 }
                 val json = JSONObject(raw)
@@ -83,5 +86,6 @@ class WatchTokenManager(
         private const val REFRESH_PATH = "/functions/v1/account/watch-token/refresh"
         private const val REFRESH_SKEW_MILLIS = 60_000L
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
+        private val refreshMutex = Mutex()
     }
 }

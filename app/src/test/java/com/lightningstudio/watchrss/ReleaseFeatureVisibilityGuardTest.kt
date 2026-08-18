@@ -47,6 +47,20 @@ class ReleaseFeatureVisibilityGuardTest {
 
         assertFalse(accountStatus.contains("立即云同步"))
         assertTrue(accountStatus.contains("Spacer(modifier = Modifier.height(24.dp))"))
+        assertTrue(accountStatus.contains("if (BuildConfig.DEBUG)"))
+        assertTrue(accountStatus.contains("cloudSyncService: WatchCloudSyncService?"))
+    }
+
+    @Test
+    fun `cloud sync runtime remains disabled in release builds`() {
+        val application = source("WatchRssApplication.kt")
+        val worker = source("data/cloud/WatchCloudSyncWorker.kt")
+        val ipSync = source("phoneconnection/ip/WatchIpSyncManager.kt")
+
+        assertTrue(application.contains("if (BuildConfig.DEBUG)"))
+        assertTrue(application.contains("WatchCloudSyncWorker.cancel(this)"))
+        assertTrue(worker.contains("if (!BuildConfig.DEBUG) return Result.success()"))
+        assertTrue(ipSync.contains("if (BuildConfig.DEBUG)"))
     }
 
     private fun source(relativePath: String): String =

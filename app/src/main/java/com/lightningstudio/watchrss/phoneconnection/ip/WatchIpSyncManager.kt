@@ -12,6 +12,7 @@ import android.net.NetworkRequest
 import android.os.Build
 import android.os.Bundle
 import androidx.core.content.ContextCompat
+import com.lightningstudio.watchrss.BuildConfig
 import com.lightningstudio.watchrss.WatchRssApplication
 import com.lightningstudio.watchrss.phoneconnection.WatchDeviceIdentity
 import com.lightningstudio.watchrss.phoneconnection.bluetooth.BluetoothSyncProtocol
@@ -274,8 +275,10 @@ class WatchIpSyncManager(
                 }
                 lastAckSeq += 1L
                 if (result.request.optString("action") == BluetoothSyncProtocol.ACTION_SYNC_LIBRARY) {
-                    runCatching {
-                        (application as? WatchRssApplication)?.cloudSyncService?.syncNow()
+                    if (BuildConfig.DEBUG) {
+                        runCatching {
+                            (application as? WatchRssApplication)?.cloudSyncService?.syncNow()
+                        }
                     }
                 }
                 scheduleRefresh("transfer-complete")

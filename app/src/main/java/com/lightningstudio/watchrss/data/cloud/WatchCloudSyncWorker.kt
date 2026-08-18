@@ -8,6 +8,7 @@ import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import com.lightningstudio.watchrss.BuildConfig
 import com.lightningstudio.watchrss.WatchRssApplication
 import java.util.concurrent.TimeUnit
 
@@ -16,6 +17,7 @@ class WatchCloudSyncWorker(
     parameters: WorkerParameters
 ) : CoroutineWorker(appContext, parameters) {
     override suspend fun doWork(): Result {
+        if (!BuildConfig.DEBUG) return Result.success()
         val app = applicationContext as WatchRssApplication
         app.accountStore.read() ?: return Result.success()
         return if (app.cloudSyncService.syncNow()) Result.success()
@@ -32,10 +34,16 @@ class WatchCloudSyncWorker(
                 )
                 .build()
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-                "watchrss-watch-cloud-sync-6h",
+                WORK_NAME,
                 ExistingPeriodicWorkPolicy.UPDATE,
                 work
             )
         }
+
+        fun cancel(context: Context) {
+            WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
+        }
+
+        private const val WORK_NAME = "watchrss-watch-cloud-sync-6h"
     }
 }
