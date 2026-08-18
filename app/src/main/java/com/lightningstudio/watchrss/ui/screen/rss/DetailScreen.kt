@@ -225,8 +225,8 @@ internal fun wholePixelAutoScrollDelta(pendingDeltaPx: Float): Float =
 
 internal fun isReaderAiSummaryEntryVisible(
     llmEnabled: Boolean,
-    isNovelContent: Boolean
-): Boolean = llmEnabled && !isNovelContent
+    hasPaidAuthorization: Boolean
+): Boolean = llmEnabled && hasPaidAuthorization
 
 @OptIn(FlowPreview::class)
 @Composable
@@ -484,9 +484,11 @@ internal fun DetailContent(
             currentFontSizeSp = readingFontSizeSp
         )
     }
+    val accountState by (context.applicationContext as com.lightningstudio.watchrss.WatchRssApplication)
+        .container.watchAccountStore.state.collectAsState()
     val showAiSummaryEntry = isReaderAiSummaryEntryVisible(
         llmEnabled = llmEnabled,
-        isNovelContent = isNovelContent
+        hasPaidAuthorization = accountState?.watchDeviceToken?.isNotBlank() == true
     )
     val showAiBanner = showAiSummaryEntry && llmAutoSummarize &&
         (llmSummaryState.status == SummaryStatus.WaitingForContent ||

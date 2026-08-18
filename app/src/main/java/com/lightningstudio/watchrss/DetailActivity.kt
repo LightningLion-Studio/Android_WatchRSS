@@ -152,18 +152,8 @@ class DetailActivity : BaseWatchActivity() {
         val itemId = intent.getLongExtra(EXTRA_ITEM_ID, 0L)
         if (itemId <= 0L) return
 
-        lifecycleScope.launch {
-            val isConfigured = container.llmApiKeyStore.hasApiKey() &&
-                container.settingsRepository.llmProvider.first().isNotBlank()
-            _isStartingActivity.value = true
-            startActivity(
-                if (isConfigured) {
-                    LlmSummaryActivity.createIntent(this@DetailActivity, itemId)
-                } else {
-                    LlmConnectivityActivity.createIntent(this@DetailActivity, itemId)
-                }
-            )
-        }
+        _isStartingActivity.value = true
+        startActivity(LlmSummaryActivity.createIntent(this, itemId))
     }
 
     private fun openReadAloud(startAnchor: ReadAloudStartAnchor?, preferOriginalContent: Boolean) {

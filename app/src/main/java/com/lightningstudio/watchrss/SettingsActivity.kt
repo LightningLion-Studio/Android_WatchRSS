@@ -4,7 +4,10 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import com.lightningstudio.watchrss.debug.PerfEntryActivity
+import com.lightningstudio.watchrss.phoneconnection.PhoneConnectionAbility
 import com.lightningstudio.watchrss.ui.screen.rss.SettingsScreenHost
 import com.lightningstudio.watchrss.ui.screen.rss.isDetailedTtsConfigurationVisible
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
@@ -25,12 +28,14 @@ class SettingsActivity : BaseWatchActivity() {
 
         setContent {
             WatchRSSTheme {
+                val account by container.watchAccountStore.state.collectAsState()
                 SettingsScreenHost(
                     viewModel = viewModel,
                     douyinRepository = douyinRepository,
                     rssRepository = rssRepository,
                     showPerformanceTools = false,
-                    showDetailedTtsConfiguration = isDetailedTtsConfigurationVisible(),
+                    showDetailedTtsConfiguration = isDetailedTtsConfigurationVisible(BuildConfig.BUILD_TYPE),
+                    hasPaidAiAccess = account?.watchDeviceToken?.isNotBlank() == true,
                     onOpenAdvanced = {
                         startActivity(Intent(this, AdvancedSettingsActivity::class.java))
                     },
@@ -42,6 +47,14 @@ class SettingsActivity : BaseWatchActivity() {
                     },
                     onOpenAutoScrollSettings = {
                         startActivity(AutoScrollControlActivity.createSettingsIntent(this))
+                    },
+                    onOpenRemoteInput = {
+                        startActivity(
+                            Intent(this, ServerActivity::class.java).apply {
+                                putExtra(ServerActivity.EXTRA_SERVER_TYPE, ServerActivity.ServerType.REMOTE_INPUT.name)
+                                putExtra(ServerActivity.EXTRA_PREFERRED_ABILITY, PhoneConnectionAbility.REMOTE_INPUT.name)
+                            }
+                        )
                     },
                     onOpenOobe = {
                         startActivity(OobeActivity.createIntent(this, returnHomeOnFinish = false))
@@ -61,9 +74,6 @@ class SettingsActivity : BaseWatchActivity() {
                                 PerfEntryActivity.TARGET_LARGE_ARTICLE
                             )
                         )
-                    },
-                    onOpenLlmConnectivity = {
-                        startActivity(LlmConnectivityActivity.createIntent(this))
                     },
                     onOpenLlmPromptPreset = {
                         startActivity(LlmPromptPresetActivity.createIntent(this))

@@ -2738,7 +2738,8 @@ class DefaultRssRepository(
         isRead = isRead,
         isLiked = isLiked,
         readingProgress = readingProgress,
-        fetchedAt = fetchedAt
+        fetchedAt = fetchedAt,
+        contentHash = syncBodyHash
     )
 
     /**

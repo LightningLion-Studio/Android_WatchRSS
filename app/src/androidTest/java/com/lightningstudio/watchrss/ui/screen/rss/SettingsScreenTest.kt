@@ -64,7 +64,6 @@ class SettingsScreenTest {
                 onOpenPerfLargeList = {},
                 onOpenPerfLargeArticle = {},
                 onOpenDouyinCookieInput = {},
-                onOpenLlmConnectivity = {},
                 onOpenLlmPromptPreset = {},
                 onOpenLlmTokenUsage = {},
                 onBeianClick = {}
@@ -142,7 +141,6 @@ class SettingsScreenTest {
                 onOpenPerfLargeList = {},
                 onOpenPerfLargeArticle = {},
                 onOpenDouyinCookieInput = {},
-                onOpenLlmConnectivity = {},
                 onOpenLlmPromptPreset = {},
                 onOpenLlmTokenUsage = {},
                 onBeianClick = {}
@@ -205,7 +203,6 @@ class SettingsScreenTest {
                 onOpenPerfLargeList = {},
                 onOpenPerfLargeArticle = {},
                 onOpenDouyinCookieInput = {},
-                onOpenLlmConnectivity = {},
                 onOpenLlmPromptPreset = {},
                 onOpenLlmTokenUsage = {},
                 onBeianClick = {}

@@ -1,33 +1,31 @@
 package com.lightningstudio.watchrss
 
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
 class ReleaseFeatureVisibilityGuardTest {
     @Test
-    fun `product features remain available in release builds`() {
+    fun `debug gated features remain unavailable in release builds`() {
         val profileActivity = source("ProfileActivity.kt")
         val settingsScreen = source("ui/screen/rss/SettingsScreen.kt")
 
-        assertTrue(profileActivity.contains("showAccountEntry = true"))
-        assertFalse(profileActivity.contains("showAccountEntry = BuildConfig.DEBUG"))
+        assertTrue(profileActivity.contains("showAccountEntry = BuildConfig.DEBUG"))
 
-        val phoneInput = settingsScreen.indexOf("operation = \"从手机输入 RSS\"")
+        val debugGate = settingsScreen.indexOf("if (BuildConfig.DEBUG)")
         val oobe = settingsScreen.indexOf("label = \"新手引导\"")
         val douyinCookie = settingsScreen.indexOf("label = \"抖音登录 Cookie\"")
-        val performanceGate = settingsScreen.indexOf("if (BuildConfig.DEBUG && showPerformanceTools)")
-        assertTrue(phoneInput >= 0)
-        assertTrue(oobe in 0 until performanceGate)
-        assertTrue(douyinCookie in 0 until performanceGate)
+        val paidAiGate = settingsScreen.indexOf("if (hasPaidAiAccess)")
+        assertTrue(debugGate in 0 until oobe)
+        assertTrue(oobe in 0 until paidAiGate)
+        assertTrue(douyinCookie in 0 until paidAiGate)
 
         val ttsSettings = source("ui/screen/rss/TtsSettingsScreen.kt")
-        assertTrue(ttsSettings.contains("isDetailedTtsConfigurationVisible(): Boolean = true"))
+        assertTrue(ttsSettings.contains("isDetailedTtsConfigurationVisible(buildType: String)"))
+        assertTrue(ttsSettings.contains("buildType == \"debug\""))
 
         val detailScreen = source("ui/screen/rss/DetailScreen.kt")
-        assertTrue(detailScreen.contains("): Boolean = llmEnabled && !isNovelContent"))
-        assertFalse(detailScreen.contains("): Boolean = isDebugBuild && llmEnabled"))
+        assertTrue(detailScreen.contains("): Boolean = llmEnabled && hasPaidAuthorization"))
     }
 
     @Test

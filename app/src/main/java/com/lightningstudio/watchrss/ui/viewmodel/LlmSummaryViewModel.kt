@@ -3,13 +3,11 @@ package com.lightningstudio.watchrss.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lightningstudio.watchrss.data.account.AccountStore
-import com.lightningstudio.watchrss.data.llm.LlmProviderCatalog
 import com.lightningstudio.watchrss.data.llm.LlmTokenUsageRepository
 import com.lightningstudio.watchrss.data.rss.ImportedContentIds
 import com.lightningstudio.watchrss.data.rss.RssRepository
 import com.lightningstudio.watchrss.data.rss.effectiveContent
 import com.lightningstudio.watchrss.data.rss.isOriginalContentMissing
-import com.lightningstudio.watchrss.data.settings.LlmApiKeyProvider
 import com.lightningstudio.watchrss.data.settings.SettingsRepository
 import com.lightningstudio.watchrss.util.AppLogger
 import kotlinx.coroutines.Dispatchers
@@ -25,13 +23,11 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlin.coroutines.coroutineContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import com.lightningstudio.watchrss.data.network.withWatchRssAppVersionHeader
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
@@ -76,7 +72,6 @@ object LlmPromptPresets {
 class LlmSummaryViewModel(
     private val rssRepository: RssRepository,
     private val settingsRepository: SettingsRepository,
-    private val llmApiKeyProvider: LlmApiKeyProvider,
     private val tokenUsageRepository: LlmTokenUsageRepository,
     private val watchAccountStore: AccountStore
 ) : ViewModel() {
@@ -86,12 +81,13 @@ class LlmSummaryViewModel(
 
     private var pendingTitle = ""
     private var pendingContent = ""
+    private var pendingContentHash = ""
     private var generationJob: Job? = null
     private var preparationJob: Job? = null
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
+        .readTimeout(10, TimeUnit.MINUTES)
         .build()
 
     fun prepare(itemId: Long) {
@@ -141,21 +137,12 @@ class LlmSummaryViewModel(
                 if (item == null) return@collect
 
                 pendingTitle = item.title.orEmpty()
+                pendingContentHash = item.contentHash
                 val rawHtml = item.effectiveContent(
                     useOriginalContent = channel?.useOriginalContent == true || !item.isOriginalContentMissing()
                 ).orEmpty()
 
                 val isImportedText = ImportedContentIds.isImportedTextItemUrl(item.link)
-                if (ImportedContentIds.isNovelContentItemUrl(item.link)) {
-                    pendingContent = ""
-                    _state.update {
-                        it.copy(
-                            status = SummaryStatus.Error("小说内容暂不支持 AI 总结"),
-                            text = ""
-                        )
-                    }
-                    return@collect
-                }
                 val waitingForOriginalContent = !isImportedText &&
                     item.isOriginalContentMissing() &&
                     channel?.useOriginalContent == true &&
@@ -207,22 +194,7 @@ class LlmSummaryViewModel(
         generationJob?.cancel()
         generationJob = viewModelScope.launch(Dispatchers.IO) {
             try {
-                val provider = settingsRepository.llmProvider.first()
-                if (provider.isEmpty()) {
-                    _state.update { it.copy(status = SummaryStatus.Error("未配置服务商")) }
-                    return@launch
-                }
-                val model = settingsRepository.llmModel.first().ifEmpty {
-                    LlmProviderCatalog.defaultModel(provider)
-                }
-                val requestIdPrefix = System.currentTimeMillis().toString()
-                val requestId = "${requestIdPrefix}_${provider}_${model}"
-
-                if (LlmProviderCatalog.isDefaultModel(provider)) {
-                    generateDefaultModel(model, requestId)
-                } else {
-                    generateByok(provider, model, requestId)
-                }
+                generateServerSummary()
             } catch (e: Exception) {
                 if (isActive) {
                     AppLogger.e(TAG, "Summary generation failed", e)
@@ -232,10 +204,10 @@ class LlmSummaryViewModel(
         }
     }
 
-    private suspend fun generateDefaultModel(model: String, requestId: String) {
+    private suspend fun generateServerSummary() {
         val account = watchAccountStore.read()
         if (account == null) {
-            _state.update { it.copy(status = SummaryStatus.Error("使用默认模型前请先登录")) }
+            _state.update { it.copy(status = SummaryStatus.Error("请先从已授权手机同步账号")) }
             return
         }
         val backendBaseUrl = account.backendBaseUrl
@@ -245,19 +217,22 @@ class LlmSummaryViewModel(
         }
         val token = account.watchDeviceToken
         if (token.isBlank()) {
-            _state.update { it.copy(status = SummaryStatus.Error("账号令牌无效")) }
+            _state.update { it.copy(status = SummaryStatus.Error("手机授权令牌无效")) }
             return
         }
 
         val presetIndex = settingsRepository.llmPromptPreset.first()
-        val systemPrompt = LlmPromptPresets.getPrompt(presetIndex)
-        val url = "${backendBaseUrl.trimEnd('/')}/api/v1/llm/default-model/llm-summary"
+            .takeIf { it in 1..4 } ?: 1
+        val url = "${backendBaseUrl.trimEnd('/')}/api/v1/llm/default-model/article-summary"
 
         val body = JSONObject().apply {
-            put("model", model)
-            put("instructions", systemPrompt)
-            put("input", buildUserMessage(pendingTitle, pendingContent))
-            put("stream", true)
+            put("title", pendingTitle)
+            put("content", pendingContent)
+            pendingContentHash.takeIf { it.matches(CONTENT_HASH) }?.let {
+                put("contentHash", it)
+            }
+            put("promptPreset", presetIndex)
+            put("stream", false)
         }.toString()
 
         val request = Request.Builder()
@@ -268,261 +243,46 @@ class LlmSummaryViewModel(
             .post(body.toRequestBody("application/json".toMediaType()))
             .build()
 
-        executeResponsesStream(
-            request,
-            provider = LlmProviderCatalog.PROVIDER_DEFAULT_MODEL,
+        val response = client.newCall(request).execute()
+        if (!response.isSuccessful) {
+            val errorBody = response.body?.string().orEmpty()
+            val errorJson = runCatching { JSONObject(errorBody) }.getOrElse { JSONObject() }
+            val errMsg = when (response.code) {
+                402 -> "AI 总结仅限已购买 6 元授权的用户"
+                401, 403 -> "账号授权已失效，请从手机重新同步"
+                else -> errorJson.optString("detail").ifBlank {
+                    errorJson.optString("error").ifBlank { "HTTP ${response.code}" }
+                }
+            }
+            _state.update { it.copy(status = SummaryStatus.Error(errMsg)) }
+            return
+        }
+        val json = JSONObject(response.body?.string().orEmpty())
+        val usage = json.optJSONObject("usage")
+        val promptTokens = usage?.optInt("inputTokens")?.takeIf { it > 0 }
+        val completionTokens = usage?.optInt("outputTokens")?.takeIf { it > 0 }
+        val totalTokens = usage?.optInt("totalTokens")?.takeIf { it > 0 }
+        val model = json.optString("model").ifBlank { "server-managed" }
+        tokenUsageRepository.record(
+            provider = "WatchRSS",
             model = model,
-            requestId = requestId
+            requestId = "${System.currentTimeMillis()}_server_summary",
+            rawUsage = usage
         )
-    }
-
-    private suspend fun generateByok(provider: String, model: String, requestId: String) {
-        val apiKey = llmApiKeyProvider.getApiKey()
-        if (apiKey.isEmpty()) {
-            _state.update { it.copy(status = SummaryStatus.Error("未配置 API Key")) }
-            return
-        }
-        val baseUrl = LlmProviderCatalog.resolveBaseUrl(
-            provider,
-            settingsRepository.llmBaseUrl.first()
-        )
-        if (baseUrl.isEmpty()) {
-            _state.update { it.copy(status = SummaryStatus.Error("无法解析 Base URL")) }
-            return
-        }
-        val presetIndex = settingsRepository.llmPromptPreset.first()
-        val systemPrompt = LlmPromptPresets.getPrompt(presetIndex)
-        val userMessage = buildUserMessage(pendingTitle, pendingContent)
-        val url = "${baseUrl.trimEnd('/')}/chat/completions"
-
-        val messages = JSONArray()
-        if (systemPrompt.isNotBlank()) {
-            messages.put(JSONObject().apply {
-                put("role", "system")
-                put("content", systemPrompt)
-            })
-        }
-        messages.put(JSONObject().apply {
-            put("role", "user")
-            put("content", userMessage)
-        })
-
-        val requestBody = JSONObject().apply {
-            put("model", model)
-            put("stream", true)
-            put("stream_options", JSONObject().apply { put("include_usage", true) })
-            put("messages", messages)
-        }.toString()
-
-        val request = Request.Builder()
-            .url(url)
-            .addHeader("Authorization", "Bearer $apiKey")
-            .addHeader("Content-Type", "application/json")
-            .post(requestBody.toRequestBody("application/json".toMediaType()))
-            .build()
-
-        executeStream(request, provider = provider, model = model, requestId = requestId)
-    }
-
-    private suspend fun executeStream(request: Request, provider: String, model: String, requestId: String) {
-        val response = client.newCall(request).execute()
-        if (!response.isSuccessful) {
-            val errBody = response.body?.string() ?: ""
-            val errMsg = runCatching {
-                JSONObject(errBody).optJSONObject("error")?.optString("message") ?: ""
-            }.getOrDefault("").ifEmpty { "HTTP ${response.code}" }
-            _state.update { it.copy(status = SummaryStatus.Error(errMsg)) }
-            return
-        }
-
-        val reader = response.body?.byteStream()?.bufferedReader() ?: run {
-            _state.update { it.copy(status = SummaryStatus.Error("空响应")) }
-            return
-        }
-
-        val accum = StringBuilder()
-        var promptTokens: Int? = null
-        var completionTokens: Int? = null
-        var totalTokens: Int? = null
-
-        val usageAccum = JSONObject()
-
-        reader.use { br ->
-            var line = br.readLine()
-            while (line != null && coroutineContext.isActive) {
-                if (line.startsWith("data: ")) {
-                    val data = line.removePrefix("data: ").trim()
-                    if (data != "[DONE]") {
-                        runCatching {
-                            val json = JSONObject(data)
-                            json.optJSONObject("usage")?.let { usage ->
-                                usage.keys().forEach { key ->
-                                    val existing = usageAccum.opt(key)
-                                    val incoming = usage.get(key)
-                                    if (existing == null) {
-                                        usageAccum.put(key, incoming)
-                                    }
-                                }
-                                val pt = usage.optInt("prompt_tokens")
-                                val ct = usage.optInt("completion_tokens")
-                                val tt = usage.optInt("total_tokens")
-                                if (pt > 0) promptTokens = pt
-                                if (ct > 0) completionTokens = ct
-                                if (tt > 0) totalTokens = tt
-                            }
-                            val content = json.optJSONArray("choices")
-                                ?.optJSONObject(0)
-                                ?.optJSONObject("delta")
-                                ?.optString("content")
-                                ?: ""
-                            if (content.isNotEmpty()) {
-                                accum.append(content)
-                                _state.update {
-                                    it.copy(
-                                        text = accum.toString(),
-                                        promptTokens = promptTokens,
-                                        completionTokens = completionTokens,
-                                        totalTokens = totalTokens
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-                line = br.readLine()
-            }
-        }
-
-        if (coroutineContext.isActive) {
-            val finalText = accum.toString().ifBlank { "（无内容）" }
-            tokenUsageRepository.record(
-                provider = provider,
-                model = model,
-                requestId = requestId,
-                rawUsage = usageAccum.takeIf { it.length() > 0 }
+        _state.update {
+            it.copy(
+                status = SummaryStatus.Done,
+                text = json.optString("text").ifBlank { "（无内容）" },
+                promptTokens = promptTokens,
+                completionTokens = completionTokens,
+                totalTokens = totalTokens
             )
-            _state.update {
-                it.copy(
-                    status = SummaryStatus.Done,
-                    text = finalText,
-                    promptTokens = promptTokens,
-                    completionTokens = completionTokens,
-                    totalTokens = totalTokens
-                )
-            }
         }
     }
 
-    private suspend fun executeResponsesStream(
-        request: Request,
-        provider: String,
-        model: String,
-        requestId: String
-    ) {
-        val response = client.newCall(request).execute()
-        if (!response.isSuccessful) {
-            val errBody = response.body?.string() ?: ""
-            val errMsg = runCatching {
-                JSONObject(errBody).optJSONObject("error")?.optString("message") ?: ""
-            }.getOrDefault("").ifEmpty { "HTTP ${response.code}" }
-            _state.update { it.copy(status = SummaryStatus.Error(errMsg)) }
-            return
-        }
-
-        val reader = response.body?.byteStream()?.bufferedReader() ?: run {
-            _state.update { it.copy(status = SummaryStatus.Error("空响应")) }
-            return
-        }
-
-        val accum = StringBuilder()
-        var promptTokens: Int? = null
-        var completionTokens: Int? = null
-        var totalTokens: Int? = null
-        val usageAccum = JSONObject()
-
-        reader.use { br ->
-            var line = br.readLine()
-            while (line != null && coroutineContext.isActive) {
-                if (line.startsWith("data: ")) {
-                    val data = line.removePrefix("data: ").trim()
-                    runCatching {
-                        val json = JSONObject(data)
-                        val eventType = json.optString("type", "")
-                        when {
-                            eventType == "response.output_text.delta" -> {
-                                val delta = json.optString("delta", "")
-                                if (delta.isNotEmpty()) {
-                                    accum.append(delta)
-                                    _state.update {
-                                        it.copy(
-                                            text = accum.toString(),
-                                            promptTokens = promptTokens,
-                                            completionTokens = completionTokens,
-                                            totalTokens = totalTokens
-                                        )
-                                    }
-                                }
-                            }
-                            eventType == "response.completed" || eventType == "response.incomplete" -> {
-                                json.optJSONObject("response")?.optJSONObject("usage")?.let { usage ->
-                                    usage.keys().forEach { key ->
-                                        if (!usageAccum.has(key)) {
-                                            usageAccum.put(key, usage.get(key))
-                                        }
-                                    }
-                                    promptTokens = usage.optInt("input_tokens").takeIf { it > 0 }
-                                        ?: usage.optInt("prompt_tokens").takeIf { it > 0 }
-                                    completionTokens = usage.optInt("output_tokens").takeIf { it > 0 }
-                                        ?: usage.optInt("completion_tokens").takeIf { it > 0 }
-                                    totalTokens = usage.optInt("total_tokens").takeIf { it > 0 }
-                                    _state.update {
-                                        it.copy(
-                                            text = accum.toString(),
-                                            promptTokens = promptTokens,
-                                            completionTokens = completionTokens,
-                                            totalTokens = totalTokens
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                line = br.readLine()
-            }
-        }
-
-        if (coroutineContext.isActive) {
-            val finalText = accum.toString().ifBlank { "（无内容）" }
-            tokenUsageRepository.record(
-                provider = provider,
-                model = model,
-                requestId = requestId,
-                rawUsage = usageAccum.takeIf { it.length() > 0 }
-            )
-            _state.update {
-                it.copy(
-                    status = SummaryStatus.Done,
-                    text = finalText,
-                    promptTokens = promptTokens,
-                    completionTokens = completionTokens,
-                    totalTokens = totalTokens
-                )
-            }
-        }
+    companion object {
+        private val CONTENT_HASH = Regex("^[0-9a-f]{64}$")
     }
-
-    private fun buildUserMessage(title: String, content: String): String {
-        val sb = StringBuilder()
-        if (title.isNotBlank()) {
-            sb.append("标题：").append(title).append("\n\n")
-        }
-        if (content.isNotBlank()) {
-            sb.append("正文：\n").append(content)
-        }
-        return sb.toString().ifBlank { title.ifBlank { "（空文章）" } }
-    }
-
 }
 
 private fun String.toSummarySourceText(isPlainText: Boolean): String {

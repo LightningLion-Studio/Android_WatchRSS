@@ -34,7 +34,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.tts.TtsProviderCatalog
-import com.lightningstudio.watchrss.ui.components.ContentEditingDownloadPhoneAppButton
 import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownScrollHandler
@@ -49,7 +48,8 @@ import com.lightningstudio.watchrss.ui.viewmodel.TtsTestStatus
 @Composable
 fun TtsSettingsScreen(
     viewModel: TtsSettingsViewModel,
-    showDetailedConfiguration: Boolean
+    showDetailedConfiguration: Boolean,
+    onOpenPhoneConfig: (() -> Unit)? = null
 ) {
     val state by viewModel.state.collectAsState()
     TtsSettingsContent(
@@ -60,6 +60,7 @@ fun TtsSettingsScreen(
         onIncreaseSpeed = viewModel::increaseSpeed,
         onDecreaseSpeed = viewModel::decreaseSpeed,
         onRunTest = viewModel::runTest,
+        onOpenPhoneConfig = onOpenPhoneConfig,
         showDetailedConfiguration = showDetailedConfiguration
     )
 }
@@ -73,6 +74,7 @@ private fun TtsSettingsContent(
     onIncreaseSpeed: () -> Unit,
     onDecreaseSpeed: () -> Unit,
     onRunTest: () -> Unit,
+    onOpenPhoneConfig: (() -> Unit)?,
     showDetailedConfiguration: Boolean
 ) {
     val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
@@ -280,8 +282,19 @@ private fun TtsSettingsContent(
                 }
             }
 
-            Spacer(modifier = Modifier.height(entrySpacing))
-            ContentEditingDownloadPhoneAppButton(operation = "配置朗读语音")
+            if (onOpenPhoneConfig != null) {
+                Spacer(modifier = Modifier.height(entrySpacing))
+                WatchSettingsPillRow(
+                    label = "手机扫码配置语音",
+                    onClick = onOpenPhoneConfig
+                )
+                Text(
+                    text = "在手机端选择音色、输入 API Key 并同步到手表",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
+                )
+            }
 
             Spacer(modifier = Modifier.height(pillHeight))
         }
@@ -325,7 +338,8 @@ private fun SpeechRateSetting(
     )
 }
 
-internal fun isDetailedTtsConfigurationVisible(): Boolean = true
+internal fun isDetailedTtsConfigurationVisible(buildType: String): Boolean =
+    buildType == "debug"
 
 @Composable
 private fun EnginePicker(

@@ -25,11 +25,6 @@ class LlmSummaryActivity : BaseWatchActivity() {
 
         val container = (application as WatchRssApplication).container
         itemId = intent.getLongExtra(EXTRA_ITEM_ID, -1L)
-        if (!container.llmApiKeyStore.hasApiKey()) {
-            startActivity(LlmConnectivityActivity.createIntent(this, itemId))
-            finish()
-            return
-        }
 
         if (itemId > 0L) viewModel.prepareAndStart(itemId)
 
@@ -39,10 +34,7 @@ class LlmSummaryActivity : BaseWatchActivity() {
                 val showTokenUsage by settingsRepository.llmShowTokenUsage.collectAsState(initial = false)
                 LlmSummaryScreen(
                     viewModel = viewModel,
-                    showTokenUsage = showTokenUsage,
-                    onOpenConnectivityCheck = {
-                        startActivity(LlmConnectivityActivity.createIntent(this, itemId))
-                    }
+                    showTokenUsage = showTokenUsage
                 )
             }
         }

@@ -31,7 +31,8 @@ data class RssItem(
     val isRead: Boolean,
     val isLiked: Boolean,
     val readingProgress: Float,
-    val fetchedAt: Long
+    val fetchedAt: Long,
+    val contentHash: String = ""
 )
 
 fun RssItem.effectiveContent(useOriginalContent: Boolean): String? {

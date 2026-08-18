@@ -5,7 +5,6 @@ import com.lightningstudio.watchrss.data.account.AccountStore
 import com.lightningstudio.watchrss.data.account.WatchAccountState
 import com.lightningstudio.watchrss.data.db.LlmTokenUsageDao
 import com.lightningstudio.watchrss.data.llm.LlmTokenUsageRepository
-import com.lightningstudio.watchrss.data.settings.LlmApiKeyProvider
 import com.lightningstudio.watchrss.data.settings.SettingsRepository
 import com.lightningstudio.watchrss.testutil.MainDispatcherRule
 import com.lightningstudio.watchrss.testutil.TestRssRepository
@@ -58,7 +57,6 @@ class LlmSummaryViewModelTest {
             val viewModel = LlmSummaryViewModel(
                 rssRepository = repo,
                 settingsRepository = env.repository,
-                llmApiKeyProvider = FakeLlmApiKeyProvider(),
                 tokenUsageRepository = LlmTokenUsageRepository(FakeLlmTokenUsageDao()),
                 watchAccountStore = FakeAccountStore()
             )
@@ -89,10 +87,6 @@ class LlmSummaryViewModelTest {
         val repository: SettingsRepository,
         val scope: CoroutineScope
     )
-
-    private class FakeLlmApiKeyProvider : LlmApiKeyProvider {
-        override fun getApiKey(): String = ""
-    }
 
     private class FakeLlmTokenUsageDao : LlmTokenUsageDao {
         override fun observeRecent(limit: Int) = MutableStateFlow(emptyList<com.lightningstudio.watchrss.data.db.LlmTokenUsageEntity>())

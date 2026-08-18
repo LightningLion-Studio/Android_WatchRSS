@@ -22,14 +22,15 @@ fun SettingsScreenHost(
     rssRepository: RssRepository,
     showPerformanceTools: Boolean,
     showDetailedTtsConfiguration: Boolean,
+    hasPaidAiAccess: Boolean,
     onOpenAdvanced: () -> Unit,
     onOpenReaderPresets: () -> Unit,
     onOpenTtsSettings: () -> Unit,
     onOpenAutoScrollSettings: () -> Unit,
+    onOpenRemoteInput: () -> Unit,
     onOpenOobe: () -> Unit,
     onOpenPerfLargeList: () -> Unit,
     onOpenPerfLargeArticle: () -> Unit,
-    onOpenLlmConnectivity: () -> Unit,
     onOpenLlmPromptPreset: () -> Unit,
     onOpenLlmTokenUsage: () -> Unit,
     onBeianClick: () -> Unit
@@ -57,6 +58,7 @@ fun SettingsScreenHost(
         llmPromptPreset = viewModel.llmPromptPreset,
         showPerformanceTools = showPerformanceTools,
         showDetailedTtsConfiguration = showDetailedTtsConfiguration,
+        hasPaidAiAccess = hasPaidAiAccess,
         onSelectCacheLimit = viewModel::updateCacheLimitMb,
         onToggleReadingTheme = viewModel::toggleReadingTheme,
         onToggleShareMode = viewModel::toggleShareUseSystem,
@@ -73,6 +75,7 @@ fun SettingsScreenHost(
         onOpenReaderPresets = onOpenReaderPresets,
         onOpenTtsSettings = onOpenTtsSettings,
         onOpenAutoScrollSettings = onOpenAutoScrollSettings,
+        onOpenRemoteInput = onOpenRemoteInput,
         onOpenOobe = onOpenOobe,
         onOpenPerfLargeList = onOpenPerfLargeList,
         onOpenPerfLargeArticle = onOpenPerfLargeArticle,
@@ -80,7 +83,6 @@ fun SettingsScreenHost(
             manualCookieInput = ""
             showManualCookieDialog = true
         },
-        onOpenLlmConnectivity = onOpenLlmConnectivity,
         onOpenLlmPromptPreset = onOpenLlmPromptPreset,
         onOpenLlmTokenUsage = onOpenLlmTokenUsage,
         onBeianClick = onBeianClick

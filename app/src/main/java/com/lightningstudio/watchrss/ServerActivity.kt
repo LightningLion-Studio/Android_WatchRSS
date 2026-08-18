@@ -25,7 +25,6 @@ class ServerActivity : BaseWatchActivity() {
     private var screenHint by mutableStateOf("")
     private var returnRemoteInputToCaller by mutableStateOf(false)
     private var preferredAbility: PhoneConnectionAbility? by mutableStateOf(null)
-    private var llmSummaryItemId by mutableStateOf(0L)
     private var pairingToken by mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -38,8 +37,6 @@ class ServerActivity : BaseWatchActivity() {
         screenTitle = intent.getStringExtra(EXTRA_SCREEN_TITLE).orEmpty()
         screenHint = intent.getStringExtra(EXTRA_SCREEN_HINT).orEmpty()
         returnRemoteInputToCaller = intent.getBooleanExtra(EXTRA_RETURN_REMOTE_URL, false)
-        llmSummaryItemId = intent.getLongExtra(EXTRA_LLM_SUMMARY_ITEM_ID, 0L)
-
         setContent {
             WatchRSSTheme {
                 ServerScreen(
@@ -79,11 +76,6 @@ class ServerActivity : BaseWatchActivity() {
                     ServerType.SYNC_BILI_WATCH_RECORDS -> {
                         LocalHttpServer.createSyncBiliWatchRecordsServer(app.container) {
                             handleSyncComplete()
-                        }
-                    }
-                    ServerType.LLM_CONFIG -> {
-                        LocalHttpServer.createLlmConfigServer(app.container) {
-                            handleLlmConfigComplete()
                         }
                     }
                     ServerType.TTS_CONFIG -> {
@@ -128,19 +120,6 @@ class ServerActivity : BaseWatchActivity() {
         }
     }
 
-    private fun handleLlmConfigComplete() {
-        lifecycleScope.launch {
-            withContext(Dispatchers.Main) {
-                if (llmSummaryItemId > 0L) {
-                    startActivity(LlmConnectivityActivity.createIntent(this@ServerActivity, llmSummaryItemId))
-                    finish()
-                } else {
-                    synced = true
-                }
-            }
-        }
-    }
-
     private fun handleTtsConfigComplete() {
         lifecycleScope.launch {
             withContext(Dispatchers.Main) {
@@ -161,7 +140,6 @@ class ServerActivity : BaseWatchActivity() {
         const val EXTRA_SCREEN_TITLE = "screen_title"
         const val EXTRA_SCREEN_HINT = "screen_hint"
         const val EXTRA_RETURN_REMOTE_URL = "return_remote_url"
-        const val EXTRA_LLM_SUMMARY_ITEM_ID = "llm_summary_item_id"
     }
 
     enum class ServerType {
@@ -169,7 +147,6 @@ class ServerActivity : BaseWatchActivity() {
         SYNC_FAVORITES,
         SYNC_WATCH_LATER,
         SYNC_BILI_WATCH_RECORDS,
-        LLM_CONFIG,
         TTS_CONFIG
     }
 
@@ -180,7 +157,6 @@ class ServerActivity : BaseWatchActivity() {
             ServerType.SYNC_FAVORITES -> "同步收藏"
             ServerType.SYNC_WATCH_LATER -> "同步稍后再看"
             ServerType.SYNC_BILI_WATCH_RECORDS -> "同步B站观看记录"
-            ServerType.LLM_CONFIG -> "配置大模型"
             ServerType.TTS_CONFIG -> "配置朗读语音"
         }
     }
@@ -192,7 +168,6 @@ class ServerActivity : BaseWatchActivity() {
             ServerType.SYNC_FAVORITES -> "请使用手机版扫描下方二维码"
             ServerType.SYNC_WATCH_LATER -> "请使用手机版扫描下方二维码"
             ServerType.SYNC_BILI_WATCH_RECORDS -> "请使用手机版扫描下方二维码"
-            ServerType.LLM_CONFIG -> "请使用手机版扫描下方二维码"
             ServerType.TTS_CONFIG -> "请使用手机版扫描下方二维码"
         }
     }

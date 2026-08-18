@@ -209,8 +209,8 @@ class AcousticConnectionActivity : BaseWatchActivity() {
             }
 
             PhoneConnectionAbility.LLM_SUMMARY_CONFIG -> {
-                statusMessage = "LLM 配置不支持声波连接"
-                detailMessage = "请使用 WiFi 扫码方式配置大模型"
+                statusMessage = "AI 摘要无需配置"
+                detailMessage = "AI 摘要仅使用 WatchRSS 提供的服务"
                 primaryButtonLabel = null
                 isBusy = false
             }

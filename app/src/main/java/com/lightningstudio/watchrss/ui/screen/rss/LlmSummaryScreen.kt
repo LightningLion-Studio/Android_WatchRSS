@@ -18,7 +18,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.SettingsEthernet
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -51,15 +50,13 @@ import com.lightningstudio.watchrss.ui.viewmodel.SummaryStatus
 @Composable
 fun LlmSummaryScreen(
     viewModel: LlmSummaryViewModel,
-    showTokenUsage: Boolean = false,
-    onOpenConnectivityCheck: () -> Unit = {}
+    showTokenUsage: Boolean = false
 ) {
     val state by viewModel.state.collectAsState()
     LlmSummaryContent(
         state = state,
         showTokenUsage = showTokenUsage,
-        onRetry = viewModel::retry,
-        onOpenConnectivityCheck = onOpenConnectivityCheck
+        onRetry = viewModel::retry
     )
 }
 
@@ -67,8 +64,7 @@ fun LlmSummaryScreen(
 private fun LlmSummaryContent(
     state: LlmSummaryUiState,
     showTokenUsage: Boolean,
-    onRetry: () -> Unit,
-    onOpenConnectivityCheck: () -> Unit
+    onRetry: () -> Unit
 ) {
     val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
     val entrySpacing = WatchDimens.hey_distance_8dp
@@ -185,13 +181,6 @@ private fun LlmSummaryContent(
                         leadingIcon = Icons.Outlined.Refresh,
                         onClick = onRetry,
                         modifier = Modifier.semantics { contentDescription = "重试生成总结按钮" }
-                    )
-                    Spacer(modifier = Modifier.height(valueSpacing))
-                    WatchSettingsPillRow(
-                        label = "检测一下",
-                        leadingIcon = Icons.Outlined.SettingsEthernet,
-                        onClick = onOpenConnectivityCheck,
-                        modifier = Modifier.semantics { contentDescription = "检测连接状态按钮" }
                     )
                 }
             }

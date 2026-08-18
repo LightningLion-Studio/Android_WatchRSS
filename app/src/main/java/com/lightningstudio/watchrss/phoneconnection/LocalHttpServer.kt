@@ -39,7 +39,6 @@ import org.json.JSONObject
  * - [createSyncFavoritesServer]  — 仅开放获取收藏夹数据端点
  * - [createSyncWatchLaterServer] — 仅开放获取稍后阅读列表端点
  * - [createSyncBiliWatchRecordsServer] — 仅开放 B 站观看历史/进度端点
- * - [createLlmConfigServer]      — 仅开放 LLM 配置的读写端点
  *
  * ## 典型调用流程
  *
@@ -72,8 +71,8 @@ import org.json.JSONObject
  * | GET  /getWatchlaterList       | SYNC_WATCH_LATER       | 手机端拉取手表稍后阅读数据                 |
  * | GET  /getBiliWatchHistory     | SYNC_BILI_WATCH_RECORDS | 手机端拉取手表上的 B 站观看历史             |
  * | GET  /getBiliPlaybackProgress | SYNC_BILI_WATCH_RECORDS | 手机端拉取手表本地 B 站断点续播进度         |
- * | GET  /getLLMSummaryConfig     | LLM_SUMMARY_CONFIG     | 配对认证后返回 AES-GCM 加密的 LLM 配置     |
- * | POST /setLLMSummaryConfig     | LLM_SUMMARY_CONFIG     | 配对认证后接收 AES-GCM 加密的 LLM 配置     |
+ * | GET  /getLLMSummaryConfig     | 已停用                 | 返回 410；AI 摘要不再支持 BYOK 配置         |
+ * | POST /setLLMSummaryConfig     | 已停用                 | 返回 410；AI 摘要不再支持 BYOK 配置         |
  * | GET  /getTtsConfig            | TTS_CONFIG             | 配对认证后返回 AES-GCM 加密的 TTS 配置     |
  * | POST /setTtsConfig            | TTS_CONFIG             | 配对认证后接收 AES-GCM 加密的 TTS 配置     |
  *
@@ -96,12 +95,11 @@ class LocalHttpServer private constructor(
     private val preferredAbility: PhoneConnectionAbility? = null,
     private val onRemoteInput: ((String) -> Unit)? = null,
     private val onSyncComplete: (() -> Unit)? = null,
-    private val onLlmConfigSaved: (() -> Unit)? = null,
     private val onTtsConfigSaved: (() -> Unit)? = null
 ) : NanoHTTPD(port) {
 
     private val configPairingSession: ConfigPairingSession? = when (serverType) {
-        ServerType.LLM_CONFIG, ServerType.TTS_CONFIG -> ConfigPairingSession.create()
+        ServerType.TTS_CONFIG -> ConfigPairingSession.create()
         else -> null
     }
 
@@ -126,8 +124,6 @@ class LocalHttpServer private constructor(
         SYNC_WATCH_LATER,
         /** 仅支持手机端同步 B 站观看历史和本地播放进度 */
         SYNC_BILI_WATCH_RECORDS,
-        /** 仅支持手机端读写 LLM 摘要配置 */
-        LLM_CONFIG,
         /** 仅支持手机端读写 TTS 配置 */
         TTS_CONFIG
     }
@@ -138,7 +134,6 @@ class LocalHttpServer private constructor(
         ServerType.SYNC_FAVORITES -> setOf(PhoneConnectionAbility.SYNC_FAVORITES)
         ServerType.SYNC_WATCH_LATER -> setOf(PhoneConnectionAbility.SYNC_WATCH_LATER)
         ServerType.SYNC_BILI_WATCH_RECORDS -> setOf(PhoneConnectionAbility.SYNC_BILI_WATCH_RECORDS)
-        ServerType.LLM_CONFIG -> setOf(PhoneConnectionAbility.LLM_SUMMARY_CONFIG)
         ServerType.TTS_CONFIG -> setOf(PhoneConnectionAbility.TTS_CONFIG)
     }
 
@@ -181,13 +176,15 @@ class LocalHttpServer private constructor(
             uri == "/getBiliPlaybackProgress" && supports(PhoneConnectionAbility.SYNC_BILI_WATCH_RECORDS) -> {
                 handleGetBiliPlaybackProgress()
             }
-            uri == "/getLLMSummaryConfig" && supports(PhoneConnectionAbility.LLM_SUMMARY_CONFIG) -> {
-                withConfigAuthentication(session, requestBody = "") { pairing ->
-                    handleGetLlmSummaryConfig(pairing)
-                }
-            }
-            uri == "/setLLMSummaryConfig" && supports(PhoneConnectionAbility.LLM_SUMMARY_CONFIG) -> {
-                handleEncryptedConfigWrite(session, ::handleSetLlmSummaryConfig)
+            uri == "/getLLMSummaryConfig" || uri == "/setLLMSummaryConfig" -> {
+                newFixedLengthResponse(
+                    Response.Status.GONE,
+                    "application/json",
+                    JSONObject().apply {
+                        put("success", false)
+                        put("message", "LLM BYOK configuration is no longer supported")
+                    }.toString()
+                )
             }
             uri == "/getTtsConfig" && supports(PhoneConnectionAbility.TTS_CONFIG) -> {
                 withConfigAuthentication(session, requestBody = "") { pairing ->
@@ -763,110 +760,6 @@ class LocalHttpServer private constructor(
         )
     }
 
-    private fun handleGetLlmSummaryConfig(pairing: ConfigPairingSession): Response {
-        return try {
-            val settingsRepository = container.settingsRepository
-            val apiKeyStore = container.llmApiKeyStore
-
-            var provider = ""
-            var model = ""
-            var baseUrl = ""
-            var enabled = false
-            kotlinx.coroutines.runBlocking {
-                provider = settingsRepository.llmProvider.first()
-                model = settingsRepository.llmModel.first()
-                baseUrl = settingsRepository.llmBaseUrl.first()
-                enabled = settingsRepository.llmEnabled.first()
-            }
-
-            val hasConfig = provider.isNotEmpty() || apiKeyStore.hasApiKey()
-            val dataObj = if (hasConfig) {
-                val rawKey = apiKeyStore.getApiKey()
-                val maskedKey = if (rawKey.length <= 4) "****" else "****${rawKey.takeLast(4)}"
-                JSONObject().apply {
-                    put("provider", provider)
-                    put("apiKey", maskedKey)
-                    put("model", model)
-                    put("baseUrl", baseUrl)
-                    put("enabled", enabled)
-                }
-            } else {
-                JSONObject.NULL
-            }
-
-            val plaintext = JSONObject().apply {
-                put("success", true)
-                put("data", dataObj)
-            }.toString()
-            encryptedConfigResponse(
-                pairing = pairing,
-                method = "GET",
-                uri = "/getLLMSummaryConfig",
-                plaintext = plaintext
-            )
-        } catch (e: Exception) {
-            AppLogger.e("LocalHttpServer", "handleGetLlmSummaryConfig failed", e)
-            configJsonResponse(Response.Status.INTERNAL_ERROR) {
-                put("success", false)
-                put("data", JSONObject.NULL)
-            }
-        }
-    }
-
-    private fun handleSetLlmSummaryConfig(
-        plaintext: String,
-        pairing: ConfigPairingSession
-    ): Response {
-        return try {
-            val json = JSONObject(plaintext)
-
-            val provider = json.optString("provider", "")
-            val apiKey = json.optString("apiKey", "")
-            val model = json.optString("model", "")
-            val baseUrl = json.optString("baseUrl", "")
-            val enabled = json.optBoolean("enabled", false)
-
-            if (provider.isEmpty()) {
-                return configJsonResponse(Response.Status.BAD_REQUEST) {
-                    put("success", false)
-                    put("message", "provider 不能为空")
-                }
-            }
-            if (apiKey.isEmpty()) {
-                return configJsonResponse(Response.Status.BAD_REQUEST) {
-                    put("success", false)
-                    put("message", "apiKey 不能为空")
-                }
-            }
-            if (!pairing.claimWrite()) {
-                return configAuthError(Response.Status.UNAUTHORIZED)
-            }
-
-            container.llmApiKeyStore.setApiKey(apiKey)
-            kotlinx.coroutines.runBlocking {
-                container.settingsRepository.setLlmConfig(
-                    provider = provider,
-                    model = model,
-                    baseUrl = baseUrl,
-                    enabled = enabled
-                )
-            }
-            val response = configJsonResponse(Response.Status.OK) {
-                put("success", true)
-                put("message", "配置已保存")
-            }
-            onLlmConfigSaved?.invoke()
-            response
-        } catch (_: Exception) {
-            // Decrypted configuration may include an API key; never attach exception messages here.
-            AppLogger.e("LocalHttpServer", "handleSetLlmSummaryConfig failed")
-            configJsonResponse(Response.Status.INTERNAL_ERROR) {
-                put("success", false)
-                put("message", "配置保存失败")
-            }
-        }
-    }
-
     private fun handleGetTtsConfig(pairing: ConfigPairingSession): Response {
         return try {
             val settingsRepository = container.settingsRepository
@@ -1098,33 +991,9 @@ class LocalHttpServer private constructor(
         }
 
         /**
-         * 创建"LLM 配置"专用服务器。
-         *
-         * 手表屏幕无法便捷输入 API Key 等长字符串，因此通过此服务器让手机端代劳：
-         * - GET  `/getLLMSummaryConfig`：认证后返回 AES-GCM 加密配置，解密后 API Key 仍脱敏。
-         * - POST `/setLLMSummaryConfig`：认证后解密完整配置，API Key 不以明文 HTTP 正文传输，
-         *   Key 存储在 [com.lightningstudio.watchrss.data.settings.LlmApiKeyStore]，
-         *   其余字段持久化到 DataStore。
-         *
-         * 注意：该服务器不提供 [onRemoteInput] / [onSyncComplete] 回调，配置写入是同步完成的。
-         */
-        fun createLlmConfigServer(
-            container: AppContainer,
-            onLlmConfigSaved: (() -> Unit)? = null
-        ): LocalHttpServer {
-            return LocalHttpServer(
-                DEFAULT_PORT,
-                container,
-                ServerType.LLM_CONFIG,
-                preferredAbility = PhoneConnectionAbility.LLM_SUMMARY_CONFIG,
-                onLlmConfigSaved = onLlmConfigSaved
-            )
-        }
-
-        /**
          * 创建"TTS 配置"专用服务器。
          *
-         * 与 LLM 配置服务器类似，手表端通过二维码让手机端代为输入音色、模型和 API Key：
+         * 手表端通过二维码让手机端代为输入音色、模型和 API Key：
          * - GET  `/getTtsConfig`：认证后返回 AES-GCM 加密配置，解密后 API Key 仍脱敏。
          * - POST `/setTtsConfig`：认证后解密完整配置，API Key 不以明文 HTTP 正文传输，
          *   Key 存储在 [com.lightningstudio.watchrss.data.settings.TtsApiKeyStore]，

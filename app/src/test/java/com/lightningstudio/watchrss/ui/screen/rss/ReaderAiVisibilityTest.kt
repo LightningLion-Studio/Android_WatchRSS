@@ -6,23 +6,23 @@ import org.junit.Test
 
 class ReaderAiVisibilityTest {
     @Test
-    fun aiSummaryEntryIsVisibleInEligibleProductionReaders() {
+    fun aiSummaryEntryRequiresEnabledPaidAuthorization() {
         assertTrue(
             isReaderAiSummaryEntryVisible(
                 llmEnabled = true,
-                isNovelContent = false
+                hasPaidAuthorization = true
             )
         )
         assertFalse(
             isReaderAiSummaryEntryVisible(
                 llmEnabled = false,
-                isNovelContent = false
+                hasPaidAuthorization = true
             )
         )
         assertFalse(
             isReaderAiSummaryEntryVisible(
                 llmEnabled = true,
-                isNovelContent = true
+                hasPaidAuthorization = false
             )
         )
     }
