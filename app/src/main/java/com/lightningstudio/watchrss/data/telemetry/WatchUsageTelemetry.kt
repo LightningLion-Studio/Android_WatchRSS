@@ -29,10 +29,26 @@ class WatchUsageTelemetry(
     private val httpClient: OkHttpClient = defaultHttpClient()
 ) : UsageTelemetry {
     private val store = DailyTelemetryStore(context)
+    private val downloadPreferences = context.applicationContext.getSharedPreferences(
+        DOWNLOAD_PREFERENCES,
+        Context.MODE_PRIVATE
+    )
     private val uploadScheduled = AtomicBoolean(false)
     private val generation = AtomicLong(0L)
 
     override fun recordAppLaunch() = capture("app_opened")
+
+    /** Records one release OOBE open per installation. */
+    fun recordReleaseOobeOpened() {
+        if (!shouldCountReleaseOobeOpen(BuildConfig.DEBUG)) return
+        synchronized(downloadPreferences) {
+            if (downloadPreferences.getBoolean(KEY_RELEASE_OOBE_RECORDED, false)) return
+            store.record(EVENT_RELEASE_OOBE_OPENED)
+            downloadPreferences.edit().putBoolean(KEY_RELEASE_OOBE_RECORDED, true).apply()
+        }
+        generation.incrementAndGet()
+        scheduleUpload()
+    }
 
     override fun recordScreenOpen(screen: String) =
         capture("screen_opened", mapOf("screen" to screen))
@@ -119,6 +135,10 @@ class WatchUsageTelemetry(
     }
 
     companion object {
+        const val EVENT_RELEASE_OOBE_OPENED = "release_oobe_opened"
+
+        private const val DOWNLOAD_PREFERENCES = "watchrss_download_telemetry"
+        private const val KEY_RELEASE_OOBE_RECORDED = "release_oobe_recorded"
         private const val UPLOAD_DEBOUNCE_MS = 750L
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
 
@@ -129,3 +149,5 @@ class WatchUsageTelemetry(
             .build()
     }
 }
+
+internal fun shouldCountReleaseOobeOpen(debugBuild: Boolean): Boolean = !debugBuild

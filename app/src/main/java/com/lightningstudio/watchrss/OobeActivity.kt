@@ -30,6 +30,7 @@ class OobeActivity : BaseWatchActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setupSystemBars()
+        (application as WatchRssApplication).usageTelemetry.recordReleaseOobeOpened()
 
         val returnHomeOnFinish = intent.getBooleanExtra(EXTRA_RETURN_HOME_ON_FINISH, true)
 
