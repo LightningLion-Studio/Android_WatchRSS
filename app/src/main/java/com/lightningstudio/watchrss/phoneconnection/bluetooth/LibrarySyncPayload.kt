@@ -11,11 +11,15 @@ import com.lightningstudio.watchrss.data.rss.SyncedArticleManifest
 import com.lightningstudio.watchrss.data.rss.SyncedChunkedArticle
 import com.lightningstudio.watchrss.data.rss.SyncedRssSource
 import com.lightningstudio.watchrss.data.rss.SyncedSavedArticle
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.util.Base64
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
 
@@ -57,12 +61,13 @@ data class LibrarySyncCursor(
 )
 
 object LibrarySyncPayload {
-    const val PROTOCOL_VERSION = 13
+    const val PROTOCOL_VERSION = 14
     const val MIN_SUPPORTED_PHONE_PROTOCOL_VERSION = 13
     const val LEGACY_PROTOCOL_VERSION = 4
     const val MAX_BODY_REQUEST_CHUNKS_PER_SYNC = Int.MAX_VALUE
     const val MAX_ARTICLE_REQUEST_BATCH_COUNT = 256
     const val MAX_MANIFEST_BATCH_COUNT = 512
+    const val CHUNKED_RESPONSE_ENCODER_WORKERS = 2
     const val FIELD_BATCH_WIRE_BYTES = "batchWireBytes"
     const val FIELD_BATCH_TOTAL_WIRE_BYTES = "batchTotalWireBytes"
     const val PHASE_CURSOR = "cursor"
@@ -112,6 +117,7 @@ object LibrarySyncPayload {
             put("supportsReaderAssets", true)
             put("supportsResourceChunkAck", true)
             put("supportsReaderPresetPreview", true)
+            put(BluetoothSyncProtocol.FIELD_SUPPORTS_PERSISTENT_SESSION, true)
             put(FIELD_SUPPORTS_TRANSFER_BYTE_PROGRESS, true)
             put("deviceId", deviceId)
             put("sentAt", System.currentTimeMillis())
@@ -590,13 +596,62 @@ object LibrarySyncPayload {
                 allowMetadataOnlyArticles = allowMetadataOnlyArticles
             )
         }
+        return buildChunkedResponseFramesFromItems(
+            deviceId = deviceId,
+            articleCount = articles.size,
+            articleItems = articleItems,
+            applied = applied,
+            sourcesApplied = sourcesApplied,
+            useBatches = useBatches
+        )
+    }
+
+    suspend fun buildChunkedResponseFramesParallel(
+        deviceId: String,
+        articles: List<SyncedSavedArticle>,
+        articleRequests: List<SyncedArticleBodyRequest>,
+        applied: Int,
+        sourcesApplied: Int = 0,
+        useBatches: Boolean,
+        allowMetadataOnlyArticles: Boolean = false,
+        encoderWorkers: Int = CHUNKED_RESPONSE_ENCODER_WORKERS
+    ): List<JSONObject> {
+        require(encoderWorkers > 0) { "正文响应编码并行度必须大于 0" }
+        val requestById = articleRequests.associateBy { it.articleId }
+        val articleItems = encodeChunkedArticleItemsParallel(
+            articles = articles,
+            encoderWorkers = encoderWorkers
+        ) { article ->
+            article.toChunkedJsonItems(
+                request = requestById[article.articleId],
+                allowMetadataOnlyArticles = allowMetadataOnlyArticles
+            )
+        }
+        return buildChunkedResponseFramesFromItems(
+            deviceId = deviceId,
+            articleCount = articles.size,
+            articleItems = articleItems,
+            applied = applied,
+            sourcesApplied = sourcesApplied,
+            useBatches = useBatches
+        )
+    }
+
+    private fun buildChunkedResponseFramesFromItems(
+        deviceId: String,
+        articleCount: Int,
+        articleItems: List<JSONObject>,
+        applied: Int,
+        sourcesApplied: Int,
+        useBatches: Boolean
+    ): List<JSONObject> {
         if (!useBatches) {
             return listOf(buildChunkedResponse(deviceId, articleItems, applied, sourcesApplied))
                 .withBatchWireByteHints()
         }
         return buildArticleFrames(
             articleItems = articleItems,
-            totalArticles = articles.size
+            totalArticles = articleCount
         ) { array, batchIndex, batchCount, totalArticles ->
             JSONObject().apply {
                 put("success", true)
@@ -608,19 +663,44 @@ object LibrarySyncPayload {
                 put("articles", array)
                 putBatchFields(batchIndex, batchCount, totalArticles)
                 if (batchIndex == 0) {
-                    putStats(articleCount = articles.size, applied = applied, sourcesApplied = sourcesApplied)
+                    putStats(articleCount = articleCount, applied = applied, sourcesApplied = sourcesApplied)
                 }
             }
         }.withResponseProgressHeader(
             deviceId = deviceId,
-            totalArticles = articles.size,
+            totalArticles = articleCount,
             stats = buildResponseStats(
-                articleCount = articles.size,
+                articleCount = articleCount,
                 applied = applied,
                 sourcesSent = 0,
                 sourcesApplied = sourcesApplied
             )
         )
+    }
+
+    private suspend fun encodeChunkedArticleItemsParallel(
+        articles: List<SyncedSavedArticle>,
+        encoderWorkers: Int,
+        encode: (SyncedSavedArticle) -> List<JSONObject>
+    ): List<JSONObject> = coroutineScope {
+        if (articles.isEmpty()) return@coroutineScope emptyList()
+        val results = arrayOfNulls<List<JSONObject>>(articles.size)
+        val nextIndex = AtomicInteger(0)
+        val workers = List(minOf(encoderWorkers, articles.size)) {
+            launch(Dispatchers.Default) {
+                while (true) {
+                    val index = nextIndex.getAndIncrement()
+                    if (index >= articles.size) break
+                    results[index] = encode(articles[index])
+                }
+            }
+        }
+        workers.forEach { it.join() }
+        buildList {
+            results.forEachIndexed { index, items ->
+                addAll(requireNotNull(items) { "正文响应编码结果缺失：$index" })
+            }
+        }
     }
 
     fun combineArticlePayloads(frames: List<JSONObject>): JSONObject {

@@ -184,6 +184,14 @@ class WatchBluetoothForegroundSyncManager(
                         onClientAccepted = {
                             beginMediaKeepAliveSession()
                             updateTransferInProgress(true)
+                        },
+                        onActionCompleted = { syncResult ->
+                            if (
+                                syncResult.request.optString("action") ==
+                                BluetoothSyncProtocol.ACTION_SYNC_LIBRARY
+                            ) {
+                                onLibrarySyncCompleted?.invoke()
+                            }
                         }
                     ).acceptOnce(timeoutMs = FOREGROUND_ACCEPT_TIMEOUT_MS)
                 }
@@ -195,12 +203,6 @@ class WatchBluetoothForegroundSyncManager(
                     TAG,
                     "foreground sync complete remote=${syncResult.remoteName} action=${syncResult.request.optString("action")}"
                 )
-                if (
-                    syncResult.request.optString("action") ==
-                    BluetoothSyncProtocol.ACTION_SYNC_LIBRARY
-                ) {
-                    onLibrarySyncCompleted?.invoke()
-                }
             }.onFailure { throwable ->
                 if (throwable is CancellationException) return
                 if (desiredListening) {

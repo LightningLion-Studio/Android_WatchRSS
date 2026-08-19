@@ -9,6 +9,20 @@ import java.util.Base64
 
 class IpSyncProtocolTest {
     @Test
+    fun websocketClientDoesNotPingDuringBackpressuredTransfers() {
+        val client = buildWatchIpSyncWebSocketClient(probeTimeoutMs = 2_500L)
+
+        try {
+            assertEquals(2_500, client.connectTimeoutMillis)
+            assertEquals(0, client.readTimeoutMillis)
+            assertEquals(0, client.pingIntervalMillis)
+        } finally {
+            client.dispatcher.executorService.shutdown()
+            client.connectionPool.evictAll()
+        }
+    }
+
+    @Test
     fun parsesAndVerifiesPhoneCompactDescriptor() {
         val unsigned = descriptor(hmac = "")
         val signed = unsigned.copy(

@@ -1,6 +1,7 @@
 package com.lightningstudio.watchrss.data.rss
 
 import org.json.JSONObject
+import java.io.BufferedWriter
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
@@ -31,6 +32,8 @@ object ArticleSyncBody {
     const val CHUNK_SIZE_BYTES = 128 * 1024
     private const val BODY_ENCODING_VERSION = 2
     private const val MAX_DECOMPRESSED_TEXT_BYTES = 32 * 1024 * 1024
+    private const val JSON_WRITE_BUFFER_CHARS = 16 * 1024
+    private val HEX_DIGITS = "0123456789abcdef".toCharArray()
 
     fun metadataFor(article: SyncedSavedArticle): ArticleBodyMetadata {
         val output = BodyChunkOutputStream()
@@ -152,7 +155,10 @@ object ArticleSyncBody {
 
     private fun writeEncodedBody(contentHtml: String?, contentText: String, output: OutputStream) {
         GZIPOutputStream(output).use { gzip ->
-            OutputStreamWriter(gzip, Charsets.UTF_8).use { writer ->
+            BufferedWriter(
+                OutputStreamWriter(gzip, Charsets.UTF_8),
+                JSON_WRITE_BUFFER_CHARS
+            ).use { writer ->
                 writer.append('{')
                 var needsComma = false
                 if (contentHtml != null) {
@@ -186,27 +192,37 @@ object ArticleSyncBody {
     }
 
     private fun writeJsonString(writer: Writer, value: String) {
-        writer.append('"')
-        value.forEach { char ->
-            when (char) {
-                '\\' -> writer.append("\\\\")
-                '"' -> writer.append("\\\"")
-                '\b' -> writer.append("\\b")
-                '\u000C' -> writer.append("\\f")
-                '\n' -> writer.append("\\n")
-                '\r' -> writer.append("\\r")
-                '\t' -> writer.append("\\t")
-                else -> {
-                    if (char.code < 0x20) {
-                        writer.append("\\u")
-                        writer.append(char.code.toString(16).padStart(4, '0'))
-                    } else {
-                        writer.append(char)
-                    }
+        writer.write('"'.code)
+        var runStart = 0
+        value.forEachIndexed { index, char ->
+            val escape = when (char) {
+                '\\' -> "\\\\"
+                '"' -> "\\\""
+                '\b' -> "\\b"
+                '\u000C' -> "\\f"
+                '\n' -> "\\n"
+                '\r' -> "\\r"
+                '\t' -> "\\t"
+                else -> null
+            }
+            if (escape != null || char.code < 0x20) {
+                if (runStart < index) {
+                    writer.write(value, runStart, index - runStart)
                 }
+                if (escape != null) {
+                    writer.write(escape)
+                } else {
+                    writer.write("\\u00")
+                    writer.write(HEX_DIGITS[char.code ushr 4].code)
+                    writer.write(HEX_DIGITS[char.code and 0x0f].code)
+                }
+                runStart = index + 1
             }
         }
-        writer.append('"')
+        if (runStart < value.length) {
+            writer.write(value, runStart, value.length - runStart)
+        }
+        writer.write('"'.code)
     }
 
     private fun decodeBody(bytes: ByteArray): Pair<String?, String> {
@@ -401,7 +417,7 @@ object ArticleSyncBody {
 
     private fun sha256(bytes: ByteArray): String {
         val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
-        return digest.joinToString("") { "%02x".format(it) }
+        return digest.toHexString()
     }
 
     private class BodyChunkOutputStream(
@@ -557,6 +573,13 @@ object ArticleSyncBody {
         }
     }
 
-    private fun ByteArray.toHexString(): String =
-        joinToString("") { "%02x".format(it) }
+    private fun ByteArray.toHexString(): String {
+        val encoded = CharArray(size * 2)
+        forEachIndexed { index, byte ->
+            val value = byte.toInt() and 0xff
+            encoded[index * 2] = HEX_DIGITS[value ushr 4]
+            encoded[index * 2 + 1] = HEX_DIGITS[value and 0x0f]
+        }
+        return String(encoded)
+    }
 }

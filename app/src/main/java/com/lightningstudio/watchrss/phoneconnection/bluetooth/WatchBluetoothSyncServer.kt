@@ -19,10 +19,12 @@ import com.lightningstudio.watchrss.data.rss.SyncedSavedArticleMergeStats
 import com.lightningstudio.watchrss.phoneconnection.PhoneConnectionAbility
 import com.lightningstudio.watchrss.phoneconnection.SavedItemsSyncPayload
 import com.lightningstudio.watchrss.phoneconnection.WatchDeviceIdentity
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.Closeable
@@ -102,6 +104,22 @@ private class StreamWatchSyncTransport(
     override fun close() = closeTransport()
 }
 
+internal suspend fun <T> withTransportReadTimeout(
+    timeoutMs: Long,
+    closeTransport: () -> Unit,
+    read: () -> T
+): T = coroutineScope {
+    val timeoutJob = launch(Dispatchers.IO) {
+        delay(timeoutMs)
+        closeTransport()
+    }
+    try {
+        withContext(Dispatchers.IO) { read() }
+    } finally {
+        timeoutJob.cancel()
+    }
+}
+
 private data class ChunkedArticleRequestFrames(
     val bodyRequests: List<SyncedArticleBodyRequest>,
     val stats: ArticleRequestBatchStats,
@@ -168,6 +186,7 @@ class WatchBluetoothSyncServer(
     private val allowedActions: Set<String>? = null,
     private val onClientAccepted: (() -> Unit)? = null,
     private val onRequestReceived: (() -> Unit)? = null,
+    private val onActionCompleted: ((BluetoothSyncResult) -> Unit)? = null,
     private val responseAckTimeoutMs: Long = RESPONSE_ACK_TIMEOUT_MS
 ) {
     @SuppressLint("MissingPermission")
@@ -288,61 +307,115 @@ class WatchBluetoothSyncServer(
             fields = remoteFields(remoteName, remoteAddress)
         )
         onClientAccepted?.invoke()
-        var request = readFrameLoggedWithTimeout(
-            client = client,
-            sessionId = sessionId,
-            label = "initialRequest",
-            timeoutMs = initialRequestTimeoutMs
-        )
-        onRequestReceived?.invoke()
-        if (
-            request.optString("action") == BluetoothSyncProtocol.ACTION_PREVIEW_READER &&
-            request.optBoolean("stream")
-        ) {
-            val response = handleReaderPreviewStream(client, request, sessionId)
-            return BluetoothSyncResult(remoteName, remoteAddress, request, response)
-        }
-        var unsupportedPhoneProtocolResponse =
-            LibrarySyncPayload.buildUnsupportedPhoneProtocolResponse(request)
-        if (unsupportedPhoneProtocolResponse == null && request.isCursorLibrarySync()) {
-            val cursorResponse = buildLibraryCursorResponse(request, sessionId)
-            writeFrameLogged(client, sessionId, "cursorResponse", cursorResponse)
-            request = readFrameLoggedWithTimeout(
+        var persistentSession = false
+        var requestTimeoutMs = initialRequestTimeoutMs
+        var completedActions = 0
+        while (true) {
+            var request = readFrameLoggedWithTimeout(
                 client = client,
                 sessionId = sessionId,
-                label = "manifestRequest",
-                timeoutMs = initialRequestTimeoutMs
+                label = if (completedActions == 0) "initialRequest" else "sessionRequest",
+                timeoutMs = requestTimeoutMs
             )
-            unsupportedPhoneProtocolResponse =
-                LibrarySyncPayload.buildUnsupportedPhoneProtocolResponse(request)
-        }
-        if (unsupportedPhoneProtocolResponse == null && request.isManifestLibrarySync()) {
-            request = readManifestRequestFrames(client, sessionId, request)
-        }
-        val libraryExchange = if (
-            unsupportedPhoneProtocolResponse == null && request.isManifestLibrarySync()
-        ) {
-            handleLibraryManifestExchange(client, request, sessionId)
-        } else {
-            null
-        }
-        val response = libraryExchange?.response ?: run {
-            (unsupportedPhoneProtocolResponse ?: handleRequest(request, sessionId)).also { payload ->
-                writeFrameLogged(client, sessionId, "response", payload)
+            onRequestReceived?.invoke()
+            val acceptsPersistentSession =
+                BluetoothSyncProtocol.requestsPersistentSession(request)
+            val persistentSessionAccepted = !persistentSession && acceptsPersistentSession
+            if (persistentSessionAccepted) {
+                persistentSession = true
+                requestTimeoutMs = BluetoothSyncProtocol.PERSISTENT_SESSION_IDLE_TIMEOUT_MS
+                WatchBluetoothDebugLog.event(
+                    sessionId = sessionId,
+                    event = "server.session.accepted",
+                    fields = remoteFields(remoteName, remoteAddress)
+                )
             }
+
+            BluetoothSyncProtocol.sessionControlPhase(request)?.let { phase ->
+                require(persistentSession) { "当前连接不是持久同步会话" }
+                val response = BluetoothSyncProtocol.buildSessionControlResponse(
+                    version = LibrarySyncPayload.PROTOCOL_VERSION,
+                    phase = phase
+                )
+                writeFrameLogged(client, sessionId, "sessionResponse", response)
+                waitForResponseAck(client, sessionId)
+                val result = BluetoothSyncResult(remoteName, remoteAddress, request, response)
+                WatchBluetoothDebugLog.event(
+                    sessionId = sessionId,
+                    event = "server.session.complete",
+                    fields = mapOf(
+                        "phase" to phase,
+                        "completedActions" to completedActions,
+                        "elapsedMs" to elapsedSince(totalStartedAt)
+                    )
+                )
+                return result
+            }
+
+            if (
+                request.optString("action") == BluetoothSyncProtocol.ACTION_PREVIEW_READER &&
+                request.optBoolean("stream")
+            ) {
+                val response = handleReaderPreviewStream(client, request, sessionId)
+                return BluetoothSyncResult(remoteName, remoteAddress, request, response)
+            }
+            var unsupportedPhoneProtocolResponse =
+                LibrarySyncPayload.buildUnsupportedPhoneProtocolResponse(request)
+            if (unsupportedPhoneProtocolResponse == null && request.isCursorLibrarySync()) {
+                val cursorResponse = buildLibraryCursorResponse(request, sessionId).apply {
+                    if (persistentSessionAccepted) putPersistentSessionAccepted()
+                }
+                writeFrameLogged(client, sessionId, "cursorResponse", cursorResponse)
+                request = readFrameLoggedWithTimeout(
+                    client = client,
+                    sessionId = sessionId,
+                    label = "manifestRequest",
+                    timeoutMs = requestTimeoutMs
+                )
+                unsupportedPhoneProtocolResponse =
+                    LibrarySyncPayload.buildUnsupportedPhoneProtocolResponse(request)
+            }
+            if (unsupportedPhoneProtocolResponse == null && request.isManifestLibrarySync()) {
+                request = readManifestRequestFrames(client, sessionId, request)
+            }
+            val libraryExchange = if (
+                unsupportedPhoneProtocolResponse == null && request.isManifestLibrarySync()
+            ) {
+                handleLibraryManifestExchange(
+                    client = client,
+                    request = request,
+                    sessionId = sessionId,
+                    persistentSessionAccepted = persistentSessionAccepted
+                )
+            } else {
+                null
+            }
+            val response = libraryExchange?.response ?: run {
+                (unsupportedPhoneProtocolResponse ?: handleRequest(request, sessionId)).also { payload ->
+                    if (persistentSessionAccepted) payload.putPersistentSessionAccepted()
+                    writeFrameLogged(client, sessionId, "response", payload)
+                }
+            }
+            val ack = waitForResponseAck(client, sessionId)
+            libraryExchange?.pendingSyncSuccess?.let { pending ->
+                markLibrarySyncSuccessAfterAck(pending, ack, sessionId)
+            }
+            completedActions += 1
+            val result = BluetoothSyncResult(remoteName, remoteAddress, request, response)
+            onActionCompleted?.invoke(result)
+            WatchBluetoothDebugLog.event(
+                sessionId = sessionId,
+                event = "server.exchange.complete",
+                fields = remoteFields(remoteName, remoteAddress) +
+                    payloadFields("request", request) + payloadFields("response", response) +
+                    mapOf(
+                        "persistentSession" to persistentSession,
+                        "completedActions" to completedActions,
+                        "elapsedMs" to elapsedSince(totalStartedAt)
+                    )
+            )
+            if (!persistentSession) return result
         }
-        val ack = waitForResponseAck(client, sessionId)
-        libraryExchange?.pendingSyncSuccess?.let { pending ->
-            markLibrarySyncSuccessAfterAck(pending, ack, sessionId)
-        }
-        WatchBluetoothDebugLog.event(
-            sessionId = sessionId,
-            event = "server.acceptOnce.complete",
-            fields = remoteFields(remoteName, remoteAddress) +
-                payloadFields("request", request) + payloadFields("response", response) +
-                mapOf("elapsedMs" to elapsedSince(totalStartedAt))
-        )
-        return BluetoothSyncResult(remoteName, remoteAddress, request, response)
     }
 
     private suspend fun buildLibraryCursorResponse(
@@ -379,7 +452,8 @@ class WatchBluetoothSyncServer(
     private suspend fun handleLibraryManifestExchange(
         client: WatchSyncTransport,
         request: JSONObject,
-        sessionId: String
+        sessionId: String,
+        persistentSessionAccepted: Boolean = false
     ): LibraryManifestExchangeResult {
         val startedAt = SystemClock.elapsedRealtime()
         WatchBluetoothDebugLog.event(
@@ -492,6 +566,8 @@ class WatchBluetoothSyncServer(
                         fallbackReason = outgoingWindow.fallbackReason
                     )
                 )
+            }.apply {
+                if (persistentSessionAccepted) putPersistentSessionAccepted()
             }
             val manifestResponseFrames = if (LibrarySyncPayload.supportsManifestBatches(request)) {
                 LibrarySyncPayload.buildManifestFrames(manifestResponse)
@@ -580,7 +656,7 @@ class WatchBluetoothSyncServer(
                     )
                 )
                 val framesStartedAt = SystemClock.elapsedRealtime()
-                LibrarySyncPayload.buildChunkedResponseFrames(
+                LibrarySyncPayload.buildChunkedResponseFramesParallel(
                     deviceId = localDeviceId,
                     articles = outgoingArticles,
                     articleRequests = phoneRequests,
@@ -593,7 +669,13 @@ class WatchBluetoothSyncServer(
                         sessionId = sessionId,
                         event = "library.response.frames.built",
                         fields = batchFields("libraryResponse", frames) +
-                            mapOf("elapsedMs" to elapsedSince(framesStartedAt))
+                            mapOf(
+                                "elapsedMs" to elapsedSince(framesStartedAt),
+                                "encoderWorkers" to minOf(
+                                    LibrarySyncPayload.CHUNKED_RESPONSE_ENCODER_WORKERS,
+                                    outgoingArticles.size
+                                )
+                            )
                     )
                 }
             } else {
@@ -978,12 +1060,10 @@ class WatchBluetoothSyncServer(
         label: String,
         timeoutMs: Long,
         logFrame: Boolean = true
-    ): JSONObject = coroutineScope {
-        val timeoutJob = launch {
-            delay(timeoutMs)
-            runCatching {
-                client.close()
-            }.onSuccess {
+    ): JSONObject = withTransportReadTimeout(
+        timeoutMs = timeoutMs,
+        closeTransport = {
+            runCatching { client.close() }.onSuccess {
                 WatchBluetoothDebugLog.warn(
                     sessionId = sessionId,
                     event = "frame.read.timeout.closed",
@@ -993,17 +1073,15 @@ class WatchBluetoothSyncServer(
                     )
                 )
             }
-        }
-        try {
+        },
+        read = {
             if (logFrame) {
                 readFrameLogged(client, sessionId, label)
             } else {
                 BluetoothSyncProtocol.readFrame(client.inputStream)
             }
-        } finally {
-            timeoutJob.cancel()
         }
-    }
+    )
 
     private suspend fun markLibrarySyncSuccessAfterAck(
         pending: PendingLibrarySyncSuccess,
@@ -1612,6 +1690,11 @@ class WatchBluetoothSyncServer(
         return optString("action") == BluetoothSyncProtocol.ACTION_SYNC_LIBRARY &&
             optInt("version") >= LibrarySyncPayload.PROTOCOL_VERSION &&
             optString("phase") == LibrarySyncPayload.PHASE_CURSOR
+    }
+
+    private fun JSONObject.putPersistentSessionAccepted() {
+        put(BluetoothSyncProtocol.FIELD_SUPPORTS_PERSISTENT_SESSION, true)
+        put(BluetoothSyncProtocol.FIELD_PERSISTENT_SESSION_ACCEPTED, true)
     }
 
     companion object {

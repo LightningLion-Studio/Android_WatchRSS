@@ -7,6 +7,7 @@ import com.lightningstudio.watchrss.data.rss.ARTICLE_BODY_SYNC_MODE_SAVED
 import com.lightningstudio.watchrss.data.rss.SyncedArticleBodyRequest
 import com.lightningstudio.watchrss.data.rss.SyncedArticleManifest
 import com.lightningstudio.watchrss.data.rss.SyncedRssSource
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -14,8 +15,19 @@ import org.junit.Assert.fail
 import org.junit.Test
 import org.json.JSONArray
 import org.json.JSONObject
+import kotlin.system.measureTimeMillis
 
 class LibrarySyncPayloadTest {
+    @Test
+    fun protocolV14_keepsV13PhoneCompatibility() {
+        assertEquals(14, LibrarySyncPayload.PROTOCOL_VERSION)
+        assertEquals(13, LibrarySyncPayload.MIN_SUPPORTED_PHONE_PROTOCOL_VERSION)
+        assertTrue(
+            LibrarySyncPayload.buildProbeResponse("watch")
+                .getBoolean(BluetoothSyncProtocol.FIELD_SUPPORTS_PERSISTENT_SESSION)
+        )
+    }
+
     @Test
     fun manifestFrames_splitAndReassemblePayloadLargerThanTransportFrame() {
         val manifest = JSONArray().also { array ->
@@ -930,6 +942,94 @@ class LibrarySyncPayloadTest {
         assertEquals(article.contentText, rebuilt.second)
     }
 
+    @Test
+    fun chunkedResponse_parallelMatchesSerialAndPreservesArticleOrder() = runTest {
+        val articles = List(4) { index ->
+            syncedArticle(
+                articleId = "parallel-$index",
+                contentHash = "hash-$index",
+                updatedAt = 20L + index
+            ).copy(
+                contentHtml = "<p>第 $index 篇：\\\"引号\\\"、反斜杠 \\\\、换行\n与 emoji 😀</p>",
+                contentText = pseudoRandomText(
+                    seed = 100 + index,
+                    length = ArticleSyncBody.CHUNK_SIZE_BYTES * 2
+                ) + "\u0001\b\u000C\n\r\t结尾-$index"
+            )
+        }
+        val requests = articles.map { article ->
+            val metadata = ArticleSyncBody.metadataFor(article)
+            SyncedArticleBodyRequest(
+                articleId = article.articleId,
+                bodyHash = metadata.bodyHash,
+                chunkIndexes = metadata.chunkHashes.indices.toList()
+            )
+        }
+        var serialFrames = emptyList<JSONObject>()
+        val serialElapsedMs = measureTimeMillis {
+            serialFrames = LibrarySyncPayload.buildChunkedResponseFrames(
+                deviceId = "watch",
+                articles = articles,
+                articleRequests = requests,
+                applied = 0,
+                useBatches = true
+            )
+        }
+        var parallelFrames = emptyList<JSONObject>()
+        val parallelElapsedMs = measureTimeMillis {
+            parallelFrames = LibrarySyncPayload.buildChunkedResponseFramesParallel(
+                deviceId = "watch",
+                articles = articles,
+                articleRequests = requests,
+                applied = 0,
+                useBatches = true,
+                encoderWorkers = 2
+            )
+        }
+
+        assertEquals(
+            serialFrames.map(::normalizedFrameJson),
+            parallelFrames.map(::normalizedFrameJson)
+        )
+        val parsed = LibrarySyncPayload.parseChunkedArticles(
+            LibrarySyncPayload.combineArticlePayloads(parallelFrames)
+        )
+        assertEquals(articles.map { it.articleId }, parsed.map { it.article.articleId })
+        parsed.zip(articles).forEach { (payload, article) ->
+            val rebuilt = ArticleSyncBody.rebuildBody(
+                localArticle = null,
+                payload = payload,
+                localBodyHash = ""
+            )
+            assertEquals(article.contentHtml, rebuilt.first)
+            assertEquals(article.contentText, rebuilt.second)
+        }
+        println(
+            "chunked response benchmark: serial=${serialElapsedMs}ms " +
+                "parallel=${parallelElapsedMs}ms workers=2 articles=${articles.size}"
+        )
+    }
+
+    @Test
+    fun articleBodyEncoding_preservesLegacySha256WireBytes() {
+        val article = syncedArticle(
+            articleId = "legacy-body-encoding",
+            contentHash = "hash",
+            updatedAt = 20L
+        ).copy(
+            contentHtml = "<p>\\\"引号\\\"、反斜杠 \\\\、换行\n与 emoji 😀</p>",
+            contentText = "正文\u0001\b\u000C\n\r\t结尾"
+        )
+
+        val metadata = ArticleSyncBody.metadataFor(article)
+
+        assertEquals(139L, metadata.bodyByteCount)
+        assertEquals(
+            "d237bf4d17445cf0059700de58311758705faa7da86776aa9ea4e62413a08481",
+            metadata.bodyHash
+        )
+    }
+
     private fun assertResponseProgressHeader(frames: List<JSONObject>, totalArticles: Int) {
         val header = frames.first()
         assertEquals(0, header.getInt("batchIndex"))
@@ -942,6 +1042,12 @@ class LibrarySyncPayloadTest {
             assertEquals(index + 1, frame.getInt("batchIndex"))
             assertEquals(frames.size, frame.getInt("batchCount"))
         }
+    }
+
+    private fun normalizedFrameJson(frame: JSONObject): String {
+        return JSONObject(frame.toString())
+            .put("sentAt", 0L)
+            .toString()
     }
 
     private fun assertBatchWireByteHints(frames: List<JSONObject>) {

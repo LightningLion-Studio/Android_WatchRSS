@@ -235,12 +235,28 @@ class WatchIpSyncManager(
                 context = application,
                 allowedActions = setOf(
                     BluetoothSyncProtocol.ACTION_SYNC_LIBRARY,
+                    BluetoothSyncProtocol.ACTION_SYNC_NOTES,
+                    BluetoothSyncProtocol.ACTION_SYNC_NOTE_ASSET,
                     BluetoothSyncProtocol.ACTION_SYNC_READER,
                     BluetoothSyncProtocol.ACTION_PREVIEW_READER,
                     BluetoothSyncProtocol.ACTION_SYNC_ACCOUNT,
                     BluetoothSyncProtocol.ACTION_SYNC_LLM_TOKEN_USAGE
                 ),
                 onRequestReceived = { setTransferInProgress(true) },
+                onActionCompleted = { syncResult ->
+                    if (BuildConfig.DEBUG) {
+                        if (
+                            syncResult.request.optString("action") ==
+                            BluetoothSyncProtocol.ACTION_SYNC_LIBRARY
+                        ) {
+                            scope.launch {
+                                runCatching {
+                                    (application as? WatchRssApplication)?.cloudSyncService?.syncNow()
+                                }
+                            }
+                        }
+                    }
+                },
                 // WebSocket.send() only confirms that bytes entered OkHttp's queue. The phone can
                 // still need minutes to drain a multi-megabyte response through the Bluetooth
                 // proxy, so the RFCOMM-sized 10 second ACK window is not valid for this transport.
@@ -274,12 +290,17 @@ class WatchIpSyncManager(
                     return@launch
                 }
                 lastAckSeq += 1L
-                if (result.request.optString("action") == BluetoothSyncProtocol.ACTION_SYNC_LIBRARY) {
-                    if (BuildConfig.DEBUG) {
-                        runCatching {
-                            (application as? WatchRssApplication)?.cloudSyncService?.syncNow()
-                        }
-                    }
+                if (
+                    result.request.optString("action") ==
+                    BluetoothSyncProtocol.ACTION_SYNC_SESSION
+                ) {
+                    if (activeConnection === connection) activeConnection = null
+                    connection.close()
+                    AppLogger.i(
+                        TAG,
+                        "IP sync session closed phase=${result.request.optString("phase")}"
+                    )
+                    return@launch
                 }
                 scheduleRefresh("transfer-complete")
             }

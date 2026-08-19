@@ -14,6 +14,20 @@ import java.security.SecureRandom
 import java.util.Base64
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
+import javax.net.SocketFactory
+
+internal fun buildWatchIpSyncWebSocketClient(
+    probeTimeoutMs: Long,
+    socketFactory: SocketFactory? = null
+): OkHttpClient {
+    val builder = OkHttpClient.Builder()
+        .connectTimeout(probeTimeoutMs, TimeUnit.MILLISECONDS)
+        .readTimeout(0, TimeUnit.MILLISECONDS)
+    // Protocol frames can be backpressured while the watch applies a large library batch.
+    // OkHttp's ping timeout would mistake that blocked callback for a dead connection.
+    if (socketFactory != null) builder.socketFactory(socketFactory)
+    return builder.build()
+}
 
 internal class WatchIpWebSocketProbe {
     suspend fun connect(
@@ -31,12 +45,10 @@ internal class WatchIpWebSocketProbe {
         }
         val result = CompletableDeferred<WatchIpSyncConnection>()
         val connectionRef = AtomicReference<WatchIpSyncConnection?>()
-        val clientBuilder = OkHttpClient.Builder()
-            .connectTimeout(probeTimeoutMs, TimeUnit.MILLISECONDS)
-            .readTimeout(0, TimeUnit.MILLISECONDS)
-            .pingInterval(15, TimeUnit.SECONDS)
-        if (network != null) clientBuilder.socketFactory(network.socketFactory)
-        val client = clientBuilder.build()
+        val client = buildWatchIpSyncWebSocketClient(
+            probeTimeoutMs = probeTimeoutMs,
+            socketFactory = network?.socketFactory
+        )
         val hello = IpSyncProtocol.buildHello(
             descriptor = descriptor,
             watchDeviceId = watchDeviceId,
