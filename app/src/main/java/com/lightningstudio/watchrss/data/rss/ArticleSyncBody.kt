@@ -30,7 +30,7 @@ data class ArticleBodyPayload(
 
 object ArticleSyncBody {
     const val CHUNK_SIZE_BYTES = 128 * 1024
-    private const val BODY_ENCODING_VERSION = 2
+    private const val BODY_ENCODING_VERSION = 3
     private const val MAX_DECOMPRESSED_TEXT_BYTES = 32 * 1024 * 1024
     private const val JSON_WRITE_BUFFER_CHARS = 16 * 1024
     private val HEX_DIGITS = "0123456789abcdef".toCharArray()
@@ -502,6 +502,7 @@ object ArticleSyncBody {
         private val captureIndexes: Set<Int>
     ) : OutputStream() {
         private var chunkBuffer: ByteArrayOutputStream? = newChunkBuffer(0)
+        private var chunkDigest = MessageDigest.getInstance("SHA-256")
         private val chunks = mutableListOf<SyncedArticleBodyChunk>()
         private var chunkIndex = 0
         private var chunkByteCount = 0
@@ -518,6 +519,7 @@ object ArticleSyncBody {
             var remaining = len
             while (remaining > 0) {
                 val count = minOf(remaining, CHUNK_SIZE_BYTES - chunkByteCount)
+                chunkDigest.update(b, offset, count)
                 chunkBuffer?.write(b, offset, count)
                 chunkByteCount += count
                 bodyByteCount += count
@@ -549,18 +551,22 @@ object ArticleSyncBody {
         }
 
         private fun finishChunk() {
+            val expectedHash = metadata.chunkHashes.getOrNull(chunkIndex)
+                ?: error("同步正文缓存缺少分块哈希：$chunkIndex")
+            require(chunkDigest.digest().toHexString() == expectedHash) {
+                "同步正文缓存分块校验失败：$chunkIndex"
+            }
             val bytes = chunkBuffer?.toByteArray()
             if (bytes != null) {
-                val hash = metadata.chunkHashes.getOrNull(chunkIndex)
-                    ?: error("同步正文缓存缺少分块哈希：$chunkIndex")
                 chunks += SyncedArticleBodyChunk(
                     index = chunkIndex,
-                    hash = hash,
+                    hash = expectedHash,
                     bytes = bytes
                 )
             }
             chunkIndex += 1
             chunkByteCount = 0
+            chunkDigest = MessageDigest.getInstance("SHA-256")
             chunkBuffer = newChunkBuffer(chunkIndex)
         }
 

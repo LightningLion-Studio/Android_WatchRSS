@@ -6,6 +6,7 @@ import com.lightningstudio.watchrss.data.rss.ARTICLE_BODY_SYNC_MODE_FULL
 import com.lightningstudio.watchrss.data.rss.ARTICLE_BODY_SYNC_MODE_SAVED
 import com.lightningstudio.watchrss.data.rss.SyncedArticleBodyRequest
 import com.lightningstudio.watchrss.data.rss.SyncedArticleManifest
+import com.lightningstudio.watchrss.data.rss.SyncedChunkedArticle
 import com.lightningstudio.watchrss.data.rss.SyncedRssSource
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -823,6 +824,46 @@ class LibrarySyncPayloadTest {
 
         assertEquals(emptyList<Int>(), parsed.chunks.map { it.index })
         assertTrue(parsed.metadataOnly)
+    }
+
+    @Test
+    fun chunkedResponse_rebuildsMetadataWhenCachedChunkHashIsStale() {
+        val original = syncedArticle(
+            articleId = "stale-body-cache",
+            contentHash = "hash",
+            updatedAt = 20L
+        ).copy(contentText = "A".repeat(4096))
+        val cachedMetadata = ArticleSyncBody.metadataFor(original)
+        val changed = original.copy(contentText = "B".repeat(4096))
+        val currentMetadata = ArticleSyncBody.metadataFor(changed)
+        assertEquals(cachedMetadata.bodyByteCount, currentMetadata.bodyByteCount)
+
+        val payload = ArticleSyncBody.payloadForRequest(
+            article = changed,
+            request = SyncedArticleBodyRequest(
+                articleId = changed.articleId,
+                bodyHash = cachedMetadata.bodyHash,
+                chunkIndexes = cachedMetadata.chunkHashes.indices.toList()
+            ),
+            cachedMetadata = cachedMetadata
+        )
+        val parsed = SyncedChunkedArticle(
+            article = changed,
+            bodyHash = payload.metadata.bodyHash,
+            bodyByteCount = payload.metadata.bodyByteCount,
+            chunkSize = payload.metadata.chunkSize,
+            chunkHashes = payload.metadata.chunkHashes,
+            chunks = payload.chunks
+        )
+        val rebuilt = ArticleSyncBody.rebuildBody(
+            localArticle = null,
+            payload = parsed,
+            localBodyHash = ""
+        )
+
+        assertEquals(currentMetadata.bodyHash, payload.metadata.bodyHash)
+        assertEquals(currentMetadata.chunkHashes, payload.metadata.chunkHashes)
+        assertEquals(changed.contentText, rebuilt.second)
     }
 
     @Test
