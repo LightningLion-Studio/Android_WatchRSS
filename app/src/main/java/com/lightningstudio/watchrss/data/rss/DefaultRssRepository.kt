@@ -715,22 +715,29 @@ class DefaultRssRepository(
     override suspend fun exportSyncedArticleManifests(deviceId: String): List<SyncedArticleManifest> =
         withContext(Dispatchers.IO) {
             val lightweight = exportLightweightSyncedArticleManifests(deviceId)
-            val missingMetadataIds = lightweight
-                .filter { it.needsBodyMetadataRefresh() }
+            val bodyArticleIds = lightweight
+                .filter { !it.deleted && it.bodyAvailable }
                 .mapTo(mutableSetOf()) { it.articleId }
-            if (missingMetadataIds.isEmpty()) {
-                return@withContext lightweight
+            if (bodyArticleIds.isEmpty()) {
+                return@withContext lightweight.map { it.withoutUnavailableBodyMetadata() }
             }
             val repaired = exportSyncedSavedArticlesInternal(
                 deviceId = deviceId,
-                requestedArticleIds = missingMetadataIds
-            ).associate { article ->
-                val cachedArticle = ensureSyncedArticleMetadata(article)
-                val metadata = cachedArticle.cachedBodyMetadata
-                    ?: ArticleSyncBody.metadataFor(cachedArticle)
-                cachedArticle.articleId to cachedArticle.toManifest(metadata)
+                requestedArticleIds = bodyArticleIds
+            ).filterNot { it.deleted }.mapNotNull { article ->
+                ensureSyncedArticleMetadata(article)?.let { cachedArticle ->
+                    val metadata = requireNotNull(cachedArticle.cachedBodyMetadata)
+                    cachedArticle.articleId to cachedArticle.toManifest(metadata)
+                }
+            }.toMap()
+            lightweight.map { manifest ->
+                when {
+                    manifest.deleted -> manifest
+                    !manifest.bodyAvailable -> manifest.withoutUnavailableBodyMetadata()
+                    else -> repaired[manifest.articleId]
+                        ?: manifest.copy(bodyAvailable = false).withoutUnavailableBodyMetadata()
+                }
             }
-            lightweight.map { manifest -> repaired[manifest.articleId] ?: manifest }
         }
 
     override suspend fun getLibrarySyncCursor(peerDeviceId: String): WatchLibrarySyncCursorSnapshot =
@@ -937,15 +944,6 @@ class DefaultRssRepository(
         return savedArticles + independentArticles + importedContentArticles + tombstones
     }
 
-    private fun SyncedArticleManifest.needsBodyMetadataRefresh(): Boolean {
-        if (deletedAt > 0L) return false
-        return bodyHash.isBlank() ||
-            bodyByteCount <= 0L ||
-            chunkSize <= 0 ||
-            chunkHashes.isEmpty() ||
-            metadataHash.isBlank()
-    }
-
     override suspend fun exportSyncedSavedArticlesForRequests(
         deviceId: String,
         requests: List<SyncedArticleBodyRequest>
@@ -956,7 +954,7 @@ class DefaultRssRepository(
             deviceId = deviceId,
             requestedArticleIds = requestedIds
         )
-            .map { article -> ensureSyncedArticleMetadata(article) }
+            .mapNotNull { article -> ensureSyncedArticleMetadata(article) }
     }
 
     override suspend fun exportSyncedRssSources(deviceId: String): List<SyncedRssSource> =
@@ -1022,22 +1020,34 @@ class DefaultRssRepository(
                 val articleDelete = articleStates
                     .filter { it.saveType == ARTICLE_DELETE_SYNC_TYPE }
                     .maxByOrNull { it.changedAt }
-                SyncedArticleManifest(
+                val tombstone = SyncedSavedArticle(
                     articleId = articleId,
                     sourceDeviceId = articleStates.maxByOrNull { it.changedAt }?.sourceDeviceId ?: deviceId,
+                    url = url,
+                    title = url,
+                    siteName = hostLabel(url),
+                    excerpt = "",
+                    contentHtml = null,
+                    contentText = "",
+                    imageUrl = null,
                     contentHash = sha256(url),
+                    importedAt = articleStates.minOf { it.changedAt },
                     updatedAt = articleStates.maxOf { it.changedAt },
+                    independentSaved = false,
                     independentChangedAt = articleDelete?.changedAt ?: 0L,
+                    independentSortOrder = 0L,
+                    rssSourceUrl = null,
+                    rssSourceTitle = null,
+                    favoriteSaved = false,
                     favoriteChangedAt = articleStates.firstOrNull { it.saveType == SaveType.FAVORITE.name }?.changedAt ?: 0L,
+                    favoriteSortOrder = 0L,
+                    watchLaterSaved = false,
                     watchLaterChangedAt = articleStates.firstOrNull { it.saveType == SaveType.WATCH_LATER.name }?.changedAt ?: 0L,
+                    watchLaterSortOrder = 0L,
                     deletedAt = articleDelete?.changedAt ?: articleStates.maxOf { it.changedAt },
-                    bodyHash = sha256(url),
-                    bodyByteCount = 0L,
-                    chunkSize = 0,
-                    chunkHashes = emptyList(),
-                    metadataHash = sha256(url),
-                    bodySyncMode = ARTICLE_BODY_SYNC_MODE_SAVED
+                    deleted = articleDelete != null
                 )
+                tombstone.toVerifiedManifest()
             }
         return savedManifests + independentManifests + importedContentManifests + tombstones
     }
@@ -1165,8 +1175,11 @@ class DefaultRssRepository(
     ): SyncedSavedArticleMergeStats = withContext(Dispatchers.IO) {
         val rebuilt = articles.map { payload ->
             val localItemId = findSyncedArticleItemId(payload.article)
-            val localItem = localItemId?.let { itemDao.getItem(it)?.hydrateExternalContent() }
-            val localArticle = localItem?.let { item ->
+            val localHydrated = localItemId
+                ?.let { id -> itemDao.getItem(id) }
+                ?.hydrateExternalContentForSync()
+            val localItem = localHydrated?.item
+            val localArticle = localItem?.takeIf { localHydrated.bodyAvailable }?.let { item ->
                 item.toSyncedChannelArticle(
                     articleId = payload.article.articleId,
                     channel = resolveSyncedArticleChannel(payload.article),
@@ -1176,8 +1189,30 @@ class DefaultRssRepository(
                     rssSourceTitle = payload.article.rssSourceTitle
                 )
             }
-            val (contentHtml, contentText) = if (payload.article.deleted) {
-                localArticle?.contentHtml to localArticle?.contentText.orEmpty()
+            val metadataOnlyBodyMetadata = if (payload.metadataOnly) {
+                requireMetadataOnlyLocalBody(
+                    payload = payload,
+                    localArticle = localArticle,
+                    localBodyAvailable = localHydrated?.bodyAvailable == true,
+                    localHasStoredBody = localItem.hasStoredSyncBody()
+                )
+            } else {
+                null
+            }
+            val retainsLocalDeletedBody = payload.article.deleted && localArticle != null
+            val verifiedRemoteBody = if (payload.article.deleted && !payload.metadataOnly) {
+                ArticleSyncBody.rebuildBody(
+                    localArticle = localArticle,
+                    payload = payload,
+                    localBodyHash = localItem?.syncBodyHash.orEmpty()
+                )
+            } else {
+                null
+            }
+            val (contentHtml, contentText) = if (retainsLocalDeletedBody) {
+                localArticle.contentHtml to localArticle.contentText
+            } else if (payload.article.deleted) {
+                requireNotNull(verifiedRemoteBody)
             } else if (payload.metadataOnly) {
                 localArticle?.contentHtml to localArticle?.contentText.orEmpty()
             } else {
@@ -1187,12 +1222,18 @@ class DefaultRssRepository(
                     localBodyHash = localItem?.syncBodyHash.orEmpty()
                 )
             }
-            val bodyMetadata = payload.bodyMetadata()
-            payload.article.copy(
+            val articleWithBody = payload.article.copy(
                 contentHtml = contentHtml,
-                contentText = contentText,
-                cachedBodyMetadata = bodyMetadata
+                contentText = contentText
             )
+            val bodyMetadata = if (retainsLocalDeletedBody) {
+                ArticleSyncBody.metadataFor(requireNotNull(localArticle)).copy(
+                    metadataHash = ArticleSyncBody.metadataHashFor(payload.article)
+                )
+            } else {
+                metadataOnlyBodyMetadata ?: verifiedPayloadBodyMetadata(articleWithBody, payload)
+            }
+            articleWithBody.copy(cachedBodyMetadata = bodyMetadata)
         }
         mergeSyncedSavedArticles(
             articles = rebuilt,
@@ -2136,28 +2177,19 @@ class DefaultRssRepository(
         return existing.id
     }
 
-    private suspend fun ensureSyncedArticleMetadata(article: SyncedSavedArticle): SyncedSavedArticle {
-        val articleMetadata = article.cachedBodyMetadata?.takeIf { it.isCurrentFor(article) }
-        val itemId = findSyncedArticleItemId(article) ?: return articleMetadata
-            ?.let { article.copy(cachedBodyMetadata = it) }
-            ?: article
-        val item = itemDao.getItem(itemId)
-        val itemMetadata = item?.currentSyncMetadataFor(article)
-        if (itemMetadata != null) {
-            return article.copy(cachedBodyMetadata = itemMetadata)
-        }
-        if (articleMetadata != null) {
-            itemDao.updateSyncMetadata(
-                id = itemId,
-                syncBodyHash = articleMetadata.bodyHash,
-                syncBodyByteCount = articleMetadata.bodyByteCount,
-                syncChunkSize = articleMetadata.chunkSize,
-                syncChunkHashesJson = articleMetadata.chunkHashes.toJsonString(),
-                syncMetadataHash = articleMetadata.metadataHash
-            )
-            return article.copy(cachedBodyMetadata = articleMetadata)
-        }
-        val metadata = ArticleSyncBody.metadataFor(article)
+    private suspend fun ensureSyncedArticleMetadata(article: SyncedSavedArticle): SyncedSavedArticle? {
+        val itemId = findSyncedArticleItemId(article)
+            ?: return article.copy(cachedBodyMetadata = ArticleSyncBody.metadataFor(article))
+        val hydrated = itemDao.getItem(itemId)?.hydrateExternalContentForSync() ?: return null
+        if (!hydrated.bodyAvailable) return null
+        val actualBody = hydrated.item.toSyncBodyContent()
+        val actualArticle = article.copy(
+            contentHtml = actualBody.contentHtml,
+            contentText = actualBody.contentText
+        )
+        val metadata = ArticleSyncBody.metadataFor(actualArticle)
+        val itemMetadata = hydrated.item.currentSyncMetadataFor(actualArticle)
+        if (itemMetadata == metadata) return actualArticle.copy(cachedBodyMetadata = metadata)
         itemDao.updateSyncMetadata(
             id = itemId,
             syncBodyHash = metadata.bodyHash,
@@ -2166,7 +2198,7 @@ class DefaultRssRepository(
             syncChunkHashesJson = metadata.chunkHashes.toJsonString(),
             syncMetadataHash = metadata.metadataHash
         )
-        return article.copy(cachedBodyMetadata = metadata)
+        return actualArticle.copy(cachedBodyMetadata = metadata)
     }
 
     private fun SyncedSavedArticle.toManifest(metadata: ArticleBodyMetadata): SyncedArticleManifest {
@@ -2194,14 +2226,8 @@ class DefaultRssRepository(
         )
     }
 
-    private fun SyncedChunkedArticle.bodyMetadata(): ArticleBodyMetadata {
-        return ArticleBodyMetadata(
-            bodyHash = bodyHash,
-            bodyByteCount = bodyByteCount,
-            chunkSize = chunkSize,
-            chunkHashes = chunkHashes,
-            metadataHash = ArticleSyncBody.metadataHashFor(article)
-        )
+    private fun RssItemEntity?.hasStoredSyncBody(): Boolean {
+        return this != null && (!originalContent.isNullOrBlank() || !content.isNullOrBlank())
     }
 
     private fun SyncedSavedArticle.toManifestFromItem(
@@ -2755,6 +2781,76 @@ class DefaultRssRepository(
      */
     val testItemDao: RssItemDao
         get() = itemDao
+}
+
+internal fun requireMetadataOnlyLocalBody(
+    payload: SyncedChunkedArticle,
+    localArticle: SyncedSavedArticle?,
+    localBodyAvailable: Boolean,
+    localHasStoredBody: Boolean
+): ArticleBodyMetadata {
+    require(payload.metadataOnly) { "同步正文请求不是仅元数据模式：${payload.article.articleId}" }
+    require(payload.chunks.isEmpty()) { "仅元数据同步包含正文分块：${payload.article.articleId}" }
+    require(localBodyAvailable && localHasStoredBody && localArticle != null) {
+        "仅元数据同步缺少可复用的本地正文：${payload.article.articleId}"
+    }
+    return verifiedPayloadBodyMetadata(localArticle, payload)
+}
+
+internal fun verifiedPayloadBodyMetadata(
+    articleWithActualBody: SyncedSavedArticle,
+    payload: SyncedChunkedArticle
+): ArticleBodyMetadata {
+    val actual = ArticleSyncBody.metadataFor(articleWithActualBody)
+    require(payload.bodyHash == actual.bodyHash) {
+        "同步正文总校验失败：${payload.article.articleId}"
+    }
+    require(payload.bodyByteCount == actual.bodyByteCount) {
+        "同步正文长度不匹配：${payload.article.articleId} " +
+            "expected=${payload.bodyByteCount} actual=${actual.bodyByteCount}"
+    }
+    require(payload.chunkSize == actual.chunkSize && payload.chunkHashes == actual.chunkHashes) {
+        "同步正文分块清单不匹配：${payload.article.articleId}"
+    }
+    return actual.copy(metadataHash = ArticleSyncBody.metadataHashFor(payload.article))
+}
+
+internal fun SyncedSavedArticle.toVerifiedManifest(): SyncedArticleManifest {
+    val metadata = ArticleSyncBody.metadataFor(this)
+    return SyncedArticleManifest(
+        articleId = articleId,
+        sourceDeviceId = sourceDeviceId,
+        contentHash = contentHash,
+        updatedAt = updatedAt,
+        independentChangedAt = independentChangedAt,
+        favoriteChangedAt = favoriteChangedAt,
+        watchLaterChangedAt = watchLaterChangedAt,
+        deletedAt = deletedAt,
+        deleted = deleted,
+        bodyHash = metadata.bodyHash,
+        bodyByteCount = metadata.bodyByteCount,
+        chunkSize = metadata.chunkSize,
+        chunkHashes = metadata.chunkHashes,
+        metadataHash = metadata.metadataHash,
+        bodyAvailable = true,
+        bodySyncMode = bodySyncModeForSync(),
+        readingProgress = readingProgress,
+        readingPositionBytes = readingPositionBytes,
+        readingPositionContentHash = readingPositionContentHash,
+        readingPositionChangedAt = readingPositionChangedAt,
+        isRead = isRead
+    )
+}
+
+internal fun SyncedArticleManifest.withoutUnavailableBodyMetadata(): SyncedArticleManifest {
+    if (bodyAvailable) return this
+    return copy(
+        bodyHash = "",
+        bodyByteCount = 0L,
+        chunkSize = 0,
+        chunkHashes = emptyList(),
+        metadataHash = ""
+    )
 }
 
 private data class PendingOriginalUpdate(
