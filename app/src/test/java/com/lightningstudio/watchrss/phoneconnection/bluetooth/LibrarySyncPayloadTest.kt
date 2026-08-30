@@ -887,6 +887,48 @@ class LibrarySyncPayloadTest {
 
         assertEquals(emptyList<Int>(), parsed.chunks.map { it.index })
         assertTrue(parsed.metadataOnly)
+        assertEquals(metadata.bodyHash, parsed.bodyHash)
+        assertEquals(metadata.bodyByteCount, parsed.bodyByteCount)
+        assertEquals(metadata.chunkSize, parsed.chunkSize)
+        assertEquals(metadata.chunkHashes, parsed.chunkHashes)
+    }
+
+    @Test
+    fun chunkedResponse_metadataOnlyRequestFallsBackToFullBodyAfterManifestDrift() {
+        val manifestArticle = syncedArticle(
+            articleId = "metadata-only-drift",
+            contentHash = "hash",
+            updatedAt = 20L
+        ).copy(contentText = "manifest body")
+        val manifestMetadata = ArticleSyncBody.metadataFor(manifestArticle)
+        val currentArticle = manifestArticle.copy(contentText = "current body")
+        val currentMetadata = ArticleSyncBody.metadataFor(currentArticle)
+
+        val frames = LibrarySyncPayload.buildChunkedResponseFrames(
+            deviceId = "watch",
+            articles = listOf(currentArticle),
+            articleRequests = listOf(
+                SyncedArticleBodyRequest(
+                    articleId = currentArticle.articleId,
+                    bodyHash = manifestMetadata.bodyHash,
+                    chunkIndexes = emptyList(),
+                    metadataOnly = true
+                )
+            ),
+            applied = 0,
+            useBatches = true
+        )
+        val parsed = LibrarySyncPayload.parseChunkedArticles(
+            LibrarySyncPayload.combineArticlePayloads(frames)
+        ).single()
+
+        assertFalse(parsed.metadataOnly)
+        assertEquals(currentMetadata.bodyHash, parsed.bodyHash)
+        assertEquals(currentMetadata.chunkHashes.indices.toList(), parsed.chunks.map { it.index })
+        assertEquals(
+            currentArticle.contentText,
+            ArticleSyncBody.rebuildBody(null, parsed, localBodyHash = "").second
+        )
     }
 
     @Test
@@ -1309,7 +1351,7 @@ class LibrarySyncPayloadTest {
     }
 
     @Test
-    fun articleBodyEncoding_preservesLegacySha256WireBytes() {
+    fun articleBodyEncoding_preservesPhoneV3OrgJsonCanonicalWireBytes() {
         val article = syncedArticle(
             articleId = "legacy-body-encoding",
             contentHash = "hash",
@@ -1321,11 +1363,15 @@ class LibrarySyncPayloadTest {
 
         val metadata = ArticleSyncBody.metadataFor(article)
 
-        assertEquals(139L, metadata.bodyByteCount)
+        // BODY_ENCODING_VERSION=3 stays byte-compatible with the phone's historical
+        // Android org.json encoding, including escaping every forward slash.
+        assertEquals(140L, metadata.bodyByteCount)
         assertEquals(
-            "d237bf4d17445cf0059700de58311758705faa7da86776aa9ea4e62413a08481",
+            "b4ccfd83f582fdc5bc39631af598b58dacb85d3c2f95d13d331c5606e5cd0730",
             metadata.bodyHash
         )
+        assertEquals(ArticleSyncBody.CHUNK_SIZE_BYTES, metadata.chunkSize)
+        assertEquals(listOf(metadata.bodyHash), metadata.chunkHashes)
     }
 
     @Test
@@ -1424,18 +1470,16 @@ class LibrarySyncPayloadTest {
         val article = syncedArticle(articleId = "out-of-bounds", contentHash = "hash", updatedAt = 20L)
         val metadata = ArticleSyncBody.metadataFor(article)
 
-        listOf(metadata.bodyHash, "stale-body-hash").forEach { requestedBodyHash ->
-            assertIllegalArgumentContains("out-of-bounds#${metadata.chunkHashes.size}") {
-                ArticleSyncBody.payloadForRequest(
-                    article,
-                    SyncedArticleBodyRequest(
-                        articleId = article.articleId,
-                        bodyHash = requestedBodyHash,
-                        chunkIndexes = listOf(metadata.chunkHashes.size)
-                    ),
-                    metadata
-                )
-            }
+        assertIllegalArgumentContains("out-of-bounds#${metadata.chunkHashes.size}") {
+            ArticleSyncBody.payloadForRequest(
+                article,
+                SyncedArticleBodyRequest(
+                    articleId = article.articleId,
+                    bodyHash = metadata.bodyHash,
+                    chunkIndexes = listOf(metadata.chunkHashes.size)
+                ),
+                metadata
+            )
         }
     }
 

@@ -51,8 +51,13 @@ private data class PendingLibrarySyncSuccess(
 
 private data class LibraryManifestExchangeResult(
     val response: JSONObject,
-    val pendingSyncSuccess: PendingLibrarySyncSuccess?
+    val pendingSyncSuccess: PendingLibrarySyncSuccess?,
+    val terminateSession: Boolean
 )
+
+internal fun shouldContinuePersistentSessionAfterLibraryExchange(
+    terminateSession: Boolean
+): Boolean = !terminateSession
 
 private data class ArticleRequestBatchStats(
     var frameCount: Int = 0,
@@ -396,6 +401,36 @@ class WatchBluetoothSyncServer(
                     writeFrameLogged(client, sessionId, "response", payload)
                 }
             }
+            if (
+                libraryExchange != null &&
+                !shouldContinuePersistentSessionAfterLibraryExchange(libraryExchange.terminateSession)
+            ) {
+                runCatching { client.close() }
+                    .onFailure { closeFailure ->
+                        WatchBluetoothDebugLog.warn(
+                            sessionId = sessionId,
+                            event = "server.exchange.abort.close.failed",
+                            fields = mapOf(
+                                "errorClass" to closeFailure::class.java.name,
+                                "message" to closeFailure.message.orEmpty()
+                            ),
+                            throwable = closeFailure
+                        )
+                    }
+                val result = BluetoothSyncResult(remoteName, remoteAddress, request, response)
+                WatchBluetoothDebugLog.event(
+                    sessionId = sessionId,
+                    event = "server.exchange.aborted",
+                    fields = remoteFields(remoteName, remoteAddress) +
+                        payloadFields("request", request) + payloadFields("response", response) +
+                        mapOf(
+                            "persistentSession" to persistentSession,
+                            "completedActions" to completedActions,
+                            "elapsedMs" to elapsedSince(totalStartedAt)
+                        )
+                )
+                return result
+            }
             val ack = waitForResponseAck(client, sessionId)
             libraryExchange?.pendingSyncSuccess?.let { pending ->
                 markLibrarySyncSuccessAfterAck(pending, ack, sessionId)
@@ -735,7 +770,8 @@ class WatchBluetoothSyncServer(
                     fullSnapshot = outgoingWindow.fullSnapshot,
                     localArticleCount = outgoingWindow.articleManifest.size,
                     remoteArticleCount = remoteManifest.size
-                )
+                ),
+                terminateSession = false
             )
         }.getOrElse { throwable ->
             Log.e(TAG, "handle manifest library exchange failed action=${request.optString("action")} phase=${request.optString("phase")}", throwable)
@@ -751,7 +787,11 @@ class WatchBluetoothSyncServer(
             )
             JSONObject().apply {
                 put("success", false)
+                put("action", BluetoothSyncProtocol.ACTION_SYNC_LIBRARY)
+                put("version", LibrarySyncPayload.PROTOCOL_VERSION)
                 put("message", throwable.message.orEmpty())
+                put("errorCode", "library_exchange_failed")
+                put("fatalSession", true)
             }.also { errorResponse ->
                 runCatching {
                     writeFrameLogged(client, sessionId, "errorResponse", errorResponse)
@@ -769,7 +809,8 @@ class WatchBluetoothSyncServer(
             }.let { errorResponse ->
                 LibraryManifestExchangeResult(
                     response = errorResponse,
-                    pendingSyncSuccess = null
+                    pendingSyncSuccess = null,
+                    terminateSession = true
                 )
             }
         }

@@ -2794,14 +2794,7 @@ internal fun requireMetadataOnlyLocalBody(
     require(localBodyAvailable && localHasStoredBody && localArticle != null) {
         "仅元数据同步缺少可复用的本地正文：${payload.article.articleId}"
     }
-    return verifiedPayloadBodyMetadata(localArticle, payload)
-}
-
-internal fun verifiedPayloadBodyMetadata(
-    articleWithActualBody: SyncedSavedArticle,
-    payload: SyncedChunkedArticle
-): ArticleBodyMetadata {
-    val actual = ArticleSyncBody.metadataFor(articleWithActualBody)
+    val actual = ArticleSyncBody.metadataFor(localArticle)
     require(payload.bodyHash == actual.bodyHash) {
         "同步正文总校验失败：${payload.article.articleId}"
     }
@@ -2812,6 +2805,14 @@ internal fun verifiedPayloadBodyMetadata(
     require(payload.chunkSize == actual.chunkSize && payload.chunkHashes == actual.chunkHashes) {
         "同步正文分块清单不匹配：${payload.article.articleId}"
     }
+    return actual.copy(metadataHash = ArticleSyncBody.metadataHashFor(payload.article))
+}
+
+internal fun verifiedPayloadBodyMetadata(
+    articleWithActualBody: SyncedSavedArticle,
+    payload: SyncedChunkedArticle
+): ArticleBodyMetadata {
+    val actual = ArticleSyncBody.metadataFor(articleWithActualBody)
     return actual.copy(metadataHash = ArticleSyncBody.metadataHashFor(payload.article))
 }
 

@@ -2,9 +2,11 @@ package com.lightningstudio.watchrss.data.rss
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.security.MessageDigest
 
 class SyncRepositoryBodyIntegrityTest {
     @Test
@@ -114,15 +116,41 @@ class SyncRepositoryBodyIntegrityTest {
     }
 
     @Test
-    fun fullPayloadBoundaryRejectsBodyThatDoesNotMatchManifest() {
+    fun fullPayloadStoresLocalMetadataAfterDifferentValidGzipWireBytesAreVerified() {
         val remote = article(contentText = "remote body")
-        val payload = metadataOnlyPayload(remote).copy(metadataOnly = false)
+        val canonical = ArticleSyncBody.payloadForRequest(
+            article = remote,
+            request = SyncedArticleBodyRequest(remote.articleId, bodyHash = "", chunkIndexes = emptyList())
+        )
+        val wireBytes = canonical.chunks.single().bytes.copyOf().also { bytes ->
+            bytes[4] = 1 // GZIP mtime changes the wire hash but not the decoded JSON body.
+        }
+        val wireHash = sha256(wireBytes)
+        val payload = SyncedChunkedArticle(
+            article = remote.copy(contentHtml = null, contentText = ""),
+            bodyHash = wireHash,
+            bodyByteCount = wireBytes.size.toLong(),
+            chunkSize = ArticleSyncBody.CHUNK_SIZE_BYTES,
+            chunkHashes = listOf(wireHash),
+            chunks = listOf(SyncedArticleBodyChunk(index = 0, hash = wireHash, bytes = wireBytes))
+        )
+        val rebuilt = ArticleSyncBody.rebuildBody(null, payload, localBodyHash = "")
+        val decodedArticle = payload.article.copy(contentHtml = rebuilt.first, contentText = rebuilt.second)
 
+        val localMetadata = verifiedPayloadBodyMetadata(decodedArticle, payload)
+
+        assertEquals(remote.contentText, rebuilt.second)
+        assertNotEquals(payload.bodyHash, localMetadata.bodyHash)
+        assertEquals(ArticleSyncBody.metadataFor(decodedArticle), localMetadata)
+        val badBodyHash = payload.copy(bodyHash = "0".repeat(64))
         assertThrows(IllegalArgumentException::class.java) {
-            verifiedPayloadBodyMetadata(
-                articleWithActualBody = remote.copy(contentText = "rebuilt wrong body"),
-                payload = payload
-            )
+            ArticleSyncBody.rebuildBody(null, badBodyHash, localBodyHash = "")
+        }
+        val badChunk = payload.copy(
+            chunks = listOf(payload.chunks.single().copy(bytes = wireBytes.copyOf().also { it[20] = (it[20].toInt() xor 1).toByte() }))
+        )
+        assertThrows(IllegalArgumentException::class.java) {
+            ArticleSyncBody.rebuildBody(null, badChunk, localBodyHash = "")
         }
     }
 
@@ -227,4 +255,9 @@ class SyncRepositoryBodyIntegrityTest {
             deletedAt = 0L
         )
     }
+
+    private fun sha256(bytes: ByteArray): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest(bytes)
+            .joinToString("") { "%02x".format(it) }
 }

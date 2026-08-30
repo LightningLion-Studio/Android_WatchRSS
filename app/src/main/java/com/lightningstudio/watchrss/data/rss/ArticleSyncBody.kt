@@ -25,7 +25,8 @@ data class ArticleBodyMetadata(
 
 data class ArticleBodyPayload(
     val metadata: ArticleBodyMetadata,
-    val chunks: List<SyncedArticleBodyChunk>
+    val chunks: List<SyncedArticleBodyChunk>,
+    val metadataOnly: Boolean = false
 )
 
 object ArticleSyncBody {
@@ -86,9 +87,14 @@ object ArticleSyncBody {
             ?.takeIf {
                 it.metadataHash == metadataHashFor(article) &&
                     (
-                        request.metadataOnly ||
+                        (
+                            request.metadataOnly &&
+                                request.bodyHash.isNotBlank() &&
+                                request.bodyHash == it.bodyHash
+                            ) ||
                             (
                                 request.bodyHash.isNotBlank() &&
+                                    !request.metadataOnly &&
                                     request.bodyHash == it.bodyHash &&
                                     request.chunkIndexes.isNotEmpty()
                                 )
@@ -102,7 +108,8 @@ object ArticleSyncBody {
                             emptyList()
                         } else {
                             chunksForRequestWithCachedMetadata(article, request, metadata)
-                        }
+                        },
+                        metadataOnly = request.metadataOnly
                     ).also {
                         if (request.metadataOnly) {
                             validateCachedBodyMetadata(article, metadata)
@@ -114,17 +121,21 @@ object ArticleSyncBody {
 
         val currentMetadata = metadataFor(article)
         val metadata = cachedMetadata?.takeIf { it == currentMetadata } ?: currentMetadata
-        requireValidRequestedChunkIndexes(request, currentMetadata)
-        val shouldSendFullBody = !request.metadataOnly &&
-            (
-                request.chunkIndexes.isEmpty() ||
-                    request.bodyHash.isBlank() ||
-                    request.bodyHash != currentMetadata.bodyHash
-                )
+        val shouldSendFullBody = if (request.metadataOnly) {
+            request.bodyHash.isBlank() || request.bodyHash != currentMetadata.bodyHash
+        } else {
+            request.chunkIndexes.isEmpty() ||
+                request.bodyHash.isBlank() ||
+                request.bodyHash != currentMetadata.bodyHash
+        }
+        if (!shouldSendFullBody && !request.metadataOnly) {
+            requireValidRequestedChunkIndexes(request, currentMetadata)
+        }
         val responseRequest = if (shouldSendFullBody) {
             request.copy(
                 bodyHash = currentMetadata.bodyHash,
-                chunkIndexes = currentMetadata.chunkHashes.indices.toList()
+                chunkIndexes = currentMetadata.chunkHashes.indices.toList(),
+                metadataOnly = false
             )
         } else {
             request
@@ -136,7 +147,8 @@ object ArticleSyncBody {
         }
         return ArticleBodyPayload(
             metadata = metadata,
-            chunks = chunks
+            chunks = chunks,
+            metadataOnly = responseRequest.metadataOnly
         )
     }
 
@@ -302,6 +314,7 @@ object ArticleSyncBody {
             val escape = when (char) {
                 '\\' -> "\\\\"
                 '"' -> "\\\""
+                '/' -> "\\/"
                 '\b' -> "\\b"
                 '\u000C' -> "\\f"
                 '\n' -> "\\n"
@@ -611,15 +624,10 @@ object ArticleSyncBody {
         return ((bodyByteCount - 1L) / chunkSize) + 1L
     }
 
-    private class BodyChunkOutputStream(
-        private val captureIndexes: Set<Int> = emptySet()
-    ) : OutputStream() {
+    private class BodyChunkOutputStream : OutputStream() {
         private val bodyDigest = MessageDigest.getInstance("SHA-256")
         private var chunkDigest = MessageDigest.getInstance("SHA-256")
-        private val chunkBuffer = ByteArrayOutputStream(CHUNK_SIZE_BYTES)
         private val chunkHashes = mutableListOf<String>()
-        private val chunks = mutableListOf<SyncedArticleBodyChunk>()
-        private var chunkIndex = 0
         private var chunkByteCount = 0
         private var bodyByteCount = 0L
         private var bodyHash: String? = null
@@ -636,7 +644,6 @@ object ArticleSyncBody {
                 val count = minOf(remaining, CHUNK_SIZE_BYTES - chunkByteCount)
                 bodyDigest.update(b, offset, count)
                 chunkDigest.update(b, offset, count)
-                chunkBuffer.write(b, offset, count)
                 chunkByteCount += count
                 bodyByteCount += count
                 offset += count
@@ -658,11 +665,6 @@ object ArticleSyncBody {
             )
         }
 
-        fun chunks(): List<SyncedArticleBodyChunk> {
-            finish()
-            return chunks.toList()
-        }
-
         private fun finish() {
             if (bodyHash != null) return
             if (chunkByteCount > 0 || bodyByteCount == 0L) {
@@ -672,18 +674,8 @@ object ArticleSyncBody {
         }
 
         private fun finishChunk() {
-            val hash = chunkDigest.digest().toHexString()
-            chunkHashes += hash
-            if (chunkIndex in captureIndexes) {
-                chunks += SyncedArticleBodyChunk(
-                    index = chunkIndex,
-                    hash = hash,
-                    bytes = chunkBuffer.toByteArray()
-                )
-            }
-            chunkIndex += 1
+            chunkHashes += chunkDigest.digest().toHexString()
             chunkByteCount = 0
-            chunkBuffer.reset()
             chunkDigest = MessageDigest.getInstance("SHA-256")
         }
     }

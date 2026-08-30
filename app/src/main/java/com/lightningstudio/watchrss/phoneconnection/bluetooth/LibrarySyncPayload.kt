@@ -1412,9 +1412,6 @@ object LibrarySyncPayload {
         request: SyncedArticleBodyRequest?
     ): List<JSONObject> {
         val responseRequest = request
-        if (responseRequest?.metadataOnly == true) {
-            return listOf(toMetadataOnlyChunkedJson(responseRequest))
-        }
         val payload = if (responseRequest != null) {
             ArticleSyncBody.payloadForRequest(this, responseRequest, cachedBodyMetadata)
         } else {
@@ -1427,21 +1424,24 @@ object LibrarySyncPayload {
         }
         val metadata = payload.metadata
         val chunks = payload.chunks
+        if (payload.metadataOnly) {
+            return listOf(toMetadataOnlyChunkedJson(metadata))
+        }
         if (chunks.isEmpty()) {
             return listOf(toChunkedJson(metadata, emptyList()))
         }
         return chunks.map { chunk -> toChunkedJson(metadata, listOf(chunk)) }
     }
 
-    private fun SyncedSavedArticle.toMetadataOnlyChunkedJson(request: SyncedArticleBodyRequest): JSONObject {
+    private fun SyncedSavedArticle.toMetadataOnlyChunkedJson(metadata: ArticleBodyMetadata): JSONObject {
         return toJson(includeBody = false).apply {
             put(
                 "body",
                 JSONObject().apply {
-                    put("bodyHash", request.bodyHash)
-                    put("bodyByteCount", 0L)
-                    put("chunkSize", 0)
-                    put("chunkHashes", JSONArray())
+                    put("bodyHash", metadata.bodyHash)
+                    put("bodyByteCount", metadata.bodyByteCount)
+                    put("chunkSize", metadata.chunkSize)
+                    put("chunkHashes", JSONArray(metadata.chunkHashes))
                     put("chunks", JSONArray())
                     put("metadataOnly", true)
                 }
