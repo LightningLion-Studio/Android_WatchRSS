@@ -23,6 +23,8 @@ import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.data.account.WatchAccountState
 import com.lightningstudio.watchrss.data.cloud.WatchCloudSyncService
 import com.lightningstudio.watchrss.ui.components.DownloadPhoneAppButton
+import com.lightningstudio.watchrss.ui.components.ThirdPartyPlatformNotice
+import com.lightningstudio.watchrss.ui.components.WatchRssAccessBoundaryCard
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownScrollHandler
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
@@ -75,6 +77,9 @@ private fun AccountStatusScreen(
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(4.dp))
+            ThirdPartyPlatformNotice(platform = "哔哩哔哩", compact = true)
+            ThirdPartyPlatformNotice(platform = "抖音", compact = true)
+            WatchRssAccessBoundaryCard()
             if (state == null) {
                 Text(
                     text = "未绑定",
@@ -97,7 +102,7 @@ private fun AccountStatusScreen(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold
                 )
-                Text("会员：${state.entitlement.plan}")
+                Text("WatchRSS云会员：${state.entitlement.plan}")
                 Text("状态：${if (state.entitlement.active) "有效" else "未生效"}")
                 Text("诊断：${if (state.telemetryConfig.diagnosticsEnabled) "已开启" else "未开启"}")
                 Text("Access Token：${if (state.isTokenExpired) "待刷新" else "有效"}")
@@ -119,13 +124,13 @@ private fun AccountStatusScreen(
                             )
                         }
                         Text(
-                            "首次使用需在手机会员云空间中批准这块手表。",
+                            "首次使用需在手机端的WatchRSS云会员空间中批准这块手表。",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     } else {
                         Text(
-                            "云存储：会员可用；本地资料与蓝牙同步不受影响。",
+                            "WatchRSS云存储：需云会员；本地资料与蓝牙同步不受影响。",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

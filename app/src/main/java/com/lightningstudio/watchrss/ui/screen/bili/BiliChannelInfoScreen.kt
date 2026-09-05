@@ -32,6 +32,7 @@ import androidx.core.content.res.ResourcesCompat
 import android.graphics.Paint
 import android.text.TextPaint
 import com.lightningstudio.watchrss.R
+import com.lightningstudio.watchrss.ui.components.ThirdPartyPlatformScopeCard
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownScrollHandler
 import com.lightningstudio.watchrss.ui.theme.ActionButtonTextStyle
@@ -100,7 +101,7 @@ fun BiliChannelInfoScreen(
                 }
                 val formattedTitle = remember(availableWidthPx, titleSizePx, typeface) {
                     formatTitleForWidthLimits(
-                        title = "哔哩哔哩",
+                        title = "腕上RSS · 哔哩哔哩频道",
                         paint = paint,
                         availableWidthPx = availableWidthPx,
                         firstLimitPx = firstLimitPx,
@@ -139,6 +140,10 @@ fun BiliChannelInfoScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Center
+            )
+            ThirdPartyPlatformScopeCard(
+                platform = "哔哩哔哩",
+                modifier = Modifier.padding(top = infoSpacing)
             )
 
             BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {

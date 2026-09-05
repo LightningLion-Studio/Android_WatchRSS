@@ -594,7 +594,8 @@ internal fun DouyinImmersiveScreen(
     ) -> Unit,
     onDiscardPlaybackItem: (String) -> Unit,
     onMessageShown: () -> Unit,
-    onHeaderClick: () -> Unit
+    onHeaderClick: () -> Unit,
+    onPlaybackActiveChanged: (Boolean) -> Unit = { }
 ) {
     var entryStartIndex by rememberSaveable {
         mutableIntStateOf(
@@ -669,6 +670,7 @@ internal fun DouyinImmersiveScreen(
     }
     val view = LocalView.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val playbackActiveCallback = rememberUpdatedState(onPlaybackActiveChanged)
     val poisonedAwemeIds by DouyinPlaybackDebugController.poisonedAwemeIds.collectAsState()
     val quarantinedPlaybackRecords = remember { mutableStateMapOf<String, DouyinPlaybackQuarantineRecord>() }
     val automatic403RefreshSources = remember { mutableStateMapOf<String, String>() }
@@ -1015,6 +1017,14 @@ internal fun DouyinImmersiveScreen(
         foregroundSlot.boundAwemeId == activeItem.awemeId
     val activeIsBuffering = activeSlotMatchesCurrentItem && foregroundSlot.isBuffering
     val activeIsPlaying = activeSlotMatchesCurrentItem && foregroundSlot.isPlaying
+    LaunchedEffect(activeIsPlaying, uiState.showTitlePage, settledPagerPage) {
+        playbackActiveCallback.value(
+            activeIsPlaying && !uiState.showTitlePage && settledPagerPage > 0
+        )
+    }
+    DisposableEffect(Unit) {
+        onDispose { playbackActiveCallback.value(false) }
+    }
     val activeHasError = activeSlotMatchesCurrentItem && foregroundSlot.hasError
     val activePlaybackNeedsInternet = (activeMediaUri ?: preparedPlaybackTargetMediaUri)
         .requiresInternetConnection()
@@ -2864,7 +2874,7 @@ private fun DouyinTitlePage(
                         ) {
                             Text(
                                 text = channelTitleWithStyledHint(
-                                    title = "抖音",
+                                    title = "腕上RSS · 抖音频道",
                                     titleSize = MaterialTheme.typography.titleMedium.fontSize
                                 ),
                                 style = MaterialTheme.typography.titleMedium,

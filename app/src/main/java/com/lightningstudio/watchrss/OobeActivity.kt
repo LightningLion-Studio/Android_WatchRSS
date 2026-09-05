@@ -5,11 +5,18 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import com.lightningstudio.watchrss.ui.components.AppTransparencyStore
+import com.lightningstudio.watchrss.ui.components.InitialAppTransparencyDialog
 import com.lightningstudio.watchrss.ui.screen.OobeScreen
 import com.lightningstudio.watchrss.data.reader.ReaderThemeMode
 import com.lightningstudio.watchrss.ui.reader.readerChromeStyle
@@ -56,39 +63,52 @@ class OobeActivity : BaseWatchActivity() {
                 val uiState by viewModel.uiState.collectAsState()
                 val activeReaderPreset by readerPresetRepository.activePreset.collectAsState()
                 val readerChrome = activeReaderPreset.readerChromeStyle()
-                OobeScreen(
-                    uiState = uiState,
-                    onSetIntroPage = viewModel::setIntroPage,
-                    onContinueFromIntro = viewModel::completeOobe,
-                    onOpenUserAgreement = {
-                        startActivity(
-                            InfoActivity.createRemoteIntent(
-                                context = this,
-                                title = "用户协议",
-                                path = InfoActivity.WATCH_USER_AGREEMENT_PATH
+                var showInitialTransparency by remember {
+                    mutableStateOf(!AppTransparencyStore.isInitialAppDisclosureAcknowledged(this@OobeActivity))
+                }
+                Box(modifier = androidx.compose.ui.Modifier.fillMaxSize()) {
+                    OobeScreen(
+                        uiState = uiState,
+                        onSetIntroPage = viewModel::setIntroPage,
+                        onContinueFromIntro = viewModel::completeOobe,
+                        onOpenUserAgreement = {
+                            startActivity(
+                                InfoActivity.createRemoteIntent(
+                                    context = this,
+                                    title = "用户协议",
+                                    path = InfoActivity.WATCH_USER_AGREEMENT_PATH
+                                )
                             )
-                        )
-                    },
-                    onOpenPrivacy = {
-                        startActivity(
-                            InfoActivity.createRemoteIntent(
-                                context = this,
-                                title = "隐私政策",
-                                path = InfoActivity.WATCH_PRIVACY_POLICY_PATH
+                        },
+                        onOpenPrivacy = {
+                            startActivity(
+                                InfoActivity.createRemoteIntent(
+                                    context = this,
+                                    title = "隐私政策",
+                                    path = InfoActivity.WATCH_PRIVACY_POLICY_PATH
+                                )
                             )
-                        )
-                    },
-                    readerDisplayDark = readerChrome.isDark,
-                    onToggleReaderDisplayMode = {
-                        readerPresetRepository.setThemeMode(
-                            if (readerChrome.isDark) {
-                                ReaderThemeMode.LIGHT
-                            } else {
-                                ReaderThemeMode.DARK
+                        },
+                        readerDisplayDark = readerChrome.isDark,
+                        onToggleReaderDisplayMode = {
+                            readerPresetRepository.setThemeMode(
+                                if (readerChrome.isDark) {
+                                    ReaderThemeMode.LIGHT
+                                } else {
+                                    ReaderThemeMode.DARK
+                                }
+                            )
+                        }
+                    )
+                    if (showInitialTransparency) {
+                        InitialAppTransparencyDialog(
+                            onAcknowledge = {
+                                AppTransparencyStore.acknowledgeInitialAppDisclosure(this@OobeActivity)
+                                showInitialTransparency = false
                             }
                         )
                     }
-                )
+                }
             }
         }
     }

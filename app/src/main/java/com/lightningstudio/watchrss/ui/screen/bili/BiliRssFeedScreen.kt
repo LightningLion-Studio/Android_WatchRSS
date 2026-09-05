@@ -407,7 +407,7 @@ private fun BiliRssFeedHeader(
             verticalArrangement = Arrangement.spacedBy(spacing)
         ) {
             Text(
-                text = channelTitleWithStyledHint("哔哩哔哩", titleSize),
+                text = channelTitleWithStyledHint("腕上RSS · 哔哩哔哩频道", titleSize),
                 color = MaterialTheme.colorScheme.onSurface,
                 fontSize = titleSize,
                 textAlign = TextAlign.Center,

@@ -5,6 +5,9 @@ import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -18,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import com.lightningstudio.watchrss.data.douyin.DouyinStreamItem
 import com.lightningstudio.watchrss.data.douyin.buildDouyinExternalSavedItem
@@ -29,6 +33,10 @@ import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_PLAYBACK_START_V
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
 import com.lightningstudio.watchrss.debug.DouyinPlaybackDebugController
+import com.lightningstudio.watchrss.ui.components.AppTransparencyStore
+import com.lightningstudio.watchrss.ui.components.InitialAppTransparencyDialog
+import com.lightningstudio.watchrss.ui.components.ThirdPartyPlatformConfirmationDialog
+import com.lightningstudio.watchrss.ui.components.ThirdPartyPlatformNotice
 import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.screen.douyin.DouyinImmersiveScreen
 import com.lightningstudio.watchrss.ui.screen.douyin.DouyinLoginScreen
@@ -104,7 +112,32 @@ class DouyinEntryActivity : BaseWatchActivity() {
             WatchRSSTheme {
                 val baseDensity = LocalDensity.current
                 CompositionLocalProvider(LocalDensity provides Density(2f, baseDensity.fontScale)) {
-                    val warningMessage = remember { mutableStateOf<String?>(null) }
+                    var showInitialTransparency by remember {
+                        mutableStateOf(!AppTransparencyStore.isInitialAppDisclosureAcknowledged(this@DouyinEntryActivity))
+                    }
+                    var showPlatformConfirmation by remember { mutableStateOf(!showInitialTransparency) }
+                    if (showInitialTransparency) {
+                        InitialAppTransparencyDialog(
+                            onAcknowledge = {
+                                AppTransparencyStore.acknowledgeInitialAppDisclosure(this@DouyinEntryActivity)
+                                showInitialTransparency = false
+                                showPlatformConfirmation = true
+                            }
+                        )
+                    } else if (showPlatformConfirmation) {
+                        ThirdPartyPlatformConfirmationDialog(
+                            platform = "抖音",
+                            onConfirm = { showPlatformConfirmation = false }
+                        )
+                    }
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        ThirdPartyPlatformNotice(
+                            platform = "抖音",
+                            compact = true,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                        Box(modifier = Modifier.weight(1f).fillMaxSize()) {
+                            val warningMessage = remember { mutableStateOf<String?>(null) }
                     val uiState by viewModel.uiState.collectAsState()
                     val volumeGuardEnabled by container.settingsRepository.mediaVolumeGuardEnabled.collectAsState(
                         initial = DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
@@ -230,6 +263,9 @@ class DouyinEntryActivity : BaseWatchActivity() {
                                     onHeaderClick = {
                                         isNavigating = true
                                         startActivity(DouyinChannelInfoActivity.createIntent(this@DouyinEntryActivity))
+                                    },
+                                    onPlaybackActiveChanged = { active ->
+                                        setVideoPlaybackBatteryTracking("douyin", active)
                                     }
                                 )
                             }
@@ -309,10 +345,12 @@ class DouyinEntryActivity : BaseWatchActivity() {
                         ) {
                             WatchCircularProgressIndicator()
                         }
+                        }
                     }
                 }
             }
         }
+    }
     }
 
     override fun onNewIntent(intent: Intent?) {

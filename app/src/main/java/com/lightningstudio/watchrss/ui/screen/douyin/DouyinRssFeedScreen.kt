@@ -123,7 +123,7 @@ fun DouyinRssFeedScreen(
         ) {
             item {
                 FeedHeader(
-                    title = "抖音",
+                    title = "腕上RSS · 抖音频道",
                     isRefreshing = uiState.isLoading,
                     enabled = !isScrolling,
                     onClick = {

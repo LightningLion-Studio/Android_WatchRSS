@@ -4,6 +4,11 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.weight
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -12,10 +17,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.data.network.DefaultInternetAvailabilityMonitor
 import com.lightningstudio.watchrss.data.network.InternetAvailabilityStatus
 import com.lightningstudio.watchrss.ui.screen.douyin.DouyinLoginBannedScreen
 import com.lightningstudio.watchrss.ui.screen.douyin.DouyinLoginCheckingScreen
+import com.lightningstudio.watchrss.ui.components.ThirdPartyPlatformNotice
 import com.lightningstudio.watchrss.ui.screen.douyin.DouyinLoginScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.util.getWebViewUnavailableMessage
@@ -66,7 +73,14 @@ class DouyinLoginActivity : BaseWatchActivity() {
                         }
 
                         InternetAvailabilityStatus.Available -> {
-                            DouyinLoginScreen(
+                            Column(modifier = Modifier.fillMaxSize()) {
+                                ThirdPartyPlatformNotice(
+                                    platform = "抖音",
+                                    compact = true,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                                Box(modifier = Modifier.weight(1f).fillMaxSize()) {
+                                    DouyinLoginScreen(
                                 initialErrorMessage = initialWebViewError,
                                 onWebViewInitFailed = { warningMessage.value = it },
                                 onLoginComplete = { cookies ->
@@ -77,7 +91,9 @@ class DouyinLoginActivity : BaseWatchActivity() {
                                     finish()
                                 },
                                 onBack = { finish() }
-                            )
+                                    )
+                                }
+                            }
                         }
                     }
                 }

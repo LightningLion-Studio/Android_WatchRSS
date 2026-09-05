@@ -44,16 +44,19 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.lightningstudio.watchrss.WatchRssApplication
 import com.lightningstudio.watchrss.ui.util.getWebViewUnavailableMessage
 import com.lightningstudio.watchrss.ui.util.offlineToastMessageOrNull
 import com.lightningstudio.watchrss.ui.util.showAppToast
@@ -90,6 +93,7 @@ fun DouyinLoginScreen(
     var qrCodeBase64 by remember { mutableStateOf<String?>(null) }
     var qrCodeType by remember { mutableStateOf<String?>(null) } // "login" or "twoStep"
     var jsErrorMessage by remember { mutableStateOf<String?>(null) }
+    var qrLoadTimeReported by remember { mutableStateOf(false) }
 
     // Loading state tracking
     var loadingStateStartTime by remember { mutableStateOf(System.currentTimeMillis()) }
@@ -272,6 +276,17 @@ fun DouyinLoginScreen(
                             qrCodeBase64 = base64Data
                             qrCodeType = "login"
                             AppLogger.log("DouyinLogin", "检测到登录二维码")
+
+                            // 上报从登录页出现到二维码出现的耗时
+                            val startTime = loginStartTime
+                            if (startTime != null && !qrLoadTimeReported) {
+                                qrLoadTimeReported = true
+                                val duration = System.currentTimeMillis() - startTime
+                                AppLogger.log("DouyinLogin", "二维码加载耗时: ${duration}ms (${duration / 1000.0}秒)")
+                                (context.applicationContext as? WatchRssApplication)
+                                    ?.usageTelemetry
+                                    ?.recordDouyinQrLoadTime(duration)
+                            }
                         } else if (qrCodeType == "login") {
                             // Login QR disappeared
                             qrCodeBase64 = null
@@ -524,9 +539,30 @@ fun DouyinLoginScreen(
                     }
                 }
 
-                // Match the loading ring style used by WebViewActivity.
-                if (isLoading) {
-                    WebViewStyleLoadingIndicator(progress = animatedProgress)
+                // 在二维码出现前持续显示加载环与提示文案
+                if (qrCodeBase64 == null && !needTwoStepVerification) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        WebViewStyleLoadingIndicator(progress = animatedProgress)
+                        Text(
+                            text = "正在加载抖音登录二维码，需要 30~60 秒，请您耐心等待",
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .padding(top = 88.dp)
+                                .padding(horizontal = 20.dp),
+                            color = Color.White,
+                            textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                shadow = Shadow(
+                                    color = Color.Black.copy(alpha = 0.65f),
+                                    offset = Offset(0f, 1f),
+                                    blurRadius = 6f
+                                )
+                            )
+                        )
+                    }
                 }
             }
         }

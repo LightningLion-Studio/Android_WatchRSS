@@ -163,7 +163,8 @@ fun BiliPlayerScreen(
     digitalCrownVolumeEnabled: Boolean = true,
     volumeGuardEnabled: Boolean = true,
     playbackStartVolumeLimitPercent: Int? = 10,
-    continuePlaybackInBackground: Boolean = false
+    continuePlaybackInBackground: Boolean = false,
+    onPlaybackActiveChanged: (Boolean) -> Unit = { }
 ) {
     val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
     val spacing = watchDimensionResource(R.dimen.hey_distance_6dp)
@@ -175,6 +176,7 @@ fun BiliPlayerScreen(
     val context = LocalContext.current
     val view = LocalView.current
     val continuePlaybackInBackgroundState = rememberUpdatedState(continuePlaybackInBackground)
+    val playbackActiveCallback = rememberUpdatedState(onPlaybackActiveChanged)
     var playerRef by remember { mutableStateOf<ExoPlayer?>(null) }
     var textureViewRef by remember { mutableStateOf<TextureView?>(null) }
     var isTextureAvailable by remember { mutableStateOf(false) }
@@ -510,6 +512,13 @@ fun BiliPlayerScreen(
             controller.show(WindowInsetsCompat.Type.navigationBars())
         }
         onDispose { }
+    }
+
+    LaunchedEffect(isActive, isPlaying) {
+        playbackActiveCallback.value(isActive && isPlaying)
+    }
+    DisposableEffect(Unit) {
+        onDispose { playbackActiveCallback.value(false) }
     }
 
     DisposableEffect(lifecycleOwner) {

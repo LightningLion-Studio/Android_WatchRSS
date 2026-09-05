@@ -4,6 +4,11 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.pager.VerticalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -19,11 +24,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.data.network.InternetAvailabilityStatus
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
+import com.lightningstudio.watchrss.ui.components.ThirdPartyPlatformNotice
 import com.lightningstudio.watchrss.ui.screen.PlatformEntryScreen
 import com.lightningstudio.watchrss.ui.screen.bili.BiliPlayerScreen
 import com.lightningstudio.watchrss.ui.viewmodel.BiliPlaybackSource
@@ -61,6 +68,13 @@ class DouyinPlayerActivity : BaseWatchActivity() {
             WatchRSSTheme {
                 val baseDensity = LocalDensity.current
                 CompositionLocalProvider(LocalDensity provides Density(2f, baseDensity.fontScale)) {
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        ThirdPartyPlatformNotice(
+                            platform = "抖音",
+                            compact = true,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                        Box(modifier = Modifier.weight(1f).fillMaxSize()) {
                     val volumeGuardEnabled by settingsRepository.mediaVolumeGuardEnabled.collectAsState(
                         initial = DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
                     )
@@ -80,7 +94,7 @@ class DouyinPlayerActivity : BaseWatchActivity() {
                         }
                     }.collectAsState(initial = false)
                     if (items.isEmpty()) {
-                        PlatformEntryScreen(title = "抖音", message = "暂无可播放内容")
+                        PlatformEntryScreen(title = "腕上RSS · 抖音频道", message = "暂无可播放内容")
                     } else {
                         val headers by produceState(initialValue = emptyMap<String, String>()) {
                             value = repository.buildPlayHeaders()
@@ -138,14 +152,21 @@ class DouyinPlayerActivity : BaseWatchActivity() {
                                     digitalCrownVolumeEnabled = page == pagerState.currentPage && volumeControlEnabled,
                                     volumeGuardEnabled = volumeGuardEnabled,
                                     playbackStartVolumeLimitPercent = playbackStartVolumeLimitPercent,
-                                    continuePlaybackInBackground = continuePlaybackInBackground
+                                    continuePlaybackInBackground = continuePlaybackInBackground,
+                                    onPlaybackActiveChanged = { active ->
+                                        if (page == pagerState.currentPage) {
+                                            setVideoPlaybackBatteryTracking("douyin", active)
+                                        }
+                                    }
                                 )
                             }
+                        }
                         }
                     }
                 }
             }
         }
+    }
     }
 
     override fun buildResumeIntent(): Intent? {
