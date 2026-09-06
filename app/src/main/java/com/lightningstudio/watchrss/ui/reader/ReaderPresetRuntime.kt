@@ -12,16 +12,11 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
@@ -38,8 +33,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.AsyncImage
-import com.lightningstudio.watchrss.data.reader.ReaderBackgroundFit
 import com.lightningstudio.watchrss.data.reader.ReaderBackgroundType
 import com.lightningstudio.watchrss.data.reader.ReaderFontSynthesis
 import com.lightningstudio.watchrss.data.reader.ReaderHyphenation
@@ -65,7 +58,8 @@ enum class ReaderTextRole {
 data class ReaderPresetRuntime(
     val preset: ReaderPreset,
     val fontFile: (String?) -> File? = { null },
-    val backgroundFile: (String?) -> File? = { null }
+    val backgroundFile: (String?) -> File? = { null },
+    val backgroundVideoFile: (String?) -> File? = { null }
 )
 
 data class ReaderChromeStyle(
@@ -99,7 +93,8 @@ fun ProvideReaderPreset(
         LocalReaderPresetRuntime provides ReaderPresetRuntime(
             preset = preset,
             fontFile = repository::fontFile,
-            backgroundFile = repository::backgroundFile
+            backgroundFile = repository::backgroundFile,
+            backgroundVideoFile = repository::backgroundVideoFile
         ),
         content = content
     )
@@ -179,26 +174,12 @@ fun ReaderBackgroundSurface(
             .background(Color(background.colorArgb))
             .clipToBounds()
     ) {
-        if (file != null && background.type != ReaderBackgroundType.SOLID) {
-            AsyncImage(
-                model = file,
-                contentDescription = null,
-                contentScale = background.fit.contentScale(),
-                alignment = BiasAlignment(
-                    horizontalBias = background.focusX * 2f - 1f,
-                    verticalBias = background.focusY * 2f - 1f
-                ),
-                colorFilter = ColorFilter.colorMatrix(
-                    backgroundColorMatrix(background.brightness, background.saturation)
-                ),
-                modifier = Modifier
-                    .fillMaxSize()
-                    .graphicsLayer {
-                        scaleX = background.zoom
-                        scaleY = background.zoom
-                        rotationZ = background.rotationDegrees
-                    }
-                    .blur(background.blurDp.dp)
+        if (background.type != ReaderBackgroundType.SOLID) {
+            ReaderBackgroundMedia(
+                file = file,
+                video = if (background.type == ReaderBackgroundType.VIDEO)
+                    runtime.backgroundVideoFile(assetId) else null,
+                background = background
             )
         }
         if (background.overlayOpacity > 0f) {
@@ -215,7 +196,7 @@ fun ReaderBackgroundSurface(
     }
 }
 
-private fun backgroundColorMatrix(brightness: Float, saturation: Float): ColorMatrix {
+internal fun backgroundColorMatrix(brightness: Float, saturation: Float): ColorMatrix {
     val s = saturation.coerceIn(0f, 2f)
     val b = brightness.coerceIn(0f, 2f)
     val inverse = 1f - s
@@ -336,10 +317,4 @@ private object ReaderFontFamilyCache {
         entries[key] = resource
         return resource
     }
-}
-
-private fun ReaderBackgroundFit.contentScale(): ContentScale = when (this) {
-    ReaderBackgroundFit.CROP -> ContentScale.Crop
-    ReaderBackgroundFit.FIT -> ContentScale.Fit
-    ReaderBackgroundFit.FILL -> ContentScale.FillBounds
 }

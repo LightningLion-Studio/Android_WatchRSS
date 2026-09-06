@@ -332,6 +332,12 @@ class ReaderPresetRepository(
         return resourceStore.fontFile(record.fileName)
     }
 
+    fun backgroundVideoFile(assetId: String?): File? {
+        val record = backgrounds.value.firstOrNull { it.id == assetId && !it.deleted } ?: return null
+        if (record.kind != ReaderBackgroundType.VIDEO.name) return null
+        return record.watchVariantFileName()?.let(resourceStore::variantFile)
+    }
+
     fun backgroundFile(assetId: String?): File? {
         val record = backgrounds.value.firstOrNull { it.id == assetId } ?: return null
         val variant = if (record.kind == ReaderBackgroundType.VIDEO.name) {

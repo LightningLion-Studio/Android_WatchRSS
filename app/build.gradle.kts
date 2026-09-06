@@ -145,6 +145,7 @@ dependencies {
     implementation(libs.coil.gif)
     implementation("com.mohamedrejeb.richeditor:richeditor-compose:1.0.0-rc10")
     implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.media3.effect)
     implementation(libs.androidx.media3.ui)
     implementation(libs.androidx.media3.datasource.okhttp)
     implementation(libs.okhttp)

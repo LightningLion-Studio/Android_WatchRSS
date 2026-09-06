@@ -146,7 +146,8 @@ private fun WatchReaderPresetLivePreview(
         LocalReaderPresetRuntime provides ReaderPresetRuntime(
             preset = preview.preset,
             fontFile = repository::fontFile,
-            backgroundFile = repository::backgroundFile
+            backgroundFile = repository::backgroundFile,
+            backgroundVideoFile = repository::backgroundVideoFile
         )
     ) {
         ReaderBackgroundSurface(modifier = Modifier.fillMaxSize()) {
