@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.hardware.input.InputManager
+import android.os.BatteryManager
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
@@ -31,6 +32,9 @@ import kotlin.math.max
 
 open class BaseWatchActivity : ComponentActivity() {
     private var screenStartedAt: Long = 0L
+    private var batteryDrainStartedAt: Long = 0L
+    private var batteryDrainStartLevel: Int? = null
+    private var batteryDrainActiveSource: String? = null
     private val resetRunnable = Runnable { resetViewState(window.decorView) }
     private var swipeStartX = 0f
     private var swipeStartY = 0f
@@ -199,6 +203,7 @@ open class BaseWatchActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        setVideoPlaybackBatteryTracking(source = batteryDrainActiveSource ?: "", active = false)
         if (isFinishing) {
             buildResumeIntent()?.let { AppResumeStateStore.clearIfMatches(this, it) }
         }
@@ -396,6 +401,52 @@ open class BaseWatchActivity : ComponentActivity() {
 
 
     protected open fun screenName(): String = this.javaClass.simpleName
+
+    /**
+     * Starts/stops a battery sample only while a real video is actively playing.
+     * Login, title pages, search/history browsing, buffering and paused time are excluded.
+     */
+    protected fun setVideoPlaybackBatteryTracking(source: String, active: Boolean) {
+        val normalizedSource = source.takeIf { it == "bilibili" || it == "douyin" }
+        if (active && normalizedSource != null) {
+            if (batteryDrainActiveSource == normalizedSource && batteryDrainStartedAt > 0L) return
+            finishVideoPlaybackBatterySample()
+            batteryDrainActiveSource = normalizedSource
+            batteryDrainStartedAt = SystemClock.elapsedRealtime()
+            batteryDrainStartLevel = currentBatteryPercent()
+            return
+        }
+        if (!active && (normalizedSource == null || batteryDrainActiveSource == normalizedSource)) {
+            finishVideoPlaybackBatterySample()
+        }
+    }
+
+    private fun finishVideoPlaybackBatterySample() {
+        val source = batteryDrainActiveSource
+        val startedAt = batteryDrainStartedAt
+        val startLevel = batteryDrainStartLevel
+        batteryDrainActiveSource = null
+        batteryDrainStartedAt = 0L
+        batteryDrainStartLevel = null
+        if (source == null || startedAt <= 0L || startLevel == null) return
+        val durationMs = SystemClock.elapsedRealtime() - startedAt
+        if (durationMs < MIN_BATTERY_DRAIN_SESSION_MS) return
+        val endLevel = currentBatteryPercent() ?: return
+        if (endLevel > startLevel) return
+        telemetryOrNull()?.recordVideoBatteryDrain(
+            source = source,
+            durationMs = durationMs,
+            batteryStart = startLevel,
+            batteryEnd = endLevel
+        )
+    }
+
+    private fun currentBatteryPercent(): Int? {
+        val value = getSystemService(BatteryManager::class.java)
+            ?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+            ?: return null
+        return value.takeIf { it in 0..100 }
+    }
 
     private fun telemetryOrNull(): WatchUsageTelemetry? {
         return (applicationContext as? WatchRssApplication)?.container?.watchUsageTelemetry
@@ -605,6 +656,7 @@ open class BaseWatchActivity : ComponentActivity() {
     }
 
     companion object {
+        private const val MIN_BATTERY_DRAIN_SESSION_MS = 60 * 1000L
         private const val RESET_DELAY_MS = 350L
         private const val SWIPE_START_RATIO = 0.65f
         private const val SWIPE_COMMIT_RATIO = 0.35f

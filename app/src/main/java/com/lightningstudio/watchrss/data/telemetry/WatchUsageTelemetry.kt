@@ -5,10 +5,12 @@ import com.lightningstudio.watchrss.BuildConfig
 import com.lightningstudio.watchrss.data.account.AccountStore
 import com.lightningstudio.watchrss.data.account.WatchTokenManager
 import com.lightningstudio.watchrss.data.network.withWatchRssAppVersionHeader
+import com.lightningstudio.watchrss.util.AppLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -85,6 +87,37 @@ class WatchUsageTelemetry(
 
     override fun recordSyncAccount() = capture("sync_account")
 
+    /**
+     * 上报一次抖音登录二维码加载耗时。
+     * 失败不抛异常，仅写日志，不影响登录流程。
+     */
+    fun recordDouyinQrLoadTime(durationMs: Long) {
+        if (durationMs <= 0) return
+        appScope.launch(Dispatchers.IO) {
+            runCatching { reportDouyinQrLoadTime(durationMs) }
+        }
+    }
+
+    /** Reports an observed foreground video session as battery percentage points per 15 minutes. */
+    fun recordVideoBatteryDrain(
+        source: String,
+        durationMs: Long,
+        batteryStart: Int,
+        batteryEnd: Int
+    ) {
+        if (source !in setOf("bilibili", "douyin") ||
+            durationMs < MIN_BATTERY_DRAIN_SESSION_MS ||
+            batteryStart !in 0..100 || batteryEnd !in 0..batteryStart
+        ) return
+        appScope.launch(Dispatchers.IO) {
+            runCatching {
+                reportVideoBatteryDrain(source, durationMs, batteryStart, batteryEnd)
+            }.onFailure { error ->
+                AppLogger.log("BatteryDrain", "上报视频功耗失败: ${error.message.orEmpty()}")
+            }
+        }
+    }
+
     override fun backlogCount(): Int = store.snapshots().size
 
     private fun capture(event: String, properties: Map<String, Any?> = emptyMap()) {
@@ -101,6 +134,53 @@ class WatchUsageTelemetry(
             runCatching { uploadPending() }
             uploadScheduled.set(false)
             if (generation.get() != uploadingGeneration) scheduleUpload()
+        }
+    }
+
+    private suspend fun reportDouyinQrLoadTime(durationMs: Long) {
+        val account = tokenManager.freshAccount()
+        val payload = JSONObject().apply {
+            put("durationMs", durationMs)
+            put("appVersionName", BuildConfig.VERSION_NAME)
+            put("appVersionCode", BuildConfig.VERSION_CODE)
+        }
+        val request = Request.Builder()
+            .url(account.backendBaseUrl.trimEnd('/') + "/functions/v1/douyin-qr-load-time")
+            .header("Authorization", "Bearer ${account.watchDeviceToken}")
+            .withWatchRssAppVersionHeader()
+            .post(payload.toString().toRequestBody(JSON_MEDIA_TYPE))
+            .build()
+        httpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                AppLogger.log("DouyinLogin", "上报二维码加载时间失败: ${response.code}")
+            }
+        }
+    }
+
+    private suspend fun reportVideoBatteryDrain(
+        source: String,
+        durationMs: Long,
+        batteryStart: Int,
+        batteryEnd: Int
+    ) {
+        val account = tokenManager.freshAccount()
+        val payload = JSONObject().apply {
+            put("source", source)
+            put("durationMs", durationMs)
+            put("batteryStart", batteryStart)
+            put("batteryEnd", batteryEnd)
+            put("appVersionName", BuildConfig.VERSION_NAME)
+        }
+        val request = Request.Builder()
+            .url(account.backendBaseUrl.trimEnd('/') + "/functions/v1/video-battery-drain")
+            .header("Authorization", "Bearer ${account.watchDeviceToken}")
+            .withWatchRssAppVersionHeader()
+            .post(payload.toString().toRequestBody(JSON_MEDIA_TYPE))
+            .build()
+        httpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                AppLogger.log("BatteryDrain", "上报视频功耗失败: ${response.code}")
+            }
         }
     }
 
@@ -140,6 +220,7 @@ class WatchUsageTelemetry(
         private const val DOWNLOAD_PREFERENCES = "watchrss_download_telemetry"
         private const val KEY_RELEASE_OOBE_RECORDED = "release_oobe_recorded"
         private const val UPLOAD_DEBOUNCE_MS = 750L
+        private const val MIN_BATTERY_DRAIN_SESSION_MS = 60 * 1000L
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
 
         private fun defaultHttpClient(): OkHttpClient = OkHttpClient.Builder()

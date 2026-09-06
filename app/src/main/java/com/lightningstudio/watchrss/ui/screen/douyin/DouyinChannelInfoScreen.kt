@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.core.content.res.ResourcesCompat
 import com.lightningstudio.watchrss.R
+import com.lightningstudio.watchrss.ui.components.ThirdPartyPlatformScopeCard
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownScrollHandler
 import com.lightningstudio.watchrss.ui.theme.ActionButtonTextStyle
@@ -103,7 +104,7 @@ fun DouyinChannelInfoScreen(
                 val availableWidthPx = with(density) { maxWidth.toPx() }
                 val formattedTitle = remember(availableWidthPx, titleSizePx, typeface) {
                     formatTitleForWidthLimits(
-                        title = "抖音",
+                        title = "腕上RSS · 抖音频道",
                         paint = paint,
                         availableWidthPx = availableWidthPx,
                         firstLimitPx = firstLimitPx,
@@ -142,6 +143,10 @@ fun DouyinChannelInfoScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Center
+            )
+            ThirdPartyPlatformScopeCard(
+                platform = "抖音",
+                modifier = Modifier.padding(top = infoSpacing)
             )
 
             Spacer(modifier = Modifier.height(buttonSpacing))

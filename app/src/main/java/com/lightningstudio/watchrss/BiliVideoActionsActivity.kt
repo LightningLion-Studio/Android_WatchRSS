@@ -5,16 +5,23 @@ import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.weight
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.data.bili.buildBiliExternalSavedItem
 import com.lightningstudio.watchrss.data.bili.buildBiliShareLink
 import com.lightningstudio.watchrss.data.bili.formatBiliError
 import com.lightningstudio.watchrss.data.rss.SaveType
+import com.lightningstudio.watchrss.ui.components.ThirdPartyPlatformNotice
 import com.lightningstudio.watchrss.ui.screen.ActionDialogScreen
 import com.lightningstudio.watchrss.ui.screen.ActionItem
 import com.lightningstudio.watchrss.ui.screen.rss.shareCurrent
@@ -127,10 +134,19 @@ class BiliVideoActionsActivity : BaseWatchActivity() {
                     )
                 )
 
-                ActionDialogScreen(
-                    items = items,
-                    extraTopPadding = 4.dp
-                )
+                Column(modifier = Modifier.fillMaxSize()) {
+                    ThirdPartyPlatformNotice(
+                        platform = "哔哩哔哩",
+                        compact = true,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                    Box(modifier = Modifier.weight(1f).fillMaxSize()) {
+                        ActionDialogScreen(
+                            items = items,
+                            extraTopPadding = 4.dp
+                        )
+                    }
+                }
             }
         }
     }
