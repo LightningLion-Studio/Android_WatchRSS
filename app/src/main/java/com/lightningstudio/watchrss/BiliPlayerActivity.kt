@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.weight
 import androidx.activity.viewModels
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
@@ -91,7 +90,7 @@ class BiliPlayerActivity : BaseWatchActivity() {
                         onPlaybackError = viewModel::onPlaybackError,
                         onOpenWeb = {
                             val safeLink = link ?: return@BiliPlayerScreen
-                            WebViewActivity.open(this, safeLink)
+                            WebViewActivity.open(this@BiliPlayerActivity, safeLink)
                         },
                         internetAvailabilityStatus = internetAvailabilityStatus,
                         onPlaybackReady = viewModel::onPlaybackReady,

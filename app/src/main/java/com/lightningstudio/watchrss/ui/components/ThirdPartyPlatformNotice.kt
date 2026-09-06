@@ -90,7 +90,7 @@ fun ThirdPartyPlatformNotice(
                 textAlign = TextAlign.Center
             )
             Text(
-                text = "这是腕上RSS连接$platform的精选功能，不是$platform官方客户端。",
+                text = "这是腕上RSS连接${platform}的精选功能，不是${platform}官方客户端。",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth(),
@@ -98,7 +98,7 @@ fun ThirdPartyPlatformNotice(
             )
             if (!compact) {
                 Text(
-                    text = "平台账号、平台会员和内容规则由$platform独立管理；当前支持范围不因¥6手机版设备授权而改变。",
+                    text = "平台账号、平台会员和内容规则由${platform}独立管理；当前支持范围不因¥6手机版设备授权而改变。",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.fillMaxWidth(),
@@ -182,8 +182,8 @@ fun ThirdPartyPlatformConfirmationDialog(
         title = { Text("使用前说明") },
         text = {
             Text(
-                "本 App 与$platform及其关联公司或子公司不存在任何关联，也未获其授权、维护、赞助或认可。\n\n" +
-                    "这是独立且非官方的软件，使用风险由您自行承担。平台账号、内容和平台规则由$platform独立管理。"
+                "本 App 与${platform}及其关联公司或子公司不存在任何关联，也未获其授权、维护、赞助或认可。\n\n" +
+                    "这是独立且非官方的软件，使用风险由您自行承担。平台账号、内容和平台规则由${platform}独立管理。"
             )
         },
         confirmButton = {

@@ -74,7 +74,7 @@ class OobeActivity : BaseWatchActivity() {
                         onOpenUserAgreement = {
                             startActivity(
                                 InfoActivity.createRemoteIntent(
-                                    context = this,
+                                    context = this@OobeActivity,
                                     title = "用户协议",
                                     path = InfoActivity.WATCH_USER_AGREEMENT_PATH
                                 )
@@ -83,7 +83,7 @@ class OobeActivity : BaseWatchActivity() {
                         onOpenPrivacy = {
                             startActivity(
                                 InfoActivity.createRemoteIntent(
-                                    context = this,
+                                    context = this@OobeActivity,
                                     title = "隐私政策",
                                     path = InfoActivity.WATCH_PRIVACY_POLICY_PATH
                                 )
