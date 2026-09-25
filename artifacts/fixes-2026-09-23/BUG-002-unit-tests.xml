@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.lightningstudio.watchrss.ui.viewmodel.BiliDetailViewModelTest" tests="19" skipped="0" failures="0" errors="0" timestamp="2026-09-22T19:07:06.041Z" hostname="MacBook-Pro-1404.local" time="0.083">
+  <properties/>
+  <testcase name="init_schedulesWarmup_fromSavedTargetWhenDetailFails" classname="com.lightningstudio.watchrss.ui.viewmodel.BiliDetailViewModelTest" time="0.056"/>
+  <testcase name="rapidCoinFailure_doesNotQueueAutomaticRetries_butAllowsExplicitRetry" classname="com.lightningstudio.watchrss.ui.viewmodel.BiliDetailViewModelTest" time="0.005"/>
+  <testcase name="favorite_success_persistsFavoriteState_forFutureOpen" classname="com.lightningstudio.watchrss.ui.viewmodel.BiliDetailViewModelTest" time="0.004"/>
+  <testcase name="loadDetail_restoresPersistedLikeAndCoinState" classname="com.lightningstudio.watchrss.ui.viewmodel.BiliDetailViewModelTest" time="0.001"/>
+  <testcase name="loadDetail_startsWarmup_forSelectedCid" classname="com.lightningstudio.watchrss.ui.viewmodel.BiliDetailViewModelTest" time="0.001"/>
+  <testcase name="loadDetail_prefersLatestPlaybackCid_overCidArg_withoutWarmingStaleCidFirst" classname="com.lightningstudio.watchrss.ui.viewmodel.BiliDetailViewModelTest" time="0.001"/>
+  <testcase name="loadDetail_remoteFavorite_syncsAppGlobalFavorite" classname="com.lightningstudio.watchrss.ui.viewmodel.BiliDetailViewModelTest" time="0.001"/>
+  <testcase name="coin_success_persistsCoinState_forFutureOpen" classname="com.lightningstudio.watchrss.ui.viewmodel.BiliDetailViewModelTest" time="0.001"/>
+  <testcase name="rapidLikeAndUnlike_runInOrder_andFinishAtConfirmedUnlike" classname="com.lightningstudio.watchrss.ui.viewmodel.BiliDetailViewModelTest" time="0.002"/>
+  <testcase name="loadDetail_keepsLocalInteractionState_whenNotLoggedIn" classname="com.lightningstudio.watchrss.ui.viewmodel.BiliDetailViewModelTest" time="0.001"/>
+  <testcase name="loadDetail_mergesLocalAndRemoteInteractionState_whenLoggedIn" classname="com.lightningstudio.watchrss.ui.viewmodel.BiliDetailViewModelTest" time="0.0"/>
+  <testcase name="unlike_success_clearsPersistedLikeState" classname="com.lightningstudio.watchrss.ui.viewmodel.BiliDetailViewModelTest" time="0.001"/>
+  <testcase name="coin_failure_keepsConfirmedState_andShowsFailure" classname="com.lightningstudio.watchrss.ui.viewmodel.BiliDetailViewModelTest" time="0.002"/>
+  <testcase name="like_success_updatesOnlyAfterConfirmation_withoutWarmupGate" classname="com.lightningstudio.watchrss.ui.viewmodel.BiliDetailViewModelTest" time="0.001"/>
+  <testcase name="selectPage_restartsWarmup_forNewCid" classname="com.lightningstudio.watchrss.ui.viewmodel.BiliDetailViewModelTest" time="0.001"/>
+  <testcase name="loadDetail_doesNotOverrideManualPageSelection_onReload" classname="com.lightningstudio.watchrss.ui.viewmodel.BiliDetailViewModelTest" time="0.001"/>
+  <testcase name="unlike_failure_preservesPreviouslyConfirmedLike" classname="com.lightningstudio.watchrss.ui.viewmodel.BiliDetailViewModelTest" time="0.001"/>
+  <testcase name="like_failure_keepsConfirmedState_andShowsFailure" classname="com.lightningstudio.watchrss.ui.viewmodel.BiliDetailViewModelTest" time="0.001"/>
+  <testcase name="rapidCoinTaps_sendOnlyOneSuccessfulPaymentRequest" classname="com.lightningstudio.watchrss.ui.viewmodel.BiliDetailViewModelTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

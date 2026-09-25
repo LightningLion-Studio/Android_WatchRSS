@@ -63,7 +63,7 @@ object BluetoothSyncProtocol {
             var offset = 0
             while (offset < length) {
                 val read = dataInput.read(bytes, offset, minOf(TRANSFER_CHUNK_BYTES, length - offset))
-            if (read < 0) throw EOFException("同步消息读取中断：$offset/$length")
+                if (read < 0) throw EOFException("同步消息读取中断：$offset/$length")
                 offset += read
                 onBytesTransferred.invoke(read.toLong())
             }

@@ -1,0 +1,101 @@
+
+> Configure project :app
+Passing custom test runner argument android.testInstrumentationRunnerArguments.allowNetworkToggle from gradle.properties or command line is not compatible with configuration caching. Please specify this argument using android gradle dsl.
+
+> Task :app:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:generateDebugBuildConfig UP-TO-DATE
+> Task :sdk:bili:preBuild UP-TO-DATE
+> Task :sdk:bili:preDebugBuild UP-TO-DATE
+> Task :sdk:bili:writeDebugAarMetadata UP-TO-DATE
+> Task :sdk:douyin:preBuild UP-TO-DATE
+> Task :sdk:douyin:preDebugBuild UP-TO-DATE
+> Task :sdk:douyin:writeDebugAarMetadata UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :sdk:bili:processDebugNavigationResources UP-TO-DATE
+> Task :sdk:douyin:processDebugNavigationResources UP-TO-DATE
+> Task :app:processDebugNavigationResources UP-TO-DATE
+> Task :app:compileDebugNavigationResources UP-TO-DATE
+> Task :app:generateDebugResValues UP-TO-DATE
+> Task :sdk:bili:generateDebugResValues UP-TO-DATE
+> Task :sdk:bili:generateDebugResources UP-TO-DATE
+> Task :sdk:bili:packageDebugResources UP-TO-DATE
+> Task :sdk:douyin:generateDebugResValues UP-TO-DATE
+> Task :sdk:douyin:generateDebugResources UP-TO-DATE
+> Task :sdk:douyin:packageDebugResources UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :sdk:bili:extractDeepLinksDebug UP-TO-DATE
+> Task :sdk:bili:processDebugManifest UP-TO-DATE
+> Task :sdk:douyin:extractDeepLinksDebug UP-TO-DATE
+> Task :sdk:douyin:processDebugManifest UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :sdk:bili:compileDebugLibraryResources UP-TO-DATE
+> Task :sdk:bili:parseDebugLocalResources UP-TO-DATE
+> Task :sdk:bili:generateDebugRFile UP-TO-DATE
+> Task :sdk:douyin:compileDebugLibraryResources UP-TO-DATE
+> Task :sdk:douyin:parseDebugLocalResources UP-TO-DATE
+> Task :sdk:douyin:generateDebugRFile UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :sdk:bili:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :sdk:bili:generateDebugBuildConfig UP-TO-DATE
+> Task :sdk:bili:extractDebugProto UP-TO-DATE
+> Task :sdk:bili:extractIncludeDebugProto UP-TO-DATE
+> Task :sdk:bili:extractProto UP-TO-DATE
+> Task :sdk:bili:generateDebugProto NO-SOURCE
+> Task :sdk:bili:compileDebugKotlin UP-TO-DATE
+> Task :sdk:bili:javaPreCompileDebug UP-TO-DATE
+> Task :sdk:bili:compileDebugJavaWithJavac UP-TO-DATE
+> Task :sdk:bili:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :sdk:douyin:checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :sdk:douyin:compileDebugKotlin UP-TO-DATE
+> Task :sdk:douyin:javaPreCompileDebug UP-TO-DATE
+> Task :sdk:douyin:compileDebugJavaWithJavac NO-SOURCE
+> Task :sdk:douyin:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :app:kspDebugKotlin UP-TO-DATE
+> Task :app:compileDebugKotlin UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:compileDebugJavaWithJavac UP-TO-DATE
+> Task :app:bundleDebugClassesToRuntimeJar UP-TO-DATE
+> Task :app:bundleDebugClassesToCompileJar UP-TO-DATE
+> Task :app:kspDebugUnitTestKotlin UP-TO-DATE
+> Task :app:compileDebugUnitTestKotlin UP-TO-DATE
+> Task :app:preDebugUnitTestBuild UP-TO-DATE
+> Task :app:javaPreCompileDebugUnitTest UP-TO-DATE
+> Task :app:compileDebugUnitTestJavaWithJavac NO-SOURCE
+> Task :app:processDebugJavaRes UP-TO-DATE
+> Task :app:processDebugUnitTestJavaRes UP-TO-DATE
+> Task :sdk:bili:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :sdk:bili:processDebugJavaRes UP-TO-DATE
+> Task :sdk:douyin:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :sdk:douyin:processDebugJavaRes UP-TO-DATE
+OpenJDK 64-Bit Server VM warning: Sharing is only supported for boot loader classes because bootstrap classpath has been appended
+
+> Task :app:testDebugUnitTest
+
+ComposeUiDefaultsGuardTest > highRiskMaterialDefaultsGoThroughWatchWrappers FAILED
+    java.lang.AssertionError at ComposeUiDefaultsGuardTest.kt:56
+
+556 tests completed, 1 failed
+
+> Task :app:testDebugUnitTest FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:testDebugUnitTest'.
+> There were failing tests. See the report at: file:///Users/zhuangjiajun/Documents/android-DEV/Android_WatchRSS/app/build/reports/tests/testDebugUnitTest/index.html
+
+* Try:
+> Run with --scan to get full insights.
+
+BUILD FAILED in 3s
+63 actionable tasks: 1 executed, 62 up-to-date

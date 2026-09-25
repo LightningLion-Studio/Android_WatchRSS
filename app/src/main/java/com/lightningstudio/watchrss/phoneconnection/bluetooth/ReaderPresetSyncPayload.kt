@@ -85,6 +85,9 @@ object ReaderPresetSyncPayload {
             if (target.exists()) target.delete()
             require(partial.renameTo(target)) { "资源落盘失败" }
             metadata.delete()
+            // The manifest may have already recomposed the open reader while this file
+            // was missing. Notify only after full checksum verification and atomic rename.
+            repository.notifyResourcesChanged()
         }
         return pushAck(index, data, applied = complete)
     }

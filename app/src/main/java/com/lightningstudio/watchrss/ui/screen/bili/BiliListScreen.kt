@@ -126,6 +126,7 @@ fun BiliListScreen(
                 items(uiState.items, key = { it.bvid ?: it.aid ?: it.title }) { item ->
                     val summary = remember(item) { buildListSummary(item) }
                     BiliFeedCard(
+                        coverRecoveryEnabled = true,
                         title = item.title,
                         summary = summary,
                         coverUrl = item.cover,

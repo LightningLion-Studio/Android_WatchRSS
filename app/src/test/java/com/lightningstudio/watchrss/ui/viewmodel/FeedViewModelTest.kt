@@ -8,6 +8,7 @@ import com.lightningstudio.watchrss.testutil.collectFlow
 import com.lightningstudio.watchrss.testutil.sampleRssChannel
 import com.lightningstudio.watchrss.testutil.sampleRssItem
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -92,4 +93,18 @@ class FeedViewModelTest {
         assertEquals(listOf(42L), repo.toggledFavoriteIds)
         assertEquals(listOf(42L), repo.toggledWatchLaterIds)
     }
+    @Test
+    fun novelCatalogLoadsAndOrdersAllMetadataWithoutChangingRssPaging() = runTest {
+        val source = "https://watchrss.local/import-txt-novel/book"
+        val repo = TestRssRepository(initialChannels = listOf(sampleRssChannel(id = 7L).copy(url = source)))
+        repo.setChannelItems(7L, (350L downTo 1L).map { id ->
+            sampleRssItem(id = id, channelId = 7L).copy(link = "$source/chapter/${id.toString().padStart(4, '0')}-x")
+        })
+        val vm = FeedViewModel(SavedStateHandle(mapOf("channelId" to 7L)), repo)
+        val catalog = vm.novelCatalog.first { it.loaded }
+        assertEquals(350, catalog.items.size)
+        assertEquals(1L, catalog.items.first().id)
+        assertEquals(350L, catalog.items.last().id)
+    }
+
 }

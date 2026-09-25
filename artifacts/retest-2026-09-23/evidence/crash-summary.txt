@@ -1,0 +1,15 @@
+F/DEBUG   (28180): Cmdline: com.google.android.bluetooth
+F/DEBUG   (28180): pid: 5309, tid: 5350, name: bt_stack_manage  >>> com.google.android.bluetooth <<<
+F/DEBUG   (28180): Abort message: 'Hardware Error Event with code 0x42'
+F/DEBUG   (30750): Cmdline: /vendor/bin/hw/android.hardware.sensors-service.multihal
+F/DEBUG   (30750): pid: 3237, tid: 3237, name: android.hardwar  >>> /vendor/bin/hw/android.hardware.sensors-service.multihal <<<
+F/DEBUG   (30750): Abort message: 'activationOnChangeSensorEvent:231: unexpected sensor type: 26'
+F/DEBUG   (23405): Cmdline: /vendor/bin/hw/android.hardware.sensors-service.multihal
+F/DEBUG   (23405): pid: 30756, tid: 30756, name: android.hardwar  >>> /vendor/bin/hw/android.hardware.sensors-service.multihal <<<
+F/DEBUG   (23405): Abort message: 'activationOnChangeSensorEvent:231: unexpected sensor type: 26'
+F/DEBUG   (10123): Cmdline: com.google.android.bluetooth
+F/DEBUG   (10123): pid: 28217, tid: 28281, name: bt_stack_manage  >>> com.google.android.bluetooth <<<
+F/DEBUG   (10123): Abort message: 'Hardware Error Event with code 0x42'
+F/DEBUG   (10525): Cmdline: com.google.android.bluetooth
+F/DEBUG   (10525): pid: 10159, tid: 10187, name: bt_stack_manage  >>> com.google.android.bluetooth <<<
+F/DEBUG   (10525): Abort message: 'Hardware Error Event with code 0x42'

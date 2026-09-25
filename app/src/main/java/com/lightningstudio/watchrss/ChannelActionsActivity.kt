@@ -56,6 +56,8 @@ class ChannelActionsActivity : BaseWatchActivity() {
         setContent {
             WatchRSSTheme {
                 val channel by viewModel.channel.collectAsState()
+                val isMarkingNovelRead by viewModel.isMarkingNovelRead.collectAsState()
+                val readError by viewModel.readError.collectAsState()
                 val notesPlacement by homeEntryPlacementStore.observeNotesPlacement().collectAsState(
                     initial = homeEntryPlacementStore.notesPlacement()
                 )
@@ -101,11 +103,15 @@ class ChannelActionsActivity : BaseWatchActivity() {
                     if (!isNotesEntry) {
                         add(
                             ActionItem(
-                                label = "标记已读",
-                                enabled = isValid && canMarkRead,
+                                label = if (isMarkingNovelRead) "正在标记已读…" else "标记已读",
+                                enabled = isValid && canMarkRead && !isMarkingNovelRead,
                                 onClick = {
-                                    viewModel.markRead()
-                                    finish()
+                                    if (ImportedContentIds.isNovelSourceUrl(channel?.url)) {
+                                        viewModel.markNovelRead { finish() }
+                                    } else {
+                                        viewModel.markRead()
+                                        finish()
+                                    }
                                 }
                             )
                         )
@@ -138,7 +144,9 @@ class ChannelActionsActivity : BaseWatchActivity() {
 
                 Box(modifier = Modifier.fillMaxSize()) {
                     ActionDialogScreen(
-                        items = items,
+                        items = items.map {
+                            if (isMarkingNovelRead && it.label != "取消") it.copy(enabled = false) else it
+                        } + listOfNotNull(readError?.let { ActionItem(it, enabled = false, onClick = {}) }),
                         extraTopPadding = 4.dp
                     )
                     if (showClearConfirm) {

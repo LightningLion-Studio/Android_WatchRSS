@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss.ui.screen
 
+import com.lightningstudio.watchrss.ui.reader.readerViewportBoundary
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -49,7 +50,7 @@ fun PrivacyPolicyConsentScreen(
     InstallDigitalCrownLazyListHandler(listState)
 
     Box(modifier = Modifier.fillMaxSize()) {
-        ReaderBackgroundSurface(modifier = Modifier.fillMaxSize()) {
+        ReaderBackgroundSurface(modifier = Modifier.fillMaxSize().readerViewportBoundary()) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 state = listState,

@@ -1,0 +1,16 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="com.lightningstudio.watchrss.ui.reader.ReaderBackgroundCoverageTest" tests="8" failures="0" errors="0" skipped="0" time="4.633" timestamp="2026-09-22T19:51:37" hostname="localhost">
+  <properties>
+    <property name="device" value="WatchRSS_OPPO_Watch_X2(AVD) - 14" />
+    <property name="flavor" value="" />
+    <property name="project" value=":app" />
+  </properties>
+  <testcase name="otherModulesRetainTheirGlobalRubberBandBehavior" classname="com.lightningstudio.watchrss.ui.reader.ReaderBackgroundCoverageTest" time="0.7" />
+  <testcase name="resolvedThemeChange_keepsNewBackgroundAtBottom" classname="com.lightningstudio.watchrss.ui.reader.ReaderBackgroundCoverageTest" time="0.672" />
+  <testcase name="longLightNovel_largeFont_bottomBackgroundRemainsCovered" classname="com.lightningstudio.watchrss.ui.reader.ReaderBackgroundCoverageTest" time="0.752" />
+  <testcase name="shortDarkNovel_bottomBackgroundRemainsCovered" classname="com.lightningstudio.watchrss.ui.reader.ReaderBackgroundCoverageTest" time="0.47" />
+  <testcase name="regularChildScrollingStillWorksInsideReaderBoundary" classname="com.lightningstudio.watchrss.ui.reader.ReaderBackgroundCoverageTest" time="0.288" />
+  <testcase name="shortLightRss_bottomBackgroundRemainsCovered" classname="com.lightningstudio.watchrss.ui.reader.ReaderBackgroundCoverageTest" time="0.452" />
+  <testcase name="longDarkRss_bottomBackgroundRemainsCovered" classname="com.lightningstudio.watchrss.ui.reader.ReaderBackgroundCoverageTest" time="0.734" />
+  <testcase name="lightReaderTopEdge_isAlsoCovered" classname="com.lightningstudio.watchrss.ui.reader.ReaderBackgroundCoverageTest" time="0.246" />
+</testsuite>

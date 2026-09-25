@@ -1,5 +1,7 @@
 package com.lightningstudio.watchrss
 
+import com.lightningstudio.watchrss.data.novel.NovelReadingHistory
+import com.lightningstudio.watchrss.data.novel.novelChapterLocation
 import android.content.Intent
 import android.os.Bundle
 import android.os.SystemClock
@@ -51,6 +53,7 @@ class DetailActivity : BaseWatchActivity() {
 
     private var fromWatchLater: Boolean = false
     private var readStartedAt: Long = 0L
+    private var recordedNovelChapter: String? = null
     private var articleTitle: String? = null
     private var articleChannelId: String? = null
     private var articleChannelTitle: String? = null
@@ -82,6 +85,14 @@ class DetailActivity : BaseWatchActivity() {
                         channelId = articleChannelId,
                         channelTitle = articleChannelTitle
                     )
+                    if (novelChapterLocation(current.link) != null && recordedNovelChapter != current.link) {
+                        recordedNovelChapter = current.link
+                        val saved = runCatching { NovelReadingHistory(this@DetailActivity).recordChapter(current.link!!) }
+                            .getOrDefault(false)
+                        if (!saved && !isFinishing) {
+                            showAppToast(this@DetailActivity, "目录阅读位置保存失败", Toast.LENGTH_SHORT)
+                        }
+                    }
                 }
             }
         }

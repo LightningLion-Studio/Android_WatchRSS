@@ -59,7 +59,8 @@ data class ReaderPresetRuntime(
     val preset: ReaderPreset,
     val fontFile: (String?) -> File? = { null },
     val backgroundFile: (String?) -> File? = { null },
-    val backgroundVideoFile: (String?) -> File? = { null }
+    val backgroundVideoFile: (String?) -> File? = { null },
+    val resourceRevision: Long = 0L
 )
 
 data class ReaderChromeStyle(
@@ -89,12 +90,14 @@ fun ProvideReaderPreset(
     content: @Composable () -> Unit
 ) {
     val preset by repository.activePreset.collectAsStateWithLifecycle()
+    val resourceRevision by repository.resourceRevision.collectAsStateWithLifecycle()
     CompositionLocalProvider(
         LocalReaderPresetRuntime provides ReaderPresetRuntime(
             preset = preset,
             fontFile = repository::fontFile,
             backgroundFile = repository::backgroundFile,
-            backgroundVideoFile = repository::backgroundVideoFile
+            backgroundVideoFile = repository::backgroundVideoFile,
+            resourceRevision = resourceRevision
         ),
         content = content
     )

@@ -1,0 +1,97 @@
+--------- beginning of main
+09-23 15:19:15.348 27763 27763 I studio.watchrss: Late-enabling -Xcheck:jni
+09-23 15:19:15.366 27763 27763 I studio.watchrss: Using CollectorTypeCMC GC.
+09-23 15:19:15.373 27763 27763 D nativeloader: Load libframework-connectivity-tiramisu-jni.so using APEX ns com_android_tethering for caller /apex/com.android.tethering/javalib/framework-connectivity-t.jar: ok
+09-23 15:19:15.396 27763 27763 D CompatibilityChangeReporter: Compat change id reported: 171979766; UID 10116; state: ENABLED
+09-23 15:19:15.396 27763 27763 D CompatibilityChangeReporter: Compat change id reported: 242716250; UID 10116; state: ENABLED
+09-23 15:19:15.402 27763 27763 W ziparchive: Unable to open '/data/app/~~eVep636znGu2Brjq9d8omg==/com.lightningstudio.watchrss-KRCjWdEDsi8qg6OV4HlD9A==/base.dm': No such file or directory
+09-23 15:19:15.402 27763 27763 W ziparchive: Unable to open '/data/app/~~eVep636znGu2Brjq9d8omg==/com.lightningstudio.watchrss-KRCjWdEDsi8qg6OV4HlD9A==/base.dm': No such file or directory
+09-23 15:19:15.593 27763 27763 D nativeloader: Configuring clns-6 for other apk /data/app/~~eVep636znGu2Brjq9d8omg==/com.lightningstudio.watchrss-KRCjWdEDsi8qg6OV4HlD9A==/base.apk. target_sdk_version=34, uses_libraries=, library_path=/data/app/~~eVep636znGu2Brjq9d8omg==/com.lightningstudio.watchrss-KRCjWdEDsi8qg6OV4HlD9A==/lib/arm64:/data/app/~~eVep636znGu2Brjq9d8omg==/com.lightningstudio.watchrss-KRCjWdEDsi8qg6OV4HlD9A==/base.apk!/lib/arm64-v8a, permitted_path=/data:/mnt/expand:/data/user/0/com.lightningstudio.watchrss
+09-23 15:19:15.600 27763 27763 V GraphicsEnvironment: Currently set values for:
+09-23 15:19:15.600 27763 27763 V GraphicsEnvironment:   angle_gl_driver_selection_pkgs=[]
+09-23 15:19:15.600 27763 27763 V GraphicsEnvironment:   angle_gl_driver_selection_values=[]
+09-23 15:19:15.600 27763 27763 V GraphicsEnvironment: Global.Settings values are invalid: number of packages: 0, number of values: 0
+09-23 15:19:15.600 27763 27763 V GraphicsEnvironment: Neither updatable production driver nor prerelease driver is supported.
+09-23 15:19:15.621 27763 27763 D WM-WrkMgrInitializer: Initializing WorkManager with default configuration.
+09-23 15:19:15.639 27763 27763 D WM-PackageManagerHelper: Skipping component enablement for androidx.work.impl.background.systemjob.SystemJobService
+09-23 15:19:15.639 27763 27763 D WM-Schedulers: Created SystemJobScheduler and enabled SystemJobService
+09-23 15:19:15.653 27763 27782 D WM-ForceStopRunnable: The default process name was not specified.
+09-23 15:19:15.654 27763 27782 D WM-ForceStopRunnable: Performing cleanup operations.
+09-23 15:19:15.667 27763 27763 D CompatibilityChangeReporter: Compat change id reported: 279646685; UID 10116; state: DISABLED
+09-23 15:19:15.675 27763 27782 D CompatibilityChangeReporter: Compat change id reported: 160794467; UID 10116; state: ENABLED
+09-23 15:19:15.682 27763 27782 D WM-ForceStopRunnable: Application was force-stopped, rescheduling.
+09-23 15:19:15.684 27763 27763 D AppLogger: 日志系统初始化完成
+09-23 15:19:15.685 27763 27763 D Application: 应用启动 - 2026-09-23 15:19:15
+09-23 15:19:15.685 27763 27763 D Startup : event=application_created processMs=289 appMs=0
+09-23 15:19:15.703 27763 27763 D CompatibilityChangeReporter: Compat change id reported: 270306772; UID 10116; state: ENABLED
+09-23 15:19:15.704 27763 27763 D CompatibilityChangeReporter: Compat change id reported: 235355681; UID 10116; state: ENABLED
+09-23 15:19:15.707 27763 27782 D CompatibilityChangeReporter: Compat change id reported: 194532703; UID 10116; state: ENABLED
+09-23 15:19:15.708 27763 27782 D CompatibilityChangeReporter: Compat change id reported: 253665015; UID 10116; state: ENABLED
+09-23 15:19:15.708 27763 27782 D CompatibilityChangeReporter: Compat change id reported: 311402873; UID 10116; state: DISABLED
+09-23 15:19:15.708 27763 27782 D CompatibilityChangeReporter: Compat change id reported: 323349338; UID 10116; state: DISABLED
+09-23 15:19:15.708 27763 27782 D WM-SystemJobScheduler: Scheduling work ID 83594dd4-32ed-4dea-afbb-76b2e6cdba8eJob ID 73
+09-23 15:19:15.710 27763 27782 D WM-GreedyScheduler: Starting tracking for 83594dd4-32ed-4dea-afbb-76b2e6cdba8e
+09-23 15:19:15.737 27763 27792 D WM-GreedyScheduler: Cancelling work ID 83594dd4-32ed-4dea-afbb-76b2e6cdba8e
+09-23 15:19:15.761 27763 27792 D WM-SystemJobScheduler: Scheduling work ID 83594dd4-32ed-4dea-afbb-76b2e6cdba8eJob ID 74
+09-23 15:19:15.771 27763 27792 D WM-GreedyScheduler: Starting tracking for 83594dd4-32ed-4dea-afbb-76b2e6cdba8e
+09-23 15:19:15.782 27763 27792 D WM-ConstraintTracker: NetworkStateTracker24: initial state = NetworkState(isConnected=true, isValidated=true, isMetered=true, isNotRoaming=true)
+09-23 15:19:15.782 27763 27792 D WM-NetworkStateTracker: Registering network callback
+09-23 15:19:15.787 27763 27788 D WM-NetworkStateTracker: Network capabilities changed: [ Transports: CELLULAR Capabilities: MMS&SUPL&DUN&FOTA&IMS&CBS&INTERNET&NOT_RESTRICTED&TRUSTED&NOT_VPN&VALIDATED&NOT_ROAMING&FOREGROUND&NOT_CONGESTED&NOT_SUSPENDED&NOT_VCN_MANAGED LinkUpBandwidth>=15000Kbps LinkDnBandwidth>=30000Kbps Specifier: <TelephonyNetworkSpecifier [mSubId = 1]> UnderlyingNetworks: Null]
+09-23 15:19:15.788 27763 27791 D WM-PackageManagerHelper: Skipping component enablement for androidx.work.impl.background.systemalarm.RescheduleReceiver
+09-23 15:19:15.788 27763 27791 D WM-GreedyScheduler: Constraints not met: Cancelling work ID WorkGenerationalId(workSpecId=83594dd4-32ed-4dea-afbb-76b2e6cdba8e, generation=73)
+09-23 15:19:15.788 27763 27791 D WM-GreedyScheduler: Constraints not met: Cancelling work ID WorkGenerationalId(workSpecId=83594dd4-32ed-4dea-afbb-76b2e6cdba8e, generation=74)
+09-23 15:19:15.894 27763 27763 D Activity: 启动: MainActivity
+09-23 15:19:15.894 27763 27763 D Startup : event=main_activity_created processMs=498 session=1 launcher=false freshCreate=true appMs=209
+09-23 15:19:15.916 27763 27763 D Activity: 活跃: MainActivity
+09-23 15:19:15.921 27763 27763 D CompatibilityChangeReporter: Compat change id reported: 237531167; UID 10116; state: DISABLED
+09-23 15:19:15.922 27763 27763 W HWUI    : Unknown dataspace 0
+09-23 15:19:15.927 27763 27785 D CompatibilityChangeReporter: Compat change id reported: 263076149; UID 10116; state: ENABLED
+09-23 15:19:15.928 27763 27785 I BtSyncDebug: event="server.acceptOnce.start" session="watchSync-mudrvf12-1" timeoutMs=120000 uuid="bb2f0b7d-8f2f-4a96-95b2-d2c91d58a861" expectedAbility="" allowedActions="syncLibrary|syncNotes|syncNoteAsset|syncReader|previewReader|syncAccount|syncLlmTokenUsage"
+09-23 15:19:15.931 27763 27785 D BluetoothSocket: bindListen(): mPort=-1, mType=1
+09-23 15:19:15.933 27763 27785 D BluetoothSocket: bindListen(), SocketState: INIT, mPfd: {ParcelFileDescriptor: java.io.FileDescriptor@233f84}
+09-23 15:19:15.933 27763 27785 D BluetoothSocket: bindListen(), Create LocalSocket
+09-23 15:19:15.933 27763 27785 D BluetoothSocket: bindListen(), new LocalSocket.getInputStream()
+09-23 15:19:15.933 27763 27785 D BluetoothSocket: bindListen(), readInt mSocketIS: android.net.LocalSocketImpl$SocketInputStream@74736d
+09-23 15:19:15.933 27763 27785 D BluetoothSocket: bindListen(): channel=24, mPort=-1
+09-23 15:19:15.933 27763 27785 I WatchRSS_BtSyncServer: listening uuid=bb2f0b7d-8f2f-4a96-95b2-d2c91d58a861 timeoutMs=120000
+09-23 15:19:15.934 27763 27785 I BtSyncDebug: event="server.listen.success" session="watchSync-mudrvf12-1" elapsedMs=5
+09-23 15:19:15.942 27763 27785 I BtSyncDebug: event="server.accept.start" session="watchSync-mudrvf12-1" timeoutMs=120000
+09-23 15:19:15.943 27763 27785 D BluetoothSocket: accept(), timeout (ms):-1
+09-23 15:19:16.071 27763 27802 I EGL_emulation: Opening libGLESv1_CM_emulation.so
+09-23 15:19:16.071 27763 27802 I EGL_emulation: Opening libGLESv2_emulation.so
+09-23 15:19:16.076 27763 27802 W HWUI    : Failed to choose config with EGL_SWAP_BEHAVIOR_PRESERVED, retrying without...
+09-23 15:19:16.076 27763 27802 W HWUI    : Failed to initialize 101010-2 format, error = EGL_SUCCESS
+09-23 15:19:16.083 27763 27802 I Gralloc4: mapper 4.x is not supported
+09-23 15:19:16.106 27763 27763 D VRI[MainActivity]: visibilityChanged oldVisibility=true newVisibility=false
+09-23 15:19:16.111 27763 27763 D Activity: 启动: HomeFeedListActivity
+09-23 15:19:16.120 27763 27763 D Activity: 活跃: HomeFeedListActivity
+09-23 15:19:16.174 27763 27786 D TrafficStats: tagSocket(99) with statsTag=0xffffffff, statsUid=-1
+09-23 15:19:16.177 27763 27763 D AutofillManager: Fill dialog is enabled:false, hints=[password, passwordAuto, creditCardNumber, creditCardSecurityCode, creditCardExpirationDate]
+09-23 15:19:16.389 27763 27786 W AnnouncementRepository: Unable to check app update
+09-23 15:19:16.389 27763 27786 W AnnouncementRepository: org.json.JSONException: End of input at character 0 of 
+09-23 15:19:16.389 27763 27786 W AnnouncementRepository: 	at org.json.JSONTokener.syntaxError(JSONTokener.java:469)
+09-23 15:19:16.389 27763 27786 W AnnouncementRepository: 	at org.json.JSONTokener.nextValue(JSONTokener.java:101)
+09-23 15:19:16.389 27763 27786 W AnnouncementRepository: 	at org.json.JSONObject.<init>(JSONObject.java:168)
+09-23 15:19:16.389 27763 27786 W AnnouncementRepository: 	at org.json.JSONObject.<init>(JSONObject.java:185)
+09-23 15:19:16.389 27763 27786 W AnnouncementRepository: 	at com.lightningstudio.watchrss.data.announcement.AnnouncementRepository$checkAnnouncement$2.invokeSuspend(AnnouncementRepository.kt:42)
+09-23 15:19:16.389 27763 27786 W AnnouncementRepository: 	at com.lightningstudio.watchrss.data.announcement.AnnouncementRepository$checkAnnouncement$2.invoke(Unknown Source:8)
+09-23 15:19:16.389 27763 27786 W AnnouncementRepository: 	at com.lightningstudio.watchrss.data.announcement.AnnouncementRepository$checkAnnouncement$2.invoke(Unknown Source:4)
+09-23 15:19:16.389 27763 27786 W AnnouncementRepository: 	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndispatchedOrReturn(Undispatched.kt:43)
+09-23 15:19:16.389 27763 27786 W AnnouncementRepository: 	at kotlinx.coroutines.BuildersKt__Builders_commonKt.withContext(Builders.common.kt:166)
+09-23 15:19:16.389 27763 27786 W AnnouncementRepository: 	at kotlinx.coroutines.BuildersKt.withContext(Unknown Source:1)
+09-23 15:19:16.389 27763 27786 W AnnouncementRepository: 	at com.lightningstudio.watchrss.data.announcement.AnnouncementRepository.checkAnnouncement(AnnouncementRepository.kt:32)
+09-23 15:19:16.389 27763 27786 W AnnouncementRepository: 	at com.lightningstudio.watchrss.HomeFeedListActivity$checkAnnouncementAndPushNotifications$1.invokeSuspend(HomeFeedListActivity.kt:372)
+09-23 15:19:16.389 27763 27786 W AnnouncementRepository: 	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:33)
+09-23 15:19:16.389 27763 27786 W AnnouncementRepository: 	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+09-23 15:19:16.389 27763 27786 W AnnouncementRepository: 	at kotlinx.coroutines.internal.LimitedDispatcher$Worker.run(LimitedDispatcher.kt:113)
+09-23 15:19:16.389 27763 27786 W AnnouncementRepository: 	at kotlinx.coroutines.scheduling.TaskImpl.run(Tasks.kt:89)
+09-23 15:19:16.389 27763 27786 W AnnouncementRepository: 	at kotlinx.coroutines.scheduling.CoroutineScheduler.runSafely(CoroutineScheduler.kt:586)
+09-23 15:19:16.389 27763 27786 W AnnouncementRepository: 	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.executeTask(CoroutineScheduler.kt:820)
+09-23 15:19:16.389 27763 27786 W AnnouncementRepository: 	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.runWorker(CoroutineScheduler.kt:717)
+09-23 15:19:16.389 27763 27786 W AnnouncementRepository: 	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.run(CoroutineScheduler.kt:704)
+09-23 15:19:16.397 27763 27786 D TrafficStats: tagSocket(102) with statsTag=0xffffffff, statsUid=-1
+09-23 15:19:16.513 27763 27763 D Startup : event=startup_ready processMs=1117 session=1 destination=home launcher=false freshCreate=true activityMs=619 appMs=828
+09-23 15:19:16.550 27763 27763 W WindowOnBackDispatcher: sendCancelIfRunning: isInProgress=falsecallback=android.app.Activity$$ExternalSyntheticLambda0@e8ba2
+09-23 15:19:16.695 27763 27772 I studio.watchrss: Compiler allocated 4108KB to compile void com.lightningstudio.watchrss.ui.screen.launch.LaunchScreenOverlayKt.LaunchScreenContent(boolean, androidx.compose.ui.Modifier, androidx.compose.runtime.Composer, int, int)
+09-23 15:19:21.183 27763 27841 D ProfileInstaller: Installing profile for com.lightningstudio.watchrss
+09-23 15:19:21.208 27763 27773 W studio.watchrss: Cleared Reference was only reachable from finalizer (only reported once)

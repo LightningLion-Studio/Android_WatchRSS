@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.lightningstudio.watchrss.NotesActivityTest" tests="17" skipped="0" failures="0" errors="0" timestamp="2026-09-22T19:07:06.018Z" hostname="MacBook-Pro-1404.local" time="0.02">
+  <properties/>
+  <testcase name="notePreview_keepsFirstLineWhenDifferentFromTitle" classname="com.lightningstudio.watchrss.NotesActivityTest" time="0.012"/>
+  <testcase name="notePreview_collapsesBlankLinesAndLimitsLength" classname="com.lightningstudio.watchrss.NotesActivityTest" time="0.0"/>
+  <testcase name="cursorVisibility_keepsScrollWhenCursorIsAlreadyVisible" classname="com.lightningstudio.watchrss.NotesActivityTest" time="0.0"/>
+  <testcase name="notePreview_doesNotRepeatTitle" classname="com.lightningstudio.watchrss.NotesActivityTest" time="0.0"/>
+  <testcase name="activatedCursor_acceptsRealTextChangeAndUserSelection" classname="com.lightningstudio.watchrss.NotesActivityTest" time="0.005"/>
+  <testcase name="editButton_hidesAndShowsAcrossLazyListItems" classname="com.lightningstudio.watchrss.NotesActivityTest" time="0.0"/>
+  <testcase name="activatedCursor_rejectsSelectionOnlyResetFromInputMethod" classname="com.lightningstudio.watchrss.NotesActivityTest" time="0.0"/>
+  <testcase name="crownCursorMovement_stopsAtDocumentEdges" classname="com.lightningstudio.watchrss.NotesActivityTest" time="0.001"/>
+  <testcase name="initialCursor_roughlyTracksPreservedScrollPosition" classname="com.lightningstudio.watchrss.NotesActivityTest" time="0.0"/>
+  <testcase name="crownCursorMovement_collapsesSelectionAndMovesByCodePoint" classname="com.lightningstudio.watchrss.NotesActivityTest" time="0.0"/>
+  <testcase name="cursorCentering_usesPhysicalViewportCenterInsteadOfScrollFraction" classname="com.lightningstudio.watchrss.NotesActivityTest" time="0.0"/>
+  <testcase name="loadingIndicator_rotatesAndWrapsEveryCycle" classname="com.lightningstudio.watchrss.NotesActivityTest" time="0.0"/>
+  <testcase name="editButton_hidesWhileScrollingDownAndStaysHiddenAfterStop" classname="com.lightningstudio.watchrss.NotesActivityTest" time="0.0"/>
+  <testcase name="titleInput_replacesLineBreaksAndKeepsSelectionInBounds" classname="com.lightningstudio.watchrss.NotesActivityTest" time="0.001"/>
+  <testcase name="cursorVisibility_scrollsOnlyEnoughToRevealCursorAboveViewport" classname="com.lightningstudio.watchrss.NotesActivityTest" time="0.0"/>
+  <testcase name="editButton_showsWhenScrollingUpAndStaysVisibleAfterStop" classname="com.lightningstudio.watchrss.NotesActivityTest" time="0.0"/>
+  <testcase name="cursorVisibility_scrollsOnlyEnoughToRevealCursorBelowViewport" classname="com.lightningstudio.watchrss.NotesActivityTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

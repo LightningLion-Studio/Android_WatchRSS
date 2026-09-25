@@ -62,6 +62,10 @@ import kotlinx.coroutines.launch
 interface AppContainer {
     val watchUsageTelemetry: WatchUsageTelemetry
     val rssRepository: RssRepository
+    val novelCatalogSource: com.lightningstudio.watchrss.data.novel.NovelCatalogSource
+        get() = com.lightningstudio.watchrss.data.novel.NovelCatalogSource { channelId ->
+            rssRepository.observeItemsPaged(channelId, Int.MAX_VALUE)
+        }
     val settingsRepository: SettingsRepository
     val llmApiKeyStore: LlmApiKeyStore
     val ttsApiKeyStore: TtsApiKeyStore
@@ -247,6 +251,10 @@ class DefaultAppContainer(context: Context) : AppContainer {
 
     override val internetAvailabilityMonitor: InternetAvailabilityMonitor by lazy {
         DefaultInternetAvailabilityMonitor(appContext)
+    }
+
+    override val novelCatalogSource: com.lightningstudio.watchrss.data.novel.NovelCatalogSource by lazy {
+        com.lightningstudio.watchrss.data.novel.DatabaseNovelCatalogSource(database.rssItemDao())
     }
 
     override val rssRepository: RssRepository by lazy {

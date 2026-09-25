@@ -1,0 +1,51 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="com.lightningstudio.watchrss.NoteEditorCursorTest" tests="43" failures="0" errors="0" skipped="0" time="30.205" timestamp="2026-09-23T07:17:38" hostname="localhost">
+  <properties>
+    <property name="device" value="WatchRSS_OPPO_Watch_X2(AVD) - 14" />
+    <property name="flavor" value="" />
+    <property name="project" value=":app" />
+  </properties>
+  <testcase name="plainText_middleInsertionPersistsAcrossReopen" classname="com.lightningstudio.watchrss.NoteEditorCursorTest" time="1.239" />
+  <testcase name="imageReference_middleInsertionKeepsRawMarkdownAcrossReopen" classname="com.lightningstudio.watchrss.NoteEditorCursorTest" time="0.513" />
+  <testcase name="latestMessageReplacesOldMessage_withoutBlockingTouches" classname="com.lightningstudio.watchrss.ui.screen.bili.BiliFeedbackHostTest" time="0.293" />
+  <testcase name="replacingWithSameTextRestartsExpiry" classname="com.lightningstudio.watchrss.ui.screen.bili.BiliFeedbackHostTest" time="0.228" />
+  <testcase name="changingUrl_cancelsStaleResult_andShowsLoading" classname="com.lightningstudio.watchrss.ui.screen.bili.BiliCoverRecoveryTest" time="0.229" />
+  <testcase name="realHttpFailure_manualRetryRecovers_sameUrl_withoutOpeningVideo" classname="com.lightningstudio.watchrss.ui.screen.bili.BiliCoverRecoveryTest" time="0.369" />
+  <testcase name="realHttpTimeout_exposesRetry_andThenRecovers" classname="com.lightningstudio.watchrss.ui.screen.bili.BiliCoverRecoveryTest" time="10.318" />
+  <testcase name="scrollingDefersLoading_andEmptyUrlDoesNotRequest" classname="com.lightningstudio.watchrss.ui.screen.bili.BiliCoverRecoveryTest" time="0.257" />
+  <testcase name="simultaneousSameUrlLoads_shareCacheWithoutRacingTemporaryFile" classname="com.lightningstudio.watchrss.ui.screen.bili.BiliCoverRecoveryTest" time="0.226" />
+  <testcase name="offlineThenRecovery_reloadsFailedCoverAutomatically" classname="com.lightningstudio.watchrss.ui.screen.bili.BiliCoverRecoveryTest" time="0.252" />
+  <testcase name="sharedCardRecoveryIsOptIn_otherModulesKeepTheirLoader" classname="com.lightningstudio.watchrss.ui.screen.bili.BiliCoverRecoveryTest" time="0.234" />
+  <testcase name="switchingBetweenOnlineNetworks_retriesOnceWithoutPolling" classname="com.lightningstudio.watchrss.ui.screen.bili.BiliCoverRecoveryTest" time="0.262" />
+  <testcase name="actualDefaultNetworkLossAndRecovery_refreshesCoverWithoutTap" classname="com.lightningstudio.watchrss.ui.screen.bili.BiliCoverNetworkDeviceTest" time="1.591" />
+  <testcase name="selectedPresetUpdate_changesLiveStyle_andSurvivesRepositoryReopen" classname="com.lightningstudio.watchrss.ui.reader.ReaderPresetLiveSyncTest" time="0.286" />
+  <testcase name="invalidChecksum_keepsPreviousResourceAndDoesNotPublishRefresh" classname="com.lightningstudio.watchrss.ui.reader.ReaderPresetLiveSyncTest" time="0.318" />
+  <testcase name="lateBackgroundMetadata_refreshesFileAlreadyOnDisk" classname="com.lightningstudio.watchrss.ui.reader.ReaderPresetLiveSyncTest" time="0.369" />
+  <testcase name="unselectedPresetUpdate_doesNotStealWatchSelection" classname="com.lightningstudio.watchrss.ui.reader.ReaderPresetLiveSyncTest" time="0.234" />
+  <testcase name="partialResource_isNotAppliedUntilLastChunkPassesValidation" classname="com.lightningstudio.watchrss.ui.reader.ReaderPresetLiveSyncTest" time="0.313" />
+  <testcase name="lateBackgroundFile_refreshesAlreadyOpenReader_withoutPresetChange" classname="com.lightningstudio.watchrss.ui.reader.ReaderPresetLiveSyncTest" time="0.376" />
+  <testcase name="switchingResourcesRebindsTheTextureAndRendersANewFirstFrame" classname="com.lightningstudio.watchrss.ui.reader.ReaderVideoBackgroundTest" time="0.715" />
+  <testcase name="videoKeepsPlayingWhilePanningAndZoomingAndPausesInBackground" classname="com.lightningstudio.watchrss.ui.reader.ReaderVideoBackgroundTest" time="1.448" />
+  <testcase name="imageFocusReachesFullFrameCornersAfterZoom" classname="com.lightningstudio.watchrss.ui.reader.ReaderVideoBackgroundTest" time="0.362" />
+  <testcase name="videoUsesFullFrameFocusAndCanBlurDuringPlaybackOnAndroid11" classname="com.lightningstudio.watchrss.ui.reader.ReaderVideoBackgroundTest" time="0.503" />
+  <testcase name="failedWholeBookWrite_keepsUnreadFlagsAndAllowsRetry" classname="com.lightningstudio.watchrss.ui.activity.NovelReadStateTest" time="0.307" />
+  <testcase name="chapteredTxtAlsoUsesReadConfirmationGate" classname="com.lightningstudio.watchrss.ui.activity.NovelReadStateTest" time="0.566" />
+  <testcase name="persistedWrite_waitsForDelayedObservableCountBeforeClosing" classname="com.lightningstudio.watchrss.ui.activity.NovelReadStateTest" time="0.315" />
+  <testcase name="markWholeBook_keepsMenuOpenUntilWriteAndUnreadCountConfirm" classname="com.lightningstudio.watchrss.ui.activity.NovelReadStateTest" time="0.26" />
+  <testcase name="normalRssArticleNavigation_doesNotOptIntoNovelWriteGate" classname="com.lightningstudio.watchrss.ui.activity.NovelReadStateTest" time="0.457" />
+  <testcase name="enteringChapter_waitsForReadPersistence_andOtherUnreadChapterStaysUnread" classname="com.lightningstudio.watchrss.ui.activity.NovelReadStateTest" time="0.561" />
+  <testcase name="otherModulesRetainTheirGlobalRubberBandBehavior" classname="com.lightningstudio.watchrss.ui.reader.ReaderBackgroundCoverageTest" time="0.227" />
+  <testcase name="resolvedThemeChange_keepsNewBackgroundAtBottom" classname="com.lightningstudio.watchrss.ui.reader.ReaderBackgroundCoverageTest" time="0.519" />
+  <testcase name="longLightNovel_largeFont_bottomBackgroundRemainsCovered" classname="com.lightningstudio.watchrss.ui.reader.ReaderBackgroundCoverageTest" time="0.775" />
+  <testcase name="shortDarkNovel_bottomBackgroundRemainsCovered" classname="com.lightningstudio.watchrss.ui.reader.ReaderBackgroundCoverageTest" time="0.462" />
+  <testcase name="regularChildScrollingStillWorksInsideReaderBoundary" classname="com.lightningstudio.watchrss.ui.reader.ReaderBackgroundCoverageTest" time="0.259" />
+  <testcase name="shortLightRss_bottomBackgroundRemainsCovered" classname="com.lightningstudio.watchrss.ui.reader.ReaderBackgroundCoverageTest" time="0.51" />
+  <testcase name="longDarkRss_bottomBackgroundRemainsCovered" classname="com.lightningstudio.watchrss.ui.reader.ReaderBackgroundCoverageTest" time="0.773" />
+  <testcase name="lightReaderTopEdge_isAlsoCovered" classname="com.lightningstudio.watchrss.ui.reader.ReaderBackgroundCoverageTest" time="0.264" />
+  <testcase name="platformDisclosure_invokesOnlyConfirmationCallback" classname="com.lightningstudio.watchrss.ui.components.PlatformDisclosureButtonTest" time="0.266" />
+  <testcase name="initialDisclosure_invokesOnlyAcknowledgementCallback" classname="com.lightningstudio.watchrss.ui.components.PlatformDisclosureButtonTest" time="0.278" />
+  <testcase name="twoLongBooksRememberTheirOwnChapter_afterBackReopenAndRecreate" classname="com.lightningstudio.watchrss.ui.activity.NovelContentsResumeTest" time="1.478" />
+  <testcase name="firstOpenStartsAtFirstChapterInNumericOrder" classname="com.lightningstudio.watchrss.ui.activity.NovelContentsResumeTest" time="0.255" />
+  <testcase name="deletedLastChapterUsesNearestFollowingChapter_withoutChangingTheSavedRecord" classname="com.lightningstudio.watchrss.ui.activity.NovelContentsResumeTest" time="0.321" />
+  <testcase name="longDirectoryReturnsOnlyMetadataWithoutHydratingBodiesOrMedia" classname="com.lightningstudio.watchrss.data.novel.NovelCatalogDaoTest" time="0.109" />
+</testsuite>

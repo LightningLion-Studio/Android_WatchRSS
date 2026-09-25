@@ -1,0 +1,23 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="com.lightningstudio.watchrss.ui.activity.NovelReadStateTest" tests="2" failures="2" errors="0" skipped="0" time="2.677" timestamp="2026-09-22T19:38:05" hostname="localhost">
+  <properties>
+    <property name="device" value="WatchRSS_OPPO_Watch_X2(AVD) - 14" />
+    <property name="flavor" value="" />
+    <property name="project" value=":app" />
+  </properties>
+  <testcase name="markWholeBook_keepsMenuOpenUntilWriteAndUnreadCountConfirm" classname="com.lightningstudio.watchrss.ui.activity.NovelReadStateTest" time="0.781">
+    <failure>java.lang.AssertionError: Menu must not finish and cancel the pending write expected:&lt;RESUMED&gt; but was:&lt;DESTROYED&gt;
+at org.junit.Assert.fail(Assert.java:89)
+at org.junit.Assert.failNotEquals(Assert.java:835)
+at org.junit.Assert.assertEquals(Assert.java:120)
+at com.lightningstudio.watchrss.ui.activity.NovelReadStateTest.markWholeBook_keepsMenuOpenUntilWriteAndUnreadCountConfirm(NovelReadStateTest.kt:55)
+</failure>
+  </testcase>
+  <testcase name="enteringChapter_waitsForReadPersistence_andOtherUnreadChapterStaysUnread" classname="com.lightningstudio.watchrss.ui.activity.NovelReadStateTest" time="1.618">
+    <failure>java.lang.AssertionError: Do not open the reader before read-state persistence
+at org.junit.Assert.fail(Assert.java:89)
+at org.junit.Assert.assertTrue(Assert.java:42)
+at com.lightningstudio.watchrss.ui.activity.NovelReadStateTest.enteringChapter_waitsForReadPersistence_andOtherUnreadChapterStaysUnread(NovelReadStateTest.kt:75)
+</failure>
+  </testcase>
+</testsuite>

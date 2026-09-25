@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss.ui.screen.rss
 
+import com.lightningstudio.watchrss.ui.reader.readerViewportBoundary
 import android.os.SystemClock
 import android.view.View
 import android.widget.Toast
@@ -1059,7 +1060,7 @@ internal fun DetailContent(
 
     com.lightningstudio.watchrss.ui.reader.ReaderBackgroundSurface(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxSize().readerViewportBoundary()
             .semantics {
                 contentDescription = "文章详情页面"
             }

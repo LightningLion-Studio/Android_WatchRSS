@@ -1,0 +1,31 @@
+--------- beginning of main
+W/ziparchive(11332): Unable to open '/data/app/~~DB9uA7tOosWARn5rbbV6Qg==/com.lightningstudio.watchrss-M-lFgqe0gx2omJ30Q7MJkw==/base.dm': No such file or directory
+W/ziparchive(11332): Unable to open '/data/app/~~DB9uA7tOosWARn5rbbV6Qg==/com.lightningstudio.watchrss-M-lFgqe0gx2omJ30Q7MJkw==/base.dm': No such file or directory
+W/studio.watchrss(11332): Long monitor contention with owner DefaultDispatcher-worker-3 (11357) at java.lang.Object kotlin.SynchronizedLazyImpl.getValue()(LazyJVM.kt:78) waiters=0 in java.lang.Object kotlin.SynchronizedLazyImpl.getValue() for 148ms
+W/HWUI    (11332): Unknown dataspace 0
+W/HWUI    (11332): Failed to choose config with EGL_SWAP_BEHAVIOR_PRESERVED, retrying without...
+W/HWUI    (11332): Failed to initialize 101010-2 format, error = EGL_SUCCESS
+W/AnnouncementRepository(11332): Unable to check app update
+W/AnnouncementRepository(11332): org.json.JSONException: End of input at character 0 of 
+W/AnnouncementRepository(11332): 	at org.json.JSONTokener.syntaxError(JSONTokener.java:469)
+W/AnnouncementRepository(11332): 	at org.json.JSONTokener.nextValue(JSONTokener.java:101)
+W/AnnouncementRepository(11332): 	at org.json.JSONObject.<init>(JSONObject.java:168)
+W/AnnouncementRepository(11332): 	at org.json.JSONObject.<init>(JSONObject.java:185)
+W/AnnouncementRepository(11332): 	at com.lightningstudio.watchrss.data.announcement.AnnouncementRepository$checkAnnouncement$2.invokeSuspend(AnnouncementRepository.kt:42)
+W/AnnouncementRepository(11332): 	at com.lightningstudio.watchrss.data.announcement.AnnouncementRepository$checkAnnouncement$2.invoke(Unknown Source:8)
+W/AnnouncementRepository(11332): 	at com.lightningstudio.watchrss.data.announcement.AnnouncementRepository$checkAnnouncement$2.invoke(Unknown Source:4)
+W/AnnouncementRepository(11332): 	at kotlinx.coroutines.intrinsics.UndispatchedKt.startUndispatchedOrReturn(Undispatched.kt:43)
+W/AnnouncementRepository(11332): 	at kotlinx.coroutines.BuildersKt__Builders_commonKt.withContext(Builders.common.kt:166)
+W/AnnouncementRepository(11332): 	at kotlinx.coroutines.BuildersKt.withContext(Unknown Source:1)
+W/AnnouncementRepository(11332): 	at com.lightningstudio.watchrss.data.announcement.AnnouncementRepository.checkAnnouncement(AnnouncementRepository.kt:32)
+W/AnnouncementRepository(11332): 	at com.lightningstudio.watchrss.HomeFeedListActivity$checkAnnouncementAndPushNotifications$1.invokeSuspend(HomeFeedListActivity.kt:372)
+W/AnnouncementRepository(11332): 	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:33)
+W/AnnouncementRepository(11332): 	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+W/AnnouncementRepository(11332): 	at kotlinx.coroutines.internal.LimitedDispatcher$Worker.run(LimitedDispatcher.kt:113)
+W/AnnouncementRepository(11332): 	at kotlinx.coroutines.scheduling.TaskImpl.run(Tasks.kt:89)
+W/AnnouncementRepository(11332): 	at kotlinx.coroutines.scheduling.CoroutineScheduler.runSafely(CoroutineScheduler.kt:586)
+W/AnnouncementRepository(11332): 	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.executeTask(CoroutineScheduler.kt:820)
+W/AnnouncementRepository(11332): 	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.runWorker(CoroutineScheduler.kt:717)
+W/AnnouncementRepository(11332): 	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.run(CoroutineScheduler.kt:704)
+W/WindowOnBackDispatcher(11332): sendCancelIfRunning: isInProgress=falsecallback=android.app.Activity$$ExternalSyntheticLambda0@e8ba2
+W/studio.watchrss(11332): Cleared Reference was only reachable from finalizer (only reported once)

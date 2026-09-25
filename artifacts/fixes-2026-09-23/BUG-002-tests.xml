@@ -1,0 +1,10 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="com.lightningstudio.watchrss.ui.screen.bili.BiliFeedbackHostTest" tests="2" failures="0" errors="0" skipped="0" time="1.081" timestamp="2026-09-22T19:03:03" hostname="localhost">
+  <properties>
+    <property name="device" value="WatchRSS_OPPO_Watch_X2(AVD) - 14" />
+    <property name="flavor" value="" />
+    <property name="project" value=":app" />
+  </properties>
+  <testcase name="latestMessageReplacesOldMessage_withoutBlockingTouches" classname="com.lightningstudio.watchrss.ui.screen.bili.BiliFeedbackHostTest" time="0.617" />
+  <testcase name="replacingWithSameTextRestartsExpiry" classname="com.lightningstudio.watchrss.ui.screen.bili.BiliFeedbackHostTest" time="0.204" />
+</testsuite>

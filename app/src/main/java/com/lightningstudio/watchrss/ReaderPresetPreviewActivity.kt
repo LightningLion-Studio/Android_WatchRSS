@@ -1,7 +1,9 @@
 package com.lightningstudio.watchrss
 
+import com.lightningstudio.watchrss.ui.reader.readerViewportBoundary
 import android.content.Context
 import android.graphics.Paint
+import android.graphics.text.LineBreaker
 import android.os.Bundle
 import android.text.Layout
 import android.text.StaticLayout
@@ -150,7 +152,7 @@ private fun WatchReaderPresetLivePreview(
             backgroundVideoFile = repository::backgroundVideoFile
         )
     ) {
-        ReaderBackgroundSurface(modifier = Modifier.fillMaxSize()) {
+        ReaderBackgroundSurface(modifier = Modifier.fillMaxSize().readerViewportBoundary()) {
             val pagePadding = ReaderPageLayout.horizontalPadding
             val blockSpacing = ReaderPageLayout.blockSpacing
             val titlePadding = ReaderPageLayout.titleHorizontalPadding
@@ -495,7 +497,7 @@ private fun createPreviewStaticLayout(
         )
         .apply {
             if (style.alignment == ReaderTextAlignment.JUSTIFY) {
-                setJustificationMode(Layout.JUSTIFICATION_MODE_INTER_WORD)
+                setJustificationMode(LineBreaker.JUSTIFICATION_MODE_INTER_WORD)
             }
         }
         .build()

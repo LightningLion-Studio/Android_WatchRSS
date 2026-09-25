@@ -13,7 +13,7 @@ import java.io.File
 
 private const val TAG = "ExoPlayerTtsAudioPlayer"
 
-@UnstableApi
+@androidx.annotation.OptIn(markerClass = [UnstableApi::class])
 class ExoPlayerTtsAudioPlayer(context: Context) : TtsAudioPlayer {
 
     private val appContext = context.applicationContext

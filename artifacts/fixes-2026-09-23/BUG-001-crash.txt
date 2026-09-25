@@ -1,0 +1,194 @@
+--------- beginning of crash
+09-15 03:22:04.783  5309  5350 F libc    : Fatal signal 6 (SIGABRT), code -1 (SI_QUEUE) in tid 5350 (bt_stack_manage), pid 5309 (droid.bluetooth)
+09-15 03:22:05.205 28180 28180 F DEBUG   : *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***
+09-15 03:22:05.205 28180 28180 F DEBUG   : Build fingerprint: 'google/sdk_gwear_arm64/emu64a:14/AW2A.240422.007.E8/12230326:userdebug/dev-keys'
+09-15 03:22:05.205 28180 28180 F DEBUG   : Revision: '0'
+09-15 03:22:05.205 28180 28180 F DEBUG   : ABI: 'arm64'
+09-15 03:22:05.205 28180 28180 F DEBUG   : Timestamp: 2026-09-15 03:22:04.897693146+0800
+09-15 03:22:05.205 28180 28180 F DEBUG   : Process uptime: 0s
+09-15 03:22:05.205 28180 28180 F DEBUG   : Cmdline: com.google.android.bluetooth
+09-15 03:22:05.205 28180 28180 F DEBUG   : pid: 5309, tid: 5350, name: bt_stack_manage  >>> com.google.android.bluetooth <<<
+09-15 03:22:05.205 28180 28180 F DEBUG   : uid: 1002
+09-15 03:22:05.205 28180 28180 F DEBUG   : tagged_addr_ctrl: 0000000000000001 (PR_TAGGED_ADDR_ENABLE)
+09-15 03:22:05.205 28180 28180 F DEBUG   : pac_enabled_keys: 000000000000000f (PR_PAC_APIAKEY, PR_PAC_APIBKEY, PR_PAC_APDAKEY, PR_PAC_APDBKEY)
+09-15 03:22:05.205 28180 28180 F DEBUG   : signal 6 (SIGABRT), code -1 (SI_QUEUE), fault addr --------
+09-15 03:22:05.205 28180 28180 F DEBUG   : Abort message: 'Hardware Error Event with code 0x42'
+09-15 03:22:05.205 28180 28180 F DEBUG   :     x0  0000000000000000  x1  00000000000014e6  x2  0000000000000006  x3  0000007c550d77d0
+09-15 03:22:05.205 28180 28180 F DEBUG   :     x4  2f1f64636e621f67  x5  2f1f64636e621f67  x6  2f1f64636e621f67  x7  7f7f7f7f7f7f7f7f
+09-15 03:22:05.205 28180 28180 F DEBUG   :     x8  00000000000000f0  x9  0000007f55433390  x10 ffffff80fffffb9f  x11 0000000000000000
+09-15 03:22:05.205 28180 28180 F DEBUG   :     x12 0000007c550d6670  x13 0000000000000024  x14 0000007c550d79e0  x15 00000432efb788de
+09-15 03:22:05.205 28180 28180 F DEBUG   :     x16 0000007f554defe0  x17 0000007f554ca860  x18 0000007c54310040  x19 00000000000014bd
+09-15 03:22:05.205 28180 28180 F DEBUG   :     x20 00000000000014e6  x21 00000000ffffffff  x22 0000007cbcc30438  x23 0000000000000000
+09-15 03:22:05.205 28180 28180 F DEBUG   :     x24 0000007c550d7f80  x25 0000000000000000  x26 0000007c5e050a10  x27 0000007c5e05f2e0
+09-15 03:22:05.205 28180 28180 F DEBUG   :     x28 0000007c550d8ac0  x29 0000007c550d7850
+09-15 03:22:05.205 28180 28180 F DEBUG   :     lr  0000007f5546aad8  sp  0000007c550d77b0  pc  0000007f5546ab08  pst 0000000000000000
+09-15 03:22:05.205 28180 28180 F DEBUG   : 14 total frames
+09-15 03:22:05.205 28180 28180 F DEBUG   : backtrace:
+09-15 03:22:05.205 28180 28180 F DEBUG   :       #00 pc 000000000005ab08  /apex/com.android.runtime/lib64/bionic/libc.so (abort+168) (BuildId: 10f6580e623cb20b4044f6e6a4103b34)
+09-15 03:22:05.205 28180 28180 F DEBUG   :       #01 pc 00000000008ed788  /apex/com.android.art/lib64/libart.so (art::Runtime::Abort(char const*)+88) (BuildId: e80ff12130cade1e1fbcdd24f28a8ca0)
+09-15 03:22:05.205 28180 28180 F DEBUG   :       #02 pc 0000000000017358  /apex/com.android.art/lib64/libbase.so (android::base::SetAborter(std::__1::function<void (char const*)>&&)::$_0::__invoke(char const*)+80) (BuildId: b99b74f03d108d6d85240d1d0cc5efdf)
+09-15 03:22:05.205 28180 28180 F DEBUG   :       #03 pc 0000000000007584  /system/lib64/liblog.so (__android_log_assert+292) (BuildId: 0b7d0a1c04ddb251841cfa2a929c819b)
+09-15 03:22:05.205 28180 28180 F DEBUG   :       #04 pc 000000000041ced0  /apex/com.android.btservices/lib64/libbluetooth_jni.so (bluetooth::hci::HciLayer::impl::on_hardware_error(bluetooth::hci::EventView)+316) (BuildId: 33c412b1485cb1ae1c73cfc753b53508)
+09-15 03:22:05.205 28180 28180 F DEBUG   :       #05 pc 000000000041b5f8  /apex/com.android.btservices/lib64/libbluetooth_jni.so (bluetooth::hci::HciLayer::impl::on_hci_event(bluetooth::hci::EventView)+4392) (BuildId: 33c412b1485cb1ae1c73cfc753b53508)
+09-15 03:22:05.205 28180 28180 F DEBUG   :       #06 pc 000000000041bb58  /apex/com.android.btservices/lib64/libbluetooth_jni.so (void base::internal::FunctorTraits<void (bluetooth::hci::HciLayer::impl::*)(bluetooth::hci::EventView), void>::Invoke<void (bluetooth::hci::HciLayer::impl::*)(bluetooth::hci::EventView), bluetooth::hci::HciLayer::impl*, bluetooth::hci::EventView>(void (bluetooth::hci::HciLayer::impl::*)(bluetooth::hci::EventView), bluetooth::hci::HciLayer::impl*&&, bluetooth::hci::EventView&&)+296) (BuildId: 33c412b1485cb1ae1c73cfc753b53508)
+09-15 03:22:05.205 28180 28180 F DEBUG   :       #07 pc 000000000041ba04  /apex/com.android.btservices/lib64/libbluetooth_jni.so (base::internal::Invoker<base::internal::BindState<void (bluetooth::hci::HciLayer::impl::*)(bluetooth::hci::EventView), base::internal::UnretainedWrapper<bluetooth::hci::HciLayer::impl>, bluetooth::hci::EventView>, void ()>::RunOnce(base::internal::BindStateBase*)+56) (BuildId: 33c412b1485cb1ae1c73cfc753b53508)
+09-15 03:22:05.205 28180 28180 F DEBUG   :       #08 pc 000000000040faf8  /apex/com.android.btservices/lib64/libbluetooth_jni.so (bluetooth::os::Handler::handle_next_event()+228) (BuildId: 33c412b1485cb1ae1c73cfc753b53508)
+09-15 03:22:05.205 28180 28180 F DEBUG   :       #09 pc 0000000000410924  /apex/com.android.btservices/lib64/libbluetooth_jni.so (bluetooth::os::Reactor::Run()+512) (BuildId: 33c412b1485cb1ae1c73cfc753b53508)
+09-15 03:22:05.205 28180 28180 F DEBUG   :       #10 pc 00000000004100f0  /apex/com.android.btservices/lib64/libbluetooth_jni.so (bluetooth::os::Thread::run(bluetooth::os::Thread::Priority)+176) (BuildId: 33c412b1485cb1ae1c73cfc753b53508)
+09-15 03:22:05.205 28180 28180 F DEBUG   :       #11 pc 0000000000410278  /apex/com.android.btservices/lib64/libbluetooth_jni.so (void* std::__1::__thread_proxy<std::__1::tuple<std::__1::unique_ptr<std::__1::__thread_struct, std::__1::default_delete<std::__1::__thread_struct> >, void (bluetooth::os::Thread::*)(bluetooth::os::Thread::Priority), bluetooth::os::Thread*, bluetooth::os::Thread::Priority> >(void*)+68) (BuildId: 33c412b1485cb1ae1c73cfc753b53508)
+09-15 03:22:05.205 28180 28180 F DEBUG   :       #12 pc 000000000006ac54  /apex/com.android.runtime/lib64/bionic/libc.so (__pthread_start(void*)+208) (BuildId: 10f6580e623cb20b4044f6e6a4103b34)
+09-15 03:22:05.205 28180 28180 F DEBUG   :       #13 pc 000000000005de68  /apex/com.android.runtime/lib64/bionic/libc.so (__start_thread+64) (BuildId: 10f6580e623cb20b4044f6e6a4103b34)
+09-15 04:42:01.011  3237  3237 F libc    : Fatal signal 6 (SIGABRT), code -1 (SI_QUEUE) in tid 3237 (android.hardwar), pid 3237 (android.hardwar)
+09-15 04:42:01.070 30750 30750 F DEBUG   : *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***
+09-15 04:42:01.070 30750 30750 F DEBUG   : Build fingerprint: 'google/sdk_gwear_arm64/emu64a:14/AW2A.240422.007.E8/12230326:userdebug/dev-keys'
+09-15 04:42:01.070 30750 30750 F DEBUG   : Revision: '0'
+09-15 04:42:01.070 30750 30750 F DEBUG   : ABI: 'arm64'
+09-15 04:42:01.070 30750 30750 F DEBUG   : Timestamp: 2026-09-15 04:42:01.022823100+0800
+09-15 04:42:01.070 30750 30750 F DEBUG   : Process uptime: 0s
+09-15 04:42:01.070 30750 30750 F DEBUG   : Cmdline: /vendor/bin/hw/android.hardware.sensors-service.multihal
+09-15 04:42:01.070 30750 30750 F DEBUG   : pid: 3237, tid: 3237, name: android.hardwar  >>> /vendor/bin/hw/android.hardware.sensors-service.multihal <<<
+09-15 04:42:01.070 30750 30750 F DEBUG   : uid: 1000
+09-15 04:42:01.071 30750 30750 F DEBUG   : tagged_addr_ctrl: 0000000000000001 (PR_TAGGED_ADDR_ENABLE)
+09-15 04:42:01.071 30750 30750 F DEBUG   : pac_enabled_keys: 000000000000000f (PR_PAC_APIAKEY, PR_PAC_APIBKEY, PR_PAC_APDAKEY, PR_PAC_APDBKEY)
+09-15 04:42:01.071 30750 30750 F DEBUG   : signal 6 (SIGABRT), code -1 (SI_QUEUE), fault addr --------
+09-15 04:42:01.071 30750 30750 F DEBUG   : Abort message: 'activationOnChangeSensorEvent:231: unexpected sensor type: 26'
+09-15 04:42:01.071 30750 30750 F DEBUG   :     x0  0000000000000000  x1  0000000000000ca5  x2  0000000000000006  x3  0000007fee4ef4c0
+09-15 04:42:01.071 30750 30750 F DEBUG   :     x4  323139736d647544  x5  323139736d647544  x6  323139736d647544  x7  7f7f7f7f7f7f7f7f
+09-15 04:42:01.071 30750 30750 F DEBUG   :     x8  00000000000000f0  x9  00000075716e4390  x10 ffffff80ffffffdf  x11 fffffffffffffffd
+09-15 04:42:01.071 30750 30750 F DEBUG   :     x12 0000007fee4ef4a0  x13 000000000000003e  x14 0000007fee4ef650  x15 0000044dbcc6d0e9
+09-15 04:42:01.071 30750 30750 F DEBUG   :     x16 000000757178ffe0  x17 000000757177b860  x18 0000007573d68000  x19 0000000000000ca5
+09-15 04:42:01.071 30750 30750 F DEBUG   :     x20 0000000000000ca5  x21 00000000ffffffff  x22 0000000000000010  x23 00000072e09384b0
+09-15 04:42:01.071 30750 30750 F DEBUG   :     x24 b40000740147b900  x25 0000007573774f80  x26 0000000000010000  x27 0000000000000000
+09-15 04:42:01.071 30750 30750 F DEBUG   :     x28 0000007fee4effb0  x29 0000007fee4ef540
+09-15 04:42:01.071 30750 30750 F DEBUG   :     lr  000000757171bad8  sp  0000007fee4ef4a0  pc  000000757171bb08  pst 0000000000000000
+09-15 04:42:01.071 30750 30750 F DEBUG   : 13 total frames
+09-15 04:42:01.071 30750 30750 F DEBUG   : backtrace:
+09-15 04:42:01.071 30750 30750 F DEBUG   :       #00 pc 000000000005ab08  /apex/com.android.runtime/lib64/bionic/libc.so (abort+168) (BuildId: 10f6580e623cb20b4044f6e6a4103b34)
+09-15 04:42:01.071 30750 30750 F DEBUG   :       #01 pc 000000000000684c  /system/lib64/liblog.so (__android_log_default_aborter+12) (BuildId: 0b7d0a1c04ddb251841cfa2a929c819b)
+09-15 04:42:01.071 30750 30750 F DEBUG   :       #02 pc 0000000000007584  /system/lib64/liblog.so (__android_log_assert+292) (BuildId: 0b7d0a1c04ddb251841cfa2a929c819b)
+09-15 04:42:01.071 30750 30750 F DEBUG   :       #03 pc 00000000000097b0  /vendor/lib64/hw/android.hardware.sensors@2.1-impl.ranchu.so (goldfish::MultihalSensors::activationOnChangeSensorEvent(int, android::hardware::sensors::V2_1::SensorInfo const&) const+216) (BuildId: 096019e31d24326baaa935bda237d85d)
+09-15 04:42:01.071 30750 30750 F DEBUG   :       #04 pc 00000000000093a0  /vendor/lib64/hw/android.hardware.sensors@2.1-impl.ranchu.so (goldfish::MultihalSensors::activate(int, bool)+156) (BuildId: 096019e31d24326baaa935bda237d85d)
+09-15 04:42:01.071 30750 30750 F DEBUG   :       #05 pc 000000000001293c  /vendor/bin/hw/android.hardware.sensors-service.multihal (android::hardware::sensors::V2_1::implementation::HalProxy::activate(int, bool)+104) (BuildId: d410a6ddb1dec8e357d9b1f78303993e)
+09-15 04:42:01.071 30750 30750 F DEBUG   :       #06 pc 000000000000c3cc  /vendor/bin/hw/android.hardware.sensors-service.multihal (non-virtual thunk to aidl::android::hardware::sensors::implementation::HalProxyAidl::activate(int, bool)+40) (BuildId: d410a6ddb1dec8e357d9b1f78303993e)
+09-15 04:42:01.071 30750 30750 F DEBUG   :       #07 pc 000000000000e418  /vendor/lib64/android.hardware.sensors-V2-ndk.so (aidl::android::hardware::sensors::_aidl_android_hardware_sensors_ISensors_onTransact(AIBinder*, unsigned int, AParcel const*, AParcel*)+280) (BuildId: b5e0466c52325c16a98eaee9af1bf36f)
+09-15 04:42:01.071 30750 30750 F DEBUG   :       #08 pc 00000000000103ec  /system/lib64/libbinder_ndk.so (ABBinder::onTransact(unsigned int, android::Parcel const&, android::Parcel*, unsigned int)+136) (BuildId: 868b3fa7122333908790ae70c8674026)
+09-15 04:42:01.071 30750 30750 F DEBUG   :       #09 pc 00000000000519f0  /system/lib64/libbinder.so (android::IPCThreadState::executeCommand(int)+1332) (BuildId: e2e17f6a091232208d007c345d0dde98)
+09-15 04:42:01.071 30750 30750 F DEBUG   :       #10 pc 000000000005097c  /system/lib64/libbinder.so (android::IPCThreadState::joinThreadPool(bool)+672) (BuildId: e2e17f6a091232208d007c345d0dde98)
+09-15 04:42:01.071 30750 30750 F DEBUG   :       #11 pc 000000000000ba44  /vendor/bin/hw/android.hardware.sensors-service.multihal (main+340) (BuildId: d410a6ddb1dec8e357d9b1f78303993e)
+09-15 04:42:01.071 30750 30750 F DEBUG   :       #12 pc 0000000000054748  /apex/com.android.runtime/lib64/bionic/libc.so (__libc_init+116) (BuildId: 10f6580e623cb20b4044f6e6a4103b34)
+09-17 04:44:01.018 30756 30756 F libc    : Fatal signal 6 (SIGABRT), code -1 (SI_QUEUE) in tid 30756 (android.hardwar), pid 30756 (android.hardwar)
+09-17 04:44:01.096 23405 23405 F DEBUG   : *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***
+09-17 04:44:01.096 23405 23405 F DEBUG   : Build fingerprint: 'google/sdk_gwear_arm64/emu64a:14/AW2A.240422.007.E8/12230326:userdebug/dev-keys'
+09-17 04:44:01.096 23405 23405 F DEBUG   : Revision: '0'
+09-17 04:44:01.096 23405 23405 F DEBUG   : ABI: 'arm64'
+09-17 04:44:01.096 23405 23405 F DEBUG   : Timestamp: 2026-09-17 04:44:01.044068424+0800
+09-17 04:44:01.096 23405 23405 F DEBUG   : Process uptime: 0s
+09-17 04:44:01.096 23405 23405 F DEBUG   : Cmdline: /vendor/bin/hw/android.hardware.sensors-service.multihal
+09-17 04:44:01.096 23405 23405 F DEBUG   : pid: 30756, tid: 30756, name: android.hardwar  >>> /vendor/bin/hw/android.hardware.sensors-service.multihal <<<
+09-17 04:44:01.096 23405 23405 F DEBUG   : uid: 1000
+09-17 04:44:01.096 23405 23405 F DEBUG   : tagged_addr_ctrl: 0000000000000001 (PR_TAGGED_ADDR_ENABLE)
+09-17 04:44:01.096 23405 23405 F DEBUG   : pac_enabled_keys: 000000000000000f (PR_PAC_APIAKEY, PR_PAC_APIBKEY, PR_PAC_APDAKEY, PR_PAC_APDBKEY)
+09-17 04:44:01.096 23405 23405 F DEBUG   : signal 6 (SIGABRT), code -1 (SI_QUEUE), fault addr --------
+09-17 04:44:01.096 23405 23405 F DEBUG   : Abort message: 'activationOnChangeSensorEvent:231: unexpected sensor type: 26'
+09-17 04:44:01.096 23405 23405 F DEBUG   :     x0  0000000000000000  x1  0000000000007824  x2  0000000000000006  x3  0000007fce14f600
+09-17 04:44:01.096 23405 23405 F DEBUG   :     x4  323139736d647544  x5  323139736d647544  x6  323139736d647544  x7  7f7f7f7f7f7f7f7f
+09-17 04:44:01.096 23405 23405 F DEBUG   :     x8  00000000000000f0  x9  000000733552b390  x10 ffffff80ffffffdf  x11 fffffffffffffffd
+09-17 04:44:01.096 23405 23405 F DEBUG   :     x12 0000007fce14f5e0  x13 000000000000003e  x14 0000007fce14f790  x15 0000081400d4225b
+09-17 04:44:01.096 23405 23405 F DEBUG   :     x16 00000073355d6fe0  x17 00000073355c2860  x18 0000007339df8000  x19 0000000000007824
+09-17 04:44:01.096 23405 23405 F DEBUG   :     x20 0000000000007824  x21 00000000ffffffff  x22 0000000000000010  x23 00000070a469c4b0
+09-17 04:44:01.096 23405 23405 F DEBUG   :     x24 b4000073051ec190  x25 000000733971bf80  x26 0000000000010000  x27 0000000000000000
+09-17 04:44:01.096 23405 23405 F DEBUG   :     x28 0000007fce1500f0  x29 0000007fce14f680
+09-17 04:44:01.096 23405 23405 F DEBUG   :     lr  0000007335562ad8  sp  0000007fce14f5e0  pc  0000007335562b08  pst 0000000000000000
+09-17 04:44:01.096 23405 23405 F DEBUG   : 13 total frames
+09-17 04:44:01.096 23405 23405 F DEBUG   : backtrace:
+09-17 04:44:01.096 23405 23405 F DEBUG   :       #00 pc 000000000005ab08  /apex/com.android.runtime/lib64/bionic/libc.so (abort+168) (BuildId: 10f6580e623cb20b4044f6e6a4103b34)
+09-17 04:44:01.096 23405 23405 F DEBUG   :       #01 pc 000000000000684c  /system/lib64/liblog.so (__android_log_default_aborter+12) (BuildId: 0b7d0a1c04ddb251841cfa2a929c819b)
+09-17 04:44:01.096 23405 23405 F DEBUG   :       #02 pc 0000000000007584  /system/lib64/liblog.so (__android_log_assert+292) (BuildId: 0b7d0a1c04ddb251841cfa2a929c819b)
+09-17 04:44:01.096 23405 23405 F DEBUG   :       #03 pc 00000000000097b0  /vendor/lib64/hw/android.hardware.sensors@2.1-impl.ranchu.so (goldfish::MultihalSensors::activationOnChangeSensorEvent(int, android::hardware::sensors::V2_1::SensorInfo const&) const+216) (BuildId: 096019e31d24326baaa935bda237d85d)
+09-17 04:44:01.096 23405 23405 F DEBUG   :       #04 pc 00000000000093a0  /vendor/lib64/hw/android.hardware.sensors@2.1-impl.ranchu.so (goldfish::MultihalSensors::activate(int, bool)+156) (BuildId: 096019e31d24326baaa935bda237d85d)
+09-17 04:44:01.096 23405 23405 F DEBUG   :       #05 pc 000000000001293c  /vendor/bin/hw/android.hardware.sensors-service.multihal (android::hardware::sensors::V2_1::implementation::HalProxy::activate(int, bool)+104) (BuildId: d410a6ddb1dec8e357d9b1f78303993e)
+09-17 04:44:01.096 23405 23405 F DEBUG   :       #06 pc 000000000000c3cc  /vendor/bin/hw/android.hardware.sensors-service.multihal (non-virtual thunk to aidl::android::hardware::sensors::implementation::HalProxyAidl::activate(int, bool)+40) (BuildId: d410a6ddb1dec8e357d9b1f78303993e)
+09-17 04:44:01.096 23405 23405 F DEBUG   :       #07 pc 000000000000e418  /vendor/lib64/android.hardware.sensors-V2-ndk.so (aidl::android::hardware::sensors::_aidl_android_hardware_sensors_ISensors_onTransact(AIBinder*, unsigned int, AParcel const*, AParcel*)+280) (BuildId: b5e0466c52325c16a98eaee9af1bf36f)
+09-17 04:44:01.096 23405 23405 F DEBUG   :       #08 pc 00000000000103ec  /system/lib64/libbinder_ndk.so (ABBinder::onTransact(unsigned int, android::Parcel const&, android::Parcel*, unsigned int)+136) (BuildId: 868b3fa7122333908790ae70c8674026)
+09-17 04:44:01.096 23405 23405 F DEBUG   :       #09 pc 00000000000519f0  /system/lib64/libbinder.so (android::IPCThreadState::executeCommand(int)+1332) (BuildId: e2e17f6a091232208d007c345d0dde98)
+09-17 04:44:01.096 23405 23405 F DEBUG   :       #10 pc 000000000005097c  /system/lib64/libbinder.so (android::IPCThreadState::joinThreadPool(bool)+672) (BuildId: e2e17f6a091232208d007c345d0dde98)
+09-17 04:44:01.096 23405 23405 F DEBUG   :       #11 pc 000000000000ba44  /vendor/bin/hw/android.hardware.sensors-service.multihal (main+340) (BuildId: d410a6ddb1dec8e357d9b1f78303993e)
+09-17 04:44:01.096 23405 23405 F DEBUG   :       #12 pc 0000000000054748  /apex/com.android.runtime/lib64/bionic/libc.so (__libc_init+116) (BuildId: 10f6580e623cb20b4044f6e6a4103b34)
+09-23 00:23:21.835 28217 28281 F libc    : Fatal signal 6 (SIGABRT), code -1 (SI_QUEUE) in tid 28281 (bt_stack_manage), pid 28217 (droid.bluetooth)
+09-23 00:23:22.332 10123 10123 F DEBUG   : *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***
+09-23 00:23:22.332 10123 10123 F DEBUG   : Build fingerprint: 'google/sdk_gwear_arm64/emu64a:14/AW2A.240422.007.E8/12230326:userdebug/dev-keys'
+09-23 00:23:22.332 10123 10123 F DEBUG   : Revision: '0'
+09-23 00:23:22.332 10123 10123 F DEBUG   : ABI: 'arm64'
+09-23 00:23:22.332 10123 10123 F DEBUG   : Timestamp: 2026-09-23 00:23:21.914786939+0800
+09-23 00:23:22.332 10123 10123 F DEBUG   : Process uptime: 0s
+09-23 00:23:22.332 10123 10123 F DEBUG   : Cmdline: com.google.android.bluetooth
+09-23 00:23:22.332 10123 10123 F DEBUG   : pid: 28217, tid: 28281, name: bt_stack_manage  >>> com.google.android.bluetooth <<<
+09-23 00:23:22.332 10123 10123 F DEBUG   : uid: 1002
+09-23 00:23:22.332 10123 10123 F DEBUG   : tagged_addr_ctrl: 0000000000000001 (PR_TAGGED_ADDR_ENABLE)
+09-23 00:23:22.332 10123 10123 F DEBUG   : pac_enabled_keys: 000000000000000f (PR_PAC_APIAKEY, PR_PAC_APIBKEY, PR_PAC_APDAKEY, PR_PAC_APDBKEY)
+09-23 00:23:22.332 10123 10123 F DEBUG   : signal 6 (SIGABRT), code -1 (SI_QUEUE), fault addr --------
+09-23 00:23:22.332 10123 10123 F DEBUG   : Abort message: 'Hardware Error Event with code 0x42'
+09-23 00:23:22.332 10123 10123 F DEBUG   :     x0  0000000000000000  x1  0000000000006e79  x2  0000000000000006  x3  0000007c56f297d0
+09-23 00:23:22.332 10123 10123 F DEBUG   :     x4  2f1f64636e621f67  x5  2f1f64636e621f67  x6  2f1f64636e621f67  x7  7f7f7f7f7f7f7f7f
+09-23 00:23:22.332 10123 10123 F DEBUG   :     x8  00000000000000f0  x9  0000007f55433390  x10 ffffff80fffffb9f  x11 0000000000000000
+09-23 00:23:22.332 10123 10123 F DEBUG   :     x12 0000007c56f28670  x13 0000000000000024  x14 0000007c56f299e0  x15 000008b3cbae03b8
+09-23 00:23:22.332 10123 10123 F DEBUG   :     x16 0000007f554defe0  x17 0000007f554ca860  x18 0000007c55c08040  x19 0000000000006e39
+09-23 00:23:22.332 10123 10123 F DEBUG   :     x20 0000000000006e79  x21 00000000ffffffff  x22 0000007cbcc30438  x23 0000000000000000
+09-23 00:23:22.332 10123 10123 F DEBUG   :     x24 0000007c56f29f80  x25 0000000000000000  x26 0000007c6009ea10  x27 0000007c600ad2e0
+09-23 00:23:22.332 10123 10123 F DEBUG   :     x28 0000007c56f2aac0  x29 0000007c56f29850
+09-23 00:23:22.332 10123 10123 F DEBUG   :     lr  0000007f5546aad8  sp  0000007c56f297b0  pc  0000007f5546ab08  pst 0000000000000000
+09-23 00:23:22.332 10123 10123 F DEBUG   : 14 total frames
+09-23 00:23:22.332 10123 10123 F DEBUG   : backtrace:
+09-23 00:23:22.332 10123 10123 F DEBUG   :       #00 pc 000000000005ab08  /apex/com.android.runtime/lib64/bionic/libc.so (abort+168) (BuildId: 10f6580e623cb20b4044f6e6a4103b34)
+09-23 00:23:22.332 10123 10123 F DEBUG   :       #01 pc 00000000008ed788  /apex/com.android.art/lib64/libart.so (art::Runtime::Abort(char const*)+88) (BuildId: e80ff12130cade1e1fbcdd24f28a8ca0)
+09-23 00:23:22.332 10123 10123 F DEBUG   :       #02 pc 0000000000017358  /apex/com.android.art/lib64/libbase.so (android::base::SetAborter(std::__1::function<void (char const*)>&&)::$_0::__invoke(char const*)+80) (BuildId: b99b74f03d108d6d85240d1d0cc5efdf)
+09-23 00:23:22.332 10123 10123 F DEBUG   :       #03 pc 0000000000007584  /system/lib64/liblog.so (__android_log_assert+292) (BuildId: 0b7d0a1c04ddb251841cfa2a929c819b)
+09-23 00:23:22.332 10123 10123 F DEBUG   :       #04 pc 000000000041ced0  /apex/com.android.btservices/lib64/libbluetooth_jni.so (bluetooth::hci::HciLayer::impl::on_hardware_error(bluetooth::hci::EventView)+316) (BuildId: 33c412b1485cb1ae1c73cfc753b53508)
+09-23 00:23:22.332 10123 10123 F DEBUG   :       #05 pc 000000000041b5f8  /apex/com.android.btservices/lib64/libbluetooth_jni.so (bluetooth::hci::HciLayer::impl::on_hci_event(bluetooth::hci::EventView)+4392) (BuildId: 33c412b1485cb1ae1c73cfc753b53508)
+09-23 00:23:22.332 10123 10123 F DEBUG   :       #06 pc 000000000041bb58  /apex/com.android.btservices/lib64/libbluetooth_jni.so (void base::internal::FunctorTraits<void (bluetooth::hci::HciLayer::impl::*)(bluetooth::hci::EventView), void>::Invoke<void (bluetooth::hci::HciLayer::impl::*)(bluetooth::hci::EventView), bluetooth::hci::HciLayer::impl*, bluetooth::hci::EventView>(void (bluetooth::hci::HciLayer::impl::*)(bluetooth::hci::EventView), bluetooth::hci::HciLayer::impl*&&, bluetooth::hci::EventView&&)+296) (BuildId: 33c412b1485cb1ae1c73cfc753b53508)
+09-23 00:23:22.332 10123 10123 F DEBUG   :       #07 pc 000000000041ba04  /apex/com.android.btservices/lib64/libbluetooth_jni.so (base::internal::Invoker<base::internal::BindState<void (bluetooth::hci::HciLayer::impl::*)(bluetooth::hci::EventView), base::internal::UnretainedWrapper<bluetooth::hci::HciLayer::impl>, bluetooth::hci::EventView>, void ()>::RunOnce(base::internal::BindStateBase*)+56) (BuildId: 33c412b1485cb1ae1c73cfc753b53508)
+09-23 00:23:22.332 10123 10123 F DEBUG   :       #08 pc 000000000040faf8  /apex/com.android.btservices/lib64/libbluetooth_jni.so (bluetooth::os::Handler::handle_next_event()+228) (BuildId: 33c412b1485cb1ae1c73cfc753b53508)
+09-23 00:23:22.332 10123 10123 F DEBUG   :       #09 pc 0000000000410924  /apex/com.android.btservices/lib64/libbluetooth_jni.so (bluetooth::os::Reactor::Run()+512) (BuildId: 33c412b1485cb1ae1c73cfc753b53508)
+09-23 00:23:22.332 10123 10123 F DEBUG   :       #10 pc 00000000004100f0  /apex/com.android.btservices/lib64/libbluetooth_jni.so (bluetooth::os::Thread::run(bluetooth::os::Thread::Priority)+176) (BuildId: 33c412b1485cb1ae1c73cfc753b53508)
+09-23 00:23:22.332 10123 10123 F DEBUG   :       #11 pc 0000000000410278  /apex/com.android.btservices/lib64/libbluetooth_jni.so (void* std::__1::__thread_proxy<std::__1::tuple<std::__1::unique_ptr<std::__1::__thread_struct, std::__1::default_delete<std::__1::__thread_struct> >, void (bluetooth::os::Thread::*)(bluetooth::os::Thread::Priority), bluetooth::os::Thread*, bluetooth::os::Thread::Priority> >(void*)+68) (BuildId: 33c412b1485cb1ae1c73cfc753b53508)
+09-23 00:23:22.332 10123 10123 F DEBUG   :       #12 pc 000000000006ac54  /apex/com.android.runtime/lib64/bionic/libc.so (__pthread_start(void*)+208) (BuildId: 10f6580e623cb20b4044f6e6a4103b34)
+09-23 00:23:22.332 10123 10123 F DEBUG   :       #13 pc 000000000005de68  /apex/com.android.runtime/lib64/bionic/libc.so (__start_thread+64) (BuildId: 10f6580e623cb20b4044f6e6a4103b34)
+09-23 00:31:53.794 10159 10187 F libc    : Fatal signal 6 (SIGABRT), code -1 (SI_QUEUE) in tid 10187 (bt_stack_manage), pid 10159 (droid.bluetooth)
+09-23 00:31:54.041 10525 10525 F DEBUG   : *** *** *** *** *** *** *** *** *** *** *** *** *** *** *** ***
+09-23 00:31:54.041 10525 10525 F DEBUG   : Build fingerprint: 'google/sdk_gwear_arm64/emu64a:14/AW2A.240422.007.E8/12230326:userdebug/dev-keys'
+09-23 00:31:54.041 10525 10525 F DEBUG   : Revision: '0'
+09-23 00:31:54.041 10525 10525 F DEBUG   : ABI: 'arm64'
+09-23 00:31:54.041 10525 10525 F DEBUG   : Timestamp: 2026-09-23 00:31:53.851757254+0800
+09-23 00:31:54.041 10525 10525 F DEBUG   : Process uptime: 0s
+09-23 00:31:54.041 10525 10525 F DEBUG   : Cmdline: com.google.android.bluetooth
+09-23 00:31:54.041 10525 10525 F DEBUG   : pid: 10159, tid: 10187, name: bt_stack_manage  >>> com.google.android.bluetooth <<<
+09-23 00:31:54.041 10525 10525 F DEBUG   : uid: 1002
+09-23 00:31:54.041 10525 10525 F DEBUG   : tagged_addr_ctrl: 0000000000000001 (PR_TAGGED_ADDR_ENABLE)
+09-23 00:31:54.041 10525 10525 F DEBUG   : pac_enabled_keys: 000000000000000f (PR_PAC_APIAKEY, PR_PAC_APIBKEY, PR_PAC_APDAKEY, PR_PAC_APDBKEY)
+09-23 00:31:54.041 10525 10525 F DEBUG   : signal 6 (SIGABRT), code -1 (SI_QUEUE), fault addr --------
+09-23 00:31:54.041 10525 10525 F DEBUG   : Abort message: 'Hardware Error Event with code 0x42'
+09-23 00:31:54.041 10525 10525 F DEBUG   :     x0  0000000000000000  x1  00000000000027cb  x2  0000000000000006  x3  0000007c566867d0
+09-23 00:31:54.041 10525 10525 F DEBUG   :     x4  2f1f64636e621f67  x5  2f1f64636e621f67  x6  2f1f64636e621f67  x7  7f7f7f7f7f7f7f7f
+09-23 00:31:54.041 10525 10525 F DEBUG   :     x8  00000000000000f0  x9  0000007f55433390  x10 ffffff80fffffb9f  x11 0000000000000000
+09-23 00:31:54.041 10525 10525 F DEBUG   :     x12 0000007c56685670  x13 0000000000000024  x14 0000007c566869e0  x15 000008b67ecc674b
+09-23 00:31:54.041 10525 10525 F DEBUG   :     x16 0000007f554defe0  x17 0000007f554ca860  x18 0000007c55f14040  x19 00000000000027af
+09-23 00:31:54.041 10525 10525 F DEBUG   :     x20 00000000000027cb  x21 00000000ffffffff  x22 0000007cbcc30438  x23 0000000000000000
+09-23 00:31:54.041 10525 10525 F DEBUG   :     x24 0000007c56686f80  x25 0000000000000000  x26 0000007c611ada10  x27 0000007c611bc2e0
+09-23 00:31:54.041 10525 10525 F DEBUG   :     x28 0000007c56687ac0  x29 0000007c56686850
+09-23 00:31:54.041 10525 10525 F DEBUG   :     lr  0000007f5546aad8  sp  0000007c566867b0  pc  0000007f5546ab08  pst 0000000000000000
+09-23 00:31:54.041 10525 10525 F DEBUG   : 14 total frames
+09-23 00:31:54.041 10525 10525 F DEBUG   : backtrace:
+09-23 00:31:54.042 10525 10525 F DEBUG   :       #00 pc 000000000005ab08  /apex/com.android.runtime/lib64/bionic/libc.so (abort+168) (BuildId: 10f6580e623cb20b4044f6e6a4103b34)
+09-23 00:31:54.042 10525 10525 F DEBUG   :       #01 pc 00000000008ed788  /apex/com.android.art/lib64/libart.so (art::Runtime::Abort(char const*)+88) (BuildId: e80ff12130cade1e1fbcdd24f28a8ca0)
+09-23 00:31:54.042 10525 10525 F DEBUG   :       #02 pc 0000000000017358  /apex/com.android.art/lib64/libbase.so (android::base::SetAborter(std::__1::function<void (char const*)>&&)::$_0::__invoke(char const*)+80) (BuildId: b99b74f03d108d6d85240d1d0cc5efdf)
+09-23 00:31:54.042 10525 10525 F DEBUG   :       #03 pc 0000000000007584  /system/lib64/liblog.so (__android_log_assert+292) (BuildId: 0b7d0a1c04ddb251841cfa2a929c819b)
+09-23 00:31:54.042 10525 10525 F DEBUG   :       #04 pc 000000000041ced0  /apex/com.android.btservices/lib64/libbluetooth_jni.so (bluetooth::hci::HciLayer::impl::on_hardware_error(bluetooth::hci::EventView)+316) (BuildId: 33c412b1485cb1ae1c73cfc753b53508)
+09-23 00:31:54.042 10525 10525 F DEBUG   :       #05 pc 000000000041b5f8  /apex/com.android.btservices/lib64/libbluetooth_jni.so (bluetooth::hci::HciLayer::impl::on_hci_event(bluetooth::hci::EventView)+4392) (BuildId: 33c412b1485cb1ae1c73cfc753b53508)
+09-23 00:31:54.042 10525 10525 F DEBUG   :       #06 pc 000000000041bb58  /apex/com.android.btservices/lib64/libbluetooth_jni.so (void base::internal::FunctorTraits<void (bluetooth::hci::HciLayer::impl::*)(bluetooth::hci::EventView), void>::Invoke<void (bluetooth::hci::HciLayer::impl::*)(bluetooth::hci::EventView), bluetooth::hci::HciLayer::impl*, bluetooth::hci::EventView>(void (bluetooth::hci::HciLayer::impl::*)(bluetooth::hci::EventView), bluetooth::hci::HciLayer::impl*&&, bluetooth::hci::EventView&&)+296) (BuildId: 33c412b1485cb1ae1c73cfc753b53508)
+09-23 00:31:54.042 10525 10525 F DEBUG   :       #07 pc 000000000041ba04  /apex/com.android.btservices/lib64/libbluetooth_jni.so (base::internal::Invoker<base::internal::BindState<void (bluetooth::hci::HciLayer::impl::*)(bluetooth::hci::EventView), base::internal::UnretainedWrapper<bluetooth::hci::HciLayer::impl>, bluetooth::hci::EventView>, void ()>::RunOnce(base::internal::BindStateBase*)+56) (BuildId: 33c412b1485cb1ae1c73cfc753b53508)
+09-23 00:31:54.042 10525 10525 F DEBUG   :       #08 pc 000000000040faf8  /apex/com.android.btservices/lib64/libbluetooth_jni.so (bluetooth::os::Handler::handle_next_event()+228) (BuildId: 33c412b1485cb1ae1c73cfc753b53508)
+09-23 00:31:54.042 10525 10525 F DEBUG   :       #09 pc 0000000000410924  /apex/com.android.btservices/lib64/libbluetooth_jni.so (bluetooth::os::Reactor::Run()+512) (BuildId: 33c412b1485cb1ae1c73cfc753b53508)
+09-23 00:31:54.042 10525 10525 F DEBUG   :       #10 pc 00000000004100f0  /apex/com.android.btservices/lib64/libbluetooth_jni.so (bluetooth::os::Thread::run(bluetooth::os::Thread::Priority)+176) (BuildId: 33c412b1485cb1ae1c73cfc753b53508)
+09-23 00:31:54.042 10525 10525 F DEBUG   :       #11 pc 0000000000410278  /apex/com.android.btservices/lib64/libbluetooth_jni.so (void* std::__1::__thread_proxy<std::__1::tuple<std::__1::unique_ptr<std::__1::__thread_struct, std::__1::default_delete<std::__1::__thread_struct> >, void (bluetooth::os::Thread::*)(bluetooth::os::Thread::Priority), bluetooth::os::Thread*, bluetooth::os::Thread::Priority> >(void*)+68) (BuildId: 33c412b1485cb1ae1c73cfc753b53508)
+09-23 00:31:54.042 10525 10525 F DEBUG   :       #12 pc 000000000006ac54  /apex/com.android.runtime/lib64/bionic/libc.so (__pthread_start(void*)+208) (BuildId: 10f6580e623cb20b4044f6e6a4103b34)
+09-23 00:31:54.042 10525 10525 F DEBUG   :       #13 pc 000000000005de68  /apex/com.android.runtime/lib64/bionic/libc.so (__start_thread+64) (BuildId: 10f6580e623cb20b4044f6e6a4103b34)

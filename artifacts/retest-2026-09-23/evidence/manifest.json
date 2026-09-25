@@ -1,0 +1,410 @@
+[
+  {
+    "file": "about-bottom.png",
+    "sha256": "0397a26a219cd07ee6f788184f5fa6919c1157bb53cc5c873c12f6c1467072cf",
+    "capture_local_time": "2026-09-23 01:17:54",
+    "time_zone": "Asia/Shanghai",
+    "raw_size": [
+      1330,
+      768
+    ],
+    "crop_box": [
+      903,
+      239,
+      1261,
+      598
+    ],
+    "used_in_report": true
+  },
+  {
+    "file": "account-unbound.png",
+    "sha256": "4cf989c294da1f6bc87893e7bcb77564c657559bf09392195c0f99e0cd114ef5",
+    "capture_local_time": "2026-09-23 01:08:35",
+    "time_zone": "Asia/Shanghai",
+    "raw_size": [
+      1330,
+      768
+    ],
+    "crop_box": [
+      903,
+      239,
+      1261,
+      598
+    ],
+    "used_in_report": true
+  },
+  {
+    "file": "advanced-settings.png",
+    "sha256": "6e3d1e41cd4f3c90d0084baa4726bb586a889db4fc234a6fd612baf7d09c12ef",
+    "capture_local_time": "2026-09-23 01:13:58",
+    "time_zone": "Asia/Shanghai",
+    "raw_size": [
+      1330,
+      768
+    ],
+    "crop_box": [
+      903,
+      239,
+      1261,
+      598
+    ],
+    "used_in_report": true
+  },
+  {
+    "file": "agreement-registration.png",
+    "sha256": "82385769775a82a6d7a38d4cd1a2d13bc5206e33aef4b5e39c168852b7b90a17",
+    "capture_local_time": "2026-09-23 01:16:09",
+    "time_zone": "Asia/Shanghai",
+    "raw_size": [
+      1330,
+      768
+    ],
+    "crop_box": [
+      903,
+      239,
+      1261,
+      598
+    ],
+    "used_in_report": true
+  },
+  {
+    "file": "autoscroll-settings.png",
+    "sha256": "ae4d7b30d0ddacc69d2520cbe4df4435da2e661643dc4ba96effe7b1dbc3b4da",
+    "capture_local_time": "2026-09-23 01:12:08",
+    "time_zone": "Asia/Shanghai",
+    "raw_size": [
+      1330,
+      768
+    ],
+    "crop_box": [
+      903,
+      239,
+      1261,
+      598
+    ],
+    "used_in_report": true
+  },
+  {
+    "file": "bili-background-option.png",
+    "sha256": "4829a58fdc202214cf078baf3135cd02f3b96e600ab94b0acc42665b1349cae7",
+    "capture_local_time": "2026-09-23 01:02:19",
+    "time_zone": "Asia/Shanghai",
+    "raw_size": [
+      1330,
+      768
+    ],
+    "crop_box": [
+      903,
+      239,
+      1261,
+      598
+    ],
+    "used_in_report": false
+  },
+  {
+    "file": "bili-detail-title.png",
+    "sha256": "b26e1aba8d977471a772049d3a0b086a228d02b7c77737d1785b2f2bf7d51128",
+    "capture_local_time": "2026-09-23 00:55:07",
+    "time_zone": "Asia/Shanghai",
+    "raw_size": [
+      1330,
+      768
+    ],
+    "crop_box": [
+      903,
+      239,
+      1261,
+      598
+    ],
+    "used_in_report": true
+  },
+  {
+    "file": "bili-favorites.png",
+    "sha256": "5eea7c3d7d2b71359edcb5cd795492f719a92dbabbef2064806d2169720e27ca",
+    "capture_local_time": "2026-09-23 01:05:09",
+    "time_zone": "Asia/Shanghai",
+    "raw_size": [
+      1330,
+      768
+    ],
+    "crop_box": [
+      903,
+      239,
+      1261,
+      598
+    ],
+    "used_in_report": true
+  },
+  {
+    "file": "bili-logout-entry.png",
+    "sha256": "d96fded1fcdb1f9af0af3f4185fd042a93b84d8f01888b952f4e83d9f76b0b43",
+    "capture_local_time": "2026-09-23 01:02:35",
+    "time_zone": "Asia/Shanghai",
+    "raw_size": [
+      1330,
+      768
+    ],
+    "crop_box": [
+      903,
+      239,
+      1261,
+      598
+    ],
+    "used_in_report": true
+  },
+  {
+    "file": "bili-player-paused.png",
+    "sha256": "7d07c56b802a638fe6cee87040e0a1f53443407c4dd3f198f62673d3625ef282",
+    "capture_local_time": "2026-09-23 00:58:19",
+    "time_zone": "Asia/Shanghai",
+    "raw_size": [
+      1330,
+      768
+    ],
+    "crop_box": [
+      903,
+      239,
+      1261,
+      598
+    ],
+    "used_in_report": true
+  },
+  {
+    "file": "bili-rotation-direct.png",
+    "sha256": "5e1d24906976c5b56b9a31345cd98ea16431f2be612f6865e2f9da1314f31109",
+    "capture_local_time": "2026-09-23 00:59:22",
+    "time_zone": "Asia/Shanghai",
+    "raw_size": [
+      1330,
+      768
+    ],
+    "crop_box": [
+      903,
+      239,
+      1261,
+      598
+    ],
+    "used_in_report": true
+  },
+  {
+    "file": "bili-search-empty.png",
+    "sha256": "3d9b5179e03bff8dce9e2bb4a8707b728d6ace4bc331a519a0287370ea72a4cb",
+    "capture_local_time": "2026-09-23 01:03:46",
+    "time_zone": "Asia/Shanghai",
+    "raw_size": [
+      1330,
+      768
+    ],
+    "crop_box": [
+      903,
+      239,
+      1261,
+      598
+    ],
+    "used_in_report": true
+  },
+  {
+    "file": "connect-phone.png",
+    "sha256": "630ef40e10110b6dc086302e4ac3c1cc87d0af8dfb88040510819fd774cb7dd8",
+    "capture_local_time": "2026-09-23 01:09:18",
+    "time_zone": "Asia/Shanghai",
+    "raw_size": [
+      1330,
+      768
+    ],
+    "crop_box": [
+      903,
+      239,
+      1261,
+      598
+    ],
+    "used_in_report": true
+  },
+  {
+    "file": "global-settings.png",
+    "sha256": "46db2f8da8a1d4ae9d60ca01b92548fe3abf16b4163b5c458151f2f4c0979e67",
+    "capture_local_time": "2026-09-23 01:09:47",
+    "time_zone": "Asia/Shanghai",
+    "raw_size": [
+      1330,
+      768
+    ],
+    "crop_box": [
+      903,
+      239,
+      1261,
+      598
+    ],
+    "used_in_report": true
+  },
+  {
+    "file": "home.png",
+    "sha256": "a1fb098b2194d8a81d3d4e80be1c1dabede60fb11ceb6a17a33f13766e1257c5",
+    "capture_local_time": "2026-09-23 01:18:42",
+    "time_zone": "Asia/Shanghai",
+    "raw_size": [
+      1330,
+      768
+    ],
+    "crop_box": [
+      903,
+      239,
+      1261,
+      598
+    ],
+    "used_in_report": true
+  },
+  {
+    "file": "my-bottom.png",
+    "sha256": "24885ec20645ca7634004bdbe8fad10dcbd5f965ad6bd50e2ad94b584ea98ca8",
+    "capture_local_time": "2026-09-23 01:14:21",
+    "time_zone": "Asia/Shanghai",
+    "raw_size": [
+      1330,
+      768
+    ],
+    "crop_box": [
+      903,
+      239,
+      1261,
+      598
+    ],
+    "used_in_report": false
+  },
+  {
+    "file": "my-top.png",
+    "sha256": "a1819da5b67a5ce22b7d8f78d4e27dab470b2195378777e1c50a434165eb9c24",
+    "capture_local_time": "2026-09-23 01:07:36",
+    "time_zone": "Asia/Shanghai",
+    "raw_size": [
+      1330,
+      768
+    ],
+    "crop_box": [
+      903,
+      239,
+      1261,
+      598
+    ],
+    "used_in_report": true
+  },
+  {
+    "file": "note-detail.png",
+    "sha256": "a4b365b817aa255ae405616128e125f2ea7144aecc239cea202a90473d475f98",
+    "capture_local_time": "2026-09-23 01:19:29",
+    "time_zone": "Asia/Shanghai",
+    "raw_size": [
+      1330,
+      768
+    ],
+    "crop_box": [
+      903,
+      239,
+      1261,
+      598
+    ],
+    "used_in_report": true
+  },
+  {
+    "file": "note-edit.png",
+    "sha256": "a2de0dbe2c6ca9a2511607e5138aec60d1d5d04e44467de40817690f91991f9a",
+    "capture_local_time": "2026-09-23 01:19:55",
+    "time_zone": "Asia/Shanghai",
+    "raw_size": [
+      1330,
+      768
+    ],
+    "crop_box": [
+      903,
+      239,
+      1261,
+      598
+    ],
+    "used_in_report": true
+  },
+  {
+    "file": "note-list.png",
+    "sha256": "5aacf094990f3350b604d80a08982d8412a8a6a4016c9ecacf924cdb3163afa9",
+    "capture_local_time": "2026-09-23 01:19:05",
+    "time_zone": "Asia/Shanghai",
+    "raw_size": [
+      1330,
+      768
+    ],
+    "crop_box": [
+      903,
+      239,
+      1261,
+      598
+    ],
+    "used_in_report": true
+  },
+  {
+    "file": "privacy-open.png",
+    "sha256": "edfcaf8d093e2c546385fb225803cda9810ce3f23f6d03f83a6ed0139166f80d",
+    "capture_local_time": "2026-09-23 01:15:01",
+    "time_zone": "Asia/Shanghai",
+    "raw_size": [
+      1330,
+      768
+    ],
+    "crop_box": [
+      903,
+      239,
+      1261,
+      598
+    ],
+    "used_in_report": true
+  },
+  {
+    "file": "reader-preset-top.png",
+    "sha256": "8cf4a5f40ed35b56c8bcd2a4c186812fa1b622e86d74c610c7e755abc33c790e",
+    "capture_local_time": "2026-09-23 01:10:11",
+    "time_zone": "Asia/Shanghai",
+    "raw_size": [
+      1330,
+      768
+    ],
+    "crop_box": [
+      903,
+      239,
+      1261,
+      598
+    ],
+    "used_in_report": false
+  },
+  {
+    "file": "reader-theme-modes.png",
+    "sha256": "431266d11b21dd12ebd059f935e93cf27d7a479421efa7f41f337484f07b6f8f",
+    "capture_local_time": "2026-09-23 01:10:35",
+    "time_zone": "Asia/Shanghai",
+    "raw_size": [
+      1330,
+      768
+    ],
+    "crop_box": [
+      903,
+      239,
+      1261,
+      598
+    ],
+    "used_in_report": true
+  },
+  {
+    "file": "tts-settings.png",
+    "sha256": "99f805a6344d8376243684fc83ac21020ccaa9e09b77ccfbdaf0908c3cc4ee79",
+    "capture_local_time": "2026-09-23 01:11:23",
+    "time_zone": "Asia/Shanghai",
+    "raw_size": [
+      1330,
+      768
+    ],
+    "crop_box": [
+      903,
+      239,
+      1261,
+      598
+    ],
+    "used_in_report": true
+  }
+]

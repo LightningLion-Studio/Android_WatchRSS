@@ -1,0 +1,17 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="com.lightningstudio.watchrss.ui.screen.bili.BiliCoverRecoveryTest" tests="9" failures="0" errors="0" skipped="0" time="13.806" timestamp="2026-09-22T19:18:00" hostname="localhost">
+  <properties>
+    <property name="device" value="WatchRSS_OPPO_Watch_X2(AVD) - 14" />
+    <property name="flavor" value="" />
+    <property name="project" value=":app" />
+  </properties>
+  <testcase name="changingUrl_cancelsStaleResult_andShowsLoading" classname="com.lightningstudio.watchrss.ui.screen.bili.BiliCoverRecoveryTest" time="0.624" />
+  <testcase name="realHttpFailure_manualRetryRecovers_sameUrl_withoutOpeningVideo" classname="com.lightningstudio.watchrss.ui.screen.bili.BiliCoverRecoveryTest" time="0.563" />
+  <testcase name="realHttpTimeout_exposesRetry_andThenRecovers" classname="com.lightningstudio.watchrss.ui.screen.bili.BiliCoverRecoveryTest" time="10.283" />
+  <testcase name="scrollingDefersLoading_andEmptyUrlDoesNotRequest" classname="com.lightningstudio.watchrss.ui.screen.bili.BiliCoverRecoveryTest" time="0.29" />
+  <testcase name="simultaneousSameUrlLoads_shareCacheWithoutRacingTemporaryFile" classname="com.lightningstudio.watchrss.ui.screen.bili.BiliCoverRecoveryTest" time="0.233" />
+  <testcase name="offlineThenRecovery_reloadsFailedCoverAutomatically" classname="com.lightningstudio.watchrss.ui.screen.bili.BiliCoverRecoveryTest" time="0.222" />
+  <testcase name="sharedCardRecoveryIsOptIn_otherModulesKeepTheirLoader" classname="com.lightningstudio.watchrss.ui.screen.bili.BiliCoverRecoveryTest" time="0.23" />
+  <testcase name="switchingBetweenOnlineNetworks_retriesOnceWithoutPolling" classname="com.lightningstudio.watchrss.ui.screen.bili.BiliCoverRecoveryTest" time="0.278" />
+  <testcase name="actualDefaultNetworkLossAndRecovery_refreshesCoverWithoutTap" classname="com.lightningstudio.watchrss.ui.screen.bili.BiliCoverNetworkDeviceTest" time="0.794" />
+</testsuite>

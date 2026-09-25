@@ -1,0 +1,40 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="com.lightningstudio.watchrss.ui.reader.ReaderBackgroundCoverageTest" tests="4" failures="4" errors="0" skipped="0" time="3.982" timestamp="2026-09-22T19:45:46" hostname="localhost">
+  <properties>
+    <property name="device" value="WatchRSS_OPPO_Watch_X2(AVD) - 14" />
+    <property name="flavor" value="" />
+    <property name="project" value=":app" />
+  </properties>
+  <testcase name="longLightNovel_largeFont_bottomBackgroundRemainsCovered" classname="com.lightningstudio.watchrss.ui.reader.ReaderBackgroundCoverageTest" time="1.708">
+    <failure>java.lang.AssertionError: Bottom must retain paper background while overscrolling: actual=Color(0.0, 0.0, 0.0, 1.0, sRGB IEC61966-2.1) expected=Color(0.9411765, 0.90588236, 0.84705883, 1.0, sRGB IEC61966-2.1)
+at org.junit.Assert.fail(Assert.java:89)
+at org.junit.Assert.assertTrue(Assert.java:42)
+at com.lightningstudio.watchrss.ui.reader.ReaderBackgroundCoverageTest.checkCoverage(ReaderBackgroundCoverageTest.kt:77)
+at com.lightningstudio.watchrss.ui.reader.ReaderBackgroundCoverageTest.longLightNovel_largeFont_bottomBackgroundRemainsCovered(ReaderBackgroundCoverageTest.kt:33)
+</failure>
+  </testcase>
+  <testcase name="shortDarkNovel_bottomBackgroundRemainsCovered" classname="com.lightningstudio.watchrss.ui.reader.ReaderBackgroundCoverageTest" time="0.554">
+    <failure>java.lang.AssertionError: Bottom must retain paper background while overscrolling: actual=Color(0.0, 0.0, 0.0, 1.0, sRGB IEC61966-2.1) expected=Color(0.14117648, 0.1882353, 0.23137255, 1.0, sRGB IEC61966-2.1)
+at org.junit.Assert.fail(Assert.java:89)
+at org.junit.Assert.assertTrue(Assert.java:42)
+at com.lightningstudio.watchrss.ui.reader.ReaderBackgroundCoverageTest.checkCoverage(ReaderBackgroundCoverageTest.kt:77)
+at com.lightningstudio.watchrss.ui.reader.ReaderBackgroundCoverageTest.shortDarkNovel_bottomBackgroundRemainsCovered(ReaderBackgroundCoverageTest.kt:34)
+</failure>
+  </testcase>
+  <testcase name="shortLightRss_bottomBackgroundRemainsCovered" classname="com.lightningstudio.watchrss.ui.reader.ReaderBackgroundCoverageTest" time="0.653">
+    <failure>java.lang.AssertionError: Bottom must retain paper background while overscrolling: actual=Color(0.0, 0.0, 0.0, 1.0, sRGB IEC61966-2.1) expected=Color(0.9411765, 0.90588236, 0.84705883, 1.0, sRGB IEC61966-2.1)
+at org.junit.Assert.fail(Assert.java:89)
+at org.junit.Assert.assertTrue(Assert.java:42)
+at com.lightningstudio.watchrss.ui.reader.ReaderBackgroundCoverageTest.checkCoverage(ReaderBackgroundCoverageTest.kt:77)
+at com.lightningstudio.watchrss.ui.reader.ReaderBackgroundCoverageTest.shortLightRss_bottomBackgroundRemainsCovered(ReaderBackgroundCoverageTest.kt:32)
+</failure>
+  </testcase>
+  <testcase name="longDarkRss_bottomBackgroundRemainsCovered" classname="com.lightningstudio.watchrss.ui.reader.ReaderBackgroundCoverageTest" time="0.821">
+    <failure>java.lang.AssertionError: Bottom must retain paper background while overscrolling: actual=Color(0.0, 0.0, 0.0, 1.0, sRGB IEC61966-2.1) expected=Color(0.14117648, 0.1882353, 0.23137255, 1.0, sRGB IEC61966-2.1)
+at org.junit.Assert.fail(Assert.java:89)
+at org.junit.Assert.assertTrue(Assert.java:42)
+at com.lightningstudio.watchrss.ui.reader.ReaderBackgroundCoverageTest.checkCoverage(ReaderBackgroundCoverageTest.kt:77)
+at com.lightningstudio.watchrss.ui.reader.ReaderBackgroundCoverageTest.longDarkRss_bottomBackgroundRemainsCovered(ReaderBackgroundCoverageTest.kt:35)
+</failure>
+  </testcase>
+</testsuite>

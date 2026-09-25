@@ -370,6 +370,7 @@ private fun BiliFeedItemEntry(
                     .background(Color.Black)
             )
             BiliFeedCard(
+                coverRecoveryEnabled = true,
                 title = item.title.orEmpty(),
                 summary = summary,
                 coverUrl = item.cover,

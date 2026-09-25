@@ -10,7 +10,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -58,7 +57,7 @@ fun InitialAppTransparencyDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onAcknowledge) { Text("我已了解") }
+            WatchTextButton(onClick = onAcknowledge) { Text("我已了解") }
         }
     )
 }
@@ -187,7 +186,7 @@ fun ThirdPartyPlatformConfirmationDialog(
             )
         },
         confirmButton = {
-            TextButton(onClick = onConfirm) { Text("知道了，继续") }
+            WatchTextButton(onClick = onConfirm) { Text("知道了，继续") }
         }
     )
 }

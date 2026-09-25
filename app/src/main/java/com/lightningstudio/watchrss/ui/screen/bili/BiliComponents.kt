@@ -41,6 +41,7 @@ import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.util.RssImageLoader
 import java.util.Locale
@@ -114,12 +115,8 @@ fun BiliVideoCard(
                 .background(MaterialTheme.colorScheme.surface),
             contentAlignment = Alignment.Center
         ) {
-            val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, coverUrl, maxWidthPx) {
-                value = if (coverUrl.isNullOrBlank()) null else {
-                    RssImageLoader.loadBitmap(context = context, url = coverUrl, maxWidthPx = maxWidthPx)
-                }
-            }
-            val safeBitmap = bitmap
+            val recovery = rememberBiliCover(coverUrl, maxWidthPx)
+            val safeBitmap = recovery.bitmap
             if (safeBitmap != null) {
                 Image(
                     bitmap = safeBitmap.asImageBitmap(),
@@ -134,6 +131,7 @@ fun BiliVideoCard(
                 tint = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.size(watchDimensionResource(R.dimen.hey_listitem_widget_size))
             )
+            BiliCoverFeedback(recovery, Modifier.align(Alignment.TopCenter).padding(6.dp))
             if (durationText != null) {
                 Box(
                     modifier = Modifier
@@ -180,7 +178,8 @@ fun BiliFeedCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     onLongClick: (() -> Unit)? = null,
-    interactionSource: MutableInteractionSource? = null
+    interactionSource: MutableInteractionSource? = null,
+    coverRecoveryEnabled: Boolean = false
 ) {
     val background = MaterialTheme.colorScheme.surface
     val shape = RoundedCornerShape(watchDimensionResource(R.dimen.hey_card_normal_bg_radius))
@@ -207,10 +206,15 @@ fun BiliFeedCard(
                 interactionSource = resolvedInteractionSource
             )
     ) {
-        val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, coverUrl, maxWidthPx) {
-            value = if (coverUrl.isNullOrBlank()) null else {
-                RssImageLoader.loadBitmap(context, coverUrl, maxWidthPx)
+        // This card is also used by Douyin: recovery is explicitly enabled only by Bili.
+        val recovery = if (coverRecoveryEnabled) rememberBiliCover(coverUrl, maxWidthPx) else null
+        val bitmap = if (recovery != null) recovery.bitmap else {
+            val legacyBitmap by produceState<android.graphics.Bitmap?>(initialValue = null, coverUrl, maxWidthPx) {
+                value = if (coverUrl.isNullOrBlank()) null else {
+                    RssImageLoader.loadBitmap(context, coverUrl, maxWidthPx)
+                }
             }
+            legacyBitmap
         }
         if (bitmap != null) {
             Image(
@@ -255,6 +259,9 @@ fun BiliFeedCard(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(top = summaryTop)
             )
+        }
+        if (recovery != null) {
+            BiliCoverFeedback(recovery, Modifier.align(Alignment.TopCenter).padding(6.dp))
         }
     }
 }

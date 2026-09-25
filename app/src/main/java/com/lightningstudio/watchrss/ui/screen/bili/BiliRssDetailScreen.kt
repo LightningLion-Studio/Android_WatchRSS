@@ -1,6 +1,6 @@
 package com.lightningstudio.watchrss.ui.screen.bili
 
-import android.graphics.Bitmap
+import com.lightningstudio.watchrss.ui.reader.readerViewportBoundary
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
@@ -32,7 +32,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -160,7 +159,7 @@ fun BiliRssDetailScreen(
 
     com.lightningstudio.watchrss.ui.reader.ReaderBackgroundSurface(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxSize().readerViewportBoundary()
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -274,7 +273,8 @@ private fun BiliRssVideoCard(
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
-    var cover by remember(poster, maxWidthPx) { mutableStateOf<Bitmap?>(null) }
+    val recovery = rememberBiliCover(poster, maxWidthPx, enabled = !isScrolling)
+    val cover = recovery.bitmap
     val ratio = cover?.let { it.width.toFloat() / it.height.toFloat() }
         ?: poster?.let { RssImageLoader.getCachedAspectRatio(it) }
     val coverHeight = watchDimensionResource(R.dimen.hey_card_large_height)
@@ -286,13 +286,6 @@ private fun BiliRssVideoCard(
             .border(1.dp, borderColor, cardShape)
     } else {
         Modifier
-    }
-
-    LaunchedEffect(poster, maxWidthPx, isScrolling) {
-        if (isScrolling) return@LaunchedEffect
-        if (cover != null) return@LaunchedEffect
-        if (poster.isNullOrBlank()) return@LaunchedEffect
-        cover = RssImageLoader.loadBitmap(context, poster, maxWidthPx)
     }
 
     Box(
@@ -333,6 +326,11 @@ private fun BiliRssVideoCard(
             modifier = Modifier
                 .align(Alignment.Center)
                 .size(watchDimensionResource(R.dimen.hey_listitem_widget_size))
+        )
+        BiliCoverFeedback(
+            recovery,
+            Modifier.align(Alignment.TopCenter).padding(6.dp),
+            enabled = !isScrolling
         )
     }
 }

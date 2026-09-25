@@ -5,7 +5,6 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -14,6 +13,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import com.lightningstudio.watchrss.ShareQrActivity
+import com.lightningstudio.watchrss.ui.screen.bili.BiliFeedbackHost
 import com.lightningstudio.watchrss.ui.screen.bili.BiliDetailScreen
 import com.lightningstudio.watchrss.ui.screen.bili.BiliRssDetailScreen
 import com.lightningstudio.watchrss.ui.reader.ProvideReaderPreset
@@ -48,14 +48,6 @@ class BiliDetailActivity : BaseWatchActivity() {
                         shareUseSystem && isSystemShareSettingSupported(context)
                     }
                     val readingFontSizeSp by settingsRepository.readingFontSizeSp.collectAsState(initial = 14)
-
-                    LaunchedEffect(uiState.message) {
-                        val message = uiState.message
-                        if (!message.isNullOrBlank()) {
-                            com.lightningstudio.watchrss.ui.util.showAppToast(context, message, android.widget.Toast.LENGTH_SHORT)
-                            viewModel.clearMessage()
-                        }
-                    }
 
                     val onPlay = {
                         val cid = viewModel.selectedCid()
@@ -93,33 +85,38 @@ class BiliDetailActivity : BaseWatchActivity() {
                             )
                         }
                     }
-                    if (rssMode) {
-                        BiliRssDetailScreen(
-                            uiState = uiState,
-                            readingFontSizeSp = readingFontSizeSp,
-                            onPlayClick = onPlay,
-                            onFavorite = viewModel::favorite,
-                            onShare = onShare
-                        )
-                    } else {
-                        BiliDetailScreen(
-                            uiState = uiState,
-                            onPlayClick = onPlay,
-                            onSelectPage = viewModel::selectPage,
-                            onLike = viewModel::like,
-                            onCoin = viewModel::coin,
-                            onFavorite = viewModel::favorite,
-                            onShare = onShare,
-                            onCommentClick = {
-                                val item = uiState.detail?.item
-                                val oid = item?.aid ?: 0L
-                                val uploaderMid = item?.owner?.mid ?: 0L
-                                context.startActivity(
-                                    BiliCommentActivity.createIntent(context, oid, uploaderMid)
-                                )
-                            },
-                            showCommentEntry = false
-                        )
+                    BiliFeedbackHost(
+                        message = uiState.message,
+                        onMessageConsumed = viewModel::clearMessage
+                    ) {
+                        if (rssMode) {
+                            BiliRssDetailScreen(
+                                uiState = uiState,
+                                readingFontSizeSp = readingFontSizeSp,
+                                onPlayClick = onPlay,
+                                onFavorite = viewModel::favorite,
+                                onShare = onShare
+                            )
+                        } else {
+                            BiliDetailScreen(
+                                uiState = uiState,
+                                onPlayClick = onPlay,
+                                onSelectPage = viewModel::selectPage,
+                                onLike = viewModel::like,
+                                onCoin = viewModel::coin,
+                                onFavorite = viewModel::favorite,
+                                onShare = onShare,
+                                onCommentClick = {
+                                    val item = uiState.detail?.item
+                                    val oid = item?.aid ?: 0L
+                                    val uploaderMid = item?.owner?.mid ?: 0L
+                                    context.startActivity(
+                                        BiliCommentActivity.createIntent(context, oid, uploaderMid)
+                                    )
+                                },
+                                showCommentEntry = false
+                            )
+                        }
                     }
                 }
                 }

@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss.ui.screen
 
+import com.lightningstudio.watchrss.ui.reader.readerViewportBoundary
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -50,7 +51,7 @@ fun InfoScreen(
     InstallDigitalCrownLazyListHandler(listState)
 
     com.lightningstudio.watchrss.ui.reader.ReaderBackgroundSurface(
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier.fillMaxSize().readerViewportBoundary()
     ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),

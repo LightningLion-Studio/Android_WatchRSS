@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss.ui.screen.bili
 
+import com.lightningstudio.watchrss.ui.reader.readerViewportBoundary
 import java.util.Locale
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.LocalIndication
@@ -36,7 +37,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -59,7 +59,6 @@ import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.sdk.bili.BiliPage
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
-import com.lightningstudio.watchrss.ui.util.RssImageLoader
 import com.lightningstudio.watchrss.ui.viewmodel.BiliDetailUiState
 import kotlin.math.max
 
@@ -84,7 +83,7 @@ fun BiliDetailScreen(
 
     com.lightningstudio.watchrss.ui.reader.ReaderBackgroundSurface(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxSize().readerViewportBoundary()
     ) {
         LazyColumn(
             state = listState,
@@ -175,11 +174,8 @@ private fun BiliCoverCard(
     )
     val context = androidx.compose.ui.platform.LocalContext.current
     val maxWidthPx = remember(context) { context.resources.displayMetrics.widthPixels.coerceAtLeast(1) }
-    val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, coverUrl, maxWidthPx) {
-        value = if (coverUrl.isNullOrBlank()) null else {
-            RssImageLoader.loadBitmap(context, coverUrl, maxWidthPx)
-        }
-    }
+    val recovery = rememberBiliCover(coverUrl, maxWidthPx)
+    val bitmap = recovery.bitmap
 
     Box(
         modifier = Modifier
@@ -218,6 +214,7 @@ private fun BiliCoverCard(
                 modifier = Modifier.size(playIconSize)
             )
         }
+        BiliCoverFeedback(recovery, Modifier.align(Alignment.TopCenter).padding(6.dp))
     }
 }
 

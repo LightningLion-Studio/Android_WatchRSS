@@ -21,6 +21,8 @@ import com.lightningstudio.watchrss.sdk.bili.BiliPage
 import com.lightningstudio.watchrss.sdk.bili.BiliVideoDetail
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collect
@@ -50,6 +52,8 @@ class BiliDetailViewModel(
     private val bvid: String? = savedStateHandle.get<String>("bvid")?.takeIf { it.isNotBlank() }
     private val cidArg: Long? = savedStateHandle.get<String>("cid")?.toLongOrNull()
     private val rssItemId: Long? = savedStateHandle.get<String>("rssItemId")?.toLongOrNull()
+    private val interactionMutex = Mutex()
+    private var coinPending = false
     private var warmupJob: Job? = null
     private var warmupTarget: BiliTarget? = null
     private var hasUserSelectedPage = false
@@ -153,45 +157,61 @@ class BiliDetailViewModel(
 
     fun like() {
         val safeAid = currentAid() ?: return
-        val nextLiked = !_uiState.value.isLiked
-        _uiState.update {
-            it.copy(
-                isLiked = nextLiked,
-                message = if (nextLiked) "已点赞" else "已取消点赞"
-            )
-        }
+        val safeBvid = currentBvid()
         viewModelScope.launch {
-            persistInteractionState(isLiked = nextLiked)
-            repository.like(safeAid, like = nextLiked, bvid = currentBvid())
+            interactionMutex.withLock {
+                val nextLiked = !_uiState.value.isLiked
+                val result = repository.like(safeAid, like = nextLiked, bvid = safeBvid)
+                if (result.isSuccess) {
+                    _uiState.update {
+                        it.copy(isLiked = nextLiked, message = if (nextLiked) "已点赞" else "已取消点赞")
+                    }
+                    persistInteractionState(isLiked = nextLiked)
+                } else {
+                    _uiState.update { it.copy(message = formatBiliError(result.code, result.message)) }
+                }
+            }
         }
     }
 
     fun coin() {
-        if (_uiState.value.isCoined) return
+        if (coinPending || _uiState.value.isCoined) return
         val safeAid = currentAid() ?: return
-        _uiState.update { it.copy(isCoined = true, message = "已投币") }
+        val safeBvid = currentBvid()
+        coinPending = true
         viewModelScope.launch {
-            persistInteractionState(isCoined = true)
-            repository.coin(safeAid, bvid = currentBvid())
+            try {
+                interactionMutex.withLock {
+                    val result = repository.coin(safeAid, bvid = safeBvid)
+                    if (result.isSuccess) {
+                        _uiState.update { it.copy(isCoined = true, message = "已投币") }
+                        persistInteractionState(isCoined = true)
+                    } else {
+                        _uiState.update { it.copy(message = formatBiliError(result.code, result.message)) }
+                    }
+                }
+            } finally {
+                coinPending = false
+            }
         }
     }
 
     fun favorite() {
         val safeAid = currentAid() ?: return
+        val safeBvid = currentBvid()
         viewModelScope.launch {
-            val nextFavorited = !_uiState.value.isFavorited
-            val result = repository.favorite(safeAid, add = nextFavorited, bvid = currentBvid())
-            if (result.isSuccess) {
-                _uiState.update {
-                    it.copy(
-                        isFavorited = nextFavorited,
-                        message = if (nextFavorited) "已收藏" else "已取消收藏"
-                    )
+            interactionMutex.withLock {
+                val nextFavorited = !_uiState.value.isFavorited
+                val result = repository.favorite(safeAid, add = nextFavorited, bvid = safeBvid)
+                if (result.isSuccess) {
+                    _uiState.update {
+                        it.copy(isFavorited = nextFavorited, message = if (nextFavorited) "已收藏" else "已取消收藏")
+                    }
+                    persistInteractionState(isFavorited = nextFavorited)
+                    syncLocalSaved(SaveType.FAVORITE, nextFavorited)
+                } else {
+                    _uiState.update { it.copy(message = formatBiliError(result.code, result.message)) }
                 }
-                persistInteractionState(isFavorited = nextFavorited)
-                syncLocalSaved(SaveType.FAVORITE, nextFavorited)
-            } else {
-                _uiState.update { it.copy(message = formatBiliError(result.code, result.message)) }
             }
         }
     }
@@ -199,12 +219,14 @@ class BiliDetailViewModel(
     fun addToWatchLater() {
         val target = currentInteractionTarget()
         viewModelScope.launch {
-            val result = repository.addToView(aid = target?.aid ?: aid, bvid = target?.bvid ?: bvid)
-            if (result.isSuccess) {
-                _uiState.update { it.copy(isWatchLater = true, message = "已加入稍后再看") }
-                syncLocalSaved(SaveType.WATCH_LATER, true)
-            } else {
-                _uiState.update { it.copy(message = formatBiliError(result.code, result.message)) }
+            interactionMutex.withLock {
+                val result = repository.addToView(aid = target?.aid ?: aid, bvid = target?.bvid ?: bvid)
+                if (result.isSuccess) {
+                    _uiState.update { it.copy(isWatchLater = true, message = "已加入稍后再看") }
+                    syncLocalSaved(SaveType.WATCH_LATER, true)
+                } else {
+                    _uiState.update { it.copy(message = formatBiliError(result.code, result.message)) }
+                }
             }
         }
     }

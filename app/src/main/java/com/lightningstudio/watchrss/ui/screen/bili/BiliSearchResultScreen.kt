@@ -98,6 +98,7 @@ fun BiliSearchResultScreen(
                     items(searchResults.itemCount) { index ->
                         val item = searchResults[index] ?: return@items
                         BiliFeedCard(
+                            coverRecoveryEnabled = true,
                             title = BiliFormatUtils.stripKeywordHighlight(item.data.title),
                             summary = buildVideoSummary(item.data),
                             coverUrl = item.data.pic,

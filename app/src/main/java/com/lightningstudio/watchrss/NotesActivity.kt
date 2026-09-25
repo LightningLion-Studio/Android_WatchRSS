@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss
 
+import com.lightningstudio.watchrss.ui.reader.readerViewportBoundary
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
@@ -79,6 +80,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -542,7 +544,7 @@ private fun WatchNoteReader(
 
     BackHandler(onBack = onBack)
     InstallDigitalCrownLazyListHandler(listState)
-    ReaderBackgroundSurface(modifier = Modifier.fillMaxSize()) {
+    ReaderBackgroundSurface(modifier = Modifier.fillMaxSize().readerViewportBoundary()) {
         Box(modifier = Modifier.fillMaxSize()) {
             WatchNoteRichTextLazyColumn(
                 markup = note.markdown,
@@ -656,7 +658,7 @@ private fun CompactEditButton(onClick: () -> Unit) {
 }
 
 @androidx.compose.runtime.Composable
-private fun WatchNoteRawEditor(
+internal fun WatchNoteRawEditor(
     note: WatchNoteEntity?,
     safeInset: androidx.compose.ui.unit.Dp,
     scrollState: ScrollState,
@@ -963,19 +965,12 @@ private fun WatchNoteRawEditor(
                                 preservedSelection = preservedSelection,
                                 focused = titleFieldFocused
                             )
-                            if (
-                                corrected.selection == normalized.selection &&
-                                preservedSelection != null &&
-                                (
-                                    normalized.text != titleValue.text ||
-                                        normalized.selection != preservedSelection
-                                )
-                            ) {
-                                titleSelectionToRestoreOnFocus = null
-                            }
+                            // Only protect the activation callback, never pin later IME selection.
+                            titleSelectionToRestoreOnFocus = null
                             titleValue = corrected
                         },
                         modifier = Modifier
+                            .testTag("note-editor-title")
                             .fillMaxWidth()
                             .padding(horizontal = ReaderPageLayout.titleHorizontalPadding)
                             .focusRequester(titleFocusRequester)
@@ -1039,6 +1034,7 @@ private fun WatchNoteRawEditor(
                 BasicTextField(
                     value = editorValue,
                     modifier = Modifier
+                        .testTag("note-editor-body")
                         .fillMaxWidth()
                         .heightIn(min = minimumBodyHeight)
                         .focusRequester(editorFocusRequester)
@@ -1094,13 +1090,9 @@ private fun WatchNoteRawEditor(
                             preservedSelection = preservedSelection,
                             focused = textFieldFocused
                         )
-                        if (
-                            corrected.selection == incoming.selection &&
-                            preservedSelection != null &&
-                            (incoming.text != current.text || incoming.selection != preservedSelection)
-                        ) {
-                            selectionToRestoreOnFocus = null
-                        }
+                        // Consume the guard even when this callback was corrected. Otherwise an
+                        // IME moving its cursor without changing text can be rejected indefinitely.
+                        selectionToRestoreOnFocus = null
                         editorValue = history.record(corrected, SystemClock.uptimeMillis())
                     },
                     onTextLayout = { textLayoutResult = it },
@@ -1134,8 +1126,16 @@ private fun WatchNoteRawEditor(
                                             ?: break
                                         if (!change.pressed) {
                                             if (!dragging) {
-                                                val activationSelection =
-                                                    latestEditorValueForGesture.selection
+                                                val current = latestEditorValueForGesture
+                                                val offset = latestTextLayoutForGesture
+                                                    ?.getOffsetForPosition(down.position)
+                                                    ?.coerceIn(0, current.text.length)
+                                                    ?: current.selection.end
+                                                val activationSelection = TextRange(offset)
+                                                editorValue = current.copy(
+                                                    selection = activationSelection,
+                                                    composition = null
+                                                )
                                                 selectionToRestoreOnFocus = activationSelection
                                                 editorFocusRequester.requestFocus()
                                             }
