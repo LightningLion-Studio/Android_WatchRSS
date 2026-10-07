@@ -144,7 +144,8 @@ class FakeRssRepository(
     override suspend fun mergeSyncedSavedArticles(
         articles: List<SyncedSavedArticle>,
         remoteDeviceId: String,
-        localDeviceId: String
+        localDeviceId: String,
+        authoritative: Boolean
     ): SyncedSavedArticleMergeStats {
         return SyncedSavedArticleMergeStats(
             received = articles.size,
@@ -155,7 +156,8 @@ class FakeRssRepository(
     override suspend fun mergeSyncedChunkedArticles(
         articles: List<SyncedChunkedArticle>,
         remoteDeviceId: String,
-        localDeviceId: String
+        localDeviceId: String,
+        authoritative: Boolean
     ): SyncedSavedArticleMergeStats {
         return SyncedSavedArticleMergeStats(
             received = articles.size,
@@ -168,7 +170,8 @@ class FakeRssRepository(
     override suspend fun mergeSyncedRssSources(
         sources: List<SyncedRssSource>,
         remoteDeviceId: String,
-        localDeviceId: String
+        localDeviceId: String,
+        authoritative: Boolean
     ): SyncedRssSourceMergeStats {
         return SyncedRssSourceMergeStats(
             received = sources.size,

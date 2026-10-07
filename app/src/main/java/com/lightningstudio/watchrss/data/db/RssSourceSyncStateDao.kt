@@ -18,4 +18,10 @@ interface RssSourceSyncStateDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(state: RssSourceSyncStateEntity)
+
+    @Query("DELETE FROM rss_source_sync_states WHERE url IN (:urls)")
+    suspend fun deleteByUrls(urls: List<String>)
+
+    @Query("DELETE FROM rss_source_sync_states")
+    suspend fun deleteAll()
 }

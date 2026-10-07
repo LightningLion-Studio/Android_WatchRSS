@@ -18,4 +18,10 @@ interface SavedSyncStateDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertAll(states: List<SavedSyncStateEntity>)
+
+    @Query("DELETE FROM saved_sync_states WHERE articleId IN (:articleIds)")
+    suspend fun deleteByArticleIds(articleIds: List<String>)
+
+    @Query("DELETE FROM saved_sync_states")
+    suspend fun deleteAll()
 }

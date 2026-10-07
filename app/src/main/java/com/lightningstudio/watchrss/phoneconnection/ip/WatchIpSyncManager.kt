@@ -235,6 +235,7 @@ class WatchIpSyncManager(
                 context = application,
                 allowedActions = setOf(
                     BluetoothSyncProtocol.ACTION_SYNC_LIBRARY,
+                    BluetoothSyncProtocol.ACTION_CLEAR_LIBRARY,
                     BluetoothSyncProtocol.ACTION_SYNC_NOTES,
                     BluetoothSyncProtocol.ACTION_SYNC_NOTE_ASSET,
                     BluetoothSyncProtocol.ACTION_SYNC_READER,

@@ -11,6 +11,7 @@ class ImportedContentIdsTest {
     fun novelContentRecognizesTxtAndEpubButNotIndependentPhoneArticles() {
         assertTrue(ImportedContentIds.isNovelContentItemUrl("https://watchrss.local/import-content/txt/book"))
         assertTrue(ImportedContentIds.isNovelContentItemUrl("https://watchrss.local/import-epub/book/chapter/1"))
+        assertTrue(ImportedContentIds.isNovelContentItemUrl("https://watchrss.local/import-txt-novel/book/chapter/1"))
         assertFalse(ImportedContentIds.isNovelContentItemUrl(ImportedContentIds.PHONE_IMPORT_CHANNEL_URL))
     }
     @Test
@@ -18,6 +19,7 @@ class ImportedContentIdsTest {
         assertTrue(ImportedContentIds.isImportedContentUrl("https://watchrss.local/import-content"))
         assertTrue(ImportedContentIds.isImportedContentUrl("https://watchrss.local/import-content/epub/book"))
         assertTrue(ImportedContentIds.isImportedContentUrl("https://watchrss.local/import-epub/book"))
+        assertTrue(ImportedContentIds.isImportedContentUrl("https://watchrss.local/import-txt-novel/book"))
         assertTrue(ImportedContentIds.isImportedContentUrl("watchrss://phone-imports"))
         assertFalse(ImportedContentIds.isImportedContentUrl("https://example.com/feed.xml"))
     }
@@ -28,6 +30,7 @@ class ImportedContentIdsTest {
         assertFalse(ImportedContentIds.isImportedTextSourceUrl("https://watchrss.local/import-content/txt/article"))
         assertFalse(ImportedContentIds.isImportedTextSourceUrl("https://watchrss.local/import-content/epub/book"))
         assertFalse(ImportedContentIds.isImportedTextSourceUrl("https://watchrss.local/import-epub/book"))
+        assertFalse(ImportedContentIds.isImportedTextSourceUrl("https://watchrss.local/import-txt-novel/book"))
         assertFalse(ImportedContentIds.isImportedTextSourceUrl("watchrss://phone-imports"))
     }
 
@@ -36,6 +39,7 @@ class ImportedContentIdsTest {
         assertTrue(ImportedContentIds.isDeletableLocalContentChannel("https://watchrss.local/import-content"))
         assertTrue(ImportedContentIds.isDeletableLocalContentChannel("https://watchrss.local/import-content/epub/book"))
         assertTrue(ImportedContentIds.isDeletableLocalContentChannel("https://watchrss.local/import-epub/book"))
+        assertTrue(ImportedContentIds.isDeletableLocalContentChannel("https://watchrss.local/import-txt-novel/book"))
         assertTrue(ImportedContentIds.isDeletableLocalContentChannel("watchrss://phone-imports"))
         assertFalse(ImportedContentIds.isDeletableLocalContentChannel("https://example.com/feed.xml"))
     }

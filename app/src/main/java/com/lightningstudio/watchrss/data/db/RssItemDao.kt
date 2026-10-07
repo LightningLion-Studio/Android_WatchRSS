@@ -8,6 +8,9 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface RssItemDao {
+    @Query("SELECT id, channelId, dedupKey FROM rss_items")
+    suspend fun getAllIdentities(): List<RssItemIdentity>
+
     @Query(
         """
         SELECT
@@ -368,6 +371,12 @@ interface RssItemDao {
     @Query("DELETE FROM rss_items WHERE channelId = :channelId")
     suspend fun deleteByChannel(channelId: Long)
 }
+
+data class RssItemIdentity(
+    val id: Long,
+    val channelId: Long,
+    val dedupKey: String
+)
 
 data class RssItemSize(
     val id: Long,

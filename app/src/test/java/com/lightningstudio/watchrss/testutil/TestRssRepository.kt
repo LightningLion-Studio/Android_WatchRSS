@@ -303,7 +303,8 @@ class TestRssRepository(
     override suspend fun mergeSyncedSavedArticles(
         articles: List<SyncedSavedArticle>,
         remoteDeviceId: String,
-        localDeviceId: String
+        localDeviceId: String,
+        authoritative: Boolean
     ): SyncedSavedArticleMergeStats {
         mergedSyncedSavedArticles += articles
         return SyncedSavedArticleMergeStats(
@@ -315,7 +316,8 @@ class TestRssRepository(
     override suspend fun mergeSyncedChunkedArticles(
         articles: List<SyncedChunkedArticle>,
         remoteDeviceId: String,
-        localDeviceId: String
+        localDeviceId: String,
+        authoritative: Boolean
     ): SyncedSavedArticleMergeStats {
         mergedSyncedChunkedArticles += articles
         return SyncedSavedArticleMergeStats(
@@ -331,7 +333,8 @@ class TestRssRepository(
     override suspend fun mergeSyncedRssSources(
         sources: List<SyncedRssSource>,
         remoteDeviceId: String,
-        localDeviceId: String
+        localDeviceId: String,
+        authoritative: Boolean
     ): SyncedRssSourceMergeStats {
         mergedSyncedRssSources += sources
         return SyncedRssSourceMergeStats(

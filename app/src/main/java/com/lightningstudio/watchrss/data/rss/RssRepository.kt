@@ -67,19 +67,28 @@ interface RssRepository {
     suspend fun mergeSyncedSavedArticles(
         articles: List<SyncedSavedArticle>,
         remoteDeviceId: String,
-        localDeviceId: String
+        localDeviceId: String,
+        authoritative: Boolean = false
     ): SyncedSavedArticleMergeStats
     suspend fun mergeSyncedChunkedArticles(
         articles: List<SyncedChunkedArticle>,
         remoteDeviceId: String,
-        localDeviceId: String
+        localDeviceId: String,
+        authoritative: Boolean = false
     ): SyncedSavedArticleMergeStats
     suspend fun exportSyncedRssSources(deviceId: String): List<SyncedRssSource>
     suspend fun mergeSyncedRssSources(
         sources: List<SyncedRssSource>,
         remoteDeviceId: String,
-        localDeviceId: String
+        localDeviceId: String,
+        authoritative: Boolean = false
     ): SyncedRssSourceMergeStats
+    suspend fun finalizeAuthoritativeLibrarySnapshot(
+        retainedArticleIds: Collection<String>,
+        retainedSourceUrls: Collection<String>
+    ) = Unit
+    suspend fun clearLibrary() = Unit
+    suspend fun resetLibrarySyncPeerState() = Unit
     suspend fun retryOfflineMedia(itemId: Long)
     suspend fun toggleLike(itemId: Long): Result<Boolean>
     suspend fun markChannelRead(channelId: Long)

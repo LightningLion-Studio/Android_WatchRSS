@@ -1055,7 +1055,8 @@ class DefaultRssRepository(
     override suspend fun mergeSyncedRssSources(
         sources: List<SyncedRssSource>,
         remoteDeviceId: String,
-        localDeviceId: String
+        localDeviceId: String,
+        authoritative: Boolean
     ): SyncedRssSourceMergeStats = withContext(Dispatchers.IO) {
         var applied = 0
         sources.forEach { source ->
@@ -1077,7 +1078,7 @@ class DefaultRssRepository(
                 ?: source.sortOrder.takeIf { it > 0L }
                 ?: source.createdAt
             val localUpdatedAt = existing?.syncUpdatedAt() ?: 0L
-            val remoteNewer = existing == null ||
+            val remoteNewer = authoritative || existing == null ||
                 remoteUpdatedAt > localUpdatedAt ||
                 (remoteUpdatedAt == localUpdatedAt && remoteDeviceId > localDeviceId)
             if (!remoteNewer) return@forEach
@@ -1118,17 +1119,18 @@ class DefaultRssRepository(
     override suspend fun mergeSyncedSavedArticles(
         articles: List<SyncedSavedArticle>,
         remoteDeviceId: String,
-        localDeviceId: String
+        localDeviceId: String,
+        authoritative: Boolean
     ): SyncedSavedArticleMergeStats = withContext(Dispatchers.IO) {
         var applied = 0
         articles.forEach { article ->
             if (article.deleted) {
                 val itemId = findSyncedArticleItemId(article)
-                var changed = applySyncedArticleDeletion(article, itemId, remoteDeviceId, localDeviceId)
-                if (applySyncedTombstoneState(article, SaveType.FAVORITE, remoteDeviceId, localDeviceId)) {
+                var changed = applySyncedArticleDeletion(article, itemId, remoteDeviceId, localDeviceId, authoritative)
+                if (applySyncedTombstoneState(article, SaveType.FAVORITE, remoteDeviceId, localDeviceId, authoritative)) {
                     changed = true
                 }
-                if (applySyncedTombstoneState(article, SaveType.WATCH_LATER, remoteDeviceId, localDeviceId)) {
+                if (applySyncedTombstoneState(article, SaveType.WATCH_LATER, remoteDeviceId, localDeviceId, authoritative)) {
                     changed = true
                 }
                 if (changed) {
@@ -1142,22 +1144,22 @@ class DefaultRssRepository(
                 !article.deleted
             val itemId = if (shouldMaterializeArticle) {
                 val channel = resolveSyncedArticleChannel(article)
-                upsertSyncedArticleItem(channel.id, article)
+                upsertSyncedArticleItem(channel.id, article, authoritative)
             } else {
                 findSyncedArticleItemId(article)
             }
             if (itemId == null) {
-                if (applySyncedTombstoneState(article, SaveType.FAVORITE, remoteDeviceId, localDeviceId)) {
+                if (applySyncedTombstoneState(article, SaveType.FAVORITE, remoteDeviceId, localDeviceId, authoritative)) {
                     applied += 1
                 }
-                if (applySyncedTombstoneState(article, SaveType.WATCH_LATER, remoteDeviceId, localDeviceId)) {
+                if (applySyncedTombstoneState(article, SaveType.WATCH_LATER, remoteDeviceId, localDeviceId, authoritative)) {
                     applied += 1
                 }
             } else {
-                if (applySyncedState(article, itemId, SaveType.FAVORITE, remoteDeviceId, localDeviceId)) {
+                if (applySyncedState(article, itemId, SaveType.FAVORITE, remoteDeviceId, localDeviceId, authoritative)) {
                     applied += 1
                 }
-                if (applySyncedState(article, itemId, SaveType.WATCH_LATER, remoteDeviceId, localDeviceId)) {
+                if (applySyncedState(article, itemId, SaveType.WATCH_LATER, remoteDeviceId, localDeviceId, authoritative)) {
                     applied += 1
                 }
             }
@@ -1171,7 +1173,8 @@ class DefaultRssRepository(
     override suspend fun mergeSyncedChunkedArticles(
         articles: List<SyncedChunkedArticle>,
         remoteDeviceId: String,
-        localDeviceId: String
+        localDeviceId: String,
+        authoritative: Boolean
     ): SyncedSavedArticleMergeStats = withContext(Dispatchers.IO) {
         val rebuilt = articles.map { payload ->
             val localItemId = findSyncedArticleItemId(payload.article)
@@ -1238,8 +1241,54 @@ class DefaultRssRepository(
         mergeSyncedSavedArticles(
             articles = rebuilt,
             remoteDeviceId = remoteDeviceId,
-            localDeviceId = localDeviceId
+            localDeviceId = localDeviceId,
+            authoritative = authoritative
         )
+    }
+
+    override suspend fun finalizeAuthoritativeLibrarySnapshot(
+        retainedArticleIds: Collection<String>,
+        retainedSourceUrls: Collection<String>
+    ) = withContext(Dispatchers.IO) {
+        val articleIds = retainedArticleIds.toHashSet()
+        val sourceUrls = retainedSourceUrls.mapTo(hashSetOf(), ::normalizeUrl)
+        itemDao.getAllIdentities()
+            .asSequence()
+            .filter { it.dedupKey !in articleIds }
+            .forEach { identity ->
+                offlineStore.deleteMediaForItem(identity.id)
+                itemDao.deleteItem(identity.id)
+            }
+        channelDao.getAllChannels()
+            .filter { normalizeUrl(it.url) !in sourceUrls }
+            .forEach { channel -> deleteChannelInternal(channel.id, recordSyncChange = false) }
+        savedSyncStateDao.getAll().asSequence()
+            .map { it.articleId }
+            .filterNot(articleIds::contains)
+            .distinct()
+            .chunked(400)
+            .forEach { savedSyncStateDao.deleteByArticleIds(it) }
+        rssSourceSyncStateDao.getAll().asSequence()
+            .map { it.url }
+            .filterNot(sourceUrls::contains)
+            .chunked(400)
+            .forEach { rssSourceSyncStateDao.deleteByUrls(it) }
+        syncChangeLogDao.deleteAll()
+        syncPeerStateDao.deleteAll()
+    }
+
+    override suspend fun clearLibrary() = withContext(Dispatchers.IO) {
+        channelDao.getAllChannels().forEach { channel ->
+            deleteChannelInternal(channel.id, recordSyncChange = false)
+        }
+        savedSyncStateDao.deleteAll()
+        rssSourceSyncStateDao.deleteAll()
+        syncChangeLogDao.deleteAll()
+        syncPeerStateDao.deleteAll()
+    }
+
+    override suspend fun resetLibrarySyncPeerState() = withContext(Dispatchers.IO) {
+        syncPeerStateDao.deleteAll()
     }
 
     override suspend fun retryOfflineMedia(itemId: Long) {
@@ -2060,7 +2109,8 @@ class DefaultRssRepository(
 
     private suspend fun upsertSyncedArticleItem(
         channelId: Long,
-        article: SyncedSavedArticle
+        article: SyncedSavedArticle,
+        authoritative: Boolean = false
     ): Long {
         val hasIncomingBody =
             !article.contentHtml.isNullOrBlank() || article.contentText.isNotBlank()
@@ -2108,7 +2158,7 @@ class DefaultRssRepository(
             return itemDao.getItemByDedupKey(channelId, article.articleId)?.id
                 ?: error("同步文章保存失败")
         }
-        val incomingReadingPositionWins =
+        val incomingReadingPositionWins = authoritative ||
             (hasIncomingBody && entity.syncBodyHash != existing.syncBodyHash) ||
                 article.readingPositionChangedAt > existing.readingPositionChangedAt ||
                 (
@@ -2158,7 +2208,7 @@ class DefaultRssRepository(
             } else {
                 existing.readingProgress
             },
-            isRead = existing.isRead || article.isRead,
+            isRead = if (authoritative) article.isRead else existing.isRead || article.isRead,
             readingPositionBytes = if (incomingReadingPositionWins) {
                 article.readingPositionBytes
             } else {
@@ -2169,10 +2219,11 @@ class DefaultRssRepository(
             } else {
                 existing.readingPositionContentHash
             },
-            readingPositionChangedAt = maxOf(
-                existing.readingPositionChangedAt,
+            readingPositionChangedAt = if (authoritative) {
                 article.readingPositionChangedAt
-            )
+            } else {
+                maxOf(existing.readingPositionChangedAt, article.readingPositionChangedAt)
+            }
         )
         return existing.id
     }
@@ -2280,7 +2331,8 @@ class DefaultRssRepository(
         itemId: Long,
         saveType: SaveType,
         remoteDeviceId: String,
-        localDeviceId: String
+        localDeviceId: String,
+        authoritative: Boolean = false
     ): Boolean {
         val remoteSaved = when (saveType) {
             SaveType.FAVORITE -> article.favoriteSaved
@@ -2294,10 +2346,10 @@ class DefaultRssRepository(
             SaveType.FAVORITE -> article.favoriteSortOrder
             SaveType.WATCH_LATER -> article.watchLaterSortOrder
         }
-        if (!remoteSaved && remoteChangedAt <= 0L) return false
+        if (!authoritative && !remoteSaved && remoteChangedAt <= 0L) return false
         val current = savedSyncStateDao.get(article.articleId, saveType.name)
         val currentSource = current?.sourceDeviceId ?: localDeviceId
-        val remoteNewer = current == null ||
+        val remoteNewer = authoritative || current == null ||
             remoteChangedAt > current.changedAt ||
             (remoteChangedAt == current.changedAt && remoteDeviceId > currentSource)
         if (!remoteNewer) return false
@@ -2317,8 +2369,10 @@ class DefaultRssRepository(
                     )
                 )
             }
-            itemDao.getItem(itemId)?.let { item ->
-                runCatching { offlineStore.downloadMediaForItem(item) }
+            if (!authoritative) {
+                itemDao.getItem(itemId)?.let { item ->
+                    runCatching { offlineStore.downloadMediaForItem(item) }
+                }
             }
         } else if (hasType) {
             savedEntryDao.delete(itemId, saveType.name)
@@ -2345,7 +2399,8 @@ class DefaultRssRepository(
         article: SyncedSavedArticle,
         saveType: SaveType,
         remoteDeviceId: String,
-        localDeviceId: String
+        localDeviceId: String,
+        authoritative: Boolean = false
     ): Boolean {
         val remoteSaved = when (saveType) {
             SaveType.FAVORITE -> article.favoriteSaved
@@ -2356,10 +2411,10 @@ class DefaultRssRepository(
             SaveType.FAVORITE -> article.favoriteChangedAt
             SaveType.WATCH_LATER -> article.watchLaterChangedAt
         }
-        if (remoteChangedAt <= 0L) return false
+        if (!authoritative && remoteChangedAt <= 0L) return false
         val current = savedSyncStateDao.get(article.articleId, saveType.name)
         val currentSource = current?.sourceDeviceId ?: localDeviceId
-        val remoteNewer = current == null ||
+        val remoteNewer = authoritative || current == null ||
             remoteChangedAt > current.changedAt ||
             (remoteChangedAt == current.changedAt && remoteDeviceId > currentSource)
         if (!remoteNewer) return false
@@ -2382,12 +2437,13 @@ class DefaultRssRepository(
         article: SyncedSavedArticle,
         itemId: Long?,
         remoteDeviceId: String,
-        localDeviceId: String
+        localDeviceId: String,
+        authoritative: Boolean = false
     ): Boolean {
-        if (!article.deleted || article.deletedAt <= 0L) return false
+        if (!article.deleted || (!authoritative && article.deletedAt <= 0L)) return false
         val current = savedSyncStateDao.get(article.articleId, ARTICLE_DELETE_SYNC_TYPE)
         val currentSource = current?.sourceDeviceId ?: localDeviceId
-        val remoteNewer = current == null ||
+        val remoteNewer = authoritative || current == null ||
             article.deletedAt > current.changedAt ||
             (article.deletedAt == current.changedAt && remoteDeviceId > currentSource)
         if (!remoteNewer) return false
