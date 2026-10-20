@@ -27,6 +27,9 @@ val clearPackageDataForInstrumentation = providers
     ?: useIsolatedInstrumentation
 
 android {
+    // Retain legacy mini-program BLE source without compiling it.
+    sourceSets.getByName("main").java.exclude("**/BleProvisioningSession.java")
+
     namespace = "com.lightningstudio.watchrss"
     compileSdk = 36
     buildToolsVersion = "36.1.0"

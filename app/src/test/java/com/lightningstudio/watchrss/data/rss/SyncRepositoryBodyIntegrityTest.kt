@@ -227,6 +227,40 @@ class SyncRepositoryBodyIntegrityTest {
         )
     }
 
+    @Test
+    fun metadataOnlyUpsertDoesNotHashAReplacementBodyOrMetadata() {
+        val patch = article(contentText = "").copy(contentHtml = null,
+            readingPositionBytes = 450, readingPositionContentHash = "retained-body-hash",
+            readingPositionChangedAt = 123, readingProgress = .6f)
+        val metadata = incomingUpsertBodyMetadata(patch, existingItem = true) {
+            error("A state-only patch must not hash or construct a replacement body")
+        }
+        assertEquals(null, metadata)
+        assertEquals(450L, patch.readingPositionBytes)
+        assertEquals("retained-body-hash", patch.readingPositionContentHash)
+        assertEquals(123L, patch.readingPositionChangedAt)
+    }
+
+    @Test
+    fun incomingBodyStillBuildsItsRealMetadata() {
+        val incoming = article(contentText = "new body")
+        val expected = ArticleSyncBody.metadataFor(incoming)
+        var builds = 0
+        val actual = incomingUpsertBodyMetadata(incoming, existingItem = true) {
+            builds++
+            ArticleSyncBody.metadataFor(it)
+        }
+        assertEquals(1, builds)
+        assertEquals(expected, actual)
+    }
+
+    @Test
+    fun newRowWithoutBodyStillHasCanonicalMetadata() {
+        val incoming = article(contentText = "").copy(contentHtml = null)
+        val expected = ArticleSyncBody.metadataFor(incoming)
+        assertEquals(expected, incomingUpsertBodyMetadata(incoming, existingItem = false))
+    }
+
     private fun article(
         sourceDeviceId: String = "phone",
         title: String = "Title",

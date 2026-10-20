@@ -46,6 +46,14 @@ interface RssRepository {
     suspend fun exportSyncedSavedArticles(deviceId: String): List<SyncedSavedArticle>
     suspend fun exportCloudRssStateArticles(deviceId: String): List<SyncedSavedArticle> =
         exportSyncedSavedArticles(deviceId)
+    /** Production implementation reads one body at a time; default supports small test fakes. */
+    suspend fun streamCloudArticles(deviceId: String, stateOnly: Boolean, emit: suspend (SyncedSavedArticle) -> Unit) {
+        val rows = if (stateOnly) exportCloudRssStateArticles(deviceId) else exportSyncedSavedArticles(deviceId)
+        for (row in rows) emit(row)
+    }
+    suspend fun streamCloudSources(deviceId: String, emit: suspend (SyncedRssSource) -> Unit) {
+        for (source in exportSyncedRssSources(deviceId)) emit(source)
+    }
     suspend fun exportSyncedArticleManifests(deviceId: String): List<SyncedArticleManifest>
     suspend fun getLibrarySyncCursor(peerDeviceId: String): WatchLibrarySyncCursorSnapshot
     suspend fun prepareLibrarySyncWindow(
@@ -70,6 +78,13 @@ interface RssRepository {
         localDeviceId: String,
         authoritative: Boolean = false
     ): SyncedSavedArticleMergeStats
+    suspend fun cloudRecordProjection(articleId: String, sourceUrl: String?): CloudRssRecordProjection? = null
+    suspend fun mergeCloudArticleBatch(articles: List<SyncedSavedArticle>, remoteDeviceId: String,
+        localDeviceId: String): SyncedSavedArticleMergeStats =
+        mergeSyncedSavedArticles(articles, remoteDeviceId, localDeviceId)
+    suspend fun mergeCloudSourceBatch(sources: List<SyncedRssSource>, remoteDeviceId: String,
+        localDeviceId: String): SyncedRssSourceMergeStats =
+        mergeSyncedRssSources(sources, remoteDeviceId, localDeviceId)
     suspend fun mergeSyncedChunkedArticles(
         articles: List<SyncedChunkedArticle>,
         remoteDeviceId: String,
@@ -102,3 +117,6 @@ interface RssRepository {
     suspend fun deleteChannel(channelId: Long)
     suspend fun trimCacheToLimit()
 }
+
+/** The two cloud fields whose metadata-only native projection is lossy. */
+data class CloudRssRecordProjection(val contentHash: String, val importedAt: Long, val metadataOnly: Boolean)

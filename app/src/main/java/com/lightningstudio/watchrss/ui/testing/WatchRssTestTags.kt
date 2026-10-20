@@ -52,6 +52,7 @@ object DouyinChannelInfoTestTags {
 object ProfileTestTags {
     const val ROOT = "profile/root"
     const val ACCOUNT_ENTRY = "profile/account_entry"
+    const val CLOUD_SYNC_ENTRY = "profile/cloud_sync_entry"
     const val FAVORITES_ENTRY = "profile/favorites_entry"
     const val WATCH_LATER_ENTRY = "profile/watch_later_entry"
     const val PHONE_CONNECTION_ENTRY = "profile/phone_connection_entry"
@@ -61,12 +62,29 @@ object ProfileTestTags {
     const val BEIAN_ENTRY = "profile/beian_entry"
 }
 
+object CloudSyncTestTags {
+    const val ROOT = "cloud_sync/root"
+    const val STATUS = "cloud_sync/status"
+    const val ACTION = "cloud_sync/action"
+    const val SPACE = "cloud_sync/space"
+    const val LAST_SYNCED = "cloud_sync/last_synced"
+}
+
 object PhoneConnectionTestTags {
     const val ROOT = "phone_connection/root"
     const val BLUETOOTH_ENTRY = "phone_connection/bluetooth_entry"
     const val PURE_SOUND_ENTRY = "phone_connection/pure_sound_entry"
     const val SOUND_GUIDED_WIFI_ENTRY = "phone_connection/sound_guided_wifi_entry"
     const val MANUAL_WIFI_ENTRY = "phone_connection/manual_wifi_entry"
+    const val MINI_PROGRAM_ENTRY = "phone_connection/mini_program_entry"
+    const val PHONE_APP_ENTRY = "phone_connection/phone_app_entry"
+    const val PHONE_APP_STEPS = "phone_connection/phone_app_steps"
+    const val DOWNLOAD_ENTRY = "phone_connection/download_entry"
+    const val PAIRING_ROOT = "phone_connection/pairing_root"
+    const val PAIRING_QR = "phone_connection/pairing_qr"
+    const val PAIRING_CONFIRM = "phone_connection/pairing_confirm"
+    const val PAIRING_DECLINE = "phone_connection/pairing_decline"
+    const val PAIRING_DONE = "phone_connection/pairing_done"
 }
 
 object AddRssTestTags {

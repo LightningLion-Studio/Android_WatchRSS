@@ -1,6 +1,7 @@
 package com.lightningstudio.watchrss.ui.screen
 
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
@@ -62,10 +63,10 @@ class ProfileScreenTest {
             )
         }
 
-        composeRule.onNodeWithTag(ProfileTestTags.FAVORITES_ENTRY).performClick()
-        composeRule.onNodeWithTag(ProfileTestTags.WATCH_LATER_ENTRY).performClick()
+        composeRule.onNodeWithTag(ProfileTestTags.FAVORITES_ENTRY).performScrollTo().performClick()
+        composeRule.onNodeWithTag(ProfileTestTags.WATCH_LATER_ENTRY).performScrollTo().performClick()
         composeRule.onNodeWithTag(ProfileTestTags.PHONE_CONNECTION_ENTRY).performScrollTo().performClick()
-        composeRule.onNodeWithTag(ProfileTestTags.SETTINGS_ENTRY).performClick()
+        composeRule.onNodeWithTag(ProfileTestTags.SETTINGS_ENTRY).performScrollTo().performClick()
         composeRule.onNodeWithTag(ProfileTestTags.ABOUT_ENTRY).performScrollTo().performClick()
         composeRule.onNodeWithTag(ProfileTestTags.CONTACT_DEVELOPER_ENTRY).performScrollTo().performClick()
         composeRule.onNodeWithTag(ProfileTestTags.BEIAN_ENTRY).performScrollTo().performClick()
@@ -120,5 +121,48 @@ class ProfileScreenTest {
         composeRule.onNodeWithTag(ProfileTestTags.ACCOUNT_ENTRY).assertDoesNotExist()
         composeRule.onNodeWithTag(ProfileTestTags.FAVORITES_ENTRY).assertExists()
         composeRule.onNodeWithTag(ProfileTestTags.WATCH_LATER_ENTRY).assertExists()
+    }
+
+    @Test
+    fun profileScreen_ordersCloudSyncBelowAccountAndRoutesOnlyToIt() {
+        val clicks = mutableListOf<String>()
+        composeRule.setWatchContent {
+            ProfileScreen(
+                onAccountClick = { clicks += "account" },
+                onCloudSyncClick = { clicks += "cloud" },
+                onFavoritesClick = { clicks += "favorites" },
+                onWatchLaterClick = { clicks += "watchLater" },
+                onPhoneConnectionClick = { clicks += "phone" },
+                onSettingsClick = { clicks += "settings" },
+                onAboutClick = { clicks += "about" },
+                onContactDeveloperClick = { clicks += "contact" },
+                onBeianClick = { clicks += "beian" }
+            )
+        }
+
+        val order = listOf("账号", "云同步", "我的收藏", "稍后再看", "连接手机", "设置", "关于", "联系开发者")
+        val tops = order.map { composeRule.onNodeWithText(it).fetchSemanticsNode().positionInRoot.y }
+        assertEquals(tops.sorted(), tops)
+
+        composeRule.onNodeWithTag(ProfileTestTags.CLOUD_SYNC_ENTRY).performClick()
+        composeRule.runOnIdle { assertEquals(listOf("cloud"), clicks) }
+    }
+
+    @Test
+    fun profileScreen_hidesCloudSyncWithAccountEntryByDefault() {
+        composeRule.setWatchContent {
+            ProfileScreen(
+                showAccountEntry = false,
+                onFavoritesClick = {},
+                onWatchLaterClick = {},
+                onPhoneConnectionClick = {},
+                onSettingsClick = {},
+                onAboutClick = {},
+                onContactDeveloperClick = {},
+                onBeianClick = {}
+            )
+        }
+
+        composeRule.onNodeWithTag(ProfileTestTags.CLOUD_SYNC_ENTRY).assertDoesNotExist()
     }
 }

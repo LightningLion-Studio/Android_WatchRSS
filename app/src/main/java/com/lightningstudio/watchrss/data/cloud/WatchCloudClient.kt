@@ -72,7 +72,46 @@ data class WatchRssInventory(
     val articles: List<SyncedSavedArticle>
 )
 
-class WatchCloudClient(private val http: OkHttpClient = OkHttpClient()) {
+class WatchCloudClient(
+    private val http: OkHttpClient = OkHttpClient(),
+    private val accountProvider: (suspend (WatchAccountState) -> WatchAccountState)? = null
+) {
+    internal suspend fun requestAccount(original: WatchAccountState): WatchAccountState {
+        val current = accountProvider?.invoke(original) ?: original
+        require(current.userId == original.userId && current.installId == original.installId &&
+            current.backendBaseUrl.trimEnd('/') == original.backendBaseUrl.trimEnd('/')) { "账号已切换，请重试" }
+        require(current.backendBaseUrl.isNotBlank() && !current.isTokenExpired) {
+            "手表账号令牌无效，请重新从手机同步账号"
+        }
+        return current
+    }
+
+    /** GET is the only format probe; Android never grants record migration consent. */
+    suspend fun recordPage(account: WatchAccountState, after: String): JSONObject? =
+        request(account, Request.Builder().url(account.backendBaseUrl.trimEnd('/') +
+            "/functions/v1/cloud/records?after=${java.net.URLEncoder.encode(after, "UTF-8")}&limit=16").get(), setOf(400, 404)).use {
+            if (it.code == 404) null else {
+                val body = it.json()
+                if (it.code == 400) {
+                    if (body.optString("error") == "cloud_record_cursor_invalid") throw WatchCloudRecordCursorInvalid()
+                    throw IOException("HTTP 400: " + body.optString("error"))
+                }
+                body
+            }
+        }
+
+    suspend fun writeRecords(account: WatchAccountState, body: JSONObject): JSONObject =
+        request(account, Request.Builder().url(account.backendBaseUrl.trimEnd('/') + "/functions/v1/cloud/records")
+            .post(body.toString().toRequestBody(JSON)), setOf(409)).use {
+            if (it.code == 409) {
+                val detail = it.json()
+                if (detail.optString("code") == "cloud_record_conflict" || detail.optString("error") == "cloud_record_conflict")
+                    throw WatchCloudRecordConflict()
+                throw IOException("HTTP 409: cloud_record_write_failed")
+            }
+            it.json()
+        }
+
     suspend fun bootstrap(account: WatchAccountState): WatchCloudBootstrap =
         post(account, "/functions/v1/cloud/bootstrap", JSONObject()).use { response ->
             val json = response.json()
@@ -104,6 +143,21 @@ class WatchCloudClient(private val http: OkHttpClient = OkHttpClient()) {
             )
         }
 
+    suspend fun createApproval(account: WatchAccountState, deviceId: String): Pair<String, Long> =
+        post(account, "/functions/v1/cloud/approvals", JSONObject()
+            .put("deviceId", deviceId).put("restart", true)).use { response ->
+            val json = response.json()
+            val id = json.getString("id")
+            require(runCatching { java.util.UUID.fromString(id) }.isSuccess) { "授权请求无效" }
+            id to json.optLong("expiresAt", System.currentTimeMillis() + 5 * 60_000L)
+        }
+
+    suspend fun redeemApproval(account: WatchAccountState, deviceId: String, requestId: String, code: String) {
+        require(code.length == 8 && code.all { it in '0'..'9' }) { "请输入8位配对码" }
+        post(account, "/functions/v1/cloud/approvals/$requestId/redeem", JSONObject()
+            .put("deviceId", deviceId).put("code", code)).close()
+    }
+
     suspend fun register(
         account: WatchAccountState,
         deviceId: String,
@@ -122,6 +176,7 @@ class WatchCloudClient(private val http: OkHttpClient = OkHttpClient()) {
                 put("keyVersion", keyVersion)
                 put("capabilities", JSONObject().apply {
                     put("snapshotSchema", 2)
+                    put("rssRecordsVersion", 1)
                     put("cloudRelay", true)
                     put("rtosProtocolReserved", true)
                 })
@@ -366,19 +421,19 @@ class WatchCloudClient(private val http: OkHttpClient = OkHttpClient()) {
             Request.Builder().url(account.backendBaseUrl.trimEnd('/') + path).get()
         )
 
-    private suspend fun request(account: WatchAccountState, builder: Request.Builder) =
+    private suspend fun request(account: WatchAccountState, builder: Request.Builder, allowedStatuses: Set<Int> = emptySet()) =
         withContext(Dispatchers.IO) {
-            require(account.backendBaseUrl.isNotBlank() && !account.isTokenExpired) {
-                "手表账号令牌无效，请重新从手机同步账号"
-            }
+            // A full library merge can outlive an access token; resolve the same session
+            // immediately before every authenticated request, including ack and complete.
+            val current = requestAccount(account)
             http.newCall(
                 builder
                     .withWatchRssAppVersionHeader()
-                    .header("authorization", "Bearer ${account.watchDeviceToken}")
+                    .header("authorization", "Bearer ${current.watchDeviceToken}")
                     .header("accept", "application/json")
                     .build()
             ).execute().also {
-                if (!it.isSuccessful) throw it.error()
+                if (!it.isSuccessful && it.code !in allowedStatuses) throw it.error()
             }
         }
 

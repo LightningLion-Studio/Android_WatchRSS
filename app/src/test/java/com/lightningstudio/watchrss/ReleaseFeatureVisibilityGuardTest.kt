@@ -63,6 +63,15 @@ class ReleaseFeatureVisibilityGuardTest {
         assertTrue(ipSync.contains("if (BuildConfig.DEBUG)"))
     }
 
+    @Test
+    fun `cloud sync page stays display only in release builds`() {
+        val activity = source("CloudSyncActivity.kt")
+        val application = source("WatchRssApplication.kt")
+
+        assertTrue(activity.contains("if (BuildConfig.DEBUG) app.cloudSyncService else null"))
+        assertTrue(application.contains("if (!BuildConfig.DEBUG) return null"))
+    }
+
     private fun source(relativePath: String): String =
         File("src/main/java/com/lightningstudio/watchrss/$relativePath").readText()
 }

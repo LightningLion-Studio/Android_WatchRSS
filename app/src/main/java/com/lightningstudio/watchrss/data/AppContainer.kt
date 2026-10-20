@@ -276,7 +276,8 @@ class DefaultAppContainer(context: Context) : AppContainer {
             parseService = parseService,
             offlineStore = offlineStore,
             deviceId = deviceIdentity.deviceId,
-            articleContentStore = articleContentStore
+            articleContentStore = articleContentStore,
+            cloudDatabase = database
         )
     }
 

@@ -24,6 +24,9 @@ interface RssChannelDao {
     @Query("SELECT * FROM rss_channels ORDER BY isPinned DESC, sortOrder DESC, createdAt DESC")
     suspend fun getAllChannels(): List<RssChannelEntity>
 
+    @Query("SELECT * FROM rss_channels WHERE id > :afterId ORDER BY id LIMIT :limit")
+    suspend fun getCloudExportPage(afterId: Long, limit: Int): List<RssChannelEntity>
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertChannel(channel: RssChannelEntity): Long
 

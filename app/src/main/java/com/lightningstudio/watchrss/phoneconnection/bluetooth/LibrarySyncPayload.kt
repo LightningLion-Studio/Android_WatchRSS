@@ -540,7 +540,10 @@ object LibrarySyncPayload {
                         sortOrder = item.optLong("sortOrder"),
                         isPinned = item.optBoolean("isPinned"),
                         deleted = item.optBoolean("deleted"),
-                        deletedAt = item.optLong("deletedAt")
+                        deletedAt = item.optLong("deletedAt"),
+                        useOriginalContent = item.optBoolean("useOriginalContent"),
+                        continuePlaybackInBackground = item.optBoolean("continuePlaybackInBackground"),
+                        syncedSettingsIncluded = item.has("useOriginalContent") || item.has("continuePlaybackInBackground")
                     )
                 )
             }
@@ -1563,6 +1566,10 @@ object LibrarySyncPayload {
             put("isPinned", isPinned)
             put("deleted", deleted)
             put("deletedAt", deletedAt)
+            if (syncedSettingsIncluded) {
+                put("useOriginalContent", useOriginalContent)
+                put("continuePlaybackInBackground", continuePlaybackInBackground)
+            }
         }
     }
 

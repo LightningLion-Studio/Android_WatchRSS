@@ -19,6 +19,12 @@ interface SavedEntryDao {
     @Query("SELECT COUNT(*) FROM saved_entries WHERE itemId = :itemId")
     suspend fun countByItemId(itemId: Long): Int
 
+    @Query("""SELECT saved_entries.* FROM saved_entries
+        JOIN rss_items ON rss_items.id = saved_entries.itemId
+        WHERE COALESCE(rss_items.link, rss_items.dedupKey) = :url AND saved_entries.saveType = :saveType
+        ORDER BY saved_entries.createdAt DESC, saved_entries.itemId ASC LIMIT 1""")
+    suspend fun getCloudExportSavedEntry(url: String, saveType: String): SavedEntryEntity?
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(entry: SavedEntryEntity): Long
 

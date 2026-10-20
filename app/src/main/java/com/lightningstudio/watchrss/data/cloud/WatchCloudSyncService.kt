@@ -3,6 +3,13 @@ package com.lightningstudio.watchrss.data.cloud
 import android.content.Context
 import android.net.ConnectivityManager
 import android.os.Build
+import android.util.Log
+import com.lightningstudio.watchrss.BuildConfig
+import java.io.OutputStream
+import java.security.MessageDigest
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.lightningstudio.watchrss.data.account.AccountStore
 import com.lightningstudio.watchrss.data.account.WatchTokenManager
 import com.lightningstudio.watchrss.phoneconnection.WatchDeviceIdentity
@@ -27,15 +34,24 @@ data class WatchCloudStatus(
     val message: String = "尚未同步",
     val usedBytes: Long = 0,
     val quotaBytes: Long = 0,
-    val lastCompletedAt: Long = 0
+    val lastCompletedAt: Long = 0,
+    /** 状态所属账号；界面只展示与当前账号一致的状态。 */
+    val accountId: String = ""
 )
+
+data class WatchCloudApprovalRequest(val id: String, val userId: String, val expiresAt: Long)
 
 class WatchCloudSyncService(
     context: Context,
     private val accountStore: AccountStore,
     repository: com.lightningstudio.watchrss.data.rss.RssRepository,
     private val tokenManager: WatchTokenManager = WatchTokenManager(accountStore),
-    private val client: WatchCloudClient = WatchCloudClient(),
+    private val client: WatchCloudClient = WatchCloudClient(accountProvider = { original ->
+        val current = accountStore.read() ?: error("手表尚未绑定账号")
+        check(current.userId == original.userId && current.installId == original.installId &&
+            current.backendBaseUrl.trimEnd('/') == original.backendBaseUrl.trimEnd('/')) { "账号已切换" }
+        if (current.watchRefreshToken.isNotBlank()) tokenManager.freshAccount() else current
+    }),
     private val codec: WatchCloudCodec = WatchCloudCodec()
 ) {
     private val appContext = context.applicationContext
@@ -43,16 +59,50 @@ class WatchCloudSyncService(
     private val keyManager = WatchCloudKeyManager(context)
     private val cache = WatchCloudCache(context)
     private val stateStore = WatchCloudStateStore(context)
+    private val recordStore = WatchCloudRecordStore(context)
     private val library = WatchCloudLibraryAdapter(repository, deviceId)
     private val mutex = Mutex()
     private val _status = MutableStateFlow(WatchCloudStatus())
+    private var statusAccountId = ""
     val status: StateFlow<WatchCloudStatus> = _status
+
+    /** Requests authorize only this installation. No account/key material leaves the watch. */
+    suspend fun requestCodeApproval(): WatchCloudApprovalRequest = withContext(Dispatchers.IO) {
+        val owner = accountStore.read()?.userId ?: error("手表尚未绑定账号")
+        val account = tokenManager.freshAccount()
+        check(account.userId == owner && accountStore.read()?.userId == owner) { "账号已切换" }
+        client.register(account, deviceId, keyManager.publicKeySpki(owner, deviceId),
+            "手表 · ${Build.MODEL}", keyManager.currentKeyVersion(owner))
+        val (id, expires) = client.createApproval(account, deviceId)
+        check(accountStore.read()?.userId == owner) { "账号已切换" }
+        WatchCloudApprovalRequest(id, owner, expires)
+    }
+
+    suspend fun redeemCodeApproval(request: WatchCloudApprovalRequest, code: String) = withContext(Dispatchers.IO) {
+        require(code.length == 8 && code.all { it in '0'..'9' }) { "请输入8位配对码" }
+        check(System.currentTimeMillis() < request.expiresAt) { "approval_expired" }
+        check(accountStore.read()?.userId == request.userId) { "账号已切换" }
+        val account = tokenManager.freshAccount()
+        check(account.userId == request.userId) { "账号已切换" }
+        client.redeemApproval(account, deviceId, request.id, code)
+        val bootstrap = client.bootstrap(account)
+        check(accountStore.read()?.userId == request.userId) { "账号已切换" }
+        bootstrap.envelopes.sortedBy(WatchDeviceKeyEnvelope::keyVersion).forEach { envelope ->
+            // Re-authorization still verifies/decrypts the offered envelope. The key manager
+            // compares an existing same-version key before persisting, so conflicts cannot replace it.
+            keyManager.acceptEnvelope(request.userId, deviceId, envelope).fill(0)
+        }
+        check(keyManager.keyVersions(request.userId).isNotEmpty()) { "授权尚未完成，请稍后重新检查" }
+        statusAccountId = request.userId
+        if (!mutex.isLocked) set(WatchCloudPhase.IDLE, "已获得云同步授权", bootstrap.member)
+    }
 
     suspend fun syncNow(manual: Boolean = false): Boolean = mutex.withLock {
         try {
             val connectivity = appContext.getSystemService(ConnectivityManager::class.java)
             val fullTransfer = manual || !connectivity.isActiveNetworkMetered
             val storedAccount = accountStore.read() ?: return@withLock false
+            statusAccountId = storedAccount.userId
             val account = if (storedAccount.watchRefreshToken.isNotBlank()) {
                 tokenManager.freshAccount()
             } else {
@@ -135,17 +185,18 @@ class WatchCloudSyncService(
                             }
                         }
                     set(WatchCloudPhase.MERGING, "正在合并手机数据", bootstrap.member)
-                    val payload = codec.restore(
-                        accountKey,
-                        manifest.copy(objects = selected)
-                    ) { hash -> cache.chunk(account.userId, hash) ?: error("中继缓存缺失") }
-                    if (fullTransfer) {
-                        payload[RELAY_OBJECT]?.let {
-                            changed = library.restore(it, head.sourceDeviceId) > 0 || changed
+                    for (objectDescriptor in selected) {
+                        debugProgress("restore_start object=${objectDescriptor.name} bytes=${objectDescriptor.originalBytes} chunks=${objectDescriptor.chunks.size}")
+                        val applied = codec.withRestoredObject(accountKey, objectDescriptor,
+                            { hash -> cache.chunk(account.userId, hash) ?: error("中继缓存缺失") }) { input ->
+                            when (objectDescriptor.name) {
+                                RELAY_OBJECT -> library.restore(input, head.sourceDeviceId)
+                                RSS_STATE_OBJECT -> library.restoreState(input, head.sourceDeviceId)
+                                else -> 0
+                            }
                         }
-                    }
-                    payload[RSS_STATE_OBJECT]?.let {
-                        changed = library.restoreState(it, head.sourceDeviceId) > 0 || changed
+                        changed = applied > 0 || changed
+                        debugProgress("restore_done object=${objectDescriptor.name} applied=$applied")
                     }
                 }
                 cache.storeManifest(
@@ -155,9 +206,10 @@ class WatchCloudSyncService(
                     markAsLocalHead = false
                 )
                 if (fullTransfer) {
+                    client.acknowledge(account, head.id, deviceId)
+                    debugProgress("head_ack sequence=${head.sequence}")
                     stateStore.markApplied(head.sourceDeviceId, head.sequence, full = true)
                     stateStore.markApplied(head.sourceDeviceId, head.sequence, full = false)
-                    client.acknowledge(account, head.id, deviceId)
                 } else if (selected.any { it.name == RSS_STATE_OBJECT }) {
                     stateStore.markApplied(head.sourceDeviceId, head.sequence, full = false)
                 }
@@ -173,17 +225,65 @@ class WatchCloudSyncService(
                 }
             }
 
+            // Keep legacy compatibility above. The records channel is opt-in on
+            // the server; Android only probes GET and never grants consent.
+            WatchCloudRecordSync(
+                userId = account.userId,
+                scope = account.backendBaseUrl.trimEnd('/') + "|" + account.userId,
+                store = recordStore,
+                keyVersion = { keyManager.currentKeyVersion(account.userId) },
+                keyForVersion = { version -> keyManager.accountKey(account.userId, version) },
+                checkOwner = {
+                    val current = accountStore.read()
+                    check(current?.userId == account.userId && current.installId == account.installId &&
+                        current.backendBaseUrl.trimEnd('/') == account.backendBaseUrl.trimEnd('/')) { "账号已切换" }
+                },
+                readPage = { cursor -> client.recordPage(account, cursor) },
+                writeBatch = { body -> client.writeRecords(account, body) },
+                streamLocal = { emit -> library.streamRecordValues(emit) },
+                apply = { values -> library.applyRecordValues(values) },
+                localProjection = { value -> library.recordProjection(value) }
+            ).sync(writable = bootstrap.member.writable)
+
             val currentKeyVersion = keyManager.currentKeyVersion(account.userId)
-            val statePayload = library.exportState()
-            val stateContentHash = WatchCloudCodec.sha256(
-                "keyVersion:$currentKeyVersion;state;".toByteArray() + statePayload
-            )
-            val relayPayload = if (fullTransfer) library.export() else null
-            val contentHash = WatchCloudCodec.sha256(
-                "keyVersion:$currentKeyVersion;full:$fullTransfer;".toByteArray() +
-                    statePayload +
-                    (relayPayload ?: ByteArray(0))
-            )
+            val accountKey = keyManager.accountKey(account.userId, currentKeyVersion)
+                ?: error("当前账号主密钥不存在")
+            val previous = cache.latest(account.userId)?.let { (id, bytes) ->
+                runCatching { codec.decryptManifest(accountKey, id, bytes) }.getOrNull()
+                    ?.takeIf { it.keyVersion == currentKeyVersion }
+            }
+            val carried = if (fullTransfer) emptyList()
+                else listOfNotNull(previous?.objects?.firstOrNull { it.name == RELAY_OBJECT })
+            val stateDigest = MessageDigest.getInstance("SHA-256").apply {
+                update("keyVersion:$currentKeyVersion;state;".toByteArray())
+            }
+            val fullDigest = MessageDigest.getInstance("SHA-256").apply {
+                update("keyVersion:$currentKeyVersion;full:$fullTransfer;".toByteArray())
+            }
+            fun digesting(output: OutputStream, vararg digests: MessageDigest) = object : OutputStream() {
+                override fun write(value: Int) { write(byteArrayOf(value.toByte()), 0, 1) }
+                override fun write(bytes: ByteArray, offset: Int, length: Int) {
+                    digests.forEach { it.update(bytes, offset, length) }
+                    output.write(bytes, offset, length)
+                }
+                override fun flush() = output.flush()
+                override fun close() = output.flush()
+            }
+            val logicalObjects = buildList {
+                add(WatchCloudStreamingObject(RSS_STATE_OBJECT) { output ->
+                    library.exportStateTo(digesting(output, stateDigest, fullDigest))
+                })
+                if (fullTransfer) add(WatchCloudStreamingObject(RELAY_OBJECT) { output ->
+                    library.exportTo(digesting(output, fullDigest))
+                })
+            }
+            set(WatchCloudPhase.UPLOADING, "正在准备手表状态", bootstrap.member)
+            val prepared = codec.prepareStreamingObjects(accountKey, logicalObjects, previous) { hash, bytes ->
+                cache.storeChunk(account.userId, hash, bytes)
+            }
+            debugProgress("export_done bytes=${prepared.sumOf { it.originalBytes }} chunks=${prepared.sumOf { it.chunks.size }}")
+            val stateContentHash = stateDigest.digest().joinToString("") { "%02x".format(it) }
+            val contentHash = fullDigest.digest().joinToString("") { "%02x".format(it) }
             val freshHeads = client.heads(account)
             val mergeNeeded = freshHeads.isNotEmpty() && freshHeads.none { candidate ->
                 freshHeads.all { current ->
@@ -196,40 +296,21 @@ class WatchCloudSyncService(
                 mergeNeeded ||
                 changed
             ) {
-                val accountKey = keyManager.accountKey(account.userId, currentKeyVersion)
-                    ?: error("当前账号主密钥不存在")
-                val previous = cache.latest(account.userId)?.let { (id, bytes) ->
-                    runCatching { codec.decryptManifest(accountKey, id, bytes) }
-                        .getOrNull()
-                        ?.takeIf { it.keyVersion == currentKeyVersion }
-                }
-                val carried = if (fullTransfer) {
-                    emptyList()
-                } else {
-                    listOfNotNull(previous?.objects?.firstOrNull { it.name == RELAY_OBJECT })
-                }
-                val logicalObjects = buildList {
-                    add(WatchCloudLogicalObject(RSS_STATE_OBJECT, statePayload))
-                    relayPayload?.let { add(WatchCloudLogicalObject(RELAY_OBJECT, it)) }
-                }
-                val parentHeads = freshHeads.associate { it.sourceDeviceId to it.id }
-                val observedHeads = freshHeads.associate { it.sourceDeviceId to it.sequence }
+                // Observe only heads actually restored above; a newly arriving head must be
+                // merged on the next pass rather than being falsely advertised as consumed.
+                val parentHeads = heads.associate { it.sourceDeviceId to it.id }
+                val observedHeads = heads.associate { it.sourceDeviceId to it.sequence }
                 val serverSequence = bootstrap.devices
                     .firstOrNull { it.deviceId == deviceId }?.lastSequence ?: 0
-                val snapshot = codec.create(
+                val snapshot = codec.createFromPrepared(
                     accountKey = accountKey,
                     keyVersion = currentKeyVersion,
                     sourceDeviceId = deviceId,
                     sequence = stateStore.nextSequence(serverSequence),
-                    objects = logicalObjects,
+                    objects = carried + prepared,
                     parentHeads = parentHeads,
-                    observedHeads = observedHeads,
-                    previous = previous,
-                    carried = carried
+                    observedHeads = observedHeads
                 )
-                snapshot.newChunks.forEach { (hash, bytes) ->
-                    cache.storeChunk(account.userId, hash, bytes)
-                }
                 set(WatchCloudPhase.UPLOADING, "正在上传手表状态", bootstrap.member)
                 client.reserve(account, snapshot, 30).forEach { target ->
                     val bytes = if (target.kind == "manifest") {
@@ -241,6 +322,7 @@ class WatchCloudSyncService(
                     client.upload(target, bytes)
                 }
                 client.complete(account, snapshot)
+                debugProgress("snapshot_complete sequence=${snapshot.manifest.deviceSequence}")
                 cache.storeManifest(
                     account.userId,
                     snapshot.manifest.snapshotId,
@@ -260,25 +342,42 @@ class WatchCloudSyncService(
                 bootstrap.member,
                 System.currentTimeMillis()
             )
+            debugProgress("sync_complete full=$fullTransfer")
             true
         } catch (error: Exception) {
+            if (error is CancellationException) {
+                debugProgress("sync_canceled phase=${_status.value.phase}")
+                throw error
+            }
+            val http = Regex("HTTP ([0-9]{3})").find(error.message.orEmpty())?.groupValues?.get(1) ?: "none"
+            val frame = error.stackTrace.firstOrNull { it.className.startsWith("com.lightningstudio.watchrss.") }
+            debugProgress("sync_failed phase=${_status.value.phase} class=${error.javaClass.simpleName} http=$http at=${frame?.className}:${frame?.methodName}:${frame?.lineNumber}")
             set(WatchCloudPhase.ERROR, error.message ?: "云同步失败")
             false
         }
+    }
+
+    /** Diagnostic counts/methods only: never article URLs, plaintext, account IDs or token/error payloads. */
+    private fun debugProgress(message: String) {
+        if (BuildConfig.DEBUG) Log.i("WatchCloudSync", message)
     }
 
     private fun set(
         phase: WatchCloudPhase,
         message: String,
         member: WatchCloudMember? = null,
-        completedAt: Long = _status.value.lastCompletedAt
+        completedAt: Long? = null
     ) {
+        // 换账号后不沿用上一账号的空间与完成时间。
+        val previous = _status.value.takeIf { it.accountId == statusAccountId }
+            ?: WatchCloudStatus(accountId = statusAccountId)
         _status.value = WatchCloudStatus(
             phase,
             message,
-            member?.usedBytes ?: _status.value.usedBytes,
-            member?.quotaBytes ?: _status.value.quotaBytes,
-            completedAt
+            member?.usedBytes ?: previous.usedBytes,
+            member?.quotaBytes ?: previous.quotaBytes,
+            completedAt ?: previous.lastCompletedAt,
+            statusAccountId
         )
     }
 

@@ -140,6 +140,52 @@ interface RssItemDao {
             readingPositionContentHash,
             readingPositionChangedAt
         FROM rss_items
+        WHERE id = :id
+        """
+    )
+    suspend fun getCloudExportMetadata(id: Long): RssItemEntity?
+
+    @Query("SELECT id FROM rss_items WHERE id > :afterId ORDER BY id LIMIT :limit")
+    suspend fun getCloudExportItemIds(afterId: Long, limit: Int): List<Long>
+
+    @Query("SELECT id FROM rss_items WHERE channelId = :channelId AND dedupKey = :articleId LIMIT 1")
+    suspend fun getCloudRecordItemId(channelId: Long, articleId: String): Long?
+
+    @Query("SELECT id FROM rss_items WHERE COALESCE(link, dedupKey) = :url ORDER BY id LIMIT 1")
+    suspend fun findCloudExportItemId(url: String): Long?
+
+    @Query(
+        """
+        SELECT
+            id,
+            channelId,
+            title,
+            description,
+            NULL AS content,
+            NULL AS originalContent,
+            link,
+            guid,
+            pubDate,
+            imageUrl,
+            audioUrl,
+            videoUrl,
+            summary,
+            previewImageUrl,
+            isRead,
+            isLiked,
+            readingProgress,
+            dedupKey,
+            fetchedAt,
+            contentSizeBytes,
+            syncBodyHash,
+            syncBodyByteCount,
+            syncChunkSize,
+            syncChunkHashesJson,
+            syncMetadataHash,
+            readingPositionBytes,
+            readingPositionContentHash,
+            readingPositionChangedAt
+        FROM rss_items
         WHERE channelId = :channelId AND (
             title LIKE :keyword ESCAPE '\' OR
             description LIKE :keyword ESCAPE '\' OR

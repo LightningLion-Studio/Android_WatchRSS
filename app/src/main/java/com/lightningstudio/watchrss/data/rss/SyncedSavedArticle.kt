@@ -117,7 +117,10 @@ data class SyncedRssSource(
     val sortOrder: Long,
     val isPinned: Boolean = false,
     val deleted: Boolean,
-    val deletedAt: Long
+    val deletedAt: Long,
+    val useOriginalContent: Boolean = false,
+    val continuePlaybackInBackground: Boolean = false,
+    val syncedSettingsIncluded: Boolean = false
 )
 
 data class SyncedRssSourceMergeStats(

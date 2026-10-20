@@ -4,6 +4,10 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.io.InputStream
+import java.io.FilterInputStream
+import java.io.OutputStream
+import java.io.IOException
 import java.security.KeyFactory
 import java.security.MessageDigest
 import java.security.PrivateKey
@@ -25,6 +29,12 @@ data class WatchCloudLogicalObject(
     val name: String,
     val bytes: ByteArray,
     val compress: Boolean = true
+)
+
+/** Producer is invoked on the caller's IO coroutine; plaintext is never collected as one array. */
+data class WatchCloudStreamingObject(
+    val name: String,
+    val produce: suspend (OutputStream) -> Unit
 )
 
 data class WatchCloudChunk(
@@ -185,6 +195,163 @@ class WatchCloudCodec(private val random: SecureRandom = SecureRandom()) {
             carried + descriptors
         )
         return WatchEncryptedSnapshot(manifest, encryptManifest(accountKey, manifest), newChunks)
+    }
+
+    suspend fun prepareStreamingObjects(
+        accountKey: ByteArray,
+        objects: List<WatchCloudStreamingObject>,
+        previous: WatchCloudManifest? = null,
+        storeChunk: (String, ByteArray) -> Unit
+    ): List<WatchCloudObject> {
+        require(accountKey.size == 32)
+        require(objects.map { it.name }.distinct().size == objects.size)
+        val reusable = previous?.chunks?.associateBy(WatchCloudChunk::plaintextSha256).orEmpty()
+        return objects.map { logical ->
+            val descriptors = mutableListOf<WatchCloudChunk>()
+            var originalBytes = 0L
+            var encodedBytes = 0L
+            val buffer = ByteArray(WATCH_CLOUD_CHUNK_BYTES)
+            var buffered = 0
+            fun emit() {
+                val encoded = gzip(if (buffered == buffer.size) buffer else buffer.copyOf(buffered))
+                val plainHash = sha256(encoded)
+                val descriptor = reusable[plainHash] ?: encryptChunk(accountKey, encoded, plainHash).let { (part, bytes) ->
+                    storeChunk(part.ciphertextSha256, bytes)
+                    part
+                }
+                descriptors += descriptor
+                encodedBytes = Math.addExact(encodedBytes, encoded.size.toLong())
+                encoded.fill(0)
+                buffered = 0
+            }
+            val output = object : OutputStream() {
+                override fun write(value: Int) { write(byteArrayOf(value.toByte()), 0, 1) }
+                override fun write(bytes: ByteArray, offset: Int, count: Int) {
+                    require(offset >= 0 && count >= 0 && offset <= bytes.size - count)
+                    var at = offset
+                    var remaining = count
+                    originalBytes = Math.addExact(originalBytes, count.toLong())
+                    while (remaining > 0) {
+                        val take = minOf(buffer.size - buffered, remaining)
+                        bytes.copyInto(buffer, buffered, at, at + take)
+                        buffered += take; at += take; remaining -= take
+                        if (buffered == buffer.size) emit()
+                    }
+                }
+                // JsonWriter may flush/close; object chunking finishes only after producer returns.
+                override fun close() = Unit
+            }
+            try {
+                logical.produce(output)
+                if (buffered > 0 || descriptors.isEmpty()) emit()
+            } finally { buffer.fill(0) }
+            WatchCloudObject(logical.name, "gzip-chunks-v1", originalBytes, encodedBytes, descriptors)
+        }
+    }
+
+    fun createFromPrepared(
+        accountKey: ByteArray,
+        keyVersion: Int,
+        sourceDeviceId: String,
+        sequence: Long,
+        objects: List<WatchCloudObject>,
+        parentHeads: Map<String, String>,
+        observedHeads: Map<String, Long>,
+        snapshotId: String = UUID.randomUUID().toString()
+    ): WatchEncryptedSnapshot {
+        require(accountKey.size == 32 && sequence > 0 && keyVersion > 0)
+        require(objects.map { it.name }.distinct().size == objects.size)
+        val manifest = WatchCloudManifest(snapshotId, sourceDeviceId, sequence, keyVersion,
+            System.currentTimeMillis(), parentHeads, observedHeads, objects)
+        return WatchEncryptedSnapshot(manifest, encryptManifest(accountKey, manifest), emptyMap())
+    }
+
+    /** Each ciphertext chunk authenticates before exposure; the entire object validates before return. */
+    suspend fun <T> withRestoredObject(
+        accountKey: ByteArray,
+        descriptor: WatchCloudObject,
+        chunk: (String) -> ByteArray,
+        consume: suspend (InputStream) -> T
+    ): T {
+        require(descriptor.originalBytes >= 0 && descriptor.encodedBytes >= 0)
+        val encodedSize = descriptor.chunks.fold(0L) { total, part ->
+            require(part.plaintextBytes >= 0)
+            Math.addExact(total, part.plaintextBytes.toLong())
+        }
+        require(encodedSize == descriptor.encodedBytes) { "云对象编码长度不一致" }
+        require(descriptor.encoding in setOf("gzip-chunks-v1", "gzip", "identity")) { "不支持的云快照编码" }
+        val parts = descriptor.chunks.iterator()
+        val sequence = object : InputStream() {
+            var current: InputStream? = null
+            var closed = false
+            private fun active(): InputStream? {
+                check(!closed)
+                current?.let { return it }
+                if (!parts.hasNext()) return null
+                val part = parts.next()
+                val encoded = decryptChunk(accountKey, part, chunk(part.ciphertextSha256))
+                val input = object : ByteArrayInputStream(encoded) {
+                    override fun close() { encoded.fill(0); super.close() }
+                }
+                return (if (descriptor.encoding == "gzip-chunks-v1") {
+                    try { GZIPInputStream(input) } catch (error: Exception) { input.close(); throw error }
+                } else input).also { current = it }
+            }
+            override fun read(): Int {
+                while (true) {
+                    val stream = active() ?: return -1
+                    val result = stream.read()
+                    if (result >= 0) return result
+                    stream.close(); current = null
+                }
+            }
+            override fun read(bytes: ByteArray, offset: Int, length: Int): Int {
+                if (length == 0) return 0
+                while (true) {
+                    val stream = active() ?: return -1
+                    val result = stream.read(bytes, offset, length)
+                    if (result >= 0) return result
+                    stream.close(); current = null
+                }
+            }
+            override fun close() { closed = true; current?.close(); current = null }
+        }
+        val decoded = if (descriptor.encoding == "gzip") {
+            try { GZIPInputStream(sequence) } catch (error: Exception) { sequence.close(); throw error }
+        } else sequence
+        val verified = object : InputStream() {
+            var count = 0L
+            var finished = false
+            private fun record(read: Int): Int {
+                if (read < 0) {
+                    finished = true
+                    if (count != descriptor.originalBytes) throw IOException("云对象正文长度不一致")
+                } else {
+                    count = Math.addExact(count, read.toLong())
+                    if (count > descriptor.originalBytes) throw IOException("云对象正文超出声明长度")
+                }
+                return read
+            }
+            override fun read(): Int {
+                val value = decoded.read()
+                record(if (value < 0) -1 else 1)
+                return value
+            }
+            override fun read(bytes: ByteArray, offset: Int, length: Int): Int = record(decoded.read(bytes, offset, length))
+            override fun close() { decoded.close() }
+        }
+        return verified.use { input ->
+            val result = consume(object : FilterInputStream(input) {
+                // Readers may close their view; this owner must still drain and validate the object.
+                override fun close() = Unit
+            })
+            val drain = ByteArray(8192)
+            while (input.read(drain) >= 0) { /* Validate unconsumed/trailing bytes before ack. */ }
+            // Legacy GZIPInputStream can finish before requesting every encrypted part.
+            // Authenticate remaining ciphertext chunks before treating the object as applied.
+            while (sequence.read(drain) >= 0) { }
+            result
+        }
     }
 
     fun decryptManifest(

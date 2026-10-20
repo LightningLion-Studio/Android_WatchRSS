@@ -16,6 +16,9 @@ interface RssSourceSyncStateDao {
     @Query("SELECT * FROM rss_source_sync_states WHERE url IN (:urls)")
     suspend fun getByUrls(urls: List<String>): List<RssSourceSyncStateEntity>
 
+    @Query("SELECT * FROM rss_source_sync_states WHERE url > :afterUrl ORDER BY url LIMIT :limit")
+    suspend fun getCloudExportPage(afterUrl: String, limit: Int): List<RssSourceSyncStateEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(state: RssSourceSyncStateEntity)
 

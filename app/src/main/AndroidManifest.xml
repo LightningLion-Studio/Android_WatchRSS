@@ -199,6 +199,8 @@
             android:name=".AccountStatusActivity"
             android:exported="${debugActivityExported}"
             android:theme="@style/Theme.WatchRSS.Translucent" />
+        <activity android:name=".CloudSyncActivity" android:exported="false" android:theme="@style/Theme.WatchRSS.Translucent" />
+        <activity android:name=".MiniProgramPairingActivity" android:exported="false" android:theme="@style/Theme.WatchRSS.Translucent" />
         <activity
             android:name=".PhoneConnectionActivity"
             android:exported="${debugActivityExported}"

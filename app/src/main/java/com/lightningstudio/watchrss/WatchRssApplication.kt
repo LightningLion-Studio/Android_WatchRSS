@@ -76,6 +76,19 @@ class WatchRssApplication : Application() {
         )
     }
 
+    private var manualCloudSync: Job? = null
+
+    /** 进行中的手动云同步；页面重进时据此保持“同步中”。 */
+    fun activeManualCloudSync(): Job? = manualCloudSync?.takeIf { it.isActive }
+
+    /** 云同步页的手动同步：合并重复点击，离开页面也不中断。仅 DEBUG 开放。 */
+    fun requestManualCloudSync(): Job? {
+        if (!BuildConfig.DEBUG) return null
+        activeManualCloudSync()?.let { return it }
+        return appScope.launch { cloudSyncService.syncNow(manual = true) }
+            .also { manualCloudSync = it }
+    }
+
     override fun onCreate() {
         super.onCreate()
 

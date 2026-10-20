@@ -36,6 +36,13 @@ object ArticleSyncBody {
     private const val JSON_WRITE_BUFFER_CHARS = 16 * 1024
     private val HEX_DIGITS = "0123456789abcdef".toCharArray()
 
+    private val emptyEncodedBodyHash: String by lazy {
+        val output = BodyChunkOutputStream()
+        writeEncodedBody(null, "", output)
+        output.metadata("").bodyHash
+    }
+    internal fun emptyBodyHash(): String = emptyEncodedBodyHash
+
     fun metadataFor(article: SyncedSavedArticle): ArticleBodyMetadata {
         val output = BodyChunkOutputStream()
         writeEncodedBody(article.contentHtml, article.contentText, output)

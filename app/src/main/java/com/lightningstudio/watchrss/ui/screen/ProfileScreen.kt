@@ -18,6 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayCircle
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.PhoneAndroid
@@ -44,7 +45,9 @@ import com.lightningstudio.watchrss.ui.testing.ProfileTestTags
 fun ProfileScreen(
     showAccountEntry: Boolean = true,
     showPhoneConnectionEntry: Boolean = true,
+    showCloudSyncEntry: Boolean = showAccountEntry,
     onAccountClick: () -> Unit = {},
+    onCloudSyncClick: () -> Unit = {},
     onFavoritesClick: () -> Unit,
     onWatchLaterClick: () -> Unit,
     onPhoneConnectionClick: () -> Unit,
@@ -93,6 +96,24 @@ fun ProfileScreen(
                     icon = Icons.Outlined.Person,
                     onClick = onAccountClick,
                     testTag = ProfileTestTags.ACCOUNT_ENTRY,
+                    pillHeight = pillHeight,
+                    pillRadius = pillRadius,
+                    pillColor = pillColor,
+                    pillHorizontalPadding = pillHorizontalPadding,
+                    pillVerticalPadding = pillVerticalPadding,
+                    iconSize = iconSize,
+                    iconSpacing = iconSpacing
+                )
+
+                Spacer(modifier = Modifier.height(entrySpacing))
+            }
+
+            if (showCloudSyncEntry) {
+                ProfileEntry(
+                    title = "云同步",
+                    icon = Icons.Outlined.Cloud,
+                    onClick = onCloudSyncClick,
+                    testTag = ProfileTestTags.CLOUD_SYNC_ENTRY,
                     pillHeight = pillHeight,
                     pillRadius = pillRadius,
                     pillColor = pillColor,
