@@ -1,6 +1,5 @@
 package com.lightningstudio.watchrss.ui.screen
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,12 +22,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownScrollHandler
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 
@@ -40,80 +38,56 @@ fun CollaboratorsScreen(
     val scrollState = rememberScrollState()
 
     InstallDigitalCrownScrollHandler(scrollState)
-    Box(modifier = modifier.fillMaxSize()) {
-        val bgOuter1 = Color.Black
-        val bgOuter2 = Color.Black
+    WatchSurface(modifier = modifier) {
+        val contentModifier = if (circleMaskEnabled) {
+            Modifier.fillMaxWidth().aspectRatio(1f).clip(CircleShape)
+        } else {
+            Modifier.fillMaxSize()
+        }
+        Box(modifier = contentModifier, contentAlignment = Alignment.TopCenter) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(scrollState)
+                    .padding(horizontal = 18.dp)
+                    .padding(top = 14.dp, bottom = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Spacer(modifier = Modifier.height(14.dp))
 
-        val circleBg1 = Color.Black
-        val circleBg2 = Color.Black
+                Spacer(modifier = Modifier.height(6.dp))
 
-        val circle = Modifier
-            .fillMaxWidth()
-            .aspectRatio(1f)
-            .clip(CircleShape)
-            .background(
-                brush = Brush.radialGradient(
-                    colors = listOf(circleBg1, circleBg2)
+                Text(
+                    text = "协作者名单",
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold
                 )
-            )
 
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    brush = Brush.linearGradient(
-                        colors = listOf(bgOuter1, bgOuter2)
-                    )
-                ),
-            contentAlignment = Alignment.Center
-        ) {
-            val contentModifier = if (circleMaskEnabled) circle else Modifier.fillMaxSize()
+                Spacer(modifier = Modifier.height(14.dp))
 
-            Box(modifier = contentModifier) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(scrollState)
-                        .padding(horizontal = 18.dp)
-                        .padding(top = 14.dp, bottom = 16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    Spacer(modifier = Modifier.height(6.dp))
-
-                    Text(
-                        text = "协作者名单",
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontSize = 17.sp,
-                        fontWeight = FontWeight.Bold
+                    CollaboratorPill(
+                        name = "闪电狮",
+                        role = "前端开发",
+                        leadingText = "S"
                     )
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        CollaboratorPill(
-                            name = "闪电狮",
-                            role = "前端开发",
-                            leadingText = "S"
-                        )
-                        CollaboratorPill(
-                            name = "林海阔",
-                            role = "前端开发",
-                            leadingText = "L"
-                        )
-                        CollaboratorPill(
-                            name = "Nicolas",
-                            role = "设计师",
-                            leadingText = "N"
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(40.dp))
+                    CollaboratorPill(
+                        name = "林海阔",
+                        role = "前端开发",
+                        leadingText = "L"
+                    )
+                    CollaboratorPill(
+                        name = "Nicolas",
+                        role = "设计师",
+                        leadingText = "N"
+                    )
                 }
+
+                Spacer(modifier = Modifier.height(40.dp))
             }
         }
     }

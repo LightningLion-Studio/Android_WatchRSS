@@ -15,8 +15,11 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+
+data class FeedMessageEvent(val id: Long, val text: String)
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class FeedViewModel(
@@ -29,6 +32,18 @@ class FeedViewModel(
 
     val channel = repository.observeChannel(channelId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val continueReading = channel.flatMapLatest { current ->
+        if (current == null || !(current.url.startsWith(com.lightningstudio.watchrss.data.rss.ImportedContentIds.EPUB_SOURCE_ROOT_URL + "/") ||
+                current.url.startsWith(com.lightningstudio.watchrss.data.rss.ImportedContentIds.TXT_NOVEL_SOURCE_ROOT_URL + "/"))) {
+            kotlinx.coroutines.flow.flowOf(null)
+        } else repository.observeNovelChapters(current.id).map { chapters ->
+            com.lightningstudio.watchrss.data.rss.novelResumeChapter(
+                com.lightningstudio.watchrss.data.rss.orderedNovelChapters(chapters, current.url)
+            )
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
 
     private val _visibleCount = MutableStateFlow(DEFAULT_PAGE_SIZE)
 
@@ -57,6 +72,9 @@ class FeedViewModel(
 
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
+    private val _messageEvent = MutableStateFlow<FeedMessageEvent?>(null)
+    val messageEvent: StateFlow<FeedMessageEvent?> = _messageEvent.asStateFlow()
+    private var nextMessageId = 0L
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
@@ -70,7 +88,7 @@ class FeedViewModel(
             _isRefreshing.value = true
             val result = repository.refreshChannel(channelId)
             if (result.isFailure) {
-                _message.value = result.exceptionOrNull()?.message ?: "刷新失败"
+                publishMessage(result.exceptionOrNull()?.message ?: "刷新失败")
             }
             _isRefreshing.value = false
             PerfTrace.log(
@@ -118,8 +136,15 @@ class FeedViewModel(
         return repository.observeSavedState(itemId).first()
     }
 
-    fun clearMessage() {
+    private fun publishMessage(text: String) {
+        _message.value = text
+        _messageEvent.value = FeedMessageEvent(++nextMessageId, text)
+    }
+
+    fun clearMessage(expectedEventId: Long? = null) {
+        if (expectedEventId != null && _messageEvent.value?.id != expectedEventId) return
         _message.value = null
+        _messageEvent.value = null
     }
 
     companion object {

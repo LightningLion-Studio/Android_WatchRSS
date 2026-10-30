@@ -10,6 +10,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.RandomAccessFile
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 import java.util.Base64
 
@@ -82,9 +84,22 @@ object ReaderPresetSyncPayload {
             require(repository.resourceStore.verify(partial, totalBytes, expectedHash)) {
                 "资源完整校验失败"
             }
-            if (target.exists()) target.delete()
-            require(partial.renameTo(target)) { "资源落盘失败" }
+            try {
+                Files.move(
+                    partial.toPath(),
+                    target.toPath(),
+                    StandardCopyOption.ATOMIC_MOVE,
+                    StandardCopyOption.REPLACE_EXISTING
+                )
+            } catch (_: java.io.IOException) {
+                Files.move(
+                    partial.toPath(),
+                    target.toPath(),
+                    StandardCopyOption.REPLACE_EXISTING
+                )
+            }
             metadata.delete()
+            repository.notifyResourceApplied()
         }
         return pushAck(index, data, applied = complete)
     }

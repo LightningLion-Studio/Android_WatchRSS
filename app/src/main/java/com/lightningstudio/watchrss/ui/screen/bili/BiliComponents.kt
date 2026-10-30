@@ -28,21 +28,29 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.Stable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.TextUnit
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.util.RssImageLoader
+import com.lightningstudio.watchrss.ui.util.ValidatedNetworkRetryBudget
+import com.lightningstudio.watchrss.ui.util.rememberValidatedNetworkRevision
 import java.util.Locale
 import androidx.compose.ui.layout.ContentScale
 
@@ -61,10 +69,15 @@ fun BiliPillButton(
 
     Box(
         modifier = Modifier
-            .height(height)
+            .height(height.coerceAtLeast(48.dp))
             .clip(RoundedCornerShape(radius))
             .background(background)
-            .clickable(enabled = enabled, onClick = onClick)
+            .clickable(
+                enabled = enabled,
+                onClickLabel = text,
+                role = Role.Button,
+                onClick = onClick
+            )
             .padding(horizontal = horizontalPadding, vertical = verticalPadding),
         contentAlignment = Alignment.Center
     ) {
@@ -103,7 +116,11 @@ fun BiliVideoCard(
             .fillMaxWidth()
             .clip(RoundedCornerShape(cardRadius))
             .background(cardColor)
-            .clickable(onClick = onClick)
+            .clickable(
+                role = Role.Button,
+                onClickLabel = "打开视频：${title.ifBlank { "未命名视频" }}",
+                onClick = onClick
+            )
             .padding(textPadding)
     ) {
         Box(
@@ -114,10 +131,20 @@ fun BiliVideoCard(
                 .background(MaterialTheme.colorScheme.surface),
             contentAlignment = Alignment.Center
         ) {
-            val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, coverUrl, maxWidthPx) {
-                value = if (coverUrl.isNullOrBlank()) null else {
-                    RssImageLoader.loadBitmap(context = context, url = coverUrl, maxWidthPx = maxWidthPx)
+            val networkRevision = rememberValidatedNetworkRevision(context)
+            var retry by remember(coverUrl) { mutableIntStateOf(0) }
+            var loadFailed by remember(coverUrl) { mutableStateOf(false) }
+            val networkRetryBudget = remember(coverUrl) { ValidatedNetworkRetryBudget(networkRevision) }
+            val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, coverUrl, maxWidthPx, networkRevision, retry) {
+                value = if (coverUrl.isNullOrBlank() || !networkRetryBudget.shouldAttempt(networkRevision)) null else {
+                    RssImageLoader.loadBitmap(
+                        context = context,
+                        url = coverUrl,
+                        maxWidthPx = maxWidthPx,
+                        retryAfterInFlightFailure = networkRevision > 0 || retry > 0
+                    )
                 }
+                loadFailed = !coverUrl.isNullOrBlank() && value == null
             }
             val safeBitmap = bitmap
             if (safeBitmap != null) {
@@ -126,6 +153,16 @@ fun BiliVideoCard(
                     contentDescription = title,
                     modifier = Modifier.fillMaxWidth(),
                     alignment = Alignment.Center
+                )
+            } else if (loadFailed) {
+                Text(
+                    text = "封面加载失败 · 点击重试",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = subtitleSize,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .clickable(role = Role.Button, onClickLabel = "重试封面加载") { retry++ }
+                        .padding(badgePadding)
                 )
             }
             Icon(
@@ -177,6 +214,7 @@ fun BiliFeedCard(
     title: String,
     summary: String,
     coverUrl: String?,
+    isVisible: Boolean = true,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     onLongClick: (() -> Unit)? = null,
@@ -207,27 +245,16 @@ fun BiliFeedCard(
                 interactionSource = resolvedInteractionSource
             )
     ) {
-        val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, coverUrl, maxWidthPx) {
-            value = if (coverUrl.isNullOrBlank()) null else {
-                RssImageLoader.loadBitmap(context, coverUrl, maxWidthPx)
-            }
-        }
-        if (bitmap != null) {
-            Image(
-                bitmap = bitmap!!.asImageBitmap(),
-                contentDescription = title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(imageHeight)
+        if (!coverUrl.isNullOrBlank()) {
+            com.lightningstudio.watchrss.ui.screen.rss.RssThumbnail(
+                url = coverUrl,
+                maxWidthPx = maxWidthPx,
+                isScrolling = false,
+                isVisible = isVisible,
+                modifier = Modifier.fillMaxWidth().height(imageHeight)
             )
         } else {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(imageHeight)
-                .background(MaterialTheme.colorScheme.surface)
-            )
+            Box(Modifier.fillMaxWidth().height(imageHeight).background(background))
         }
         Box(
             modifier = Modifier
@@ -249,7 +276,7 @@ fun BiliFeedCard(
             )
             Text(
                 text = summary,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = summarySize,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -304,12 +331,17 @@ private fun Modifier.clickableWithRipple(
         clickable(
             interactionSource = interactionSource,
             indication = LocalIndication.current,
+            onClickLabel = "打开视频",
+            role = Role.Button,
             onClick = onClick
         )
     } else {
         combinedClickable(
             interactionSource = interactionSource,
             indication = LocalIndication.current,
+            onClickLabel = "打开视频",
+            onLongClickLabel = "视频操作",
+            role = Role.Button,
             onClick = onClick,
             onLongClick = onLongClick
         )

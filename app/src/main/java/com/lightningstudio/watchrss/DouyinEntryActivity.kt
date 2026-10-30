@@ -103,7 +103,7 @@ class DouyinEntryActivity : BaseWatchActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setupSystemBars()
-        pendingAutoEnterFlow = shouldAutoEnterFlow(intent)
+        pendingAutoEnterFlow = true
         pendingResumeAwemeId = readResumeAwemeId(intent)
 
         val initialWebViewError = getWebViewUnavailableMessage(this)
@@ -175,7 +175,7 @@ class DouyinEntryActivity : BaseWatchActivity() {
                         warnWebViewUnavailable(this@DouyinEntryActivity, message)
                         warningMessage.value = null
                     }
-                    LaunchedEffect(originalContentEnabled, uiState.message) {
+                    LaunchedEffect(originalContentEnabled, uiState.messageEventId) {
                         if (!originalContentEnabled) {
                             val message = uiState.message
                             if (!message.isNullOrBlank()) {
@@ -184,13 +184,15 @@ class DouyinEntryActivity : BaseWatchActivity() {
                                     message,
                                     android.widget.Toast.LENGTH_SHORT
                                 )
-                                viewModel.clearMessage()
+                                viewModel.clearMessage(uiState.messageEventId)
                             }
                         }
                     }
-                    LaunchedEffect(uiState.isLoggedIn, uiState.items.size, uiState.showTitlePage) {
+                    LaunchedEffect(uiState.isLoggedIn, uiState.items.size, uiState.showTitlePage,
+                        originalContentEnabled, showInitialTransparency, showPlatformConfirmation) {
                         if (
-                            pendingAutoEnterFlow &&
+                            pendingAutoEnterFlow && originalContentEnabled &&
+                            !showInitialTransparency && !showPlatformConfirmation &&
                             uiState.isLoggedIn &&
                             uiState.showTitlePage &&
                             uiState.items.isNotEmpty()
@@ -258,7 +260,7 @@ class DouyinEntryActivity : BaseWatchActivity() {
                                     },
                                     onRequestPlaybackRefresh = viewModel::refreshPlaybackSource,
                                     onDiscardPlaybackItem = viewModel::discardPlaybackItem,
-                                    onMessageShown = viewModel::clearMessage,
+                                    onMessageShown = { eventId -> viewModel.clearMessage(eventId) },
                                     onHeaderClick = {
                                         isNavigating = true
                                         startActivity(DouyinChannelInfoActivity.createIntent(this@DouyinEntryActivity))
@@ -379,6 +381,8 @@ class DouyinEntryActivity : BaseWatchActivity() {
             resumeAwemeId = resolveResumeDouyinAwemeId(state)
         )
     }
+
+    override fun shouldUsePlatformSwipeDismissFeature(): Boolean = false
 
     override fun isSwipeBackEnabled(): Boolean = !disableSwipeBack
 

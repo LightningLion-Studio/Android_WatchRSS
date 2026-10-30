@@ -108,7 +108,9 @@ fun WatchRSSTheme(
                 LocalContentColor provides colorScheme.onSurface
             ) {
                 ProvideTextStyle(Typography.bodyMedium) {
-                    RubberBandOverscrollContainer(content = content)
+                    com.lightningstudio.watchrss.ui.components.ReadAloudFloatingControlsHost {
+                        RubberBandOverscrollContainer(content = content)
+                    }
                 }
             }
         }

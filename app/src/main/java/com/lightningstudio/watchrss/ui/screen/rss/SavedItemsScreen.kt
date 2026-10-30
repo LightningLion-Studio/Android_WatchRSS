@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListItemInfo
 import androidx.compose.foundation.lazy.LazyListState
@@ -70,11 +71,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.BlurFadeVisibility
-import com.lightningstudio.watchrss.ui.components.ContentEditingDownloadPhoneAppButton
 import com.lightningstudio.watchrss.data.rss.SavedItem
+import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
-import com.lightningstudio.watchrss.ui.theme.watchColorResource
 import com.lightningstudio.watchrss.ui.util.formatTime
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -90,8 +90,7 @@ fun SavedItemsScreen(
     onUndoClick: () -> Unit,
     onItemClick: (SavedItem) -> Unit,
     onItemRemove: (SavedItem) -> Unit,
-    onItemsReordered: (List<Long>) -> Unit,
-    syncOperationLabel: String
+    onItemsReordered: (List<Long>) -> Unit
 ) {
     val safePadding = WatchDimens.watch_safe_padding
     val extraBottomPadding = 40.dp
@@ -125,140 +124,22 @@ fun SavedItemsScreen(
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .semantics {
-                contentDescription = "${title}页面"
-                stateDescription = when {
-                    !hasLoadedItems -> "加载中"
-                    items.isEmpty() -> "无保存项目"
-                    else -> "共 ${items.size} 个保存项目"
-                }
-            }
-    ) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            state = listState,
-            contentPadding = PaddingValues(
-                start = safePadding,
-                top = safePadding,
-                end = safePadding,
-                bottom = safePadding + extraBottomPadding
-            )
-        ) {
-            item(key = "saved_header") {
-                SavedHeader(title = title, hint = hint)
-            }
-            item(key = "phone_sync_prompt") {
-                ContentEditingDownloadPhoneAppButton(
-                    operation = syncOperationLabel,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = itemSpacing)
-                )
-            }
-            if (hasLoadedItems && displayItems.isEmpty()) {
-                item(key = "saved_empty") {
-                    SavedEmpty(message = emptyMessage)
-                }
-            } else {
-                items(displayItems, key = { it.item.id }) { savedItem ->
-                    val itemId = savedItem.item.id
-                    val isDragging = draggingItemId == itemId
-                    val dragModifier = Modifier.pointerInput(itemId) {
-                        detectDragGesturesAfterLongPress(
-                            onDragStart = {
-                                draggingItemId = itemId
-                                draggingItemOffset = 0f
-                                dragStartItems = displayItems.toList()
-                            },
-                            onDragEnd = {
-                                if (draggingItemId != itemId) return@detectDragGesturesAfterLongPress
-                                val orderedIds = displayItems.map { it.item.id }
-                                val startIds = dragStartItems.map { it.item.id }
-                                draggingItemId = null
-                                draggingItemOffset = 0f
-                                dragStartItems = emptyList()
-                                if (orderedIds != startIds) {
-                                    pendingOrderIds = orderedIds
-                                    onItemsReordered(orderedIds)
-                                }
-                            },
-                            onDragCancel = {
-                                if (draggingItemId == itemId) {
-                                    displayItems.replaceAll(dragStartItems)
-                                    draggingItemId = null
-                                    draggingItemOffset = 0f
-                                    dragStartItems = emptyList()
-                                }
-                            }
-                        ) { change, dragAmount ->
-                            if (draggingItemId != itemId) return@detectDragGesturesAfterLongPress
-                            change.consume()
-                            draggingItemOffset += dragAmount.y
-
-                            val currentInfo = listState.visibleItemInfo(itemId) ?: return@detectDragGesturesAfterLongPress
-                            val currentCenter = currentInfo.offset + draggingItemOffset + currentInfo.size / 2f
-                            val targetInfo = listState.layoutInfo.visibleItemsInfo
-                                .filter { info -> info.key is Long && info.key != itemId }
-                                .firstOrNull { info ->
-                                    currentCenter in info.offset.toFloat()..(info.offset + info.size).toFloat()
-                                }
-
-                            if (targetInfo != null) {
-                                val fromIndex = displayItems.indexOfFirst { it.item.id == itemId }
-                                val toIndex = displayItems.indexOfFirst { it.item.id == targetInfo.key }
-                                if (fromIndex >= 0 && toIndex >= 0 && fromIndex != toIndex) {
-                                    draggingItemOffset -= (targetInfo.offset - currentInfo.offset).toFloat()
-                                    displayItems.move(fromIndex, toIndex)
-                                }
-                            }
-
-                            val updatedInfo = listState.visibleItemInfo(itemId) ?: return@detectDragGesturesAfterLongPress
-                            val overscroll = listState.dragOverscroll(updatedInfo, draggingItemOffset)
-                            if (overscroll != 0f) {
-                                scope.launch {
-                                    val consumed = listState.scrollBy(overscroll.coerceIn(-36f, 36f))
-                                    draggingItemOffset += consumed
-                                }
-                            }
-                        }
-                    }
-
-                    SwipeToRemoveRow(
-                        modifier = Modifier
-                            .zIndex(if (isDragging) 1f else 0f)
-                            .offset {
-                                IntOffset(
-                                    x = 0,
-                                    y = if (isDragging) draggingItemOffset.roundToInt() else 0
-                                )
-                            }
-                            .then(dragModifier),
-                        itemId = savedItem.item.id,
-                        onRemove = { onItemRemove(savedItem) }
-                    ) { swipeModifier ->
-                        SavedItemRow(
-                            title = savedItem.item.title,
-                            summary = buildSavedSummary(savedItem),
-                            modifier = swipeModifier.padding(bottom = itemSpacing),
-                            isDragging = isDragging,
-                            onClick = { onItemClick(savedItem) }
-                        )
+    WatchSurface {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .semantics {
+                    contentDescription = "${title}页面"
+                    stateDescription = when {
+                        !hasLoadedItems -> "加载中"
+                        items.isEmpty() -> "无保存项目"
+                        else -> "共 ${items.size} 个保存项目"
                     }
                 }
-            }
-        }
-
-        BlurFadeVisibility(
-            visible = !hasLoadedItems,
-            modifier = Modifier.fillMaxSize()
         ) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                userScrollEnabled = false,
+                state = listState,
                 contentPadding = PaddingValues(
                     start = safePadding,
                     top = safePadding,
@@ -266,22 +147,133 @@ fun SavedItemsScreen(
                     bottom = safePadding + extraBottomPadding
                 )
             ) {
-                item(key = "saved_loading_header") {
+                item(key = "saved_header") {
                     SavedHeader(title = title, hint = hint)
                 }
-                item(key = "saved_loading_skeleton") {
-                    SavedItemsSkeleton(itemSpacing = itemSpacing)
+                if (hasLoadedItems && displayItems.isEmpty()) {
+                    item(key = "saved_empty") {
+                        SavedEmpty(message = emptyMessage)
+                    }
+                } else {
+                    items(displayItems, key = { it.item.id }) { savedItem ->
+                        val itemId = savedItem.item.id
+                        val isDragging = draggingItemId == itemId
+                        val dragModifier = Modifier.pointerInput(itemId) {
+                            detectDragGesturesAfterLongPress(
+                                onDragStart = {
+                                    draggingItemId = itemId
+                                    draggingItemOffset = 0f
+                                    dragStartItems = displayItems.toList()
+                                },
+                                onDragEnd = {
+                                    if (draggingItemId != itemId) return@detectDragGesturesAfterLongPress
+                                    val orderedIds = displayItems.map { it.item.id }
+                                    val startIds = dragStartItems.map { it.item.id }
+                                    draggingItemId = null
+                                    draggingItemOffset = 0f
+                                    dragStartItems = emptyList()
+                                    if (orderedIds != startIds) {
+                                        pendingOrderIds = orderedIds
+                                        onItemsReordered(orderedIds)
+                                    }
+                                },
+                                onDragCancel = {
+                                    if (draggingItemId == itemId) {
+                                        displayItems.replaceAll(dragStartItems)
+                                        draggingItemId = null
+                                        draggingItemOffset = 0f
+                                        dragStartItems = emptyList()
+                                    }
+                                }
+                            ) { change, dragAmount ->
+                                if (draggingItemId != itemId) return@detectDragGesturesAfterLongPress
+                                change.consume()
+                                draggingItemOffset += dragAmount.y
+
+                                val currentInfo = listState.visibleItemInfo(itemId) ?: return@detectDragGesturesAfterLongPress
+                                val currentCenter = currentInfo.offset + draggingItemOffset + currentInfo.size / 2f
+                                val targetInfo = listState.layoutInfo.visibleItemsInfo
+                                    .filter { info -> info.key is Long && info.key != itemId }
+                                    .firstOrNull { info ->
+                                        currentCenter in info.offset.toFloat()..(info.offset + info.size).toFloat()
+                                    }
+
+                                if (targetInfo != null) {
+                                    val fromIndex = displayItems.indexOfFirst { it.item.id == itemId }
+                                    val toIndex = displayItems.indexOfFirst { it.item.id == targetInfo.key }
+                                    if (fromIndex >= 0 && toIndex >= 0 && fromIndex != toIndex) {
+                                        draggingItemOffset -= (targetInfo.offset - currentInfo.offset).toFloat()
+                                        displayItems.move(fromIndex, toIndex)
+                                    }
+                                }
+
+                                val updatedInfo = listState.visibleItemInfo(itemId) ?: return@detectDragGesturesAfterLongPress
+                                val overscroll = listState.dragOverscroll(updatedInfo, draggingItemOffset)
+                                if (overscroll != 0f) {
+                                    scope.launch {
+                                        val consumed = listState.scrollBy(overscroll.coerceIn(-36f, 36f))
+                                        draggingItemOffset += consumed
+                                    }
+                                }
+                            }
+                        }
+
+                        SwipeToRemoveRow(
+                            modifier = Modifier
+                                .zIndex(if (isDragging) 1f else 0f)
+                                .offset {
+                                    IntOffset(
+                                        x = 0,
+                                        y = if (isDragging) draggingItemOffset.roundToInt() else 0
+                                    )
+                                }
+                                .then(dragModifier),
+                            itemId = savedItem.item.id,
+                            onRemove = { onItemRemove(savedItem) }
+                        ) { swipeModifier ->
+                            SavedItemRow(
+                                title = savedItem.item.title,
+                                summary = buildSavedSummary(savedItem),
+                                modifier = swipeModifier.padding(bottom = itemSpacing),
+                                isDragging = isDragging,
+                                onClick = { onItemClick(savedItem) }
+                            )
+                        }
+                    }
                 }
             }
-        }
 
-        if (undoVisible) {
-            UndoFloatingButton(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = safePadding),
-                onClick = onUndoClick
-            )
+            BlurFadeVisibility(
+                visible = !hasLoadedItems,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    userScrollEnabled = false,
+                    contentPadding = PaddingValues(
+                        start = safePadding,
+                        top = safePadding,
+                        end = safePadding,
+                        bottom = safePadding + extraBottomPadding
+                    )
+                ) {
+                    item(key = "saved_loading_header") {
+                        SavedHeader(title = title, hint = hint)
+                    }
+                    item(key = "saved_loading_skeleton") {
+                        SavedItemsSkeleton(itemSpacing = itemSpacing)
+                    }
+                }
+            }
+
+            if (undoVisible) {
+                UndoFloatingButton(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = safePadding),
+                    onClick = onUndoClick
+                )
+            }
         }
     }
 }
@@ -545,11 +537,12 @@ private fun UndoFloatingButton(
 ) {
     val size = watchDimensionResource(R.dimen.hey_listitem_big_lefticon_height_width)
     val radius = WatchDimens.hey_card_normal_bg_radius
-    val background = watchColorResource(R.color.watch_pill_background)
+    val background = MaterialTheme.colorScheme.surfaceVariant
     val iconSize = watchDimensionResource(R.dimen.hey_listitem_widget_size)
 
     Box(
         modifier = modifier
+            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
             .size(size)
             .clip(RoundedCornerShape(radius))
             .background(background)

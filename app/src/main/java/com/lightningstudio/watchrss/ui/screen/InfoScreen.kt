@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -16,9 +17,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.platform.LocalDensity
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.screen.rss.DetailTextBlock
@@ -40,8 +41,7 @@ fun InfoScreen(
     val pagePadding = watchDimensionResource(R.dimen.detail_page_horizontal_padding)
     val blockSpacing = watchDimensionResource(R.dimen.detail_block_spacing)
     val titlePadding = watchDimensionResource(R.dimen.detail_title_safe_padding)
-    val backgroundColor = Color.Black
-    val textColor = Color.White
+    val textColor = MaterialTheme.colorScheme.onSurface
     val bodyFontSize = with(density) { 12.dp.toSp() }
     val textBlocks = remember(content) { buildInfoBlocks(content) }
     val contentGap = blockSpacing + 4.dp
@@ -109,7 +109,13 @@ fun InfoScreen(
                     text = "浙ICP备2024111886号-5A",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.clickable(onClick = onBeianClick)
+                    modifier = Modifier
+                        .heightIn(min = 48.dp)
+                        .clickable(
+                            role = Role.Button,
+                            onClickLabel = "查看备案信息",
+                            onClick = onBeianClick
+                        )
                 )
             }
         }

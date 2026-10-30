@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,6 +23,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -30,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.douyin.DouyinWatchHistoryEntry
 import com.lightningstudio.watchrss.ui.components.WatchButton
+import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.screen.bili.formatBiliCount
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
@@ -49,35 +54,35 @@ fun DouyinHistoryScreen(
 
     InstallDigitalCrownLazyListHandler(listState)
 
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(androidx.compose.ui.graphics.Color.Black),
-        state = listState,
-        contentPadding = PaddingValues(
-            start = safePadding,
-            top = safePadding,
-            end = safePadding,
-            bottom = safePadding + 40.dp
-        ),
-        verticalArrangement = Arrangement.spacedBy(itemSpacing)
-    ) {
-        item {
-            HistoryHeader()
-        }
-        if (items.isNotEmpty()) {
+    WatchSurface {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            state = listState,
+            contentPadding = PaddingValues(
+                start = safePadding,
+                top = safePadding,
+                end = safePadding,
+                bottom = safePadding + 40.dp
+            ),
+            verticalArrangement = Arrangement.spacedBy(itemSpacing)
+        ) {
             item {
-                ClearHistoryButton(onClick = onClearHistory)
+                HistoryHeader()
             }
-            items(items, key = { it.awemeId }) { entry ->
-                DouyinHistoryItemRow(
-                    entry = entry,
-                    onClick = { onItemClick(entry) }
-                )
-            }
-        } else {
-            item {
-                EmptyHistory()
+            if (items.isNotEmpty()) {
+                item {
+                    ClearHistoryButton(onClick = onClearHistory)
+                }
+                items(items, key = { it.awemeId }) { entry ->
+                    DouyinHistoryItemRow(
+                        entry = entry,
+                        onClick = { onItemClick(entry) }
+                    )
+                }
+            } else {
+                item {
+                    EmptyHistory()
+                }
             }
         }
     }
@@ -99,7 +104,8 @@ private fun HistoryHeader() {
             text = "播放历史",
             color = MaterialTheme.colorScheme.onSurface,
             fontSize = titleSize,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.semantics { heading() }
         )
         Text(
             text = "保存在本地，记录最近播放内容",
@@ -125,7 +131,7 @@ private fun ClearHistoryButton(onClick: () -> Unit) {
             shape = RoundedCornerShape(WatchDimens.hey_button_default_radius),
             modifier = Modifier
                 .width(buttonWidth)
-                .height(WatchDimens.watch_action_button_height)
+                .height(WatchDimens.watch_action_button_height.coerceAtLeast(48.dp))
         ) {
             Text(
                 text = "清空历史",
@@ -155,7 +161,12 @@ private fun DouyinHistoryItemRow(
             .fillMaxWidth()
             .clip(shape)
             .background(backgroundColor)
-            .clickable(onClick = onClick)
+            .heightIn(min = 48.dp)
+            .clickable(
+                role = Role.Button,
+                onClickLabel = "播放${entry.title?.takeIf { it.isNotBlank() } ?: "抖音视频"}",
+                onClick = onClick
+            )
             .padding(
                 start = paddingStart,
                 end = paddingEnd,

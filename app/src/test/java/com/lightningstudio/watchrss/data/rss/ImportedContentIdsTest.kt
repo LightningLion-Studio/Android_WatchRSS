@@ -8,6 +8,22 @@ import org.junit.Test
 class ImportedContentIdsTest {
 
     @Test
+    fun readerCapabilities_hideWebActionsForNovelsAndLocalContent() {
+        listOf(
+            "${ImportedContentIds.ROOT_SOURCE_URL}/txt/book/1",
+            "${ImportedContentIds.EPUB_SOURCE_ROOT_URL}/book/chapter/2",
+            ImportedContentIds.PHONE_IMPORT_CHANNEL_URL,
+            "file:///private/book.txt", ""
+        ).forEach { link ->
+            org.junit.Assert.assertEquals(ReaderContentCapabilities(false, false), ImportedContentIds.readerCapabilities(link))
+        }
+        org.junit.Assert.assertEquals(
+            ReaderContentCapabilities(true, true),
+            ImportedContentIds.readerCapabilities("https://example.com/article")
+        )
+    }
+
+    @Test
     fun novelContentRecognizesTxtAndEpubButNotIndependentPhoneArticles() {
         assertTrue(ImportedContentIds.isNovelContentItemUrl("https://watchrss.local/import-content/txt/book"))
         assertTrue(ImportedContentIds.isNovelContentItemUrl("https://watchrss.local/import-epub/book/chapter/1"))

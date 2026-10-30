@@ -69,6 +69,8 @@ interface BiliRepositoryContract {
         durationMs: Long,
         trigger: BiliPlaybackCheckpointTrigger
     ): BiliResult<Unit> = unsupportedBiliRepositoryMethod()
+    suspend fun resolveAudioSource(cid: Long, aid: Long?, bvid: String?): BiliResult<BiliAudioSource> =
+        unsupportedBiliRepositoryMethod()
     suspend fun fetchPlayUrlMp4(
         cid: Long,
         aid: Long? = null,
@@ -114,6 +116,7 @@ interface BiliRepositoryContract {
         unsupportedBiliRepositoryMethod()
     suspend fun getSearchHistory(): List<String> = unsupportedBiliRepositoryMethod()
     suspend fun addSearchHistory(keyword: String): Unit = unsupportedBiliRepositoryMethod()
+    suspend fun removeSearchHistory(keyword: String): Unit = unsupportedBiliRepositoryMethod()
     suspend fun clearSearchHistory(): Unit = unsupportedBiliRepositoryMethod()
     suspend fun getComments(oid: Long, next: Long = 0): BiliResult<BiliCommentPage> =
         unsupportedBiliRepositoryMethod()

@@ -244,16 +244,9 @@ class WatchIpSyncManager(
                 ),
                 onRequestReceived = { setTransferInProgress(true) },
                 onActionCompleted = { syncResult ->
-                    if (BuildConfig.DEBUG) {
-                        if (
-                            syncResult.request.optString("action") ==
-                            BluetoothSyncProtocol.ACTION_SYNC_LIBRARY
-                        ) {
-                            scope.launch {
-                                runCatching {
-                                    (application as? WatchRssApplication)?.cloudSyncService?.syncNow()
-                                }
-                            }
+                    if (syncResult.request.optString("action") == BluetoothSyncProtocol.ACTION_SYNC_LIBRARY) {
+                        scope.launch {
+                            runCatching { (application as? WatchRssApplication)?.cloudSyncService?.syncNow() }
                         }
                     }
                 },

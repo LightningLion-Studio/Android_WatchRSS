@@ -1,6 +1,8 @@
 package com.lightningstudio.watchrss.ui.screen.rss
 
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
@@ -10,6 +12,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.data.settings.DEFAULT_RSS_INLINE_IMAGE_PREFETCH_MODE
 import com.lightningstudio.watchrss.testutil.setWatchContent
 import com.lightningstudio.watchrss.ui.testing.SettingsTestTags
@@ -82,7 +85,10 @@ class SettingsScreenTest {
         composeRule.onNodeWithTag(SettingsTestTags.OPEN_OOBE_ENTRY, useUnmergedTree = true).performScrollTo().assertExists()
         composeRule.onAllNodesWithTag(SettingsTestTags.PHONE_CONNECTION_SWITCH, useUnmergedTree = true).assertCountEquals(0)
         composeRule.onNodeWithTag(SettingsTestTags.DOUYIN_COOKIE_ENTRY, useUnmergedTree = true).performScrollTo().assertExists()
-        composeRule.onNodeWithTag(SettingsTestTags.BEIAN_ENTRY, useUnmergedTree = true).performScrollTo().assertExists()
+        composeRule.onNodeWithTag(SettingsTestTags.BEIAN_ENTRY, useUnmergedTree = true)
+            .performScrollTo()
+            .assertExists()
+            .assertHeightIsAtLeast(48.dp)
 
         composeRule.onNodeWithTag(SettingsTestTags.ADVANCED_ENTRY, useUnmergedTree = true).performScrollTo().performClick()
 
@@ -104,6 +110,7 @@ class SettingsScreenTest {
         var mediaVolumeControlToggleCount = 0
         var mediaVolumeGuardToggleCount = 0
         val playbackStartVolumeSelections = mutableListOf<Int?>()
+        var beianClickCount = 0
 
         composeRule.setWatchContent {
             SettingsScreen(
@@ -138,19 +145,28 @@ class SettingsScreenTest {
                 onOpenDouyinCookieInput = {},
                 onOpenLlmPromptPreset = {},
                 onOpenLlmTokenUsage = {},
-                onBeianClick = {}
+                onBeianClick = { beianClickCount += 1 }
             )
         }
 
-        composeRule.onNodeWithTag(SettingsTestTags.FONT_DECREASE_BUTTON, useUnmergedTree = true).performScrollTo().performClick()
-        composeRule.onNodeWithTag(SettingsTestTags.FONT_INCREASE_BUTTON, useUnmergedTree = true).performScrollTo().performClick()
+        composeRule.onNodeWithTag(SettingsTestTags.FONT_DECREASE_BUTTON, useUnmergedTree = true)
+            .assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp).performScrollTo().performClick()
+        composeRule.onNodeWithTag(SettingsTestTags.FONT_INCREASE_BUTTON, useUnmergedTree = true)
+            .assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp).performScrollTo().performClick()
         composeRule.onNodeWithTag(SettingsTestTags.MEDIA_VOLUME_CONTROL_SWITCH, useUnmergedTree = true).performScrollTo().performClick()
         composeRule.onNodeWithTag(SettingsTestTags.MEDIA_VOLUME_GUARD_SWITCH, useUnmergedTree = true).performScrollTo().performClick()
-        composeRule.onNodeWithTag(SettingsTestTags.PLAYBACK_START_VOLUME_DECREASE_BUTTON, useUnmergedTree = true).performScrollTo().performClick()
-        composeRule.onNodeWithTag(SettingsTestTags.PLAYBACK_START_VOLUME_INCREASE_BUTTON, useUnmergedTree = true).performScrollTo().performClick()
+        composeRule.onNodeWithTag(SettingsTestTags.PLAYBACK_START_VOLUME_DECREASE_BUTTON, useUnmergedTree = true)
+            .assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp).performScrollTo().performClick()
+        composeRule.onNodeWithTag(SettingsTestTags.PLAYBACK_START_VOLUME_INCREASE_BUTTON, useUnmergedTree = true)
+            .assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp).performScrollTo().performClick()
+        composeRule.onNodeWithTag(SettingsTestTags.BEIAN_ENTRY, useUnmergedTree = true)
+            .performScrollTo()
+            .performClick()
         composeRule.onNodeWithTag(SettingsTestTags.ADVANCED_ENTRY, useUnmergedTree = true).performScrollTo().performClick()
-        composeRule.onNodeWithTag(SettingsTestTags.CACHE_DECREASE_BUTTON, useUnmergedTree = true).performClick()
-        composeRule.onNodeWithTag(SettingsTestTags.CACHE_INCREASE_BUTTON, useUnmergedTree = true).performClick()
+        composeRule.onNodeWithTag(SettingsTestTags.CACHE_DECREASE_BUTTON, useUnmergedTree = true)
+            .assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp).performClick()
+        composeRule.onNodeWithTag(SettingsTestTags.CACHE_INCREASE_BUTTON, useUnmergedTree = true)
+            .assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp).performClick()
 
         composeRule.runOnIdle {
             assertEquals(listOf(768L, 1536L), cacheSelections)
@@ -158,6 +174,7 @@ class SettingsScreenTest {
             assertEquals(1, mediaVolumeControlToggleCount)
             assertEquals(1, mediaVolumeGuardToggleCount)
             assertEquals(listOf<Int?>(5, 15), playbackStartVolumeSelections)
+            assertEquals(1, beianClickCount)
         }
     }
 

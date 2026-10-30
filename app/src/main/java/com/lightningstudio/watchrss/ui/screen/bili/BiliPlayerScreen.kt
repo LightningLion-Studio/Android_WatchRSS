@@ -31,7 +31,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
@@ -64,6 +66,8 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -164,7 +168,9 @@ fun BiliPlayerScreen(
     volumeGuardEnabled: Boolean = true,
     playbackStartVolumeLimitPercent: Int? = 10,
     continuePlaybackInBackground: Boolean = false,
-    onPlaybackActiveChanged: (Boolean) -> Unit = { }
+    onPlaybackActiveChanged: (Boolean) -> Unit = { },
+    onOpenDetails: (() -> Unit)? = null,
+    showRepeatOneControl: Boolean = false
 ) {
     val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
     val spacing = watchDimensionResource(R.dimen.hey_distance_6dp)
@@ -174,6 +180,16 @@ fun BiliPlayerScreen(
     val iconSize = watchDimensionResource(R.dimen.hey_listitem_widget_size)
     val lifecycleOwner = LocalLifecycleOwner.current
     val context = LocalContext.current
+    val canOpenInBrowser = remember(context) {
+        val browserIntent = android.content.Intent(
+            android.content.Intent.ACTION_VIEW,
+            android.net.Uri.parse("https://www.bilibili.com/")
+        ).addCategory(android.content.Intent.CATEGORY_BROWSABLE)
+        context.packageManager.queryIntentActivities(
+            browserIntent,
+            android.content.pm.PackageManager.MATCH_DEFAULT_ONLY
+        ).isNotEmpty()
+    }
     val view = LocalView.current
     val continuePlaybackInBackgroundState = rememberUpdatedState(continuePlaybackInBackground)
     val playbackActiveCallback = rememberUpdatedState(onPlaybackActiveChanged)
@@ -200,6 +216,9 @@ fun BiliPlayerScreen(
         label = "screenRotation"
     )
     var controlsVisible by remember { mutableStateOf(true) }
+    var playbackPanelVisible by remember { mutableStateOf(false) }
+    // Local to this screen's video session, never a saved global playback preference.
+    var repeatCurrentVideo by remember { mutableStateOf(false) }
     var viewSize by remember { mutableStateOf(IntSize.Zero) }
     var videoSize by remember { mutableStateOf(IntSize.Zero) }
     var videoRotation by remember { mutableStateOf(0) }
@@ -344,6 +363,8 @@ fun BiliPlayerScreen(
         val textureView = textureViewRef ?: return
         releasePlayer(resetActiveSource = false)
         val player = ExoPlayer.Builder(context)
+            .setAudioAttributes(androidx.media3.common.AudioAttributes.DEFAULT, true)
+            .setHandleAudioBecomingNoisy(true)
             .setMediaSourceFactory(DefaultMediaSourceFactory(buildDataSourceFactory(source)))
             .build()
         playerRef = player
@@ -360,6 +381,7 @@ fun BiliPlayerScreen(
         isBuffering = true
         playbackError = null
         player.setVideoTextureView(textureView)
+        player.repeatMode = if (repeatCurrentVideo) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
         player.setMediaItem(MediaItem.fromUri(source.url))
         if (pendingSeekPositionMs > 0) {
             player.seekTo(pendingSeekPositionMs.toLong())
@@ -733,6 +755,67 @@ fun BiliPlayerScreen(
         onVolumeAdjust = volumeState::adjustByDelta
     )
 
+    if (playbackPanelVisible) {
+        com.lightningstudio.watchrss.ui.components.PlaybackControlPanel(
+            player = playerRef,
+            volume = volumeState,
+            onTogglePlayback = ::togglePlayback,
+            onDismiss = { playbackPanelVisible = false },
+            scaleLabel = when (scaleMode) {
+                PlayerScaleMode.Standard -> "适应"
+                PlayerScaleMode.Expanded -> "填充"
+                PlayerScaleMode.Shrunk -> "完整画面"
+            },
+            onSelectScale = { stopPanFling(); panOffsetX = 0f; scaleMode = PlayerScaleMode.entries[it] },
+            additionalControls = {
+                if (showRepeatOneControl) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        com.lightningstudio.watchrss.ui.components.WatchCheckbox(
+                            checked = repeatCurrentVideo,
+                            onCheckedChange = { enabled ->
+                                repeatCurrentVideo = enabled
+                                playerRef?.repeatMode = if (enabled) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+                            }
+                        )
+                        Text("单条循环（本次播放）")
+                    }
+                }
+                Text("画面旋转 · 当前 ${rotationAngle.roundToInt()}°")
+                listOf(0, 90, 180, 270).chunked(2).forEach { angles ->
+                    Row {
+                        angles.forEach { angle ->
+                            com.lightningstudio.watchrss.ui.components.WatchTextButton(onClick = {
+                                stopPanFling()
+                                panOffsetX = 0f
+                                rotationAngle = angle.toFloat()
+                                rotationTargetDeg = angle.toFloat()
+                            }) { Text("$angle°") }
+                        }
+                    }
+                }
+                Text("画面位置")
+                val panPositionPercent = if (panRangePx > 0f) {
+                    (panOffsetX / panRangePx * 100f).roundToInt().coerceIn(-100, 100)
+                } else {
+                    0
+                }
+                androidx.compose.material3.Slider(
+                    value = panOffsetX.coerceIn(-panRangePx, panRangePx),
+                    valueRange = -panRangePx.coerceAtLeast(1f)..panRangePx.coerceAtLeast(1f),
+                    enabled = panRangePx > 0f,
+                    onValueChange = { stopPanFling(); panOffsetX = it },
+                    modifier = Modifier.semantics {
+                        contentDescription = "画面位置"
+                        stateDescription = "${panPositionPercent}%"
+                    }
+                )
+                com.lightningstudio.watchrss.ui.components.WatchTextButton(onClick = { stopPanFling(); panOffsetX = 0f }) {
+                    Text("画面回中")
+                }
+            }
+        )
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -842,6 +925,9 @@ fun BiliPlayerScreen(
                             onDoubleTap = {
                                 if (isPrepared) {
                                     togglePlayback()
+                                    controlsVisible = true
+                                    com.lightningstudio.watchrss.ui.util.showAppToast(context,
+                                        if (playerRef?.playWhenReady == true) "继续播放" else "已暂停")
                                 }
                             }
                         )
@@ -932,7 +1018,7 @@ fun BiliPlayerScreen(
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(spacing)) {
                     BiliPillButton(text = "重试", onClick = onRetry)
-                    BiliPillButton(text = "浏览器打开", onClick = onOpenWeb)
+                    if (canOpenInBrowser) BiliPillButton(text = "浏览器打开", onClick = onOpenWeb)
                 }
             }
         }
@@ -964,24 +1050,13 @@ fun BiliPlayerScreen(
                             horizontalArrangement = Arrangement.spacedBy(spacing),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            val scaleToggleAction = scaleMode.toggleAction()
-                            PlayerIconButton(
-                                icon = scaleToggleAction.icon,
-                                contentDescription = scaleToggleAction.contentDescription,
-                                size = controlSize,
-                                iconSize = iconSize,
-                                onClick = { scaleMode = scaleMode.next() }
-                            )
-                            PlayerIconButton(
-                                icon = Icons.Filled.ScreenRotation,
-                                contentDescription = "旋转",
-                                size = controlSize,
-                                iconSize = iconSize,
-                                onClick = {
-                                    rotationTargetDeg += 90f
-                                    rotationAngle = (rotationAngle + 90f) % 360f
-                                }
-                            )
+                            BiliPillButton(text = "播放控制", onClick = { playbackPanelVisible = true })
+                            onOpenDetails?.let { openDetails ->
+                                BiliPillButton(text = "详情", onClick = {
+                                    pausePlayback()
+                                    openDetails()
+                                })
+                            }
                         }
                     }
 
@@ -1137,19 +1212,24 @@ private fun PlayerIconButton(
 ) {
     Box(
         modifier = modifier
+            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
             .size(size)
             .alpha(if (enabled) 1f else 0.5f)
-            .clickable(enabled = enabled, onClick = onClick)
             .semantics {
                 this.contentDescription = contentDescription
                 this.stateDescription = if (enabled) "可用" else "禁用"
-                role = Role.Button
-            },
+            }
+            .clickable(
+                enabled = enabled,
+                onClickLabel = contentDescription,
+                role = Role.Button,
+                onClick = onClick
+            ),
         contentAlignment = Alignment.Center
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = contentDescription,
+            contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.size(iconSize)
         )
@@ -1464,6 +1544,7 @@ private fun PlayerSeekButton(
 
     Box(
         modifier = Modifier
+            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
             .size(size)
             .alpha(if (enabled) 1f else 0.5f)
             .pointerInput(enabled) {
@@ -1485,12 +1566,24 @@ private fun PlayerSeekButton(
                         }
                     }
                 )
+            }
+            .semantics {
+                this.contentDescription = contentDescription
+                role = Role.Button
+                if (enabled) {
+                    onClick(label = contentDescription) {
+                        onSeek(baseStepMs * direction)
+                        true
+                    }
+                } else {
+                    disabled()
+                }
             },
         contentAlignment = Alignment.Center
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = contentDescription,
+            contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.size(iconSize)
         )

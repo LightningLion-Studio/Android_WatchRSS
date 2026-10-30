@@ -61,11 +61,11 @@ class BiliSettingsActivity : BaseWatchActivity() {
                         lifecycleOwner.lifecycle.addObserver(observer)
                         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
                     }
-                    LaunchedEffect(uiState.message) {
+                    LaunchedEffect(uiState.messageEventId) {
                         val message = uiState.message
                         if (!message.isNullOrBlank()) {
                             com.lightningstudio.watchrss.ui.util.showAppToast(context, message, android.widget.Toast.LENGTH_SHORT)
-                            viewModel.clearMessage()
+                            viewModel.clearMessage(uiState.messageEventId)
                         }
                     }
                     LaunchedEffect(uiState.shouldExitToFeed) {

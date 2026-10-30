@@ -23,7 +23,7 @@ class BiliFeedViewModelTest {
     @Test
     fun refresh_withoutLogin_showsLoginMessage() = runTest {
         val repo = TestBiliRepository(initialLoggedIn = false)
-        val viewModel = BiliFeedViewModel(repo)
+        val viewModel = mainDispatcherRule.track(BiliFeedViewModel(repo))
         advanceUntilIdle()
 
         viewModel.refresh()
@@ -49,7 +49,7 @@ class BiliFeedViewModelTest {
                 )
             )
         }
-        val viewModel = BiliFeedViewModel(repo)
+        val viewModel = mainDispatcherRule.track(BiliFeedViewModel(repo))
         advanceUntilIdle()
         repo.loggedIn = true
         viewModel.refresh()
@@ -79,7 +79,7 @@ class BiliFeedViewModelTest {
                 )
             )
         }
-        val viewModel = BiliFeedViewModel(repo)
+        val viewModel = mainDispatcherRule.track(BiliFeedViewModel(repo))
         advanceUntilIdle()
 
         viewModel.refresh()
@@ -93,7 +93,7 @@ class BiliFeedViewModelTest {
     fun favorite_and_watchLater_syncLocalSavedState() = runTest {
         val platformRepo = TestBiliRepository(initialLoggedIn = true)
         val rssRepo = TestRssRepository()
-        val viewModel = BiliFeedViewModel(platformRepo, rssRepo)
+        val viewModel = mainDispatcherRule.track(BiliFeedViewModel(platformRepo, rssRepo))
         val item = sampleBiliItem(aid = 55L, bvid = "BV55", cid = 77L)
         advanceUntilIdle()
 
@@ -123,7 +123,7 @@ class BiliFeedViewModelTest {
             )
         }
         val rssRepo = TestRssRepository()
-        val viewModel = BiliFeedViewModel(platformRepo, rssRepo)
+        val viewModel = mainDispatcherRule.track(BiliFeedViewModel(platformRepo, rssRepo))
         val bvidOnlyItem = resolvedItem.copy(aid = null)
         advanceUntilIdle()
 
@@ -146,7 +146,7 @@ class BiliFeedViewModelTest {
         val repo = TestBiliRepository(initialLoggedIn = true).apply {
             feedResult = com.lightningstudio.watchrss.sdk.bili.BiliResult(code = BiliErrorCodes.REQUEST_FAILED)
         }
-        val viewModel = BiliFeedViewModel(repo)
+        val viewModel = mainDispatcherRule.track(BiliFeedViewModel(repo))
         advanceUntilIdle()
 
         viewModel.loadMore()

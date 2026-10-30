@@ -24,7 +24,7 @@ class BiliLoginAndSearchViewModelTest {
         val repo = TestBiliRepository().apply {
             webQrPollResult = QrPollResult(status = QrPollStatus.SUCCESS, rawCode = 0)
         }
-        val viewModel = BiliLoginViewModel(repo)
+        val viewModel = mainDispatcherRule.track(BiliLoginViewModel(repo))
 
         viewModel.startLogin()
         advanceUntilIdle()
@@ -45,7 +45,7 @@ class BiliLoginAndSearchViewModelTest {
         val repo = TestBiliRepository().apply {
             webQrCode = null
         }
-        val viewModel = BiliLoginViewModel(repo)
+        val viewModel = mainDispatcherRule.track(BiliLoginViewModel(repo))
 
         viewModel.startLogin()
         advanceUntilIdle()
@@ -59,7 +59,7 @@ class BiliLoginAndSearchViewModelTest {
         val repo = TestBiliRepository().apply {
             applyCookieResult = Result.failure(IllegalArgumentException("missing_cookie:bili_jct"))
         }
-        val viewModel = BiliLoginViewModel(repo)
+        val viewModel = mainDispatcherRule.track(BiliLoginViewModel(repo))
 
         viewModel.applyCookies("SESSDATA=bad")
         advanceUntilIdle()
@@ -70,7 +70,7 @@ class BiliLoginAndSearchViewModelTest {
     @Test
     fun searchViewModel_loadsAndMutatesSearchHistory() = runTest {
         val repo = TestBiliRepository()
-        val viewModel = BiliSearchViewModel(repo)
+        val viewModel = mainDispatcherRule.track(BiliSearchViewModel(repo))
         advanceUntilIdle()
 
         assertEquals(listOf("Compose"), viewModel.searchHistory.value)
@@ -88,7 +88,7 @@ class BiliLoginAndSearchViewModelTest {
     @Test
     fun searchViewModel_submitSearch_normalizesQuery_updatesActiveQuery_and_persistsHistory() = runTest {
         val repo = TestBiliRepository()
-        val viewModel = BiliSearchViewModel(repo)
+        val viewModel = mainDispatcherRule.track(BiliSearchViewModel(repo))
         advanceUntilIdle()
 
         viewModel.updateDraftQuery("  Kotlin  ")
@@ -104,7 +104,7 @@ class BiliLoginAndSearchViewModelTest {
     @Test
     fun searchViewModel_submitSearch_collapsesInternalWhitespace_beforeSearching() = runTest {
         val repo = TestBiliRepository()
-        val viewModel = BiliSearchViewModel(repo)
+        val viewModel = mainDispatcherRule.track(BiliSearchViewModel(repo))
         advanceUntilIdle()
 
         viewModel.updateDraftQuery("  hello\u3000 world   compose  ")
@@ -120,7 +120,7 @@ class BiliLoginAndSearchViewModelTest {
     @Test
     fun searchViewModel_submitSearch_usesExplicitQuery_whenInputStateHasNotSyncedYet() = runTest {
         val repo = TestBiliRepository()
-        val viewModel = BiliSearchViewModel(repo)
+        val viewModel = mainDispatcherRule.track(BiliSearchViewModel(repo))
         advanceUntilIdle()
 
         viewModel.updateDraftQuery("world")
@@ -136,7 +136,7 @@ class BiliLoginAndSearchViewModelTest {
     @Test
     fun searchViewModel_submitSearch_videoId_returnsOpenVideo_withoutChangingActiveQuery() = runTest {
         val repo = TestBiliRepository()
-        val viewModel = BiliSearchViewModel(repo)
+        val viewModel = mainDispatcherRule.track(BiliSearchViewModel(repo))
         advanceUntilIdle()
 
         viewModel.updateDraftQuery("  bv1xx411c7md  ")
@@ -155,7 +155,7 @@ class BiliLoginAndSearchViewModelTest {
     @Test
     fun searchViewModel_resetSearchSession_clearsDraftAndActiveQuery() = runTest {
         val repo = TestBiliRepository()
-        val viewModel = BiliSearchViewModel(repo)
+        val viewModel = mainDispatcherRule.track(BiliSearchViewModel(repo))
         advanceUntilIdle()
 
         viewModel.submitSearch("  Kotlin Compose  ")

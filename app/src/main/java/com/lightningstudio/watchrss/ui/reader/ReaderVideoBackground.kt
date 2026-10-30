@@ -54,12 +54,17 @@ internal fun ReaderBackgroundMedia(
     val context = LocalContext.current
     val density = LocalDensity.current.density
     val legacyBlur = Build.VERSION.SDK_INT < 31
-    val imageModel = remember(file?.path, background.blurDp, density) {
+    val resourceRevision = LocalReaderPresetRuntime.current.resourceRevision
+    val imageModel = remember(file?.path, file?.lastModified(), file?.length(), resourceRevision, background.blurDp, density) {
         if (file != null && legacyBlur && background.blurDp > 0f) {
             ImageRequest.Builder(context).data(file).allowHardware(false)
                 .transformations(ReaderBackgroundBlurTransformation(context, background.blurDp * density))
                 .build()
-        } else file
+        } else file?.let {
+            ImageRequest.Builder(context).data(it)
+                .memoryCacheKey("${it.path}:${it.lastModified()}:${it.length()}:$resourceRevision")
+                .build()
+        }
     }
     var width by remember(file?.path, video?.path) { mutableFloatStateOf(1f) }
     var height by remember(file?.path, video?.path) { mutableFloatStateOf(1f) }

@@ -35,13 +35,13 @@ class WatchCloudStateStore(context: Context) {
         JSONObject(
             preferences.getString(
                 appliedKey(full),
-                preferences.getString("applied", "{}")
+                if (full) "{}" else preferences.getString("applied", "{}")
             ).orEmpty()
         )
     }.getOrDefault(JSONObject())
 
     private fun appliedKey(full: Boolean): String =
-        if (full) "applied_full" else "applied_state"
+        if (full) "applied_full_notes_v3" else "applied_state"
 
     private fun contentHashKey(full: Boolean): String =
         if (full) "content_hash_full" else "content_hash_state"

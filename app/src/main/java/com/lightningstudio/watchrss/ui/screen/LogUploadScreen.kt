@@ -35,7 +35,7 @@ fun LogUploadScreen(
     val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
     val sectionSpacing = 12.dp
 
-    WatchSurface(pureBlack = true) {
+    WatchSurface {
         when {
             isLoading -> {
                 Box(

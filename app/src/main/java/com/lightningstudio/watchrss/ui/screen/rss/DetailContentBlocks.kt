@@ -41,6 +41,8 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -72,7 +74,7 @@ internal fun DetailTextBlock(
     topPadding: Dp,
     isScrolling: Boolean,
     inlineActionText: String? = null,
-    inlineActionColor: Color = Color(0xFF87CEEB),
+    inlineActionColor: Color = textColor,
     onInlineActionClick: (() -> Unit)? = null,
     highlightRange: DetailTextHighlightRange? = null,
     highlightColor: Color = Color.Transparent,
@@ -131,6 +133,13 @@ internal fun DetailTextBlock(
             .fillMaxWidth()
             .padding(top = topPadding)
             .then(gestureModifier)
+            .then(
+                if (style == ContentTextStyle.TITLE || style == ContentTextStyle.SUBTITLE) {
+                    Modifier.semantics { heading() }
+                } else {
+                    Modifier
+                }
+            )
             .scrollSemanticsDisabled(isScrolling)
             .debugTraceLayout("DetailTextBlock/layout")
             .debugTraceDraw("DetailTextBlock/draw")
@@ -225,24 +234,26 @@ internal fun DetailImageBlock(
         Trace.beginSection("DetailImageBlock")
     }
     val context = LocalContext.current
-    val imageLoader = remember(context) { RssInlineImageLoader.get(context) }
-    var ratio by remember(url, initialAspectRatio) {
-        mutableStateOf(RssImageLoader.getCachedAspectRatio(url) ?: initialAspectRatio)
+    val imageCacheScope = com.lightningstudio.watchrss.data.account.workspace.libraryContext(context)
+        .cacheDir.absolutePath
+    val imageLoader = remember(imageCacheScope) { RssInlineImageLoader.get(context) }
+    var ratio by remember(imageCacheScope, url, initialAspectRatio) {
+        mutableStateOf(RssImageLoader.getCachedAspectRatio(context, url) ?: initialAspectRatio)
     }
-    val request = remember(url, maxWidthPx, context) {
+    val request = remember(imageCacheScope, url, maxWidthPx, context) {
         RssInlineImageLoader.buildRequest(context, url, maxWidthPx)
     }
     val painter = rememberAsyncImagePainter(
         model = request,
         imageLoader = imageLoader,
         onSuccess = { success ->
-            RssInlineImageLoader.cacheAspectRatio(url, success.result)
+            RssInlineImageLoader.cacheAspectRatio(context, url, success.result)
             val width = success.result.drawable.intrinsicWidth
             val height = success.result.drawable.intrinsicHeight
             ratio = if (width > 0 && height > 0) {
                 width.toFloat() / height.toFloat()
             } else {
-                RssImageLoader.getCachedAspectRatio(url) ?: ratio
+                RssImageLoader.getCachedAspectRatio(context, url) ?: ratio
             }
         },
         contentScale = ContentScale.Fit,
@@ -257,7 +268,11 @@ internal fun DetailImageBlock(
                 .fillMaxWidth()
                 .padding(top = topPadding)
                 .aspectRatio(aspectRatio)
-                .clickableWithRipple(enabled = !isScrolling, onClick = onClick)
+                .clickableWithRipple(
+                    enabled = !isScrolling,
+                    onClickLabel = "查看文章图片",
+                    onClick = onClick
+                )
                 .scrollSemanticsDisabled(isScrolling)
                 .debugTraceLayout("DetailImageBlock/layout")
                 .debugTraceDraw("DetailImageBlock/draw"),
@@ -339,7 +354,7 @@ internal fun DetailVideoBlock(
         delay(MEDIA_LOAD_IDLE_DELAY_MS)
         ratioState.value = when {
             !poster.isNullOrBlank() ->
-                RssImageLoader.getCachedAspectRatio(poster)
+            RssImageLoader.getCachedAspectRatio(context, poster)
                     ?: if (isLocalMedia(poster)) {
                         RssImageLoader.preloadAndCacheRatio(context, poster, maxWidthPx)
                     } else {
@@ -351,7 +366,7 @@ internal fun DetailVideoBlock(
     }
 
     val coverRatio = coverState.value?.let { it.width.toFloat() / it.height.toFloat() }
-        ?: poster?.let { RssImageLoader.getCachedAspectRatio(it) }
+        ?: poster?.let { RssImageLoader.getCachedAspectRatio(context, it) }
         ?: ratioState.value
     val cardShape = androidx.compose.foundation.shape.RoundedCornerShape(WatchDimens.hey_card_normal_bg_radius)
     val cardModifier = if (borderColor.alpha > 0f) {
@@ -369,7 +384,11 @@ internal fun DetailVideoBlock(
             .padding(top = topPadding)
             .then(cardModifier)
             .background(containerColor)
-            .clickableWithRipple(enabled = !isScrolling, onClick = onClick)
+            .clickableWithRipple(
+                enabled = !isScrolling,
+                onClickLabel = "播放文章中的视频",
+                onClick = onClick
+            )
             .scrollSemanticsDisabled(isScrolling)
             .debugTraceLayout("DetailVideoBlock/layout")
             .debugTraceDraw("DetailVideoBlock/draw")

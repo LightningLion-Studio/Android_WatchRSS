@@ -13,6 +13,7 @@ import kotlinx.coroutines.launch
 data class BiliSettingsUiState(
     val isLoggedIn: Boolean = false,
     val message: String? = null,
+    val messageEventId: Long = 0L,
     val channelId: Long? = null,
     val originalContentEnabled: Boolean = false,
     val deleteEnabled: Boolean = false,
@@ -47,6 +48,7 @@ class BiliSettingsViewModel(
                 it.copy(
                     isLoggedIn = false,
                     message = "已退出登录",
+                    messageEventId = it.messageEventId + 1,
                     shouldExitToFeed = true
                 )
             }
@@ -89,7 +91,8 @@ class BiliSettingsViewModel(
         }
     }
 
-    fun clearMessage() {
+    fun clearMessage(expectedEventId: Long? = null) {
+        if (expectedEventId != null && _uiState.value.messageEventId != expectedEventId) return
         _uiState.update { it.copy(message = null) }
     }
 

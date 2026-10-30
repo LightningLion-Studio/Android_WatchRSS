@@ -2,19 +2,24 @@ package com.lightningstudio.watchrss.ui.components
 
 import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -42,25 +47,31 @@ object AppTransparencyStore {
 fun InitialAppTransparencyDialog(
     onAcknowledge: () -> Unit
 ) {
-    AlertDialog(
+    Dialog(
         onDismissRequest = { },
-        title = { Text("使用前说明") },
-        text = {
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize().background(Color.Black).padding(horizontal = 28.dp, vertical = 22.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text("使用前说明", modifier = Modifier.fillMaxWidth(), color = Color.White, textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.titleMedium)
             Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
+                modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(vertical = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("本 App 由第三方开发者及社区用户贡献，与哔哩哔哩无合作关系，哔哩哔哩是上海宽娱数码科技有限公司的商标。")
-                Text("本 App 不是哔哩哔哩的替代品，建议能使用官方客户端时尽量使用官方客户端。")
-                Text("本 App 均使用来源于网络的公开信息进行开发。")
-                Text("本 App 中和 B 站相关的功能完全免费。")
-                Text("本 App 中所呈现的 B 站内容来自哔哩哔哩官方。")
+                Text("本 App 由第三方开发者及社区用户贡献，与哔哩哔哩无合作关系，哔哩哔哩是上海宽娱数码科技有限公司的商标。", color = Color.White)
+                Text("本 App 不是哔哩哔哩的替代品，建议能使用官方客户端时尽量使用官方客户端。", color = Color.White)
+                Text("本 App 均使用来源于网络的公开信息进行开发。", color = Color.White)
+                Text("本 App 中和 B 站相关的功能完全免费。", color = Color.White)
+                Text("本 App 中所呈现的 B 站内容来自哔哩哔哩官方。", color = Color.White)
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onAcknowledge) { Text("我已了解") }
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                WatchTextButton(onClick = onAcknowledge) { Text("我已了解") }
+            }
         }
-    )
+    }
 }
 
 /**
@@ -177,17 +188,42 @@ fun ThirdPartyPlatformConfirmationDialog(
     platform: String,
     onConfirm: () -> Unit
 ) {
-    AlertDialog(
+    Dialog(
         onDismissRequest = { },
-        title = { Text("使用前说明") },
-        text = {
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black)
+                .padding(horizontal = 28.dp, vertical = 22.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
             Text(
-                "本 App 与${platform}及其关联公司或子公司不存在任何关联，也未获其授权、维护、赞助或认可。\n\n" +
-                    "这是独立且非官方的软件，使用风险由您自行承担。平台账号、内容和平台规则由${platform}独立管理。"
+                text = "使用前说明",
+                modifier = Modifier.fillMaxWidth(),
+                color = Color.White,
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.titleMedium
             )
-        },
-        confirmButton = {
-            TextButton(onClick = onConfirm) { Text("知道了，继续") }
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "本 App 与${platform}及其关联公司或子公司不存在任何关联，也未获其授权、维护、赞助或认可。\n\n" +
+                        "这是独立且非官方的软件，使用风险由您自行承担。平台账号、内容和平台规则由${platform}独立管理。",
+                    color = Color.White,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = TextAlign.Start
+                )
+            }
+            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                WatchTextButton(onClick = onConfirm) { Text("知道了，继续") }
+            }
         }
-    )
+    }
 }

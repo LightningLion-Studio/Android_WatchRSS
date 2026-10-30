@@ -7,6 +7,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
@@ -25,10 +26,13 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
 import com.lightningstudio.watchrss.ui.theme.watchColorResource
@@ -50,13 +54,11 @@ fun WatchReadingThemeToggle(
 
     Box(
         modifier = modifier
-            .size(outerSize)
+            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
             .semantics {
                 contentDescription = "阅读主题"
                 stateDescription = if (isDark) "深色" else "浅色"
             }
-            .clip(CircleShape)
-            .background(borderColor)
             .toggleable(
                 value = isDark,
                 role = Role.Switch,
@@ -68,10 +70,18 @@ fun WatchReadingThemeToggle(
     ) {
         Box(
             modifier = Modifier
-                .size(innerSize)
+                .size(outerSize)
                 .clip(CircleShape)
-                .background(fillColor)
-        )
+                .background(borderColor),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(innerSize)
+                    .clip(CircleShape)
+                    .background(fillColor)
+            )
+        }
     }
 }
 
@@ -100,11 +110,12 @@ fun WatchRoundIconButtonIcon(
     contentDescription: String,
     enabled: Boolean,
     modifier: Modifier = Modifier,
+    minimumTouchSize: Dp = 48.dp,
     onClick: () -> Unit
 ) {
     val size = WatchDimens.hey_distance_20dp
     val iconSize = size * 0.6f
-    val baseColor = watchColorResource(R.color.watch_pill_background)
+    val baseColor = MaterialTheme.colorScheme.surfaceVariant
     val idleColor = lerp(baseColor, Color.White, 0.12f)
     val pressedColor = lerp(baseColor, Color.Black, 0.18f)
     val interactionSource = remember { MutableInteractionSource() }
@@ -113,9 +124,18 @@ fun WatchRoundIconButtonIcon(
 
     Box(
         modifier = modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(backgroundColor)
+            .sizeIn(minWidth = minimumTouchSize, minHeight = minimumTouchSize)
+            .semantics {
+                role = Role.Button
+                onClick(label = contentDescription) {
+                    if (!enabled) {
+                        false
+                    } else {
+                        onClick()
+                        true
+                    }
+                }
+            }
             .clickable(
                 enabled = enabled,
                 interactionSource = interactionSource,
@@ -124,11 +144,19 @@ fun WatchRoundIconButtonIcon(
             ),
         contentAlignment = Alignment.Center
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.45f),
-            modifier = Modifier.size(iconSize)
-        )
+        Box(
+            modifier = Modifier
+                .size(size)
+                .clip(CircleShape)
+                .background(backgroundColor),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.45f),
+                modifier = Modifier.size(iconSize)
+            )
+        }
     }
 }

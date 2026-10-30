@@ -19,10 +19,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import com.lightningstudio.watchrss.ui.theme.watchColorResource
+import androidx.compose.ui.semantics.Role
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownScrollHandler
@@ -43,7 +44,7 @@ fun AboutScreen(
     val pillHorizontalPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_10dp
     val pillVerticalPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_8dp
     val pillRadius = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_button_default_radius
-    val pillColor = watchColorResource(R.color.watch_pill_background)
+    val pillColor = MaterialTheme.colorScheme.surfaceVariant
     val scrollState = rememberScrollState()
 
     InstallDigitalCrownScrollHandler(scrollState)
@@ -156,10 +157,14 @@ private fun AboutEntry(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(pillHeight)
+                .height(pillHeight.coerceAtLeast(48.dp))
                 .clip(RoundedCornerShape(pillRadius))
                 .background(pillColor)
-                .clickable(onClick = onClick)
+                .clickable(
+                    role = Role.Button,
+                    onClickLabel = title,
+                    onClick = onClick
+                )
                 .padding(
                     start = pillHorizontalPadding,
                     end = pillHorizontalPadding,

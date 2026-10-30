@@ -70,6 +70,10 @@ class ChannelActionsActivity : BaseWatchActivity() {
                 var showDeleteConfirm by remember { mutableStateOf(false) }
 
                 val items = buildList {
+                    add(ActionItem(label = "调整首页顺序", onClick = {
+                        startActivity(Intent(this@ChannelActionsActivity, HomeOrderActivity::class.java))
+                        finish()
+                    }))
                     add(
                         ActionItem(
                             label = "移动到顶部",

@@ -3,6 +3,7 @@ package com.lightningstudio.watchrss.data.bili
 import kotlin.math.abs
 
 object BiliErrorCodes {
+    const val AUDIO_UNAVAILABLE = 9010
     const val REQUEST_FAILED = 9001
     const val MISSING_MID = 9002
     const val MISSING_FAVORITE_FOLDER = 9003
@@ -21,6 +22,7 @@ fun formatBiliError(code: Int, message: String? = null): String {
         BiliErrorCodes.QR_REQUEST_FAILED -> normalizedMessage ?: "获取登录二维码失败"
         BiliErrorCodes.COOKIE_INVALID -> normalizedMessage ?: "Cookie 无效"
         BiliErrorCodes.PLAY_PARAM_MISSING -> "缺少播放参数"
+        BiliErrorCodes.AUDIO_UNAVAILABLE -> "当前视频未提供可用的独立音频轨"
         BiliErrorCodes.PLAY_URL_EMPTY -> "暂无可播放地址"
         -101 -> normalizedMessage ?: "登录已失效"
         -111 -> normalizedMessage ?: "缺少 CSRF"

@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -94,7 +95,9 @@ fun ServerScreen(
 
     // 计算当前背景色和文字色
     val backgroundColor = lerp(Color.Black, Color.White, backgroundProgress)
-    val textColor = lerp(Color.White, Color.Black, backgroundProgress)
+    val textColor = contrastingBlackOrWhite(backgroundColor)
+    val buttonBackgroundColor = lerp(Color(0xFF2C2C2C), Color(0xFFE0E0E0), backgroundProgress)
+    val buttonContentColor = contrastingBlackOrWhite(buttonBackgroundColor)
 
     Box(
         modifier = Modifier
@@ -130,7 +133,7 @@ fun ServerScreen(
                     Text(
                         text = "正在启动服务器...",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = textColor.copy(alpha = 0.7f),
+                        color = textColor,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.semantics {
                             liveRegion = LiveRegionMode.Polite
@@ -140,7 +143,7 @@ fun ServerScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     DownloadPhoneAppCompactLink(
                         operation = title,
-                        color = textColor.copy(alpha = 0.8f)
+                        color = textColor
                     )
                 }
                 networkError -> {
@@ -148,7 +151,7 @@ fun ServerScreen(
                     Text(
                         text = "请连接WiFi网络",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = lerp(Color(0xFFCF6679), Color(0xFFB00020), backgroundProgress),
+                        color = textColor,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.semantics {
                             contentDescription = "错误：请连接WiFi网络"
@@ -158,7 +161,7 @@ fun ServerScreen(
                     Text(
                         text = hint,
                         style = MaterialTheme.typography.bodySmall,
-                        color = textColor.copy(alpha = 0.7f),
+                        color = textColor,
                         textAlign = TextAlign.Center,
                         modifier = Modifier.semantics {
                             contentDescription = "操作说明：$hint"
@@ -168,7 +171,7 @@ fun ServerScreen(
                     WatchButton(
                         onClick = onDismiss,
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = lerp(Color(0xFF2C2C2C), Color(0xFFE0E0E0), backgroundProgress)
+                            containerColor = buttonBackgroundColor
                         ),
                         shape = RoundedCornerShape(watchDimensionResource(R.dimen.hey_button_default_radius)),
                         modifier = Modifier
@@ -177,7 +180,7 @@ fun ServerScreen(
                     ) {
                         Text(
                             text = "关闭",
-                            color = textColor,
+                            color = buttonContentColor,
                             style = ActionButtonTextStyle,
                             textAlign = TextAlign.Center
                         )
@@ -185,7 +188,7 @@ fun ServerScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     DownloadPhoneAppCompactLink(
                         operation = title,
-                        color = textColor.copy(alpha = 0.8f)
+                        color = textColor
                     )
                 }
                 else -> {
@@ -196,7 +199,7 @@ fun ServerScreen(
                             contentDescription = "服务器连接二维码，使用手机版腕上RSS扫描此二维码",
                             modifier = Modifier
                                 .size(120.dp)
-                                .border(width = 6.dp, color = Color.Black)
+                                .border(width = 6.dp, color = textColor)
                                 .semantics {
                                     role = Role.Image
                                     contentDescription = "服务器连接二维码，使用手机版腕上RSS扫描此二维码"
@@ -209,7 +212,7 @@ fun ServerScreen(
                         Text(
                             text = "已同步至手机端",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = lerp(Color(0xFF64B5F6), Color(0xFF1976D2), backgroundProgress),
+                            color = textColor,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.semantics {
                                 liveRegion = LiveRegionMode.Polite
@@ -220,7 +223,7 @@ fun ServerScreen(
                         WatchButton(
                             onClick = onDismiss,
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = lerp(Color(0xFF2C2C2C), Color(0xFFE0E0E0), backgroundProgress)
+                                containerColor = buttonBackgroundColor
                             ),
                             shape = RoundedCornerShape(watchDimensionResource(R.dimen.hey_button_default_radius)),
                             modifier = Modifier
@@ -229,7 +232,7 @@ fun ServerScreen(
                         ) {
                             Text(
                                 text = "关闭",
-                                color = textColor,
+                                color = buttonContentColor,
                                 style = ActionButtonTextStyle,
                                 textAlign = TextAlign.Center
                             )
@@ -237,13 +240,13 @@ fun ServerScreen(
                         Spacer(modifier = Modifier.height(8.dp))
                         DownloadPhoneAppCompactLink(
                             operation = title,
-                            color = textColor.copy(alpha = 0.8f)
+                            color = textColor
                         )
                     } else {
                         Text(
                             text = hint,
                             style = MaterialTheme.typography.bodySmall,
-                            color = textColor.copy(alpha = 0.7f),
+                            color = textColor,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.semantics {
                                 liveRegion = LiveRegionMode.Polite
@@ -253,7 +256,7 @@ fun ServerScreen(
                         Spacer(modifier = Modifier.height(8.dp))
                         DownloadPhoneAppCompactLink(
                             operation = title,
-                            color = textColor.copy(alpha = 0.8f)
+                            color = textColor
                         )
                     }
                 }
@@ -261,6 +264,9 @@ fun ServerScreen(
         }
     }
 }
+
+private fun contrastingBlackOrWhite(background: Color): Color =
+    if (background.luminance() >= 0.179f) Color.Black else Color.White
 
 private fun generateQrCode(context: Context, port: Int, pairingToken: String?): Bitmap? {
     val ipAddress = NetworkUtils.getLocalIpAddress(context) ?: return null

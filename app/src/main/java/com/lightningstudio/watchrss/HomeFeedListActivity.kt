@@ -161,7 +161,7 @@ class HomeFeedListActivity : BaseWatchActivity() {
                 val channels by viewModel.channels.collectAsState()
                 val hasLoadedChannels by viewModel.hasLoadedChannels.collectAsState()
                 val isRefreshing by viewModel.isRefreshing.collectAsState()
-                val message by viewModel.message.collectAsState()
+                val message by viewModel.messageEvent.collectAsState()
                 val platformLoginState by viewModel.platformLoginState.collectAsState()
                 val readAloudController = (application as WatchRssApplication)
                     .container
@@ -177,14 +177,15 @@ class HomeFeedListActivity : BaseWatchActivity() {
                     }
                 }
 
-                androidx.compose.runtime.LaunchedEffect(message) {
-                    if (message != null) {
+                androidx.compose.runtime.LaunchedEffect(message?.id) {
+                    val event = message
+                    if (event != null) {
                         com.lightningstudio.watchrss.ui.util.showAppToast(
                             context,
-                            message,
+                            event.text,
                             Toast.LENGTH_SHORT
                         )
-                        viewModel.clearMessage()
+                        viewModel.clearMessage(event.id)
                     }
                 }
 

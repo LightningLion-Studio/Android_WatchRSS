@@ -42,6 +42,7 @@ class BiliPlayerActivity : BaseWatchActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        stopService(Intent(this, com.lightningstudio.watchrss.data.media.BiliAudioService::class.java))
         setupSystemBars()
 
         val aid = intent.getStringExtra(EXTRA_AID)?.toLongOrNull()
@@ -87,12 +88,29 @@ class BiliPlayerActivity : BaseWatchActivity() {
                             BiliPlayerScreen(
                         uiState = uiState,
                         onRetry = viewModel::loadPlayUrl,
+                        onOpenDetails = {
+                            startActivity(BiliDetailActivity.createIntent(
+                                this@BiliPlayerActivity, aid, bvid,
+                                intent.getStringExtra(EXTRA_CID)?.toLongOrNull()
+                            ))
+                        },
                         onPlaybackError = viewModel::onPlaybackError,
                         onOpenWeb = {
                             val safeLink = link ?: return@BiliPlayerScreen
-                            WebViewActivity.open(this@BiliPlayerActivity, safeLink)
+                            runCatching {
+                                startActivity(android.content.Intent(
+                                    android.content.Intent.ACTION_VIEW,
+                                    android.net.Uri.parse(safeLink)
+                                ).addCategory(android.content.Intent.CATEGORY_BROWSABLE))
+                            }.onFailure {
+                                com.lightningstudio.watchrss.ui.util.showAppToast(
+                                    this@BiliPlayerActivity,
+                                    "浏览器暂不可用，请稍后重试"
+                                )
+                            }
                         },
                         internetAvailabilityStatus = internetAvailabilityStatus,
+                        showRepeatOneControl = true,
                         onPlaybackReady = viewModel::onPlaybackReady,
                         onPlaybackProgress = { positionMs, durationMs ->
                             viewModel.onPlaybackProgress(positionMs, durationMs)
@@ -121,6 +139,8 @@ class BiliPlayerActivity : BaseWatchActivity() {
             }
         }
     }
+
+    override fun shouldUsePlatformSwipeDismissFeature(): Boolean = false
 
     override fun shouldDeferSwipeBack(dx: Float, dy: Float): Boolean {
         if (dx <= 0f) return false

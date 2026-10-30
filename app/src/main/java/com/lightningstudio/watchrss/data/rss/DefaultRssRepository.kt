@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss.data.rss
 
+import androidx.room.withTransaction
 import androidx.core.net.toUri
 import android.net.Uri
 import com.lightningstudio.watchrss.data.cache.CacheTrimReason
@@ -70,6 +71,7 @@ private data class SyncBodyContent(
 )
 
 class DefaultRssRepository(
+    private val database: com.lightningstudio.watchrss.data.db.WatchRssDatabase,
     private val channelDao: RssChannelDao,
     private val itemDao: RssItemDao,
     private val savedEntryDao: SavedEntryDao,
@@ -96,31 +98,25 @@ class DefaultRssRepository(
     private val previewJobs: MutableSet<Long> = ConcurrentHashMap.newKeySet()
     private val previewAttemptKeys = ConcurrentHashMap<Long, String>()
 
+    override fun observeNovelChapters(channelId: Long): Flow<List<NovelChapter>> =
+        itemDao.observeNovelChapters(channelId)
+
     override fun observeCloudSyncRevision(): Flow<Long> =
         syncChangeLogDao.observeMaxSeq()
 
     override fun observeHomeChannels(): Flow<List<RssChannel>> =
-        channelDao.observeChannels().map { channels ->
-            channels.map { channel -> channel.toModel(unreadCount = 0) }
+        channelDao.observeChannelsWithUnreadCounts().map { rows ->
+            rows.map { row -> row.channel.toModel(row.unreadCount) }
         }
 
     override fun observeChannels(): Flow<List<RssChannel>> =
-        combine(
-            channelDao.observeChannels(),
-            itemDao.observeUnreadCounts()
-        ) { channels, unreadCounts ->
-            val unreadMap = unreadCounts.associate { it.channelId to it.unreadCount }
-            channels.map { channel ->
-                channel.toModel(unreadMap[channel.id] ?: 0)
-            }
+        channelDao.observeChannelsWithUnreadCounts().map { rows ->
+            rows.map { it.channel.toModel(it.unreadCount) }
         }
 
     override fun observeChannel(channelId: Long): Flow<RssChannel?> =
-        combine(
-            channelDao.observeChannel(channelId),
-            itemDao.observeUnreadCount(channelId)
-        ) { channel, unreadCount ->
-            channel?.toModel(unreadCount)
+        channelDao.observeChannelWithUnreadCount(channelId).map { row ->
+            row?.channel?.toModel(row.unreadCount)
         }
 
     override fun observeItemsPaged(channelId: Long, limit: Int): Flow<List<RssItem>> =
@@ -247,6 +243,35 @@ class DefaultRssRepository(
 
         runCatching {
             val parsed = fetchService.fetchChannel(normalizedUrl)
+            val preview = RssChannelPreview(
+                url = normalizedUrl,
+                title = parseService.channelTitle(parsed, normalizedUrl),
+                description = parsed.description?.trim()?.ifEmpty { null },
+                imageUrl = parsed.image?.url?.trim()?.ifEmpty { null },
+                siteUrl = parsed.link?.trim()?.ifEmpty { null },
+                items = parsed.items.map { parseService.toPreviewItem(it) },
+                isBuiltin = false
+            )
+            AddRssPreview.Ready(preview)
+        }.mapError()
+    }
+
+    override suspend fun previewChannelFromContent(
+        url: String,
+        content: String
+    ): Result<AddRssPreview> = withContext(Dispatchers.IO) {
+        val normalizedUrl = normalizeUrl(url)
+        if (!isValidUrl(normalizedUrl)) {
+            return@withContext Result.failure(IllegalArgumentException("URL 不合法"))
+        }
+
+        val existing = channelDao.getChannelByUrl(normalizedUrl)
+        if (existing != null) {
+            return@withContext Result.success(AddRssPreview.Existing(existing.toModel(0)))
+        }
+
+        runCatching {
+            val parsed = fetchService.parseChannelContent(content)
             val preview = RssChannelPreview(
                 url = normalizedUrl,
                 title = parseService.channelTitle(parsed, normalizedUrl),
@@ -556,29 +581,67 @@ class DefaultRssRepository(
         }
     }
 
+    override suspend fun markNovelChapterOpened(itemId: Long) {
+        withContext(Dispatchers.IO) {
+            val changedAt = database.withTransaction {
+                val item = itemDao.getItem(itemId) ?: return@withTransaction null
+                val bookSource = novelBookSource(item.link) ?: return@withTransaction null
+                val latestBookOpenAt = itemDao.maxNovelReadingPositionChangedAt(
+                    item.channelId,
+                    bookSource
+                ) ?: 0L
+                val nextChangedAt = maxOf(System.currentTimeMillis(), latestBookOpenAt + 1L)
+                itemDao.updateReadingPositionChangedAt(itemId, nextChangedAt)
+                nextChangedAt to (item.link ?: item.dedupKey)
+            } ?: return@withContext
+            recordArticleChange(
+                stableArticleId(changedAt.second),
+                "readingProgress",
+                changedAt.first
+            )
+        }
+    }
+
     override suspend fun updateItemReadingProgress(itemId: Long, progress: Float) {
         withContext(Dispatchers.IO) {
             val clamped = progress.coerceIn(0f, 1f)
-            val item = itemDao.getItem(itemId) ?: return@withContext
-            if (kotlin.math.abs(item.readingProgress - clamped) < 0.001f) return@withContext
+            val initialItem = itemDao.getItem(itemId) ?: return@withContext
+            if (kotlin.math.abs(initialItem.readingProgress - clamped) < 0.001f) return@withContext
             val importedReader = getImportedTextReader(itemId)
-            val byteLength = importedReader?.byteLength
-                ?: (item.originalContent ?: item.content.orEmpty()).toByteArray(Charsets.UTF_8).size.toLong()
-            val positionBytes = (byteLength.toDouble() * clamped.toDouble())
-                .roundToLong()
-                .coerceIn(0L, byteLength)
-            val changedAt = System.currentTimeMillis()
-            itemDao.updateReadingProgress(
-                id = itemId,
-                progress = clamped,
-                positionBytes = positionBytes,
-                positionContentHash = item.syncBodyHash,
-                positionChangedAt = changedAt
-            )
+            val update = database.withTransaction {
+                val item = itemDao.getItem(itemId) ?: return@withTransaction null
+                if (kotlin.math.abs(item.readingProgress - clamped) < 0.001f) {
+                    return@withTransaction null
+                }
+                val byteLength = importedReader?.byteLength
+                    ?: (item.originalContent ?: item.content.orEmpty())
+                        .toByteArray(Charsets.UTF_8).size.toLong()
+                val positionBytes = (byteLength.toDouble() * clamped.toDouble())
+                    .roundToLong()
+                    .coerceIn(0L, byteLength)
+                val bookSource = novelBookSource(item.link)
+                val changedAt = if (bookSource == null) {
+                    System.currentTimeMillis()
+                } else {
+                    val latestBookChangeAt = itemDao.maxNovelReadingPositionChangedAt(
+                        item.channelId,
+                        bookSource
+                    ) ?: 0L
+                    maxOf(System.currentTimeMillis(), latestBookChangeAt + 1L)
+                }
+                itemDao.updateReadingProgress(
+                    id = itemId,
+                    progress = clamped,
+                    positionBytes = positionBytes,
+                    positionContentHash = item.syncBodyHash,
+                    positionChangedAt = changedAt
+                )
+                changedAt to (item.link ?: item.dedupKey)
+            } ?: return@withContext
             recordArticleChange(
-                stableArticleId(item.link ?: item.dedupKey),
+                stableArticleId(update.second),
                 "readingProgress",
-                changedAt
+                update.first
             )
         }
     }
@@ -1276,6 +1339,30 @@ class DefaultRssRepository(
                     now
                 )
             }
+        }
+    }
+
+    override suspend fun reorderHomeEntries(orderedIds: List<Long>): Long = withContext(Dispatchers.IO) {
+        database.withTransaction {
+            val channels = channelDao.getAllChannels()
+            com.lightningstudio.watchrss.data.home.validateHomeOrder(orderedIds, channels.map { it.id })
+            val base = maxOf(System.currentTimeMillis(), (channels.maxOfOrNull { it.sortOrder } ?: 0L) + 1L)
+            val byId = channels.associateBy { it.id }
+            var notesOrder = base
+            orderedIds.forEachIndexed { index, id ->
+                val rank = base + orderedIds.size - index
+                if (id == com.lightningstudio.watchrss.data.home.NOTES_HOME_ORDER_ID) {
+                    notesOrder = rank
+                } else {
+                    val updated = byId.getValue(id).copy(sortOrder = rank, isPinned = false)
+                    channelDao.updateChannel(updated)
+                    if (updated.isSyncedRssSource()) {
+                        rssSourceSyncStateDao.upsert(updated.toSourceSyncState(deviceId, deleted = false))
+                        recordRssSourceChange(updated.url, "manualOrder", rank)
+                    }
+                }
+            }
+            notesOrder
         }
     }
 
@@ -2720,6 +2807,9 @@ class DefaultRssRepository(
 
     private fun <T> Result<T>.mapError(): Result<T> {
         val error = exceptionOrNull() ?: return this
+        if (generateSequence(error) { it.cause }.any { it is RssBrowserChallengeRequiredException }) {
+            return Result.failure(error)
+        }
         val message = when (error) {
             is java.net.UnknownHostException -> "网络不可用"
             is java.net.SocketTimeoutException -> "请求超时"

@@ -17,6 +17,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -36,14 +38,7 @@ class AccountStatusActivity : BaseWatchActivity() {
         setContent {
             WatchRSSTheme {
                 val state by (application as WatchRssApplication).accountStore.state.collectAsState()
-                AccountStatusScreen(
-                    state,
-                    if (BuildConfig.DEBUG) {
-                        (application as WatchRssApplication).cloudSyncService
-                    } else {
-                        null
-                    }
-                )
+                AccountStatusScreen(state, (application as WatchRssApplication).cloudSyncService)
             }
         }
     }
@@ -61,7 +56,7 @@ private fun AccountStatusScreen(
 ) {
     val scrollState = androidx.compose.foundation.rememberScrollState()
     InstallDigitalCrownScrollHandler(scrollState)
-    WatchSurface(pureBlack = true) {
+    WatchSurface {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -73,7 +68,9 @@ private fun AccountStatusScreen(
             Text(
                 text = "账号",
                 style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics { heading() },
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(4.dp))
@@ -93,7 +90,7 @@ private fun AccountStatusScreen(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 DownloadPhoneAppButton(
-                    operation = if (BuildConfig.DEBUG) "登录账号与云同步" else "登录账号",
+                    operation = "登录账号与云同步",
                     modifier = Modifier.offset(y = (-4).dp)
                 )
             } else {
@@ -114,27 +111,7 @@ private fun AccountStatusScreen(
                     }}"
                 )
                 cloudSyncService?.let { service ->
-                    val cloudStatus by service.status.collectAsState()
-                    if (state.entitlement.plan == "member" && state.entitlement.active) {
-                        Text("云中继：${cloudStatus.message}")
-                        if (cloudStatus.quotaBytes > 0) {
-                            Text(
-                                "空间：${cloudStatus.usedBytes / 1048576} / " +
-                                    "${cloudStatus.quotaBytes / 1048576} MiB"
-                            )
-                        }
-                        Text(
-                            "首次使用需在手机端的WatchRSS云会员空间中批准这块手表。",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    } else {
-                        Text(
-                            "WatchRSS云存储：需云会员；本地资料与蓝牙同步不受影响。",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    WatchCloudControlsPanel(service)
                 }
             }
             Spacer(modifier = Modifier.height(24.dp))

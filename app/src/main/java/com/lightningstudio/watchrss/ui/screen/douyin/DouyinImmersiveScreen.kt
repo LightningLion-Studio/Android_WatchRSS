@@ -2,6 +2,7 @@
 
 package com.lightningstudio.watchrss.ui.screen.douyin
 
+import androidx.activity.compose.BackHandler
 import androidx.core.graphics.createBitmap
 import android.app.Activity
 import android.content.Context
@@ -19,6 +20,9 @@ import android.view.TextureView
 import android.view.WindowManager
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -87,6 +91,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
@@ -593,7 +598,7 @@ internal fun DouyinImmersiveScreen(
         DouyinPlaybackRefreshTrigger
     ) -> Unit,
     onDiscardPlaybackItem: (String) -> Unit,
-    onMessageShown: () -> Unit,
+    onMessageShown: (Long) -> Unit,
     onHeaderClick: () -> Unit,
     onPlaybackActiveChanged: (Boolean) -> Unit = { }
 ) {
@@ -640,6 +645,20 @@ internal fun DouyinImmersiveScreen(
     var pendingAutoSkipPage by remember { mutableIntStateOf(-1) }
     var autoSkipMessage by remember { mutableStateOf<String?>(null) }
     var controlsVisible by rememberSaveable { mutableStateOf(true) }
+    var sessionMuted by remember { mutableStateOf(true) }
+    val latestSessionMuted by rememberUpdatedState(sessionMuted)
+    val latestTitlePage by rememberUpdatedState(uiState.showTitlePage)
+    var singleItemImmersive by rememberSaveable { mutableStateOf(false) }
+    BackHandler(enabled = singleItemImmersive) {
+        singleItemImmersive = false
+        controlsVisible = true
+    }
+    LaunchedEffect(uiState.showTitlePage) {
+        if (uiState.showTitlePage) {
+            sessionMuted = true
+            singleItemImmersive = false
+        }
+    }
     var scaleMode by rememberSaveable { mutableStateOf(DouyinPlayerScaleMode.Standard) }
     val effectiveVolumeGuardEnabled = volumeGuardEnabled && digitalCrownVolumeEnabled
     val volumeState = rememberPlayerVolumeState(
@@ -653,7 +672,7 @@ internal fun DouyinImmersiveScreen(
         }
     }
     fun enforceEntryPlaybackStartVolumeLimit() {
-        if (uiState.showTitlePage || playbackStartVolumeLimitConsumed) return
+        if (uiState.showTitlePage || latestSessionMuted || playbackStartVolumeLimitConsumed) return
         volumeState.enforcePlaybackStartGuard()
         playbackStartVolumeLimitConsumed = true
     }
@@ -808,6 +827,11 @@ internal fun DouyinImmersiveScreen(
         }
     }
     val allSlots = listOf(primarySlot, secondarySlot)
+    LaunchedEffect(sessionMuted, foregroundSlotKey, uiState.showTitlePage) {
+        allSlots.forEach { slot ->
+            slot.player.volume = if (!sessionMuted && !uiState.showTitlePage && slot.key == foregroundSlotKey) 1f else 0f
+        }
+    }
     val preparedPosterBytes = remember(
         preparedItem?.awemeId,
         preparedItem?.playUrlResolvedAtMs,
@@ -930,7 +954,6 @@ internal fun DouyinImmersiveScreen(
             return
         }
         slot.inFlightPrewarmKey = prepareKey
-        val previousVolume = slot.player.volume
         fun shouldKeepPlayingForPreparedTarget(): Boolean {
             return !latestPrewarmShowTitlePage.value &&
                 latestPrewarmPreparedAwemeId.value == item.awemeId &&
@@ -1000,7 +1023,7 @@ internal fun DouyinImmersiveScreen(
                 isStillTarget = shouldPausePrewarmPlayback()
             )
             if (!keepMutedAfterTimeout) {
-                slot.player.volume = previousVolume
+                slot.player.volume = if (!latestSessionMuted && !latestTitlePage && slot.key == latestPrewarmForegroundSlotKey.value) DOUYIN_PLAYER_AUDIBLE_VOLUME else 0f
             }
             if (shouldPausePrewarmPlayback() && !keepMutedAfterTimeout) {
                 slot.player.playWhenReady = false
@@ -1063,7 +1086,7 @@ internal fun DouyinImmersiveScreen(
     }
 
     fun restoreAudibleSlotVolume(slot: DouyinPlayerSlotState) {
-        slot.player.volume = DOUYIN_PLAYER_AUDIBLE_VOLUME
+        slot.player.volume = if (latestSessionMuted) 0f else DOUYIN_PLAYER_AUDIBLE_VOLUME
     }
 
     fun stopSlotPlayback(slot: DouyinPlayerSlotState) {
@@ -1273,7 +1296,7 @@ internal fun DouyinImmersiveScreen(
     }
 
     fun scheduleAutoSkipCurrentPage() {
-        if (activePage == pagerState.currentPage && activePage > 0) {
+        if (!singleItemImmersive && activePage == pagerState.currentPage && activePage > 0) {
             pendingAutoSkipPage = activePage
         }
     }
@@ -1362,7 +1385,7 @@ internal fun DouyinImmersiveScreen(
         runtimePlaybackOverrides = runtimePlaybackOverrides - normalizedAwemeId
         slot?.let(::clearSlotBinding)
         if (previous == null) {
-            onDiscardPlaybackItem(normalizedAwemeId)
+            if (!singleItemImmersive) onDiscardPlaybackItem(normalizedAwemeId)
         }
         AppLogger.d(
             TAG,
@@ -1488,10 +1511,11 @@ internal fun DouyinImmersiveScreen(
         }
     }
 
-    LaunchedEffect(pendingAutoSkipPage, pageCount) {
+    LaunchedEffect(pendingAutoSkipPage, pageCount, singleItemImmersive) {
         val failingPage = pendingAutoSkipPage
         if (failingPage <= 0) return@LaunchedEffect
         pendingAutoSkipPage = -1
+        if (singleItemImmersive) return@LaunchedEffect
         if (failingPage != pagerState.currentPage) return@LaunchedEffect
 
         val nextPage = resolveDouyinAutoSkipTargetPage(
@@ -1757,7 +1781,6 @@ internal fun DouyinImmersiveScreen(
         if (currentForegroundSlot.attachedSurfaceRole != DouyinPlayerSurfaceRole.HiddenPrewarm) return@LaunchedEffect
         if (currentForegroundSlot.hasRenderedFirstFrame || currentForegroundSlot.hasError) return@LaunchedEffect
 
-        val previousVolume = currentForegroundSlot.player.volume
         var keepMutedAfterTimeout = false
         try {
             currentForegroundSlot.player.volume = 0f
@@ -1796,7 +1819,7 @@ internal fun DouyinImmersiveScreen(
             )
         } finally {
             if (!keepMutedAfterTimeout) {
-                currentForegroundSlot.player.volume = previousVolume
+                currentForegroundSlot.player.volume = if (!latestSessionMuted && !latestTitlePage && currentForegroundSlot.key == latestPrewarmForegroundSlotKey.value) DOUYIN_PLAYER_AUDIBLE_VOLUME else 0f
             }
         }
 
@@ -2372,6 +2395,7 @@ internal fun DouyinImmersiveScreen(
                     }
                     if (!continuePlaybackInBackground) {
                         activePausedByLifecycle = true
+                        activePausedByGesture = true
                         activeAutoplayEnabled = false
                         stopAllPlayback()
                     }
@@ -2624,7 +2648,7 @@ internal fun DouyinImmersiveScreen(
             hasMatchingLookaheadTarget = hasMatchingLookaheadTarget
         )
     }
-    val pagerUserScrollEnabled = pageCount > 1
+    val pagerUserScrollEnabled = pageCount > 1 && !singleItemImmersive
 
     Box(
         modifier = Modifier
@@ -2727,6 +2751,18 @@ internal fun DouyinImmersiveScreen(
                     isActive = pageIsActive,
                     videoSlot = visibleVideoSlot,
                     controlsVisible = controlsVisible,
+                    paused = pageIsActive && activePausedByGesture,
+                    muted = sessionMuted,
+                    immersive = singleItemImmersive,
+                    onToggleMuted = {
+                        if (sessionMuted && !playbackStartVolumeLimitConsumed) {
+                            volumeState.enforcePlaybackStartGuard()
+                            playbackStartVolumeLimitConsumed = true
+                        }
+                        if (sessionMuted) context.stopService(android.content.Intent(context, com.lightningstudio.watchrss.data.media.BiliAudioService::class.java))
+                        sessionMuted = !sessionMuted
+                    },
+                    onToggleImmersive = { singleItemImmersive = !singleItemImmersive },
                     scaleMode = scaleMode,
                     isBuffering = if (pageIsActive && !showNetworkUnavailable) {
                         if (showPosterFallback) {
@@ -2743,6 +2779,8 @@ internal fun DouyinImmersiveScreen(
                     posterBytes = pagePosterBytes,
                     hasError = pageHasError,
                     onToggleControls = { controlsVisible = !controlsVisible },
+                    volumeState = volumeState,
+                    onSelectScale = { scaleMode = DouyinPlayerScaleMode.entries[it] },
                     onToggleScaleMode = { scaleMode = scaleMode.next() },
                     onLongPress = { onItemLongPress(item) },
                     onDoubleTap = {
@@ -2786,8 +2824,8 @@ internal fun DouyinImmersiveScreen(
         }
 
         if (!uiState.message.isNullOrBlank()) {
-            LaunchedEffect(uiState.message) {
-                onMessageShown()
+            LaunchedEffect(uiState.messageEventId) {
+                onMessageShown(uiState.messageEventId)
             }
         }
 
@@ -2869,7 +2907,11 @@ private fun DouyinTitlePage(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .align(Alignment.TopCenter)
-                                .clickable(onClick = onHeaderClick),
+                                                    .clickable(
+                                                        role = androidx.compose.ui.semantics.Role.Button,
+                                                        onClickLabel = "打开抖音频道信息",
+                                                        onClick = onHeaderClick
+                                                    ),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
@@ -2903,7 +2945,14 @@ private fun DouyinTitlePage(
                                 .align(Alignment.BottomCenter)
                                 .padding(bottom = buttonBottom)
                                 .size(buttonSize)
-                                .clickable {
+                                .clickable(
+                                    role = androidx.compose.ui.semantics.Role.Button,
+                                    onClickLabel = if (hasItems) {
+                                        "进入抖音视频流"
+                                    } else {
+                                        "刷新抖音内容"
+                                    }
+                                ) {
                                     if (hasItems) {
                                         onEnterFlow()
                                     } else {
@@ -3011,6 +3060,11 @@ private fun DouyinVideoPage(
     isActive: Boolean,
     videoSlot: DouyinPlayerSlotState?,
     controlsVisible: Boolean,
+    paused: Boolean,
+    muted: Boolean,
+    immersive: Boolean,
+    onToggleMuted: () -> Unit,
+    onToggleImmersive: () -> Unit,
     scaleMode: DouyinPlayerScaleMode,
     isBuffering: Boolean,
     isVideoVisible: Boolean,
@@ -3019,10 +3073,30 @@ private fun DouyinVideoPage(
     posterBytes: ByteArray?,
     hasError: Boolean,
     onToggleControls: () -> Unit,
+    volumeState: com.lightningstudio.watchrss.ui.components.PlayerVolumeState,
+    onSelectScale: (Int) -> Unit,
     onToggleScaleMode: () -> Unit,
     onLongPress: () -> Unit,
     onDoubleTap: () -> Unit
 ) {
+    var showPlaybackPanel by remember(item.awemeId) { mutableStateOf(false) }
+    var seeking by remember(item.awemeId) { mutableStateOf(false) }
+    if (showPlaybackPanel && isActive) {
+        com.lightningstudio.watchrss.ui.components.PlaybackControlPanel(
+            player = videoSlot?.player,
+            volume = volumeState,
+            onTogglePlayback = onDoubleTap,
+            onDismiss = { showPlaybackPanel = false },
+            scaleLabel = when (scaleMode) {
+                DouyinPlayerScaleMode.Standard -> "适应"
+                DouyinPlayerScaleMode.Expanded -> "填充"
+                DouyinPlayerScaleMode.Shrunk -> "完整画面"
+            },
+            onSelectScale = onSelectScale,
+            muted = muted,
+            onToggleMuted = onToggleMuted
+        )
+    }
     val density = LocalDensity.current
     val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
     val topPadding = watchDimensionResource(R.dimen.hey_distance_6dp)
@@ -3041,6 +3115,34 @@ private fun DouyinVideoPage(
         showBufferingIndicator = true
     }
 
+    val speedControl = remember(videoSlot?.player) {
+        TemporaryPlaybackSpeed(
+            read = { videoSlot?.player?.playbackParameters?.speed ?: 1f },
+            write = { videoSlot?.player?.setPlaybackSpeed(it) }
+        )
+    }
+    var boosting by remember(videoSlot?.player) { mutableStateOf(false) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(speedControl, isActive, lifecycleOwner) {
+        if (!isActive) { speedControl.end(); boosting = false }
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_PAUSE || event == Lifecycle.Event.ON_STOP) {
+                speedControl.end()
+                boosting = false
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            speedControl.end()
+        }
+    }
+    LaunchedEffect(controlsVisible, isActive, paused, boosting, seeking) {
+        if (controlsVisible && isActive && !boosting && !seeking) {
+            delay(4_000L)
+            onToggleControls()
+        }
+    }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -3048,7 +3150,12 @@ private fun DouyinVideoPage(
             .pointerInput(item.awemeId, controlsVisible, isActive, hasError) {
                 detectTapGestures(
                     onTap = { onToggleControls() },
-                    onLongPress = { onLongPress() },
+                    onPress = {
+                        try { tryAwaitRelease() } finally { speedControl.end(); boosting = false }
+                    },
+                    onLongPress = {
+                        if (isActive && !hasError) { speedControl.begin(); boosting = true }
+                    },
                     onDoubleTap = {
                         if (isActive) {
                             onDoubleTap()
@@ -3078,6 +3185,19 @@ private fun DouyinVideoPage(
             WatchCircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
         }
 
+        if (boosting) {
+            Text("临时 2 倍速", color = Color.White, modifier = Modifier.align(Alignment.Center))
+        }
+        if (isActive && !controlsVisible && (paused || muted || immersive)) {
+            Row(Modifier.align(Alignment.BottomCenter).padding(bottom = 24.dp)) {
+                com.lightningstudio.watchrss.ui.components.WatchTextButton(onClick = onToggleControls) {
+                    Text(if (paused) "已暂停 · 控制" else "控制")
+                }
+                if (muted) {
+                    com.lightningstudio.watchrss.ui.components.WatchTextButton(onClick = onToggleMuted) { Text("开启声音") }
+                }
+            }
+        }
         if (controlsVisible) {
             Box(
                 modifier = Modifier
@@ -3140,10 +3260,26 @@ private fun DouyinVideoPage(
                 }
 
                 Column(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 160.dp).verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(watchDimensionResource(R.dimen.hey_distance_2dp)),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    if (isActive) com.lightningstudio.watchrss.ui.components.PlaybackSeekControl(videoSlot?.player, onScrubbingChanged = { seeking = it })
+                    Row(horizontalArrangement = Arrangement.Center) {
+                        com.lightningstudio.watchrss.ui.components.WatchTextButton(onClick = onToggleMuted) {
+                            Text(if (muted) "开启声音" else "静音")
+                        }
+                        com.lightningstudio.watchrss.ui.components.WatchTextButton(onClick = onDoubleTap) {
+                            Text(if (paused) "继续" else "暂停")
+                        }
+                    }
+                    com.lightningstudio.watchrss.ui.components.WatchTextButton(onClick = { showPlaybackPanel = true }) { Text("播放控制 · 进度与音量") }
+                    Row(horizontalArrangement = Arrangement.Center) {
+                        com.lightningstudio.watchrss.ui.components.WatchTextButton(onClick = onToggleImmersive) {
+                            Text(if (immersive) "退出单条" else "单条沉浸")
+                        }
+                        com.lightningstudio.watchrss.ui.components.WatchTextButton(onClick = onLongPress) { Text("更多") }
+                    }
                     Text(
                         text = titleText,
                         fontSize = titleFontSize,
@@ -3367,6 +3503,7 @@ private fun buildDouyinExoPlayer(
         .setLoadControl(loadControl)
         .build().apply {
             repeatMode = Player.REPEAT_MODE_ONE
+            volume = 0f
         }
 }
 

@@ -94,6 +94,7 @@ class BiliRepository(
     }
 
     override suspend fun logoutAndClearPreviewCache() {
+        appContext.stopService(android.content.Intent(appContext, com.lightningstudio.watchrss.data.media.BiliAudioService::class.java))
         clearAccount()
         clearLocalInteractionState()
         clearLocalPlaybackProgress()
@@ -352,6 +353,16 @@ class BiliRepository(
         }
     }
 
+    override suspend fun resolveAudioSource(cid: Long, aid: Long?, bvid: String?): BiliResult<BiliAudioSource> = safeCall {
+        val result = client.play.fetchPlayUrl(cid = cid, aid = aid, bvid = bvid, fnval = 16)
+        if (!result.isSuccess) BiliResult(result.code, result.message)
+        else {
+            val track = result.data?.let(::selectBiliAudioTrack)
+            if (track == null) BiliResult(BiliErrorCodes.AUDIO_UNAVAILABLE, "当前视频未提供可用的独立音频轨")
+            else BiliResult(code = 0, data = BiliAudioSource(track.first, buildPlayHeaders(), track.second))
+        }
+    }
+
     override suspend fun fetchPlayUrlMp4(
         cid: Long,
         aid: Long?,
@@ -553,13 +564,18 @@ class BiliRepository(
     }
 
     override suspend fun addSearchHistory(keyword: String) {
-        val history = getSearchHistory().toMutableList()
-        history.remove(keyword)
-        history.add(0, keyword)
-        val trimmed = history.take(20)
-        val raw = buildSearchHistoryJson(trimmed)
         dataStore.edit { preferences ->
-            preferences[SEARCH_HISTORY_JSON] = raw
+            val history = parseSearchHistory(preferences[SEARCH_HISTORY_JSON].orEmpty())
+            preferences[SEARCH_HISTORY_JSON] = buildSearchHistoryJson(
+                (listOf(keyword) + history.filterNot { it == keyword }).take(20)
+            )
+        }
+    }
+
+    override suspend fun removeSearchHistory(keyword: String) {
+        dataStore.edit { preferences ->
+            val history = parseSearchHistory(preferences[SEARCH_HISTORY_JSON].orEmpty())
+            preferences[SEARCH_HISTORY_JSON] = buildSearchHistoryJson(history.filterNot { it == keyword })
         }
     }
 

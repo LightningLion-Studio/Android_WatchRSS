@@ -22,6 +22,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -36,6 +38,7 @@ import com.lightningstudio.watchrss.ui.components.rememberPullRefreshEnabled
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.theme.BrandOrange
 import com.lightningstudio.watchrss.ui.util.formatTime
+import com.lightningstudio.watchrss.ui.viewmodel.HomeMessageEvent
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 
@@ -43,24 +46,26 @@ import kotlinx.coroutines.flow.StateFlow
 fun HomeScreen(
     channels: StateFlow<List<RssChannel>>,
     isRefreshing: StateFlow<Boolean>,
-    message: StateFlow<String?>,
+    message: StateFlow<HomeMessageEvent?>,
     onRefreshAll: () -> Unit,
-    onMessageShown: () -> Unit,
+    onMessageShown: (Long) -> Unit,
     onAddRss: () -> Unit,
     onOpenSettings: () -> Unit,
     onChannelClick: (RssChannel) -> Unit
 ) {
     val channelList by channels.collectAsState()
     val refreshing by isRefreshing.collectAsState()
-    val toastMessage by message.collectAsState()
+    val toastEvent by message.collectAsState()
+    val toastMessage = toastEvent?.text
     val listState = rememberLazyListState()
     InstallDigitalCrownLazyListHandler(listState)
     val canRefresh = rememberPullRefreshEnabled(listState)
 
-    LaunchedEffect(toastMessage) {
-        if (toastMessage != null) {
+    LaunchedEffect(toastEvent?.id) {
+        val event = toastEvent
+        if (event != null) {
             delay(1500)
-            onMessageShown()
+            onMessageShown(event.id)
         }
     }
 
@@ -85,7 +90,8 @@ fun HomeScreen(
                     Text(
                         text = "腕上RSS",
                         style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.semantics { heading() }
                     )
                     WatchTextButton(onClick = onOpenSettings) {
                         Text(text = "设置", color = BrandOrange)
@@ -195,7 +201,7 @@ private fun AddRssCard(onAdd: () -> Unit) {
         ) {
             Text(
                 text = "添加 RSS",
-                style = MaterialTheme.typography.titleMedium.copy(fontSize = 12.sp),
+                style = MaterialTheme.typography.titleMedium.copy(fontSize = 14.sp),
                 color = BrandOrange
             )
             Spacer(modifier = Modifier.height(2.dp))

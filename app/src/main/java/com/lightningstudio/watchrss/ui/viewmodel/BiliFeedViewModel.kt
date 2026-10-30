@@ -23,7 +23,8 @@ data class BiliFeedUiState(
     val feedSource: BiliFeedSource? = null,
     val lastRefreshAt: Long? = null,
     val canLoadMore: Boolean = true,
-    val message: String? = null
+    val message: String? = null,
+    val messageEventId: Long = 0L
 )
 
 class BiliFeedViewModel(
@@ -59,7 +60,8 @@ class BiliFeedViewModel(
                         items = emptyList(),
                         feedSource = null,
                         canLoadMore = true,
-                        message = "请先登录获取推荐内容"
+                        message = "请先登录获取推荐内容",
+                        messageEventId = it.messageEventId + 1
                     )
                 }
                 return@launch
@@ -99,7 +101,8 @@ class BiliFeedViewModel(
                         isRefreshing = false,
                         isLoadingMore = false,
                         items = if (cachedItems.isNotEmpty()) cachedItems else it.items,
-                        message = formatBiliError(result.code, result.message)
+                        message = formatBiliError(result.code, result.message),
+                        messageEventId = it.messageEventId + 1
                     )
                 }
             }
@@ -131,14 +134,16 @@ class BiliFeedViewModel(
                 _uiState.update {
                     it.copy(
                         isLoadingMore = false,
-                        message = formatBiliError(result.code, result.message)
+                        message = formatBiliError(result.code, result.message),
+                        messageEventId = it.messageEventId + 1
                     )
                 }
             }
         }
     }
 
-    fun clearMessage() {
+    fun clearMessage(expectedEventId: Long? = null) {
+        if (expectedEventId != null && _uiState.value.messageEventId != expectedEventId) return
         _uiState.update { it.copy(message = null) }
     }
 
@@ -148,10 +153,10 @@ class BiliFeedViewModel(
             val aid = targetItem.aid ?: return@launch
             val result = repository.favorite(aid, add = true, bvid = targetItem.bvid)
             if (result.isSuccess) {
-                _uiState.update { it.copy(message = "已收藏") }
+                publishMessage("已收藏")
                 syncLocalSaved(targetItem, SaveType.FAVORITE, true)
             } else {
-                _uiState.update { it.copy(message = formatBiliError(result.code, result.message)) }
+                publishMessage(formatBiliError(result.code, result.message))
             }
         }
     }
@@ -160,10 +165,10 @@ class BiliFeedViewModel(
         viewModelScope.launch {
             val result = repository.addToView(aid = item.aid, bvid = item.bvid)
             if (result.isSuccess) {
-                _uiState.update { it.copy(message = "已加入稍后再看") }
+                publishMessage("已加入稍后再看")
                 syncLocalSaved(item, SaveType.WATCH_LATER, true)
             } else {
-                _uiState.update { it.copy(message = formatBiliError(result.code, result.message)) }
+                publishMessage(formatBiliError(result.code, result.message))
             }
         }
     }
@@ -178,7 +183,8 @@ class BiliFeedViewModel(
                 feedSource = page?.source,
                 lastRefreshAt = refreshedAt,
                 canLoadMore = items.isNotEmpty(),
-                message = if (items.isEmpty()) "暂无推荐内容" else null
+                message = if (items.isEmpty()) "暂无推荐内容" else null,
+                messageEventId = if (items.isEmpty()) it.messageEventId + 1 else it.messageEventId
             )
         }
     }
@@ -198,6 +204,12 @@ class BiliFeedViewModel(
             !item.bvid.isNullOrBlank() -> "bvid:${item.bvid}"
             item.aid != null -> "aid:${item.aid}"
             else -> "title:${item.title.orEmpty()}"
+        }
+    }
+
+    private fun publishMessage(message: String) {
+        _uiState.update {
+            it.copy(message = message, messageEventId = it.messageEventId + 1)
         }
     }
 
@@ -226,17 +238,17 @@ class BiliFeedViewModel(
         if (item.aid != null) return item
         val bvid = item.bvid?.trim()?.takeIf { it.isNotEmpty() }
         if (bvid == null) {
-            _uiState.update { it.copy(message = "当前内容暂不支持收藏") }
+            publishMessage("当前内容暂不支持收藏")
             return null
         }
         val result = repository.fetchVideoDetail(aid = null, bvid = bvid)
         if (!result.isSuccess) {
-            _uiState.update { it.copy(message = formatBiliError(result.code, result.message)) }
+            publishMessage(formatBiliError(result.code, result.message))
             return null
         }
         val resolved = result.data?.item
         if (resolved?.aid == null) {
-            _uiState.update { it.copy(message = "当前内容暂不支持收藏") }
+            publishMessage("当前内容暂不支持收藏")
             return null
         }
         return item.copy(

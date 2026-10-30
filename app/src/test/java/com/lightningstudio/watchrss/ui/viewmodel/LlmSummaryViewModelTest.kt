@@ -58,13 +58,13 @@ class LlmSummaryViewModelTest {
 
         try {
             val accountStore = FakeAccountStore()
-            val viewModel = LlmSummaryViewModel(
+            val viewModel = mainDispatcherRule.track(LlmSummaryViewModel(
                 rssRepository = repo,
                 settingsRepository = env.repository,
                 tokenUsageRepository = LlmTokenUsageRepository(FakeLlmTokenUsageDao()),
                 watchAccountStore = accountStore,
                 watchTokenManager = WatchTokenManager(accountStore)
-            )
+            ))
 
             viewModel.prepare(42L)
             advanceUntilIdle()
@@ -99,13 +99,13 @@ class LlmSummaryViewModelTest {
 
         try {
             val accountStore = FakeAccountStore()
-            val viewModel = LlmSummaryViewModel(
+            val viewModel = mainDispatcherRule.track(LlmSummaryViewModel(
                 rssRepository = repo,
                 settingsRepository = env.repository,
                 tokenUsageRepository = LlmTokenUsageRepository(FakeLlmTokenUsageDao()),
                 watchAccountStore = accountStore,
                 watchTokenManager = WatchTokenManager(accountStore)
-            )
+            ))
 
             viewModel.prepare(itemId)
             advanceUntilIdle()

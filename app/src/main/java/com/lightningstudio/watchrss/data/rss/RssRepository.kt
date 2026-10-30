@@ -10,6 +10,8 @@ data class ImportedTextReader(
 )
 
 interface RssRepository {
+    fun observeNovelChapters(channelId: Long): Flow<List<NovelChapter>> = kotlinx.coroutines.flow.flowOf(emptyList())
+
     fun observeCloudSyncRevision(): Flow<Long> = emptyFlow()
     fun observeHomeChannels(): Flow<List<RssChannel>>
     fun observeChannels(): Flow<List<RssChannel>>
@@ -27,6 +29,8 @@ interface RssRepository {
     suspend fun loadImportedTextChunk(marker: String, chunkIndex: Int): String?
 
     suspend fun previewChannel(url: String): Result<AddRssPreview>
+    suspend fun previewChannelFromContent(url: String, content: String): Result<AddRssPreview> =
+        Result.failure(UnsupportedOperationException("RSS 内容解析不可用"))
     suspend fun confirmAddChannel(preview: RssChannelPreview): Result<RssChannel>
     suspend fun addChannel(url: String): Result<RssChannel>
     suspend fun refreshChannel(channelId: Long, refreshAll: Boolean = false): Result<Unit>
@@ -35,6 +39,7 @@ interface RssRepository {
     fun requestOriginalContents(itemIds: List<Long>, force: Boolean = false)
     fun setOriginalContentUpdatesPaused(channelId: Long, paused: Boolean)
     suspend fun markItemRead(itemId: Long)
+    suspend fun markNovelChapterOpened(itemId: Long)
     suspend fun toggleFavorite(itemId: Long): Result<SavedState>
     suspend fun toggleWatchLater(itemId: Long): Result<SavedState>
     suspend fun reorderSavedItems(saveType: SaveType, orderedItemIds: List<Long>)
@@ -84,6 +89,7 @@ interface RssRepository {
     suspend fun toggleLike(itemId: Long): Result<Boolean>
     suspend fun markChannelRead(channelId: Long)
     suspend fun updateItemReadingProgress(itemId: Long, progress: Float)
+    suspend fun reorderHomeEntries(orderedIds: List<Long>): Long = throw UnsupportedOperationException("排序尚未实现")
     suspend fun moveChannelToTop(channelId: Long)
     suspend fun setChannelPinned(channelId: Long, pinned: Boolean)
     suspend fun setChannelOriginalContent(channelId: Long, enabled: Boolean)

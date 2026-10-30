@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -37,13 +38,28 @@ import com.lightningstudio.watchrss.ui.utils.BiliFormatUtils
 fun BiliCommentCard(
     comment: BiliCommentData,
     uploaderMid: Long,
-    onReplyClick: () -> Unit,
+    onReplyClick: (() -> Unit)?,
     modifier: Modifier = Modifier
 ) {
     WatchCard(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(onClick = onReplyClick),
+        modifier = modifier.fillMaxWidth().then(
+            if (onReplyClick != null) Modifier
+                .clickable(
+                    onClickLabel = buildString {
+                        append("查看")
+                        append(comment.member?.uname?.takeIf { it.isNotBlank() } ?: "用户")
+                        append("的评论回复")
+                        comment.content?.message
+                            ?.takeIf { it.isNotBlank() }
+                            ?.let { message ->
+                                append("：")
+                                append(message.take(40))
+                            }
+                    },
+                    role = Role.Button,
+                    onClick = onReplyClick
+                ) else Modifier
+        ),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         )

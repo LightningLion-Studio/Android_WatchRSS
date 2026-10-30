@@ -39,6 +39,8 @@ class TestRssRepository(
 
     var previewChannelResult: Result<AddRssPreview> =
         Result.failure(UnsupportedOperationException("previewChannel not configured"))
+    var previewChannelFromContentResult: Result<AddRssPreview> = previewChannelResult
+    var previewChannelFromContentRequest: Pair<String, String>? = null
     var confirmAddChannelResult: Result<RssChannel> =
         Result.failure(UnsupportedOperationException("confirmAddChannel not configured"))
     var addChannelResult: Result<RssChannel> =
@@ -177,6 +179,11 @@ class TestRssRepository(
 
     override suspend fun previewChannel(url: String): Result<AddRssPreview> = previewChannelResult
 
+    override suspend fun previewChannelFromContent(url: String, content: String): Result<AddRssPreview> {
+        previewChannelFromContentRequest = url to content
+        return previewChannelFromContentResult
+    }
+
     override suspend fun confirmAddChannel(preview: RssChannelPreview): Result<RssChannel> {
         return confirmAddChannelResult
     }
@@ -208,6 +215,8 @@ class TestRssRepository(
         markedReadItemIds += itemId
         updateItem(itemId) { it.copy(isRead = true) }
     }
+
+    override suspend fun markNovelChapterOpened(itemId: Long) = Unit
 
     override suspend fun toggleFavorite(itemId: Long): Result<SavedState> {
         toggledFavoriteIds += itemId

@@ -10,8 +10,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -167,9 +169,14 @@ private fun RecommendGroupCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(min = 48.dp)
             .clip(RoundedCornerShape(cardRadius))
             .background(cardColor)
-            .clickable(onClick = onClick)
+            .clickable(
+                onClickLabel = "打开推荐分组 ${group.name}",
+                role = Role.Button,
+                onClick = onClick
+            )
             .padding(
                 start = horizontalPadding,
                 end = horizontalPadding,
@@ -178,7 +185,6 @@ private fun RecommendGroupCard(
             )
             .semantics {
                 contentDescription = semanticDescription
-                role = Role.Button
             }
     ) {
         Text(
@@ -252,21 +258,30 @@ private fun RecommendChannelCard(
         Spacer(modifier = Modifier.width(iconSpacing))
         Box(
             modifier = Modifier
-                .size(iconSize)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
-                .clickable(onClick = onAddClick)
+                .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+                .clickable(
+                    onClickLabel = "添加频道 ${channel.title}",
+                    role = Role.Button,
+                    onClick = onAddClick
+                )
                 .semantics {
                     contentDescription = "添加频道：${channel.title}"
-                    role = Role.Button
                 },
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = "+",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
+            Box(
+                modifier = Modifier
+                    .size(iconSize)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "+",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
         }
     }
 }

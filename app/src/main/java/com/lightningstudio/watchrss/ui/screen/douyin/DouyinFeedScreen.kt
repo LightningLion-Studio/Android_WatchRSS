@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -21,7 +22,8 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.style.TextAlign
 import com.lightningstudio.watchrss.R
@@ -52,7 +54,7 @@ fun DouyinFeedScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(MaterialTheme.colorScheme.background)
     ) {
         PullRefreshBox(
             isRefreshing = uiState.isLoading,
@@ -116,7 +118,11 @@ private fun DouyinFeedHeader(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onHeaderClick)
+            .clickable(
+                role = androidx.compose.ui.semantics.Role.Button,
+                onClickLabel = "打开抖音频道信息",
+                onClick = onHeaderClick
+            )
             .padding(horizontal = headerPadding, vertical = headerPadding),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -135,13 +141,20 @@ private fun DouyinFeedHeader(
         )
         if (!isLoggedIn) {
             Spacer(modifier = Modifier.height(watchDimensionResource(R.dimen.hey_distance_4dp)))
-            Text(
-                text = "登录",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFF1E88E5),
-                textAlign = TextAlign.Center,
-                modifier = Modifier.clickable { onLoginClick() }
-            )
+            Box(
+                modifier = Modifier
+                    .heightIn(min = 48.dp)
+                    .clickable(role = Role.Button, onClick = onLoginClick)
+                    .padding(horizontal = 12.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "登录",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    textAlign = TextAlign.Center
+                )
+            }
         }
     }
 }

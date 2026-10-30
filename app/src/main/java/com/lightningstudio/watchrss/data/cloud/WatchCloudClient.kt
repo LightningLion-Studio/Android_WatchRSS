@@ -109,7 +109,8 @@ class WatchCloudClient(private val http: OkHttpClient = OkHttpClient()) {
         deviceId: String,
         publicKeySpki: String,
         displayName: String,
-        keyVersion: Int
+        keyVersion: Int,
+        keyAlgorithm: String = "P-256"
     ) {
         post(
             account,
@@ -119,6 +120,7 @@ class WatchCloudClient(private val http: OkHttpClient = OkHttpClient()) {
                 put("platform", "watch")
                 put("displayName", displayName)
                 put("publicKeySpki", publicKeySpki)
+                put("keyAlgorithm", keyAlgorithm)
                 put("keyVersion", keyVersion)
                 put("capabilities", JSONObject().apply {
                     put("snapshotSchema", 2)

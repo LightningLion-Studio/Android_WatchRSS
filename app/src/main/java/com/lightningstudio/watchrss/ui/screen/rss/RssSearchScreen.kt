@@ -18,6 +18,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -65,7 +68,9 @@ fun RssSearchScreen(
                     color = MaterialTheme.colorScheme.onSurface,
                     fontSize = titleSize,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { heading() }
                 )
             }
 
@@ -124,19 +129,33 @@ private fun SearchResultCard(
             .fillMaxWidth()
             .clip(shape)
             .background(background)
-            .clickable(onClick = onClick)
+            .clickable(
+                onClickLabel = "打开文章：${item.title.ifBlank { "无标题" }}",
+                role = Role.Button,
+                onClick = onClick
+            )
             .padding(padding)
     ) {
         Text(
-            text = buildHighlightedText(item.title, keyword, highlightColor),
+            text = buildHighlightedText(
+                item.title,
+                keyword,
+                highlightColor,
+                MaterialTheme.colorScheme.onPrimary
+            ),
             color = MaterialTheme.colorScheme.onSurface,
             fontSize = titleSize,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
         Text(
-            text = buildHighlightedText(snippet, keyword, highlightColor),
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            text = buildHighlightedText(
+                snippet,
+                keyword,
+                highlightColor,
+                MaterialTheme.colorScheme.onPrimary
+            ),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = summarySize,
             lineHeight = summaryLineHeight,
             maxLines = 2,
@@ -214,7 +233,12 @@ private fun normalizeSearchText(text: String): String {
         .replace("&gt;", ">")
 }
 
-private fun buildHighlightedText(text: String, keyword: String, highlightColor: Color): AnnotatedString {
+private fun buildHighlightedText(
+    text: String,
+    keyword: String,
+    highlightColor: Color,
+    highlightTextColor: Color
+): AnnotatedString {
     val query = keyword.trim()
     if (query.isEmpty() || text.isEmpty()) return AnnotatedString(text)
     val lowerText = text.lowercase()
@@ -229,7 +253,7 @@ private fun buildHighlightedText(text: String, keyword: String, highlightColor: 
         builder.pushStyle(
             SpanStyle(
                 background = highlightColor,
-                color = Color.Black
+                color = highlightTextColor
             )
         )
         builder.append(text.substring(index, index + query.length))

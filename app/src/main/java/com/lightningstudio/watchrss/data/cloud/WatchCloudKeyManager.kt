@@ -64,22 +64,44 @@ class WatchCloudKeyManager(context: Context) {
         envelope: WatchDeviceKeyEnvelope
     ): ByteArray {
         val privateKey = requireNotNull(
-            keyStore().getKey(alias(userId, deviceId), null) as? PrivateKey
+            devicePrivateKey(userId, deviceId)
         ) { "手表设备私钥不存在" }
         return unwrapWatchDeviceEnvelope(envelope, userId, deviceId, privateKey).also { key ->
             saveAccountKey(userId, envelope.keyVersion, key)
         }
     }
 
+    fun deviceKeyAlgorithm(userId: String, deviceId: String): String =
+        if (getOrCreateDeviceKey(userId, deviceId).public.algorithm == "RSA") "RSA-2048" else "P-256"
+
+    private fun devicePrivateKey(userId: String, deviceId: String): PrivateKey? {
+        val store = keyStore()
+        return (store.getKey(rsaAlias(userId, deviceId), null) as? PrivateKey)
+            ?: (store.getKey(alias(userId, deviceId), null) as? PrivateKey)
+    }
+
+    private fun rsaAlias(userId: String, deviceId: String) = alias(userId, deviceId).replace("_ecdh", "_rsa")
+
     private fun getOrCreateDeviceKey(userId: String, deviceId: String): KeyPair {
-        require(Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            "云中继需要 Android 12 及以上硬件密钥支持"
-        }
+        val rsaAlias = rsaAlias(userId, deviceId)
+        val store = keyStore()
+        val rsaPrivate = store.getKey(rsaAlias, null) as? PrivateKey
+        val rsaPublic = store.getCertificate(rsaAlias)?.publicKey
+        if (rsaPrivate != null && rsaPublic != null) return java.security.KeyPair(rsaPublic, rsaPrivate)
         val alias = alias(userId, deviceId)
-        val keyStore = keyStore()
-        val private = keyStore.getKey(alias, null) as? PrivateKey
-        val public = keyStore.getCertificate(alias)?.publicKey
-        if (private != null && public != null) return KeyPair(public, private)
+        val existingPrivate = store.getKey(alias, null) as? PrivateKey
+        val existingPublic = store.getCertificate(alias)?.publicKey
+        if (existingPrivate != null && existingPublic != null) return java.security.KeyPair(existingPublic, existingPrivate)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            return KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_RSA, ANDROID_KEYSTORE).run {
+                initialize(KeyGenParameterSpec.Builder(rsaAlias, KeyProperties.PURPOSE_DECRYPT)
+                    .setKeySize(2048)
+                    .setDigests(KeyProperties.DIGEST_SHA256)
+                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_RSA_OAEP)
+                    .build())
+                generateKeyPair()
+            }
+        }
         return KeyPairGenerator.getInstance(
             KeyProperties.KEY_ALGORITHM_EC,
             ANDROID_KEYSTORE

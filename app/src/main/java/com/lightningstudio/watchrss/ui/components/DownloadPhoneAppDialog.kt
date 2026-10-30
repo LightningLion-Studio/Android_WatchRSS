@@ -154,7 +154,11 @@ fun DownloadPhoneAppCompactLink(
         color = color,
         textDecoration = TextDecoration.Underline,
         textAlign = TextAlign.Center,
-        modifier = modifier.clickable { showDialog = true }
+        modifier = modifier.clickable(
+            role = Role.Button,
+            onClickLabel = "查看手机端下载方式",
+            onClick = { showDialog = true }
+        )
     )
     if (showDialog) {
         DownloadPhoneAppDialog(operation = operation, onDismiss = { showDialog = false })
@@ -174,6 +178,13 @@ fun DownloadPhoneAppDialog(
     val context = LocalContext.current
     val density = LocalDensity.current
     var qrBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    val browserIntent = remember {
+        android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(PHONE_APP_DOWNLOAD_URL))
+            .addCategory(android.content.Intent.CATEGORY_BROWSABLE)
+    }
+    val canOpenBrowser = context.packageManager.queryIntentActivities(
+        browserIntent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY
+    ).isNotEmpty()
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -213,7 +224,7 @@ fun DownloadPhoneAppDialog(
                     modifier = Modifier
                         .size(containerSize)
                         .clip(CircleShape)
-                        .background(Color.Black)
+                        .background(MaterialTheme.colorScheme.surface)
                         .padding(top = scaleDp(56.dp), bottom = scaleDp(20.dp))
                         .testTag(DownloadPhoneAppTestTags.DIALOG)
                         .semantics { dialog() },
@@ -279,7 +290,8 @@ fun DownloadPhoneAppDialog(
                                         .basicMarquee(iterations = Int.MAX_VALUE)
                                 )
                                 Text(
-                                    text = "二维码生成失败，请点击下方按钮打开下载页",
+                                    text = if (canOpenBrowser) "二维码生成失败，请点击下方按钮打开下载页"
+                                    else "二维码生成失败，请稍后重试，或在手机访问 $PHONE_APP_DOWNLOAD_URL",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     textAlign = TextAlign.Center
@@ -296,7 +308,11 @@ fun DownloadPhoneAppDialog(
                                 .size(scaleDp(104.dp))
                                 .clip(CircleShape)
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .clickable(onClick = onDismiss)
+                                .clickable(
+                                    role = Role.Button,
+                                    onClickLabel = "关闭下载页",
+                                    onClick = onDismiss
+                                )
                                 .testTag(DownloadPhoneAppTestTags.CLOSE_BUTTON),
                             contentAlignment = Alignment.Center
                         ) {
@@ -307,9 +323,13 @@ fun DownloadPhoneAppDialog(
                                 modifier = Modifier.size(scaleDp(48.dp))
                             )
                         }
-                        WatchButton(
+                        if (canOpenBrowser) WatchButton(
                             onClick = {
-                                runCatching { openExternalLink(context, PHONE_APP_DOWNLOAD_URL) }
+                                runCatching { context.startActivity(browserIntent) }.onFailure {
+                                    com.lightningstudio.watchrss.ui.util.showAppToast(
+                                        context, "下载页无法打开，请使用手机扫描二维码"
+                                    )
+                                }
                             },
                             contentPadding = PaddingValues(horizontal = scaleDp(8.dp)),
                             modifier = Modifier

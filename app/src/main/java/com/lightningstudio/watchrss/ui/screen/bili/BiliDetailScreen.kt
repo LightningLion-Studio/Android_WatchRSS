@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -35,6 +38,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -42,6 +46,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -60,6 +70,8 @@ import com.lightningstudio.watchrss.sdk.bili.BiliPage
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
 import com.lightningstudio.watchrss.ui.util.RssImageLoader
+import com.lightningstudio.watchrss.ui.util.ValidatedNetworkRetryBudget
+import com.lightningstudio.watchrss.ui.util.rememberValidatedNetworkRevision
 import com.lightningstudio.watchrss.ui.viewmodel.BiliDetailUiState
 import kotlin.math.max
 
@@ -73,7 +85,9 @@ fun BiliDetailScreen(
     onFavorite: () -> Unit,
     onShare: () -> Unit,
     onCommentClick: () -> Unit,
-    showCommentEntry: Boolean
+    showCommentEntry: Boolean,
+    shareLabel: String = "分享链接",
+    onListenAudio: (() -> Unit)? = null
 ) {
     val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
     val spacing = watchDimensionResource(R.dimen.hey_distance_6dp)
@@ -120,8 +134,19 @@ fun BiliDetailScreen(
         onLike = onLike,
         onCoin = onCoin,
                     onFavorite = onFavorite,
-                    onShare = onShare
+                    onShare = onShare,
+                    shareLabel = shareLabel
                 )
+            }
+            item {
+                Text(
+                    text = if (shareLabel == "系统分享") "分享视频链接到系统应用" else "用手机扫码打开视频链接",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            onListenAudio?.let { listen ->
+                item { com.lightningstudio.watchrss.ui.components.WatchTextButton(onClick = listen) { Text("只听音频（可后台播放）") } }
             }
             if (!detail?.pages.isNullOrEmpty()) {
                 item {
@@ -175,10 +200,20 @@ private fun BiliCoverCard(
     )
     val context = androidx.compose.ui.platform.LocalContext.current
     val maxWidthPx = remember(context) { context.resources.displayMetrics.widthPixels.coerceAtLeast(1) }
-    val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, coverUrl, maxWidthPx) {
-        value = if (coverUrl.isNullOrBlank()) null else {
-            RssImageLoader.loadBitmap(context, coverUrl, maxWidthPx)
+    val networkRevision = rememberValidatedNetworkRevision(context)
+    var retry by remember(coverUrl) { mutableIntStateOf(0) }
+    var loadFailed by remember(coverUrl) { mutableStateOf(false) }
+    val networkRetryBudget = remember(coverUrl) { ValidatedNetworkRetryBudget(networkRevision) }
+    val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, coverUrl, maxWidthPx, networkRevision, retry) {
+        value = if (coverUrl.isNullOrBlank() || !networkRetryBudget.shouldAttempt(networkRevision)) null else {
+            RssImageLoader.loadBitmap(
+                context,
+                coverUrl,
+                maxWidthPx,
+                retryAfterInFlightFailure = networkRevision > 0 || retry > 0
+            )
         }
+        loadFailed = !coverUrl.isNullOrBlank() && value == null
     }
 
     Box(
@@ -187,7 +222,7 @@ private fun BiliCoverCard(
             .aspectRatio(3f / 2f)
             .clip(RoundedCornerShape(radius))
             .background(MaterialTheme.colorScheme.surface)
-            .clickableWithRipple(onClick),
+            .clickableWithRipple(onClickLabel = "打开视频", onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         val safeBitmap = bitmap
@@ -197,6 +232,16 @@ private fun BiliCoverCard(
                 contentDescription = "视频封面",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
+            )
+        } else if (loadFailed) {
+            Text(
+                text = "封面加载失败 · 点击重试",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .clickable(role = Role.Button, onClickLabel = "重试封面加载") { retry++ }
+                    .padding(8.dp)
             )
         }
         Box(
@@ -250,8 +295,8 @@ private fun BiliMetaCard(
             style = com.lightningstudio.watchrss.ui.reader.readerTextStyle(
                 com.lightningstudio.watchrss.ui.reader.ReaderTextRole.TITLE
             ),
-            maxLines = 3,
-            overflow = TextOverflow.Ellipsis
+            softWrap = true,
+            modifier = Modifier.semantics { heading() }
         )
         if (!owner.isNullOrBlank()) {
             Text(
@@ -314,7 +359,8 @@ private fun BiliActionSection(
     onLike: () -> Unit,
     onCoin: () -> Unit,
     onFavorite: () -> Unit,
-    onShare: () -> Unit
+    onShare: () -> Unit,
+    shareLabel: String
 ) {
     BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
         val buttonCount = 4
@@ -333,6 +379,7 @@ private fun BiliActionSection(
                 icon = Icons.Filled.ThumbUp,
                 contentDescription = "点赞",
                 selected = isLiked,
+                stateLabel = "点赞",
                 size = buttonSize,
                 onClick = onLike
             )
@@ -340,6 +387,7 @@ private fun BiliActionSection(
                 icon = Icons.Filled.MonetizationOn,
                 contentDescription = "投币",
                 selected = isCoined,
+                stateLabel = "投币",
                 enabled = !isCoined,
                 size = buttonSize,
                 onClick = onCoin
@@ -348,12 +396,13 @@ private fun BiliActionSection(
                 icon = Icons.Filled.Star,
                 contentDescription = "收藏",
                 selected = isFavorited,
+                stateLabel = "收藏",
                 size = buttonSize,
                 onClick = onFavorite
             )
             BiliActionCircleButton(
                 icon = Icons.Outlined.Share,
-                contentDescription = "转发",
+                contentDescription = shareLabel,
                 size = buttonSize,
                 onClick = onShare
             )
@@ -366,6 +415,7 @@ private fun BiliActionCircleButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String,
     selected: Boolean = false,
+    stateLabel: String? = null,
     enabled: Boolean = true,
     size: Dp = watchDimensionResource(R.dimen.hey_button_height),
     onClick: () -> Unit
@@ -376,20 +426,49 @@ private fun BiliActionCircleButton(
         .coerceAtLeast(18.dp)
         .coerceAtMost(defaultIconSize)
     val background = if (selected) accent else MaterialTheme.colorScheme.surfaceVariant
-    Box(
-        modifier = Modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(background)
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = watchDimensionResource(R.dimen.hey_distance_2dp)),
-        contentAlignment = Alignment.Center
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.widthIn(min = size.coerceAtLeast(48.dp))
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.size(iconSize)
+        Box(
+            modifier = Modifier
+                .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+                .semantics {
+                    this.contentDescription = contentDescription
+                    stateLabel?.let { label ->
+                        this.selected = selected
+                        stateDescription = if (selected) "已$label" else "未$label"
+                    }
+                }
+                .clickable(
+                    enabled = enabled,
+                    onClickLabel = contentDescription,
+                    role = Role.Button,
+                    onClick = onClick
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(size)
+                    .clip(CircleShape)
+                    .background(background)
+                    .padding(horizontal = watchDimensionResource(R.dimen.hey_distance_2dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(iconSize)
+                )
+            }
+        }
+        Text(
+            text = contentDescription,
+            style = MaterialTheme.typography.labelSmall,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
 }
@@ -404,7 +483,8 @@ private fun BiliSectionTitle(title: String, trailing: String? = null) {
         Text(
             text = title,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = textSize(R.dimen.hey_s_title)
+            fontSize = textSize(R.dimen.hey_s_title),
+            modifier = Modifier.semantics { heading() }
         )
         if (!trailing.isNullOrBlank()) {
             Text(
@@ -434,6 +514,7 @@ private fun BiliDescriptionCard(text: String) {
             .clip(RoundedCornerShape(radius))
             .background(background)
             .clickableWithRipple(
+                onClickLabel = "展开或收起简介",
                 onClick = {
                     if (canExpand || expanded) {
                         expanded = !expanded
@@ -488,7 +569,7 @@ private fun BiliCommentEntryCard(onClick: () -> Unit) {
             .fillMaxWidth()
             .clip(RoundedCornerShape(radius))
             .background(background)
-            .clickableWithRipple(onClick)
+            .clickableWithRipple(onClickLabel = "查看评论", onClick = onClick)
             .padding(padding),
         contentAlignment = Alignment.Center
     ) {
@@ -539,7 +620,7 @@ private fun BiliPageEntry(
             .clip(RoundedCornerShape(radius))
             .background(background)
             .border(1.dp, borderColor, RoundedCornerShape(radius))
-            .clickableWithRipple(onClick)
+            .clickableWithRipple(onClickLabel = "播放此分集", onClick = onClick)
             .padding(padding)
     ) {
         Row(
@@ -576,10 +657,15 @@ private fun textSize(id: Int): androidx.compose.ui.unit.TextUnit {
 }
 
 @Composable
-private fun Modifier.clickableWithRipple(onClick: () -> Unit): Modifier {
+private fun Modifier.clickableWithRipple(
+    onClickLabel: String,
+    onClick: () -> Unit
+): Modifier {
     return clickable(
         interactionSource = androidx.compose.runtime.remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
         indication = LocalIndication.current,
+        onClickLabel = onClickLabel,
+        role = Role.Button,
         onClick = onClick
     )
 }

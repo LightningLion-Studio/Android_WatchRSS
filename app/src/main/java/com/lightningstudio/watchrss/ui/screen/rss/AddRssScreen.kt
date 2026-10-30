@@ -1,6 +1,7 @@
 package com.lightningstudio.watchrss.ui.screen.rss
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -12,23 +13,32 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -46,6 +56,7 @@ import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownScrollHandler
 import com.lightningstudio.watchrss.ui.theme.ActionButtonTextStyle
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
+import com.lightningstudio.watchrss.ui.theme.watchIsRound
 import com.lightningstudio.watchrss.ui.theme.watchActionButtonWidthFor
 import com.lightningstudio.watchrss.ui.theme.watchQrSizeFor
 import com.lightningstudio.watchrss.ui.testing.AddRssTestTags
@@ -66,9 +77,13 @@ fun AddRssScreen(
     onOpenExisting: (RssChannel) -> Unit,
     onChannelAdded: (String?, Long) -> Unit,
     onConsumed: () -> Unit,
-    onClearError: () -> Unit
+    onClearError: () -> Unit,
+    onOpenBrowserVerification: () -> Unit = {},
+    onBrowserVerificationComplete: (String) -> Unit = {}
 ) {
     val state by uiState.collectAsState()
+    var browserStatus by remember(state.url) { mutableStateOf("正在打开订阅页面…") }
+    var browserProgress by remember(state.url) { mutableStateOf(0) }
 
     LaunchedEffect(state.createdChannelId) {
         val channelId = state.createdChannelId
@@ -76,6 +91,22 @@ fun AddRssScreen(
             onChannelAdded(state.url, channelId)
             onConsumed()
         }
+    }
+
+    BackHandler(enabled = state.step == AddRssStep.BROWSER_VERIFICATION) { }
+
+    if (state.step == AddRssStep.BROWSER_VERIFICATION) {
+        BrowserVerificationFullScreen(
+            url = state.browserVerificationUrl ?: state.url,
+            challengeHtml = state.browserChallengeHtml,
+            status = browserStatus,
+            progress = browserProgress,
+            onStatusChanged = { browserStatus = it },
+            onProgressChanged = { browserProgress = it },
+            onFeedXmlReady = onBrowserVerificationComplete,
+            onCancel = onBackToInput
+        )
+        return
     }
 
     WatchSurface {
@@ -153,7 +184,7 @@ fun AddRssScreen(
                                 Text(
                                     text = "https://example.com/feed.xml",
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             },
                             singleLine = true,
@@ -171,8 +202,8 @@ fun AddRssScreen(
                                 disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
                                 focusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                 unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                                focusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                                unfocusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                focusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                unfocusedPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         )
 
@@ -212,6 +243,16 @@ fun AddRssScreen(
                             if (showActions) {
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    if (state.requiresBrowserVerification) {
+                                        WatchButton(
+                                            onClick = onOpenBrowserVerification,
+                                            colors = ButtonDefaults.buttonColors(containerColor = actionColor),
+                                            shape = actionShape,
+                                            modifier = Modifier.testTag(AddRssTestTags.BROWSER_VERIFICATION_BUTTON)
+                                        ) {
+                                            Text(text = "网页验证", color = actionTextColor)
+                                        }
+                                    }
                                     WatchButton(
                                         onClick = onSubmit,
                                         colors = ButtonDefaults.buttonColors(containerColor = actionColor),
@@ -247,7 +288,7 @@ fun AddRssScreen(
                                     enabled = !state.isSubmitting && !state.isLoadingPreview,
                                     shape = CircleShape,
                                     modifier = Modifier
-                                        .size(44.dp)
+                                        .size(48.dp)
                                         .testTag(AddRssTestTags.SUBMIT_BUTTON)
                                         .semantics {
                                             contentDescription = if (state.isSubmitting) "添加中" else "添加订阅按钮"
@@ -462,7 +503,76 @@ fun AddRssScreen(
                             }
                         }
                     }
+
+                    AddRssStep.BROWSER_VERIFICATION -> {
+                        // The verification step returns above as a true full-screen WebView.
+                    }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BrowserVerificationFullScreen(
+    url: String,
+    challengeHtml: String,
+    status: String,
+    progress: Int,
+    onStatusChanged: (String) -> Unit,
+    onProgressChanged: (Int) -> Unit,
+    onFeedXmlReady: (String) -> Unit,
+    onCancel: () -> Unit
+) {
+    val roundDisplay = watchIsRound(LocalConfiguration.current)
+    Box(
+        Modifier
+            .fillMaxSize()
+            .then(if (roundDisplay) Modifier.clip(CircleShape) else Modifier)
+    ) {
+        RssBrowserVerificationView(
+            url = url,
+            challengeHtml = challengeHtml,
+            onStatusChanged = onStatusChanged,
+            onProgressChanged = onProgressChanged,
+            onFeedXmlReady = onFeedXmlReady,
+            modifier = Modifier.fillMaxSize()
+        )
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .padding(top = 24.dp)
+                .fillMaxWidth(0.56f)
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color.Black)
+                .padding(horizontal = 6.dp, vertical = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text("网页安全验证", style = MaterialTheme.typography.titleSmall, color = Color.White, maxLines = 1)
+            Text(
+                status,
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.82f),
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                LinearProgressIndicator(
+                    progress = { progress.coerceIn(0, 100) / 100f },
+                    modifier = Modifier.weight(1f).height(3.dp),
+                    color = Color.White,
+                    trackColor = Color.White.copy(alpha = 0.22f)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("网页加载 ${progress.coerceIn(0, 100)}%", style = MaterialTheme.typography.labelSmall, color = Color.White, maxLines = 1)
+            }
+            androidx.compose.material3.TextButton(
+                onClick = onCancel,
+                modifier = Modifier.defaultMinSize(minWidth = 0.dp, minHeight = 0.dp),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+            ) {
+                Text("取消验证", color = Color.White, style = MaterialTheme.typography.labelSmall)
             }
         }
     }

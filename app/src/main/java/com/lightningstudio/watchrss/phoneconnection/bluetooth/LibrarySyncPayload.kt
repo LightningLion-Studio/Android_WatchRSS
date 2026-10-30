@@ -113,6 +113,7 @@ object LibrarySyncPayload {
             put("action", BluetoothSyncProtocol.ACTION_SYNC_LIBRARY)
             put("phase", PHASE_PROBE)
             put(FIELD_SUPPORTS_MANIFEST_BATCHES, true)
+            put("supportsAccountDataSpaces", true)
             put("supportsReaderPresets", true)
             put("supportsReaderAssets", true)
             put("supportsResourceChunkAck", true)

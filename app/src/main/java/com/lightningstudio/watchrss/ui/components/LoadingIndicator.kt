@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
@@ -24,7 +25,8 @@ import com.lightningstudio.watchrss.ui.util.showAppToast
 @Composable
 fun LoadingIndicator(
     loadState: LoadState,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onRetry: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     when (loadState) {
@@ -49,17 +51,26 @@ fun LoadingIndicator(
                     showAppToast(context, toastMessage)
                 }
             }
-            Box(
+            Column(
                 modifier = modifier
                     .fillMaxWidth()
                     .padding(16.dp),
-                contentAlignment = Alignment.Center
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
                     text = "加载失败: $errorMessage",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.error
                 )
+                if (onRetry != null) {
+                    WatchButton(
+                        onClick = onRetry,
+                        modifier = Modifier.heightIn(min = 48.dp)
+                    ) {
+                        Text(text = "重试")
+                    }
+                }
             }
         }
         else -> {}

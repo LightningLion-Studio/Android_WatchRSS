@@ -48,20 +48,32 @@ class FeedActivity : BaseWatchActivity() {
             WatchRSSTheme {
                 val context = LocalContext.current
                 val channel by viewModel.channel.collectAsState()
+                val isNovelMode = channel?.url?.let { url ->
+                    url.startsWith(com.lightningstudio.watchrss.data.rss.ImportedContentIds.EPUB_SOURCE_ROOT_URL + "/") ||
+                        url.startsWith(com.lightningstudio.watchrss.data.rss.ImportedContentIds.TXT_NOVEL_SOURCE_ROOT_URL + "/")
+                } == true
+                val continueReading by viewModel.continueReading.collectAsState()
                 val items by viewModel.items.collectAsState()
                 val hasLoadedItems by viewModel.hasLoadedItems.collectAsState()
                 val isRefreshing by viewModel.isRefreshing.collectAsState()
                 val hasMore by viewModel.hasMore.collectAsState()
-                val message by viewModel.message.collectAsState()
+                val message by viewModel.messageEvent.collectAsState()
 
-                LaunchedEffect(message) {
-                    if (message != null) {
-                        com.lightningstudio.watchrss.ui.util.showAppToast(context, message, android.widget.Toast.LENGTH_SHORT)
-                        viewModel.clearMessage()
+                LaunchedEffect(message?.id) {
+                    val event = message
+                    if (event != null) {
+                        com.lightningstudio.watchrss.ui.util.showAppToast(context, event.text, android.widget.Toast.LENGTH_SHORT)
+                        viewModel.clearMessage(event.id)
                     }
                 }
 
                 FeedScreen(
+                    isNovelMode = isNovelMode,
+                    continueReading = continueReading,
+                    onContinueReading = { chapter ->
+                        if (allowNavigation()) startActivity(Intent(this@FeedActivity, DetailActivity::class.java)
+                            .putExtra(DetailActivity.EXTRA_ITEM_ID, chapter.id))
+                    },
                     channel = channel,
                     items = items,
                     hasLoadedItems = hasLoadedItems,
@@ -85,6 +97,7 @@ class FeedActivity : BaseWatchActivity() {
                         if (!allowNavigation()) return@FeedScreen
                         val intent = Intent(this@FeedActivity, DetailActivity::class.java)
                         intent.putExtra(DetailActivity.EXTRA_ITEM_ID, item.id)
+                        intent.putExtra(DetailActivity.EXTRA_IS_NOVEL_MODE, isNovelMode)
                         startActivity(intent)
                     },
                     onItemLongClick = { item ->

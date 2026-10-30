@@ -4,6 +4,7 @@ import androidx.core.net.toUri
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import com.lightningstudio.watchrss.BuildConfig
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.runtime.LaunchedEffect
@@ -22,11 +23,20 @@ class AddRssActivity : BaseWatchActivity() {
         AppViewModelFactory((application as WatchRssApplication).container)
     }
 
+    override fun isSwipeBackEnabled(): Boolean =
+        viewModel.uiState.value.step != com.lightningstudio.watchrss.ui.viewmodel.AddRssStep.BROWSER_VERIFICATION
+
+    // The platform swipe-to-dismiss feature is registered once in onCreate, while
+    // this activity is still on the URL input step. Keep AddRssActivity on the
+    // dynamically gated BaseWatchActivity gesture so verification can disable it.
+    override fun shouldUsePlatformSwipeDismissFeature(): Boolean = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setupSystemBars()
 
         val presetUrl = intent.getStringExtra(EXTRA_URL)?.trim().orEmpty()
+        val debugAutoSubmit = BuildConfig.DEBUG && intent.getBooleanExtra(EXTRA_DEBUG_AUTO_SUBMIT, false)
         if (presetUrl.isNotEmpty()) {
             viewModel.updateUrl(presetUrl)
         }
@@ -35,6 +45,15 @@ class AddRssActivity : BaseWatchActivity() {
             WatchRSSTheme {
                 val context = LocalContext.current
                 val uiState by viewModel.uiState.collectAsState()
+
+                LaunchedEffect(debugAutoSubmit, presetUrl) {
+                    if (debugAutoSubmit && presetUrl.isNotEmpty()) viewModel.submit()
+                }
+                LaunchedEffect(debugAutoSubmit, uiState.requiresBrowserVerification) {
+                    if (debugAutoSubmit && uiState.requiresBrowserVerification) {
+                        viewModel.openBrowserVerification()
+                    }
+                }
 
                 LaunchedEffect(uiState.errorMessage) {
                     offlineToastMessageOrNull(context, uiState.errorMessage)?.let { message ->
@@ -56,7 +75,9 @@ class AddRssActivity : BaseWatchActivity() {
                         openChannel(url, channelId)
                     },
                     onConsumed = viewModel::consumeCreatedChannel,
-                    onClearError = viewModel::clearError
+                    onClearError = viewModel::clearError,
+                    onOpenBrowserVerification = viewModel::openBrowserVerification,
+                    onBrowserVerificationComplete = viewModel::finishBrowserVerification
                 )
             }
         }
@@ -89,5 +110,6 @@ class AddRssActivity : BaseWatchActivity() {
 
     companion object {
         const val EXTRA_URL = "extra_url"
+        const val EXTRA_DEBUG_AUTO_SUBMIT = "extra_debug_auto_submit"
     }
 }

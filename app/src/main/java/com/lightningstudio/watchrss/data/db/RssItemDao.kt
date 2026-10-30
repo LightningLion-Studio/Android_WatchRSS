@@ -8,6 +8,9 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface RssItemDao {
+    @Query("SELECT id, title, link, readingPositionChangedAt FROM rss_items WHERE channelId = :channelId")
+    fun observeNovelChapters(channelId: Long): Flow<List<com.lightningstudio.watchrss.data.rss.NovelChapter>>
+
     @Query(
         """
         SELECT
@@ -153,6 +156,9 @@ interface RssItemDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertItems(items: List<RssItemEntity>): List<Long>
 
+    @Query("DELETE FROM rss_items WHERE channelId = :channelId AND dedupKey LIKE 'debug-novel-10-pages-%'")
+    suspend fun deleteDebugNovelFixtureItems(channelId: Long)
+
     @Query("UPDATE rss_items SET isRead = 1 WHERE id = :id")
     suspend fun markRead(id: Long)
 
@@ -179,6 +185,19 @@ interface RssItemDao {
         positionContentHash: String,
         positionChangedAt: Long
     )
+
+    @Query("UPDATE rss_items SET readingPositionChangedAt = :positionChangedAt WHERE id = :id")
+    suspend fun updateReadingPositionChangedAt(id: Long, positionChangedAt: Long)
+
+    @Query(
+        """
+        SELECT MAX(readingPositionChangedAt)
+        FROM rss_items
+        WHERE channelId = :channelId
+          AND substr(link, 1, length(:bookSource)) = :bookSource
+        """
+    )
+    suspend fun maxNovelReadingPositionChangedAt(channelId: Long, bookSource: String): Long?
 
     @Query("DELETE FROM rss_items WHERE id = :id")
     suspend fun deleteItem(id: Long)
@@ -343,6 +362,9 @@ interface RssItemDao {
 
     @Query("SELECT COUNT(*) FROM rss_items WHERE channelId = :channelId AND isRead = 0")
     fun observeUnreadCount(channelId: Long): Flow<Int>
+
+    @Query("SELECT COUNT(*) FROM rss_items WHERE channelId = :channelId AND isRead = 0")
+    suspend fun getUnreadCount(channelId: Long): Int
 
     @Query("SELECT SUM(contentSizeBytes) FROM rss_items")
     fun observeTotalCacheBytes(): Flow<Long?>

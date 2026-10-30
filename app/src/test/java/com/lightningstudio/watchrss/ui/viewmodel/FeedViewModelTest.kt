@@ -23,7 +23,7 @@ class FeedViewModelTest {
     fun loadMore_extendsVisibleItems_and_hasMoreReflectsRemainingCount() = runTest {
         val repo = TestRssRepository(initialChannels = listOf(sampleRssChannel(id = 7L)))
         repo.setChannelItems(7L, (1L..14L).map { sampleRssItem(id = it, channelId = 7L) })
-        val viewModel = FeedViewModel(SavedStateHandle(mapOf("channelId" to 7L)), repo)
+        val viewModel = mainDispatcherRule.track(FeedViewModel(SavedStateHandle(mapOf("channelId" to 7L)), repo))
         val itemsCollection = collectFlow(viewModel.items)
         val hasMoreCollection = collectFlow(viewModel.hasMore)
         advanceUntilIdle()
@@ -44,7 +44,7 @@ class FeedViewModelTest {
     fun refreshFailure_setsMessage_and_requestOriginalContentsDeduplicatesIds() = runTest {
         val repo = TestRssRepository(initialChannels = listOf(sampleRssChannel(id = 3L)))
         repo.refreshResults[3L] = Result.failure(IllegalStateException("刷新失败"))
-        val viewModel = FeedViewModel(SavedStateHandle(mapOf("channelId" to 3L)), repo)
+        val viewModel = mainDispatcherRule.track(FeedViewModel(SavedStateHandle(mapOf("channelId" to 3L)), repo))
         advanceUntilIdle()
 
         viewModel.refresh()
@@ -66,7 +66,7 @@ class FeedViewModelTest {
     @Test
     fun hasLoadedItems_becomesTrueAfterEmptyItemEmission() = runTest {
         val repo = TestRssRepository(initialChannels = listOf(sampleRssChannel(id = 9L)))
-        val viewModel = FeedViewModel(SavedStateHandle(mapOf("channelId" to 9L)), repo)
+        val viewModel = mainDispatcherRule.track(FeedViewModel(SavedStateHandle(mapOf("channelId" to 9L)), repo))
         val itemsCollection = collectFlow(viewModel.items)
 
         advanceUntilIdle()
@@ -80,7 +80,7 @@ class FeedViewModelTest {
     fun toggleSavedActions_and_getSavedState_delegateToRepository() = runTest {
         val repo = TestRssRepository(initialChannels = listOf(sampleRssChannel(id = 5L)))
         repo.setSavedState(42L, SavedState(isFavorite = true, isWatchLater = false))
-        val viewModel = FeedViewModel(SavedStateHandle(mapOf("channelId" to 5L)), repo)
+        val viewModel = mainDispatcherRule.track(FeedViewModel(SavedStateHandle(mapOf("channelId" to 5L)), repo))
         advanceUntilIdle()
 
         assertEquals(SavedState(isFavorite = true, isWatchLater = false), viewModel.getSavedState(42L))

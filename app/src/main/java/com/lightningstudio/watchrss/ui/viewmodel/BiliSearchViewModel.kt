@@ -23,6 +23,8 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 sealed interface BiliSearchSubmitAction {
     data object None : BiliSearchSubmitAction
@@ -39,6 +41,7 @@ class BiliSearchViewModel(
 
     private val _searchHistory = MutableStateFlow<List<String>>(emptyList())
     val searchHistory: StateFlow<List<String>> = _searchHistory.asStateFlow()
+    private val searchHistoryMutationMutex = Mutex()
 
     private val _draftQuery = MutableStateFlow("")
     val draftQuery: StateFlow<String> = _draftQuery.asStateFlow()
@@ -94,7 +97,9 @@ class BiliSearchViewModel(
 
     fun loadSearchHistory() {
         viewModelScope.launch {
-            _searchHistory.value = repository.getSearchHistory()
+            searchHistoryMutationMutex.withLock {
+                _searchHistory.value = repository.getSearchHistory()
+            }
         }
     }
 
@@ -128,15 +133,28 @@ class BiliSearchViewModel(
             return
         }
         viewModelScope.launch {
-            repository.addSearchHistory(normalized)
-            _searchHistory.value = repository.getSearchHistory()
+            searchHistoryMutationMutex.withLock {
+                repository.addSearchHistory(normalized)
+                _searchHistory.value = repository.getSearchHistory()
+            }
+        }
+    }
+
+    fun removeSearchHistory(keyword: String) {
+        viewModelScope.launch {
+            searchHistoryMutationMutex.withLock {
+                repository.removeSearchHistory(keyword)
+                _searchHistory.value = repository.getSearchHistory()
+            }
         }
     }
 
     fun clearSearchHistory() {
         viewModelScope.launch {
-            repository.clearSearchHistory()
-            _searchHistory.value = emptyList()
+            searchHistoryMutationMutex.withLock {
+                repository.clearSearchHistory()
+                _searchHistory.value = emptyList()
+            }
         }
     }
 

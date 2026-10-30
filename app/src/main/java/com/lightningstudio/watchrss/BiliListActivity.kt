@@ -35,7 +35,7 @@ class BiliListActivity : BaseWatchActivity() {
                     val context = LocalContext.current
                     val uiState by viewModel.uiState.collectAsState()
 
-                    LaunchedEffect(uiState.message) {
+                    LaunchedEffect(uiState.messageEventId) {
                         val message = uiState.message
                         if (!message.isNullOrBlank()) {
                             com.lightningstudio.watchrss.ui.util.showAppToast(
@@ -43,7 +43,7 @@ class BiliListActivity : BaseWatchActivity() {
                                 message,
                                 android.widget.Toast.LENGTH_SHORT
                             )
-                            viewModel.clearMessage()
+                            viewModel.clearMessage(uiState.messageEventId)
                         }
                     }
 
@@ -51,6 +51,7 @@ class BiliListActivity : BaseWatchActivity() {
                         uiState = uiState,
                         onRefresh = viewModel::refresh,
                         onLoadMore = viewModel::loadMore,
+                        onSelectFavoriteFolder = viewModel::selectFavoriteFolder,
                         onItemClick = { item ->
                             context.startActivity(
                                 BiliDetailActivity.createIntent(context, item.aid, item.bvid, item.cid)

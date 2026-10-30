@@ -15,10 +15,12 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
@@ -45,15 +47,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import com.lightningstudio.watchrss.ui.theme.watchColorResource
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.annotation.DrawableRes
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.BuildConfig
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.settings.CACHE_LIMIT_OPTIONS_MB
@@ -271,10 +275,7 @@ private fun MainSettingsPage(
     val sectionSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_content_horizontal_distance
     val entrySpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_8dp
     val valueSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_4dp
-    val stepperSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_6dp
-    val compactStepperSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_4dp
     val stepperValueWidth = watchDimensionResource(R.dimen.watch_action_button_height)
-    val playbackStartVolumeValueWidth = stepperValueWidth + compactStepperSpacing
     val valueIndent = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_10dp
     val pillHeight = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_multiple_item_height
     val scrollState = rememberScrollState()
@@ -283,7 +284,7 @@ private fun MainSettingsPage(
     val mediaVolumeControlInfo = remember { MainSettingsCatalog.mediaVolumeControl }
     val mediaVolumeGuardInfo = remember { MainSettingsCatalog.mediaVolumeGuard }
     val mediaPlaybackStartVolumeLimitInfo = remember { MainSettingsCatalog.mediaPlaybackStartVolumeLimit }
-    val mediaVolumeGuardUnavailableMessage = "仅在启用滚轮调节音量后可使用音量调节防干扰"
+    val mediaVolumeGuardUnavailableMessage = "仅在启用表冠调节音量后可使用音量调节防干扰"
     val showVolumeGuardUnavailableToast = {
         showAppToast(
             context,
@@ -294,7 +295,7 @@ private fun MainSettingsPage(
 
     InstallDigitalCrownScrollHandler(scrollState)
 
-    WatchSurface(pureBlack = true) {
+    WatchSurface {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -370,28 +371,22 @@ private fun MainSettingsPage(
             )
 
             WatchSettingsPillRow(label = fontSizeInfo.title) {
-                RoundIconButtonIcon(
-                    icon = Icons.Outlined.Remove,
-                    contentDescription = "减小字体",
-                    enabled = lowerFont != null,
-                    testTag = SettingsTestTags.FONT_DECREASE_BUTTON,
-                    onClick = { lowerFont?.let(onSelectFontSize) }
-                )
-                Spacer(modifier = Modifier.width(stepperSpacing))
                 StepperValue(
                     text = "${readingFontSizeSp}sp",
                     width = stepperValueWidth,
                     testTag = SettingsTestTags.FONT_VALUE
                 )
-                Spacer(modifier = Modifier.width(stepperSpacing))
-                RoundIconButtonIcon(
-                    icon = Icons.Outlined.Add,
-                    contentDescription = "增大字体",
-                    enabled = higherFont != null,
-                    testTag = SettingsTestTags.FONT_INCREASE_BUTTON,
-                    onClick = { higherFont?.let(onSelectFontSize) }
-                )
             }
+            SettingsStepperControls(
+                decreaseDescription = "减小字体",
+                increaseDescription = "增大字体",
+                decreaseTag = SettingsTestTags.FONT_DECREASE_BUTTON,
+                increaseTag = SettingsTestTags.FONT_INCREASE_BUTTON,
+                decreaseEnabled = lowerFont != null,
+                increaseEnabled = higherFont != null,
+                onDecrease = { lowerFont?.let(onSelectFontSize) },
+                onIncrease = { higherFont?.let(onSelectFontSize) }
+            )
             Text(
                 text = fontSizeInfo.description,
                 style = MaterialTheme.typography.bodySmall,
@@ -445,7 +440,7 @@ private fun MainSettingsPage(
             }
             Text(
                 text = if (!mediaVolumeControlEnabled) {
-                    "已随滚轮音量调节停用"
+                    "已随表冠音量调节停用"
                 } else if (mediaVolumeGuardEnabled) {
                     "已开启"
                 } else {
@@ -456,7 +451,7 @@ private fun MainSettingsPage(
                 modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
             )
             Text(
-                text = "滚轮连续上调时会先停在约21%，停一下再滚可继续升高",
+                text = "表冠连续上调时会先停在约21%，停一下再转动表冠可继续升高",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
@@ -465,42 +460,30 @@ private fun MainSettingsPage(
             Spacer(modifier = Modifier.height(entrySpacing))
 
             WatchSettingsPillRow(label = mediaPlaybackStartVolumeLimitInfo.title) {
-                RoundIconButtonIcon(
-                    icon = Icons.Outlined.Remove,
-                    contentDescription = "降低静音开播上限",
-                    enabled = true,
-                    testTag = SettingsTestTags.PLAYBACK_START_VOLUME_DECREASE_BUTTON,
-                    onClick = {
-                        onSelectMediaPlaybackStartVolumeLimit(
-                            previousMediaPlaybackStartVolumeLimitPercent(
-                                mediaPlaybackStartVolumeLimitPercent
-                            )
-                        )
-                    }
-                )
-                Spacer(modifier = Modifier.width(compactStepperSpacing))
                 StepperValue(
                     text = formatMediaPlaybackStartVolumeLimitPercent(
                         mediaPlaybackStartVolumeLimitPercent
                     ),
-                    width = playbackStartVolumeValueWidth,
+                    width = stepperValueWidth,
                     testTag = SettingsTestTags.PLAYBACK_START_VOLUME_VALUE
                 )
-                Spacer(modifier = Modifier.width(compactStepperSpacing))
-                RoundIconButtonIcon(
-                    icon = Icons.Outlined.Add,
-                    contentDescription = "提高静音开播上限",
-                    enabled = true,
-                    testTag = SettingsTestTags.PLAYBACK_START_VOLUME_INCREASE_BUTTON,
-                    onClick = {
-                        onSelectMediaPlaybackStartVolumeLimit(
-                            nextMediaPlaybackStartVolumeLimitPercent(
-                                mediaPlaybackStartVolumeLimitPercent
-                            )
-                        )
-                    }
-                )
             }
+            SettingsStepperControls(
+                decreaseDescription = "降低静音开播上限",
+                increaseDescription = "提高静音开播上限",
+                decreaseTag = SettingsTestTags.PLAYBACK_START_VOLUME_DECREASE_BUTTON,
+                increaseTag = SettingsTestTags.PLAYBACK_START_VOLUME_INCREASE_BUTTON,
+                onDecrease = {
+                    onSelectMediaPlaybackStartVolumeLimit(
+                        previousMediaPlaybackStartVolumeLimitPercent(mediaPlaybackStartVolumeLimitPercent)
+                    )
+                },
+                onIncrease = {
+                    onSelectMediaPlaybackStartVolumeLimit(
+                        nextMediaPlaybackStartVolumeLimitPercent(mediaPlaybackStartVolumeLimitPercent)
+                    )
+                }
+            )
             Text(
                 text = mediaPlaybackStartVolumeLimitInfo.description,
                 style = MaterialTheme.typography.bodySmall,
@@ -683,16 +666,18 @@ private fun MainSettingsPage(
             Spacer(modifier = Modifier.height(entrySpacing))
 
             Box(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .clickable(role = Role.Button, onClick = onBeianClick)
+                    .testTag(SettingsTestTags.BEIAN_ENTRY)
+                    .semantics { contentDescription = "备案信息" },
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = "浙ICP备2024111886号-5A",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .testTag(SettingsTestTags.BEIAN_ENTRY)
-                        .clickable(onClick = onBeianClick)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
@@ -725,7 +710,6 @@ private fun AdvancedSettingsPage(
     val sectionSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_content_horizontal_distance
     val entrySpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_8dp
     val valueSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_4dp
-    val stepperSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_6dp
     val stepperValueWidth = watchDimensionResource(R.dimen.watch_action_button_height)
     val textStepperValueWidth = stepperValueWidth
     val valueIndent = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_10dp
@@ -734,7 +718,7 @@ private fun AdvancedSettingsPage(
 
     InstallDigitalCrownScrollHandler(scrollState)
 
-    WatchSurface(pureBlack = true) {
+    WatchSurface {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -747,28 +731,22 @@ private fun AdvancedSettingsPage(
             Spacer(modifier = Modifier.height(sectionSpacing))
 
             WatchSettingsPillRow(label = "缓存上限") {
-                RoundIconButtonIcon(
-                    icon = Icons.Outlined.Remove,
-                    contentDescription = "减少缓存上限",
-                    enabled = lowerCache != null,
-                    testTag = SettingsTestTags.CACHE_DECREASE_BUTTON,
-                    onClick = { lowerCache?.let(onSelectCacheLimit) }
-                )
-                Spacer(modifier = Modifier.width(stepperSpacing))
                 StepperValue(
                     text = formatCacheSize(cacheLimit),
                     width = stepperValueWidth,
                     testTag = SettingsTestTags.CACHE_VALUE
                 )
-                Spacer(modifier = Modifier.width(stepperSpacing))
-                RoundIconButtonIcon(
-                    icon = Icons.Outlined.Add,
-                    contentDescription = "增加缓存上限",
-                    enabled = higherCache != null,
-                    testTag = SettingsTestTags.CACHE_INCREASE_BUTTON,
-                    onClick = { higherCache?.let(onSelectCacheLimit) }
-                )
             }
+            SettingsStepperControls(
+                decreaseDescription = "减少缓存上限",
+                increaseDescription = "增加缓存上限",
+                decreaseTag = SettingsTestTags.CACHE_DECREASE_BUTTON,
+                increaseTag = SettingsTestTags.CACHE_INCREASE_BUTTON,
+                decreaseEnabled = lowerCache != null,
+                increaseEnabled = higherCache != null,
+                onDecrease = { lowerCache?.let(onSelectCacheLimit) },
+                onIncrease = { higherCache?.let(onSelectCacheLimit) }
+            )
             Text(
                 text = "当前已用 ${formatCacheSize(cacheUsage)}",
                 style = MaterialTheme.typography.bodySmall,
@@ -785,28 +763,22 @@ private fun AdvancedSettingsPage(
             Spacer(modifier = Modifier.height(entrySpacing))
 
             WatchSettingsPillRow(label = "媒体缓存") {
-                RoundIconButtonIcon(
-                    icon = Icons.Outlined.Remove,
-                    contentDescription = "减少媒体缓存",
-                    enabled = lowerImagePrefetchMode != null,
-                    testTag = SettingsTestTags.IMAGE_PREFETCH_DECREASE_BUTTON,
-                    onClick = { lowerImagePrefetchMode?.let(onSelectRssInlineImagePrefetchMode) }
-                )
-                Spacer(modifier = Modifier.width(stepperSpacing))
                 StepperValue(
                     text = rssInlineImagePrefetchMode.label,
                     width = textStepperValueWidth,
                     testTag = SettingsTestTags.IMAGE_PREFETCH_VALUE
                 )
-                Spacer(modifier = Modifier.width(stepperSpacing))
-                RoundIconButtonIcon(
-                    icon = Icons.Outlined.Add,
-                    contentDescription = "增加媒体缓存",
-                    enabled = higherImagePrefetchMode != null,
-                    testTag = SettingsTestTags.IMAGE_PREFETCH_INCREASE_BUTTON,
-                    onClick = { higherImagePrefetchMode?.let(onSelectRssInlineImagePrefetchMode) }
-                )
             }
+            SettingsStepperControls(
+                decreaseDescription = "减少媒体缓存",
+                increaseDescription = "增加媒体缓存",
+                decreaseTag = SettingsTestTags.IMAGE_PREFETCH_DECREASE_BUTTON,
+                increaseTag = SettingsTestTags.IMAGE_PREFETCH_INCREASE_BUTTON,
+                decreaseEnabled = lowerImagePrefetchMode != null,
+                increaseEnabled = higherImagePrefetchMode != null,
+                onDecrease = { lowerImagePrefetchMode?.let(onSelectRssInlineImagePrefetchMode) },
+                onIncrease = { higherImagePrefetchMode?.let(onSelectRssInlineImagePrefetchMode) }
+            )
             Text(
                 text = rssInlineImagePrefetchMode.summary,
                 style = MaterialTheme.typography.bodySmall,
@@ -890,7 +862,8 @@ internal fun SettingsHeader(title: String) {
         Text(
             text = title,
             style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.semantics { heading() }
         )
     }
 }
@@ -923,7 +896,7 @@ private fun RoundIconButton(
     onClick: () -> Unit
 ) {
     val size = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_20dp
-    val baseColor = watchColorResource(R.color.watch_pill_background)
+    val baseColor = MaterialTheme.colorScheme.surfaceVariant
     val idleColor = lerp(baseColor, androidx.compose.ui.graphics.Color.White, 0.12f)
     val pressedColor = lerp(baseColor, androidx.compose.ui.graphics.Color.Black, 0.18f)
     val interactionSource = remember { MutableInteractionSource() }
@@ -932,22 +905,95 @@ private fun RoundIconButton(
 
     Box(
         modifier = Modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(backgroundColor)
+            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
             .clickable(
                 enabled = enabled,
+                onClickLabel = text,
+                role = Role.Button,
                 interactionSource = interactionSource,
                 indication = LocalIndication.current,
                 onClick = onClick
             ),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-            textAlign = TextAlign.Center
+        Box(
+            modifier = Modifier
+                .size(size)
+                .clip(CircleShape)
+                .background(backgroundColor),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+@Composable
+private fun SettingsStepperControls(
+    decreaseDescription: String,
+    increaseDescription: String,
+    decreaseTag: String,
+    increaseTag: String,
+    decreaseEnabled: Boolean = true,
+    increaseEnabled: Boolean = true,
+    onDecrease: () -> Unit,
+    onIncrease: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        SettingsStepperButton(
+            icon = Icons.Outlined.Remove,
+            description = decreaseDescription,
+            enabled = decreaseEnabled,
+            tag = decreaseTag,
+            onClick = onDecrease,
+            modifier = Modifier.weight(1f)
+        )
+        SettingsStepperButton(
+            icon = Icons.Outlined.Add,
+            description = increaseDescription,
+            enabled = increaseEnabled,
+            tag = increaseTag,
+            onClick = onIncrease,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+private fun SettingsStepperButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    description: String,
+    enabled: Boolean,
+    tag: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .heightIn(min = 48.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clickable(enabled = enabled, onClick = onClick)
+            .semantics {
+                contentDescription = description
+                role = Role.Button
+            }
+            .testTag(tag),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = if (enabled) 1f else 0.38f),
+            modifier = Modifier.size(22.dp)
         )
     }
 }
@@ -962,7 +1008,7 @@ internal fun RoundIconButtonIcon(
 ) {
     val size = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_20dp
     val iconSize = size * 0.6f
-    val baseColor = watchColorResource(R.color.watch_pill_background)
+    val baseColor = MaterialTheme.colorScheme.surfaceVariant
     val idleColor = lerp(baseColor, androidx.compose.ui.graphics.Color.White, 0.12f)
     val pressedColor = lerp(baseColor, androidx.compose.ui.graphics.Color.Black, 0.18f)
     val interactionSource = remember { MutableInteractionSource() }
@@ -971,24 +1017,32 @@ internal fun RoundIconButtonIcon(
 
     Box(
         modifier = Modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(backgroundColor)
+            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
             .then(testTag?.let(Modifier::testTag) ?: Modifier)
             .clickable(
                 enabled = enabled,
+                onClickLabel = contentDescription,
+                role = Role.Button,
                 interactionSource = interactionSource,
                 indication = LocalIndication.current,
                 onClick = onClick
             ),
         contentAlignment = Alignment.Center
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.45f),
-            modifier = Modifier.size(iconSize)
-        )
+        Box(
+            modifier = Modifier
+                .size(size)
+                .clip(CircleShape)
+                .background(backgroundColor),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.45f),
+                modifier = Modifier.size(iconSize)
+            )
+        }
     }
 }
 

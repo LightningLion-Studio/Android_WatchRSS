@@ -1,32 +1,31 @@
 package com.lightningstudio.watchrss.ui.screen.douyin
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.data.network.InternetAvailabilityStatus
 import com.lightningstudio.watchrss.ui.components.InternetAvailabilityPage
+import com.lightningstudio.watchrss.ui.components.WatchSurface
 
 @Composable
 fun DouyinLoginCheckingScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    InternetAvailabilityPage(
-        status = InternetAvailabilityStatus.Checking,
-        guidanceMessage = "仅在 Wi-Fi 或蜂窝网络可用时打开抖音登录",
-        statusMessage = "正在检测互联网状态…",
-        actionText = "返回",
-        actionEnabled = true,
-        actionModifier = Modifier.padding(bottom = 8.dp),
-        onAction = onBack,
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color.Black)
-    )
+    WatchSurface(modifier = modifier) {
+        InternetAvailabilityPage(
+            status = InternetAvailabilityStatus.Checking,
+            guidanceMessage = "仅在 Wi-Fi 或蜂窝网络可用时打开抖音登录",
+            statusMessage = "正在检测互联网状态…",
+            actionText = "返回",
+            actionEnabled = true,
+            actionModifier = Modifier.padding(bottom = 8.dp),
+            onAction = onBack,
+            modifier = Modifier.fillMaxSize()
+        )
+    }
 }
 
 @Composable
@@ -46,16 +45,16 @@ fun DouyinLoginBannedScreen(
         InternetAvailabilityStatus.Available -> "已检测到互联网，可以继续"
     }
 
-    InternetAvailabilityPage(
-        status = status,
-        guidanceMessage = guidanceMessage,
-        statusMessage = statusMessage,
-        actionText = "返回",
-        actionEnabled = true,
-        actionModifier = Modifier.padding(bottom = 8.dp),
-        onAction = onBack,
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color.Black)
-    )
+    WatchSurface(modifier = modifier) {
+        InternetAvailabilityPage(
+            status = status,
+            guidanceMessage = guidanceMessage,
+            statusMessage = statusMessage,
+            actionText = "返回",
+            actionEnabled = true,
+            actionModifier = Modifier.padding(bottom = 8.dp),
+            onAction = onBack,
+            modifier = Modifier.fillMaxSize()
+        )
+    }
 }

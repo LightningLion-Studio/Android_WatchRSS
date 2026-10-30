@@ -23,7 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import com.lightningstudio.watchrss.ui.theme.watchColorResource
+import androidx.compose.ui.semantics.Role
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.TextUnit
@@ -86,7 +86,7 @@ fun BiliChannelInfoScreen(
 
     InstallDigitalCrownScrollHandler(scrollState)
 
-    WatchSurface(pureBlack = true) {
+    WatchSurface {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -221,7 +221,7 @@ private fun ActionButton(
     height: androidx.compose.ui.unit.Dp,
     onClick: () -> Unit
 ) {
-    val pillColor = watchColorResource(R.color.watch_pill_background)
+    val pillColor = MaterialTheme.colorScheme.surfaceVariant
     val pillRadius = WatchDimens.hey_button_default_radius
     val background = pillColor
     val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.6f)
@@ -229,10 +229,15 @@ private fun ActionButton(
     androidx.compose.foundation.layout.Box(
         modifier = Modifier
             .width(width)
-            .height(height)
+            .height(height.coerceAtLeast(48.dp))
             .clip(RoundedCornerShape(pillRadius))
             .background(background)
-            .clickable(enabled = enabled, onClick = onClick),
+            .clickable(
+                enabled = enabled,
+                role = Role.Button,
+                onClickLabel = label,
+                onClick = onClick
+            ),
         contentAlignment = Alignment.Center
     ) {
         Text(

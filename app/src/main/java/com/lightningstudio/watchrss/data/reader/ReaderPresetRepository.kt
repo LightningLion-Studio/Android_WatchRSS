@@ -66,6 +66,14 @@ class ReaderPresetRepository(
         )
     )
     private val scheduledDark = MutableStateFlow(false)
+    private val resourceRevisionState = MutableStateFlow(0L)
+    val resourceRevision: StateFlow<Long> = resourceRevisionState
+
+    @Synchronized
+    fun notifyResourceApplied() {
+        resourceRevisionState.value++
+    }
+
     val selection: StateFlow<ReaderPresetSelection> = selectionState
     val schedule: StateFlow<WatchReaderThemeSchedule> = scheduleState
 

@@ -20,7 +20,8 @@ data class BiliLoginUiState(
     val status: QrPollStatus = QrPollStatus.PENDING,
     val isLoading: Boolean = false,
     val isSuccess: Boolean = false,
-    val message: String? = null
+    val message: String? = null,
+    val messageEventId: Long = 0L
 )
 
 class BiliLoginViewModel(
@@ -37,7 +38,11 @@ class BiliLoginViewModel(
             val webQr = repository.requestWebQrCode()
             if (webQr == null) {
                 _uiState.update {
-                    it.copy(isLoading = false, message = formatBiliError(BiliErrorCodes.QR_REQUEST_FAILED))
+                    it.copy(
+                        isLoading = false,
+                        message = formatBiliError(BiliErrorCodes.QR_REQUEST_FAILED),
+                        messageEventId = it.messageEventId + 1
+                    )
                 }
                 return@launch
             }
@@ -58,21 +63,25 @@ class BiliLoginViewModel(
         viewModelScope.launch {
             val result = repository.applyCookieHeader(rawCookie)
             if (result.isSuccess) {
-                _uiState.update { it.copy(isSuccess = true, message = "登录成功") }
+                _uiState.update {
+                    it.copy(isSuccess = true, message = "登录成功", messageEventId = it.messageEventId + 1)
+                }
             } else {
                 _uiState.update {
                     it.copy(
                         message = formatBiliError(
                             BiliErrorCodes.COOKIE_INVALID,
                             result.exceptionOrNull()?.message
-                        )
+                        ),
+                        messageEventId = it.messageEventId + 1
                     )
                 }
             }
         }
     }
 
-    fun clearMessage() {
+    fun clearMessage(expectedEventId: Long? = null) {
+        if (expectedEventId != null && _uiState.value.messageEventId != expectedEventId) return
         _uiState.update { it.copy(message = null) }
     }
 
@@ -84,7 +93,12 @@ class BiliLoginViewModel(
                 when (result.status) {
                     QrPollStatus.SUCCESS -> {
                         _uiState.update {
-                            it.copy(status = result.status, isSuccess = true, message = "登录成功")
+                            it.copy(
+                                status = result.status,
+                                isSuccess = true,
+                                message = "登录成功",
+                                messageEventId = it.messageEventId + 1
+                            )
                         }
                         return@launch
                     }
@@ -92,7 +106,8 @@ class BiliLoginViewModel(
                         _uiState.update {
                             it.copy(
                                 status = result.status,
-                                message = formatBiliError(result.rawCode, result.message)
+                                message = formatBiliError(result.rawCode, result.message),
+                                messageEventId = it.messageEventId + 1
                             )
                         }
                         return@launch
@@ -101,7 +116,8 @@ class BiliLoginViewModel(
                         _uiState.update {
                             it.copy(
                                 status = result.status,
-                                message = formatBiliError(result.rawCode, result.message)
+                                message = formatBiliError(result.rawCode, result.message),
+                                messageEventId = it.messageEventId + 1
                             )
                         }
                         return@launch

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -39,6 +40,10 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -73,7 +78,7 @@ fun LlmTokenUsageScreen(
 
     InstallDigitalCrownScrollHandler(scrollState)
 
-    WatchSurface(pureBlack = true) {
+    WatchSurface {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -164,7 +169,7 @@ private fun ScreenHeader(title: String) {
         text = title,
         style = MaterialTheme.typography.titleMedium,
         color = MaterialTheme.colorScheme.onSurface,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().semantics { heading() },
         textAlign = TextAlign.Center
     )
 }
@@ -376,9 +381,9 @@ private fun ProviderDistributionChartCard(byProvider: List<LlmTokenUsageByProvid
                 MaterialTheme.colorScheme.primary,
                 MaterialTheme.colorScheme.secondary,
                 MaterialTheme.colorScheme.tertiary,
-                Color(0xFFEF5350),
-                Color(0xFF66BB6A),
-                Color(0xFFFFCA28)
+                MaterialTheme.colorScheme.error,
+                MaterialTheme.colorScheme.outline,
+                MaterialTheme.colorScheme.onSurfaceVariant
             )
             val holeColor = MaterialTheme.colorScheme.surfaceVariant
             Canvas(modifier = Modifier
@@ -427,9 +432,8 @@ private fun ProviderDistributionChartCard(byProvider: List<LlmTokenUsageByProvid
 }
 
 @Composable
-private fun ProviderSummaryChip(provider: LlmTokenUsageByProviderPojo) {
+internal fun ProviderSummaryChip(provider: LlmTokenUsageByProviderPojo) {
     Card(
-        onClick = { },
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
@@ -455,7 +459,7 @@ private fun ProviderSummaryChip(provider: LlmTokenUsageByProviderPojo) {
 }
 
 @Composable
-private fun RecordChip(record: LlmTokenUsageEntity) {
+internal fun RecordChip(record: LlmTokenUsageEntity) {
     val displayTotal = record.totalTokens
         ?: record.inputTokens?.plus(record.outputTokens ?: 0)
         ?: record.promptTokenCount?.plus(record.candidatesTokenCount ?: 0)
@@ -466,7 +470,6 @@ private fun RecordChip(record: LlmTokenUsageEntity) {
     val reasoning = record.reasoningTokens
 
     Card(
-        onClick = { },
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
@@ -497,14 +500,17 @@ private fun RecordChip(record: LlmTokenUsageEntity) {
 }
 
 @Composable
-private fun ActionChip(
+internal fun ActionChip(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
     onClick: () -> Unit
 ) {
     Card(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .semantics { role = Role.Button },
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer
         )

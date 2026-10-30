@@ -139,7 +139,7 @@ private fun WatchReaderPresetLivePreview(
     val context = LocalContext.current
     val showUnsupportedAction = remember(context) {
         {
-            Toast.makeText(context, "预览页面不支持收藏/分享", Toast.LENGTH_SHORT).show()
+            com.lightningstudio.watchrss.ui.util.showAppToast(context, "预览页面不支持收藏/分享", Toast.LENGTH_SHORT)
         }
     }
     androidx.compose.runtime.CompositionLocalProvider(

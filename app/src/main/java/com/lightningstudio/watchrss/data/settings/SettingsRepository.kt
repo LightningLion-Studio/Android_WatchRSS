@@ -15,6 +15,7 @@ private val CACHE_LIMIT_BYTES = longPreferencesKey("cache_limit_bytes")
 private val OOBE_SEEN_VERSION = intPreferencesKey("oobe_seen_version")
 private val READING_THEME_DARK = booleanPreferencesKey("reading_theme_dark")
 private val READING_FONT_SIZE_SP = intPreferencesKey("reading_font_size_sp")
+private val READER_TAP_TO_SCROLL = booleanPreferencesKey("reader_tap_to_scroll")
 private val READER_AUTO_SCROLL_ENABLED = booleanPreferencesKey("reader_auto_scroll_enabled")
 private val READER_AUTO_SCROLL_LINES_PER_SECOND = floatPreferencesKey("reader_auto_scroll_lines_per_second")
 private val SHARE_USE_SYSTEM = booleanPreferencesKey("share_use_system")
@@ -71,6 +72,12 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     val readingFontSizeSp: Flow<Int> = dataStore.data.map { preferences ->
         preferences[READING_FONT_SIZE_SP] ?: DEFAULT_READING_FONT_SIZE_SP
     }
+    val readerTapToScrollEnabled: Flow<Boolean> = dataStore.data.map { it[READER_TAP_TO_SCROLL] ?: false }
+
+    suspend fun setReaderTapToScrollEnabled(value: Boolean) {
+        dataStore.edit { it[READER_TAP_TO_SCROLL] = value }
+    }
+
     val readerAutoScrollEnabled: Flow<Boolean> = dataStore.data.map { preferences ->
         preferences[READER_AUTO_SCROLL_ENABLED] ?: DEFAULT_READER_AUTO_SCROLL_ENABLED
     }

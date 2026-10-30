@@ -10,17 +10,29 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.TextUnit
@@ -33,7 +45,7 @@ import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.viewmodel.BiliSearchSubmitAction
 import com.lightningstudio.watchrss.ui.viewmodel.BiliSearchViewModel
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun BiliSearchScreen(
     viewModel: BiliSearchViewModel,
@@ -41,6 +53,19 @@ fun BiliSearchScreen(
     onSearch: (BiliSearchSubmitAction) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var deletingKeyword by remember { mutableStateOf<String?>(null) }
+    deletingKeyword?.let { keyword ->
+        AlertDialog(
+            onDismissRequest = { deletingKeyword = null },
+            title = { Text("删除这条搜索历史？") },
+            text = { Text(keyword) },
+            confirmButton = { WatchTextButton(onClick = {
+                viewModel.removeSearchHistory(keyword)
+                deletingKeyword = null
+            }) { Text("删除") } },
+            dismissButton = { WatchTextButton(onClick = { deletingKeyword = null }) { Text("取消") } }
+        )
+    }
     val searchText by viewModel.draftQuery.collectAsState()
     val hotSearchWords by viewModel.hotSearchWords.collectAsState()
     val searchHistory by viewModel.searchHistory.collectAsState()
@@ -52,7 +77,7 @@ fun BiliSearchScreen(
     BackHandler(onBack = onNavigateBack)
     InstallDigitalCrownLazyListHandler(listState)
 
-    WatchSurface(pureBlack = true) {
+    WatchSurface {
         LazyColumn(
             modifier = modifier.fillMaxSize(),
             state = listState,
@@ -70,7 +95,9 @@ fun BiliSearchScreen(
                     color = MaterialTheme.colorScheme.onSurface,
                     fontSize = titleSize,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { heading() }
                 )
             }
 
@@ -97,7 +124,8 @@ fun BiliSearchScreen(
                             Text(
                                 text = "搜索历史",
                                 style = MaterialTheme.typography.labelLarge,
-                                color = Color.White
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.semantics { heading() }
                             )
                             WatchTextButton(onClick = { viewModel.clearSearchHistory() }) {
                                 Text("清空")
@@ -109,12 +137,20 @@ fun BiliSearchScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             searchHistory.forEach { keyword ->
-                                SuggestionChip(
-                                    onClick = {
-                                        onSearch(viewModel.submitSearch(keyword))
-                                    },
-                                    label = { Text(keyword) }
-                                )
+                                Box(
+                                    Modifier
+                                        .heightIn(min = 48.dp)
+                                        .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp))
+                                        .combinedClickable(
+                                            onClick = { onSearch(viewModel.submitSearch(keyword)) },
+                                            onClickLabel = "搜索 $keyword",
+                                            role = Role.Button,
+                                            onLongClickLabel = "删除这条搜索历史",
+                                            onLongClick = { deletingKeyword = keyword }
+                                        )
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    contentAlignment = Alignment.Center
+                                ) { Text(keyword, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                             }
                         }
                     }
@@ -127,7 +163,8 @@ fun BiliSearchScreen(
                     Column {
                         Text(
                             text = "热门搜索",
-                            style = MaterialTheme.typography.titleMedium
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.semantics { heading() }
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         FlowRow(

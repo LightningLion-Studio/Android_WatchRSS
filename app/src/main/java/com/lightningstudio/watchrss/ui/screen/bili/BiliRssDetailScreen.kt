@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -40,6 +41,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -122,22 +129,21 @@ fun BiliRssDetailScreen(
 
     val detail = uiState.detail
     if (detail == null) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(backgroundColor),
-            contentAlignment = Alignment.Center
+        com.lightningstudio.watchrss.ui.reader.ReaderBackgroundSurface(
+            modifier = Modifier.fillMaxSize()
         ) {
-            val loadingText = if (uiState.isLoading) "加载中..." else {
-                uiState.message?.trim().takeUnless { it.isNullOrBlank() } ?: "加载中..."
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                val loadingText = if (uiState.isLoading) "加载中..." else {
+                    uiState.message?.trim().takeUnless { it.isNullOrBlank() } ?: "加载中..."
+                }
+                Text(
+                    text = loadingText,
+                    color = textColor,
+                    fontSize = titleSize,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
-            Text(
-                text = loadingText,
-                color = textColor,
-                fontSize = titleSize,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
         }
         return
     }
@@ -174,11 +180,13 @@ fun BiliRssDetailScreen(
                 Spacer(modifier = Modifier.height(watchDimensionResource(R.dimen.hey_distance_4dp)))
             }
             item(key = "title") {
-                DetailTitle(
-                    title = display.title,
-                    titlePadding = WatchDimens.detail_title_safe_padding,
-                    textColor = textColor
-                )
+                Box(modifier = Modifier.fillMaxWidth().semantics { heading() }) {
+                    DetailTitle(
+                        title = display.title,
+                        titlePadding = WatchDimens.detail_title_safe_padding,
+                        textColor = textColor
+                    )
+                }
             }
             item(key = "contentGap") {
                 Spacer(modifier = Modifier.height(blockSpacing))
@@ -224,6 +232,8 @@ fun BiliRssDetailScreen(
                     CircleIconButton(
                         icon = Icons.Filled.Star,
                         contentDescription = "收藏",
+                        selected = uiState.isFavorited,
+                        stateLabel = "收藏",
                         tint = if (uiState.isFavorited) activeColor else textColor,
                         containerColor = if (uiState.isFavorited) activeActionContainerColor else actionContainerColor,
                         borderColor = if (uiState.isFavorited) activeActionBorderColor else actionBorderColor,
@@ -274,9 +284,11 @@ private fun BiliRssVideoCard(
     onClick: () -> Unit
 ) {
     val context = LocalContext.current
-    var cover by remember(poster, maxWidthPx) { mutableStateOf<Bitmap?>(null) }
+    val imageCacheScope = com.lightningstudio.watchrss.data.account.workspace.libraryContext(context)
+        .cacheDir.absolutePath
+    var cover by remember(imageCacheScope, poster, maxWidthPx) { mutableStateOf<Bitmap?>(null) }
     val ratio = cover?.let { it.width.toFloat() / it.height.toFloat() }
-        ?: poster?.let { RssImageLoader.getCachedAspectRatio(it) }
+        ?: poster?.let { RssImageLoader.getCachedAspectRatio(context, it) }
     val coverHeight = watchDimensionResource(R.dimen.hey_card_large_height)
     val useDecoratedCard = borderColor.alpha > 0f
     val cardShape = RoundedCornerShape(watchDimensionResource(R.dimen.hey_card_normal_bg_radius))
@@ -288,7 +300,7 @@ private fun BiliRssVideoCard(
         Modifier
     }
 
-    LaunchedEffect(poster, maxWidthPx, isScrolling) {
+    LaunchedEffect(imageCacheScope, poster, maxWidthPx, isScrolling) {
         if (isScrolling) return@LaunchedEffect
         if (cover != null) return@LaunchedEffect
         if (poster.isNullOrBlank()) return@LaunchedEffect
@@ -341,6 +353,8 @@ private fun BiliRssVideoCard(
 private fun CircleIconButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String,
+    selected: Boolean? = null,
+    stateLabel: String? = null,
     tint: Color,
     containerColor: Color,
     borderColor: Color,
@@ -365,27 +379,42 @@ private fun CircleIconButton(
 
     Box(
         modifier = Modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(backgroundColor)
-            .then(
-                if (borderColor.alpha > 0f) Modifier.border(1.dp, borderColor, CircleShape) else Modifier
-            )
+            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+            .semantics {
+                this.contentDescription = contentDescription
+                if (selected != null && stateLabel != null) {
+                    this.selected = selected
+                    stateDescription = if (selected) "已$stateLabel" else "未$stateLabel"
+                }
+            }
             .clickableWithRipple(
                 enabled = enabled,
                 interactionSource = interactionSource,
+                onClickLabel = contentDescription,
                 onClick = onClick
             ),
         contentAlignment = Alignment.Center
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
+        Box(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-            tint = tint
-        )
+                .size(size)
+                .clip(CircleShape)
+                .background(backgroundColor)
+                .then(
+                    if (borderColor.alpha > 0f) Modifier.border(1.dp, borderColor, CircleShape)
+                    else Modifier
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                tint = tint
+            )
+        }
     }
 }
 
@@ -399,12 +428,15 @@ private fun textSize(id: Int): TextUnit {
 private fun Modifier.clickableWithRipple(
     enabled: Boolean = true,
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
+    onClickLabel: String? = null,
     onClick: () -> Unit
 ): Modifier {
     return clickable(
         enabled = enabled,
         interactionSource = interactionSource,
         indication = LocalIndication.current,
+        onClickLabel = onClickLabel,
+        role = Role.Button,
         onClick = onClick
     )
 }

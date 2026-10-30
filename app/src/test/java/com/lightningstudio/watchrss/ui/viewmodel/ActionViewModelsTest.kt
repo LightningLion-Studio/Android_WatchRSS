@@ -23,7 +23,7 @@ class ActionViewModelsTest {
     @Test
     fun channelActionsViewModel_exposesChannel_and_runsActions() = runTest {
         val repo = TestRssRepository(initialChannels = listOf(sampleRssChannel(id = 31L, isPinned = false)))
-        val viewModel = ChannelActionsViewModel(SavedStateHandle(mapOf("channelId" to 31L)), repo)
+        val viewModel = mainDispatcherRule.track(ChannelActionsViewModel(SavedStateHandle(mapOf("channelId" to 31L)), repo))
         val collection = collectFlow(viewModel.channel)
         advanceUntilIdle()
 
@@ -47,7 +47,7 @@ class ActionViewModelsTest {
         val repo = TestRssRepository(initialChannels = listOf(sampleRssChannel(id = 40L)))
         repo.setChannelItems(40L, listOf(sampleRssItem(id = 99L, channelId = 40L)))
         repo.setSavedState(99L, SavedState(isFavorite = true, isWatchLater = false))
-        val viewModel = ItemActionsViewModel(SavedStateHandle(mapOf("itemId" to 99L)), repo)
+        val viewModel = mainDispatcherRule.track(ItemActionsViewModel(SavedStateHandle(mapOf("itemId" to 99L)), repo))
         val itemCollection = collectFlow(viewModel.item)
         val savedCollection = collectFlow(viewModel.savedState)
         advanceUntilIdle()

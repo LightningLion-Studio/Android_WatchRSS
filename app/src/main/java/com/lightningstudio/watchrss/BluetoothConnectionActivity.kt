@@ -5,8 +5,10 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -48,14 +50,17 @@ class BluetoothConnectionActivity : BaseWatchActivity() {
     private var statusMessage by mutableStateOf("等待手机蓝牙连接…")
     private var detailMessage by mutableStateOf<String?>(null)
     private var isBusy by mutableStateOf(false)
+    private var permissionDenied by mutableStateOf(false)
 
     private val bluetoothPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
             if (result.values.all { it }) {
+                permissionDenied = false
                 startListening()
             } else {
+                permissionDenied = true
                 statusMessage = "缺少蓝牙权限"
-                detailMessage = "请允许蓝牙权限后重试"
+                detailMessage = "蓝牙同步需要附近设备权限来查找并连接手机。允许权限后可重新等待；若系统不再显示授权弹窗，请打开应用权限设置。"
                 isBusy = false
             }
         }
@@ -74,7 +79,9 @@ class BluetoothConnectionActivity : BaseWatchActivity() {
                     statusMessage = statusMessage,
                     detailMessage = detailMessage,
                     isBusy = isBusy,
+                    permissionDenied = permissionDenied,
                     onRetry = { startWithPermissionCheck() },
+                    onOpenPermissionSettings = ::openPermissionSettings,
                     onDismiss = { finish() }
                 )
             }
@@ -104,6 +111,7 @@ class BluetoothConnectionActivity : BaseWatchActivity() {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
         if (missing.isEmpty()) {
+            permissionDenied = false
             startListening()
         } else {
             bluetoothPermissionLauncher.launch(missing.toTypedArray())
@@ -186,9 +194,16 @@ class BluetoothConnectionActivity : BaseWatchActivity() {
         return buildList {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 add(Manifest.permission.BLUETOOTH_CONNECT)
-                add(Manifest.permission.BLUETOOTH_SCAN)
             }
         }
+    }
+
+    private fun openPermissionSettings() {
+        startActivity(
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.fromParts("package", packageName, null)
+            }
+        )
     }
 
     companion object {
@@ -214,7 +229,9 @@ private fun BluetoothConnectionScreen(
     statusMessage: String,
     detailMessage: String?,
     isBusy: Boolean,
+    permissionDenied: Boolean,
     onRetry: () -> Unit,
+    onOpenPermissionSettings: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
@@ -222,7 +239,7 @@ private fun BluetoothConnectionScreen(
 
     InstallDigitalCrownScrollHandler(scrollState)
 
-    WatchSurface(pureBlack = true) {
+    WatchSurface {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -266,7 +283,12 @@ private fun BluetoothConnectionScreen(
             }
             if (!isBusy) {
                 Button(onClick = onRetry) {
-                    Text(text = "重新等待")
+                    Text(text = if (permissionDenied) "重新检查权限并等待" else "重新等待")
+                }
+                if (permissionDenied) {
+                    Button(onClick = onOpenPermissionSettings) {
+                        Text(text = "打开蓝牙权限设置")
+                    }
                 }
                 Button(onClick = onDismiss) {
                     Text(text = "关闭")

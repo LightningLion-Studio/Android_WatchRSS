@@ -28,10 +28,10 @@ class SavedAndSearchViewModelTest {
             SaveType.WATCH_LATER,
             listOf(sampleSavedItem(itemId = 8L, saveType = SaveType.WATCH_LATER))
         )
-        val viewModel = SavedItemsViewModel(
+        val viewModel = mainDispatcherRule.track(SavedItemsViewModel(
             SavedStateHandle(mapOf("saveType" to SaveType.WATCH_LATER.name)),
             repo
-        )
+        ))
         val collection = collectFlow(viewModel.items)
         advanceUntilIdle()
 
@@ -56,10 +56,10 @@ class SavedAndSearchViewModelTest {
                 sampleSavedItem(itemId = 3L)
             )
         )
-        val viewModel = SavedItemsViewModel(
+        val viewModel = mainDispatcherRule.track(SavedItemsViewModel(
             SavedStateHandle(mapOf("saveType" to SaveType.FAVORITE.name)),
             repo
-        )
+        ))
         val collection = collectFlow(viewModel.items)
         advanceUntilIdle()
 
@@ -82,7 +82,7 @@ class SavedAndSearchViewModelTest {
                 sampleRssItem(id = 3L, channelId = 15L, title = "Compose Digest")
             )
         )
-        val viewModel = RssSearchViewModel(SavedStateHandle(mapOf("channelId" to 15L)), repo)
+        val viewModel = mainDispatcherRule.track(RssSearchViewModel(SavedStateHandle(mapOf("channelId" to 15L)), repo))
         val collection = collectFlow(viewModel.results)
 
         viewModel.updateKeyword("Compose")

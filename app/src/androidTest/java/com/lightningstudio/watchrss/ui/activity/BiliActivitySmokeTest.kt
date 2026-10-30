@@ -1,7 +1,11 @@
 package com.lightningstudio.watchrss.ui.activity
 
 import android.content.Context
+import android.view.View
+import android.view.ViewGroup
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -39,6 +43,7 @@ import com.lightningstudio.watchrss.testutil.sampleBiliVideoDetail
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
@@ -106,6 +111,45 @@ class BiliActivitySmokeTest {
     }
 
     @Test
+    fun qrLoginKeepsScreenAwakeWhileWaitingAndRestoresItWhenFinished() {
+        var keepScreenOnAtDestroy: Boolean? = null
+        ActivityScenario.launch<BiliLoginActivity>(BiliLoginActivity.createIntent(context())).use { scenario ->
+            var composeView: View? = null
+            val deadline = System.currentTimeMillis() + 5_000
+            while (composeView == null && System.currentTimeMillis() < deadline) {
+                InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+                scenario.onActivity { activity ->
+                    composeView = findKeepScreenOnView(activity.window.decorView)
+                }
+                if (composeView == null) Thread.sleep(50)
+            }
+            val qrView = requireNotNull(composeView) { "Compose QR view did not keep the screen awake" }
+            assertTrue("QR login must keep the display on while awaiting a scan", qrView.keepScreenOn)
+
+            scenario.onActivity { activity ->
+                fakeBiliRepository.webQrPollResult = QrPollResult(
+                    status = QrPollStatus.SUCCESS,
+                    rawCode = 0,
+                    cookies = emptyMap()
+                )
+                activity.lifecycle.addObserver(LifecycleEventObserver { _, event ->
+                    if (event == Lifecycle.Event.ON_DESTROY) {
+                        keepScreenOnAtDestroy = qrView.keepScreenOn
+                    }
+                })
+            }
+
+            val finishDeadline = System.currentTimeMillis() + 5_000
+            while (scenario.state != Lifecycle.State.DESTROYED && System.currentTimeMillis() < finishDeadline) {
+                InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+                Thread.sleep(50)
+            }
+            assertEquals("successful QR login should close its activity", Lifecycle.State.DESTROYED, scenario.state)
+            assertEquals("the screen flag must be restored when the QR page leaves", false, keepScreenOnAtDestroy)
+        }
+    }
+
+    @Test
     fun biliChannelInfoActivity_launches() {
         launchAndAssertResumed(BiliChannelInfoActivity.createIntent(context()))
     }
@@ -155,6 +199,15 @@ class BiliActivitySmokeTest {
     }
 
     private fun context(): Context = ApplicationProvider.getApplicationContext()
+
+    private fun findKeepScreenOnView(view: View): View? {
+        if (view is ViewGroup) {
+            for (index in 0 until view.childCount) {
+                findKeepScreenOnView(view.getChildAt(index))?.let { return it }
+            }
+        }
+        return view.takeIf { it.keepScreenOn }
+    }
 
     private fun launchAndAssertResumed(activityClass: Class<*>) {
         ActivityScenario.launch<android.app.Activity>(android.content.Intent(context(), activityClass)).use { scenario ->

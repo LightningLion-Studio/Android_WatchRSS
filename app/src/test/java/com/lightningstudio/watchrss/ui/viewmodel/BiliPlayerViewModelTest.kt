@@ -962,7 +962,7 @@ class BiliPlayerViewModelTest {
         cid: String = "34",
         remoteReportScope: CoroutineScope? = null
     ): BiliPlayerViewModel {
-        return BiliPlayerViewModel(
+        return mainDispatcherRule.track(BiliPlayerViewModel(
             savedStateHandle = SavedStateHandle(
                 mapOf(
                     "aid" to aid,
@@ -972,7 +972,7 @@ class BiliPlayerViewModelTest {
             ),
             repository = repository,
             detachedRemoteReportScope = remoteReportScope
-        )
+        ))
     }
 
     private fun clearViewModel(viewModel: BiliPlayerViewModel) {

@@ -304,7 +304,7 @@ fun DouyinLoginScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(MaterialTheme.colorScheme.background)
             .pointerInput(Unit) {
                 awaitPointerEventScope {
                     while (true) {
@@ -509,7 +509,7 @@ fun DouyinLoginScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(Color.Black.copy(alpha = 0.8f)),
+                                .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.96f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Column(
@@ -519,20 +519,20 @@ fun DouyinLoginScreen(
                                 Icon(
                                     imageVector = Icons.Default.Warning,
                                     contentDescription = "Error",
-                                    tint = Color(0xFFFF9800),
+                                    tint = MaterialTheme.colorScheme.error,
                                     modifier = Modifier.size(48.dp)
                                 )
                                 Spacer(modifier = Modifier.height(16.dp))
                                 Text(
                                     text = "脚本执行错误",
                                     style = MaterialTheme.typography.titleMedium,
-                                    color = Color.White
+                                    color = MaterialTheme.colorScheme.onErrorContainer
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
                                     text = error,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = Color.Gray
+                                    color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.85f)
                                 )
                             }
                         }
@@ -601,19 +601,21 @@ private fun WebViewStyleLoadingIndicator(progress: Float) {
 
 @Composable
 private fun LoginSuccessView() {
+    val checkColor = MaterialTheme.colorScheme.onTertiaryContainer
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
         contentAlignment = Alignment.Center
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Green circle background with checkmark
             Box(
                 modifier = Modifier
                     .size(120.dp)
                     .background(
-                        color = Color(0xFF4CAF50), // Medium saturation green
+                        color = MaterialTheme.colorScheme.tertiaryContainer,
                         shape = CircleShape
                     ),
                 contentAlignment = Alignment.Center
@@ -621,7 +623,6 @@ private fun LoginSuccessView() {
                 // Draw checkmark
                 Canvas(modifier = Modifier.size(60.dp)) {
                     val strokeWidth = 6.dp.toPx()
-                    val checkColor = Color.White
 
                     // Short line (left part of checkmark)
                     drawLine(
@@ -648,7 +649,7 @@ private fun LoginSuccessView() {
             Text(
                 text = "登录成功",
                 style = MaterialTheme.typography.titleLarge,
-                color = Color.White
+                color = MaterialTheme.colorScheme.onBackground
             )
         }
     }
@@ -720,7 +721,9 @@ private fun NativeQRCodeView(
 @Composable
 private fun ErrorView(errorMessage: String) {
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -730,20 +733,20 @@ private fun ErrorView(errorMessage: String) {
             Icon(
                 imageVector = Icons.Default.Warning,
                 contentDescription = "Error",
-                tint = Color(0xFFFF9800),
+                tint = MaterialTheme.colorScheme.error,
                 modifier = Modifier.size(48.dp)
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = "加载失败",
                 style = MaterialTheme.typography.titleMedium,
-                color = Color.White
+                color = MaterialTheme.colorScheme.onBackground
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = errorMessage,
                 style = MaterialTheme.typography.bodySmall,
-                color = Color.Gray
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.74f)
             )
         }
     }

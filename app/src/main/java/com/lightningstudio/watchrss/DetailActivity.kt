@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.widget.Toast
 import androidx.activity.compose.setContent
+import androidx.compose.runtime.mutableStateOf
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.runtime.LaunchedEffect
@@ -36,6 +37,14 @@ class DetailActivity : BaseWatchActivity() {
 
     private val _isStartingActivity = MutableStateFlow(false)
     private val isStartingActivity = _isStartingActivity.asStateFlow()
+    private val autoScrollHasStarted = mutableStateOf(false)
+    private val novelMenuExpanded = mutableStateOf(false)
+
+    override fun onSwipeBackAttempt(dx: Float, dy: Float): Boolean {
+        if (!novelMenuExpanded.value) return false
+        novelMenuExpanded.value = false
+        return true
+    }
     private val autoScrollControlLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -46,6 +55,10 @@ class DetailActivity : BaseWatchActivity() {
         }
         viewModel.setReaderAutoScrollPlaying(
             data.getBooleanExtra(AutoScrollControlActivity.EXTRA_PLAYING_RESULT, false)
+        )
+        autoScrollHasStarted.value = data.getBooleanExtra(
+            AutoScrollControlActivity.EXTRA_STARTED_RESULT,
+            autoScrollHasStarted.value
         )
     }
 
@@ -90,16 +103,20 @@ class DetailActivity : BaseWatchActivity() {
                 ProvideReaderPreset(container.readerPresetRepository) {
                 val context = LocalContext.current
                 val llmSummaryState by llmSummaryViewModel.state.collectAsState()
-                val message by viewModel.message.collectAsState()
+                val message by viewModel.messageEvent.collectAsState()
                 val readAloudState by container.readAloudController.uiState.collectAsState()
-                LaunchedEffect(message) {
-                    if (message != null) {
-                        showAppToast(context, message, Toast.LENGTH_SHORT)
-                        viewModel.clearMessage()
+                LaunchedEffect(message?.id) {
+                    val event = message
+                    if (event != null) {
+                        showAppToast(context, event.text, Toast.LENGTH_SHORT)
+                        viewModel.clearMessage(event.id)
                     }
                 }
                 DetailScreen(
                     viewModel = viewModel,
+                    novelMenuExpanded = novelMenuExpanded.value,
+                    onNovelMenuExpandedChange = { novelMenuExpanded.value = it },
+                    initialIsNovelMode = intent.getBooleanExtra(EXTRA_IS_NOVEL_MODE, false),
                     llmSummaryState = llmSummaryState,
                     readAloudState = readAloudState,
                     isStartingActivity = isStartingActivity.collectAsState().value,
@@ -107,6 +124,12 @@ class DetailActivity : BaseWatchActivity() {
                     onOpenReadAloud = ::openReadAloud,
                     onOpenReadAloudControls = ::openReadAloudControls,
                     onOpenAutoScrollControls = ::openAutoScrollControls,
+                    onOpenChapter = { nextId ->
+                        startActivity(Intent(this@DetailActivity, DetailActivity::class.java)
+                            .putExtra(EXTRA_ITEM_ID, nextId)
+                            .putExtra(EXTRA_IS_NOVEL_MODE, intent.getBooleanExtra(EXTRA_IS_NOVEL_MODE, false)))
+                        finish()
+                    },
                     onBack = { itemId, reachedBottom, isWatchLater ->
                         handleBackPress(itemId, reachedBottom, isWatchLater)
                     }
@@ -190,12 +213,14 @@ class DetailActivity : BaseWatchActivity() {
         )
     }
 
-    private fun openAutoScrollControls(isPlaying: Boolean) {
+    private fun openAutoScrollControls(isPlaying: Boolean, hasStarted: Boolean, isAtBottom: Boolean) {
         _isStartingActivity.value = true
         autoScrollControlLauncher.launch(
             AutoScrollControlActivity.createReaderIntent(
                 context = this,
-                isPlaying = isPlaying
+                isPlaying = isPlaying,
+                hasStarted = hasStarted || autoScrollHasStarted.value,
+                isAtBottom = isAtBottom
             )
         )
     }
@@ -205,6 +230,7 @@ class DetailActivity : BaseWatchActivity() {
         if (itemId <= 0L) return null
         return Intent(this, DetailActivity::class.java).apply {
             putExtra(EXTRA_ITEM_ID, itemId)
+            putExtra(EXTRA_IS_NOVEL_MODE, intent.getBooleanExtra(EXTRA_IS_NOVEL_MODE, false))
             putExtra(EXTRA_FROM_WATCH_LATER, fromWatchLater)
             if (intent.hasExtra(EXTRA_USE_ORIGINAL_CONTENT)) {
                 putExtra(
@@ -221,6 +247,7 @@ class DetailActivity : BaseWatchActivity() {
     }
     companion object {
         const val EXTRA_ITEM_ID = "itemId"
+        const val EXTRA_IS_NOVEL_MODE = "isNovelMode"
         const val EXTRA_USE_ORIGINAL_CONTENT = "useOriginalContent"
         const val EXTRA_FROM_WATCH_LATER = "fromWatchLater"
         const val EXTRA_REMOVE_WATCH_LATER_ID = "removeWatchLaterId"

@@ -377,6 +377,12 @@ fun unwrapWatchDeviceEnvelope(
     deviceId: String,
     privateKey: PrivateKey
 ): ByteArray {
+    require(envelope.keyVersion > 0)
+    if (envelope.algorithm == RsaDeviceEnvelope.ALGORITHM) {
+        require(envelope.ephemeralPublicKeySpki.isBlank()) { "RSA信封不应包含临时公钥" }
+        return RsaDeviceEnvelope.unwrap(envelope.wrappedKeyBase64.b64Bytes(), envelope.nonceBase64.b64Bytes(),
+            "watchrss-account-key:$userId:${envelope.keyVersion}:$deviceId".toByteArray(), privateKey)
+    }
     require(envelope.algorithm == "P-256+HKDF-SHA256+A256GCM")
     val ephemeral = KeyFactory.getInstance("EC").generatePublic(
         X509EncodedKeySpec(envelope.ephemeralPublicKeySpki.b64Bytes())

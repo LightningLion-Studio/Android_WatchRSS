@@ -22,7 +22,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.Dp
-import com.lightningstudio.watchrss.ui.theme.watchColorResource
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -51,12 +50,12 @@ fun ActionDialogScreen(
     val endSpacing = WatchDimens.hey_content_horizontal_distance_6_0
     val buttonHeight = WatchDimens.watch_action_button_height
     val buttonRadius = WatchDimens.hey_button_default_radius
-    val buttonColor = watchColorResource(R.color.watch_pill_background)
+    val buttonColor = MaterialTheme.colorScheme.surfaceVariant
     val scrollState = rememberScrollState()
 
     InstallDigitalCrownScrollHandler(scrollState)
 
-    WatchSurface(pureBlack = true) {
+    WatchSurface {
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
@@ -107,15 +106,15 @@ private fun ActionButton(
     val shape = RoundedCornerShape(radius)
     val background = backgroundColor
     val baseColor = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.6f)
-    val dangerColor = watchColorResource(R.color.danger_red).copy(alpha = if (enabled) 1f else 0.6f)
+    val dangerColor = MaterialTheme.colorScheme.error.copy(alpha = if (enabled) 1f else 0.6f)
     val textColor = if (label.contains("删除")) dangerColor else baseColor
     Box(
         modifier = Modifier
             .width(width)
-            .height(height)
+            .height(height.coerceAtLeast(48.dp))
             .clip(shape)
             .background(background)
-            .clickable(enabled = enabled, onClick = onClick)
+            .clickable(enabled = enabled, role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
             .padding(horizontal = 8.dp),
         contentAlignment = Alignment.Center
     ) {

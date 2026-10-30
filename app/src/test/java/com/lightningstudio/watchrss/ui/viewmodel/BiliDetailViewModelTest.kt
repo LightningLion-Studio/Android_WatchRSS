@@ -45,7 +45,7 @@ class BiliDetailViewModelTest {
             )
         }
 
-        val viewModel = BiliDetailViewModel(
+        val viewModel = mainDispatcherRule.track(BiliDetailViewModel(
             savedStateHandle = SavedStateHandle(
                 mapOf(
                     "aid" to "12",
@@ -55,7 +55,7 @@ class BiliDetailViewModelTest {
             ),
             repository = repo,
             rssRepository = TestRssRepository()
-        )
+        ))
         advanceUntilIdle()
 
         assertEquals(1, viewModel.uiState.value.selectedPageIndex)
@@ -86,7 +86,7 @@ class BiliDetailViewModelTest {
             )
         }
 
-        val viewModel = BiliDetailViewModel(
+        val viewModel = mainDispatcherRule.track(BiliDetailViewModel(
             savedStateHandle = SavedStateHandle(
                 mapOf(
                     "aid" to "12",
@@ -96,7 +96,7 @@ class BiliDetailViewModelTest {
             ),
             repository = repo,
             rssRepository = TestRssRepository()
-        )
+        ))
         advanceUntilIdle()
 
         assertEquals(1, viewModel.uiState.value.selectedPageIndex)
@@ -109,7 +109,7 @@ class BiliDetailViewModelTest {
             videoDetailResult = BiliResult(code = BiliErrorCodes.REQUEST_FAILED)
         }
 
-        BiliDetailViewModel(
+        mainDispatcherRule.track(BiliDetailViewModel(
             savedStateHandle = SavedStateHandle(
                 mapOf(
                     "aid" to "13",
@@ -119,7 +119,7 @@ class BiliDetailViewModelTest {
             ),
             repository = repo,
             rssRepository = TestRssRepository()
-        )
+        ))
         advanceUntilIdle()
 
         assertEquals(listOf(Triple(13L, "BV13", 303L)), repo.warmupDetailRequests)
@@ -140,11 +140,11 @@ class BiliDetailViewModelTest {
                 )
             )
         }
-        val viewModel = BiliDetailViewModel(
+        val viewModel = mainDispatcherRule.track(BiliDetailViewModel(
             savedStateHandle = SavedStateHandle(mapOf("aid" to "22", "bvid" to "BV22")),
             repository = repo,
             rssRepository = TestRssRepository()
-        )
+        ))
         advanceUntilIdle()
 
         viewModel.selectPage(1)
@@ -183,11 +183,11 @@ class BiliDetailViewModelTest {
             )
         }
 
-        val viewModel = BiliDetailViewModel(
+        val viewModel = mainDispatcherRule.track(BiliDetailViewModel(
             savedStateHandle = SavedStateHandle(mapOf("aid" to "32", "bvid" to "BV32")),
             repository = repo,
             rssRepository = TestRssRepository()
-        )
+        ))
         advanceUntilIdle()
         assertEquals(1, viewModel.uiState.value.selectedPageIndex)
 
@@ -218,11 +218,11 @@ class BiliDetailViewModelTest {
             )
         }
 
-        val viewModel = BiliDetailViewModel(
+        val viewModel = mainDispatcherRule.track(BiliDetailViewModel(
             savedStateHandle = SavedStateHandle(mapOf("aid" to "31", "bvid" to "BV31")),
             repository = repo,
             rssRepository = TestRssRepository()
-        )
+        ))
         advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value.isLiked)
@@ -253,11 +253,11 @@ class BiliDetailViewModelTest {
             )
         }
 
-        val viewModel = BiliDetailViewModel(
+        val viewModel = mainDispatcherRule.track(BiliDetailViewModel(
             savedStateHandle = SavedStateHandle(mapOf("aid" to "41", "bvid" to "BV41")),
             repository = repo,
             rssRepository = TestRssRepository()
-        )
+        ))
         advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value.isLiked)
@@ -289,11 +289,11 @@ class BiliDetailViewModelTest {
         }
         val rssRepo = TestRssRepository()
 
-        BiliDetailViewModel(
+        mainDispatcherRule.track(BiliDetailViewModel(
             savedStateHandle = SavedStateHandle(mapOf("aid" to "43", "bvid" to "BV43")),
             repository = repo,
             rssRepository = rssRepo
-        )
+        ))
         advanceUntilIdle()
 
         assertEquals(
@@ -325,11 +325,11 @@ class BiliDetailViewModelTest {
             )
         }
 
-        val viewModel = BiliDetailViewModel(
+        val viewModel = mainDispatcherRule.track(BiliDetailViewModel(
             savedStateHandle = SavedStateHandle(mapOf("aid" to "42", "bvid" to "BV42")),
             repository = repo,
             rssRepository = TestRssRepository()
-        )
+        ))
         advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value.isLiked)
@@ -345,11 +345,11 @@ class BiliDetailViewModelTest {
             val item = sampleBiliItem(aid = 55L, bvid = "BV55", cid = 77L)
             videoDetailResult = BiliResult(code = 0, data = sampleBiliVideoDetail(item))
         }
-        val viewModel = BiliDetailViewModel(
+        val viewModel = mainDispatcherRule.track(BiliDetailViewModel(
             savedStateHandle = SavedStateHandle(mapOf("aid" to "55", "bvid" to "BV55", "cid" to "77")),
             repository = repo,
             rssRepository = TestRssRepository()
-        )
+        ))
         advanceUntilIdle()
 
         viewModel.like()
@@ -382,11 +382,11 @@ class BiliDetailViewModelTest {
             videoDetailResult = BiliResult(code = 0, data = sampleBiliVideoDetail(item))
             coinResult = BiliResult(code = BiliErrorCodes.REQUEST_FAILED)
         }
-        val viewModel = BiliDetailViewModel(
+        val viewModel = mainDispatcherRule.track(BiliDetailViewModel(
             savedStateHandle = SavedStateHandle(mapOf("aid" to "88", "bvid" to "BV88", "cid" to "99")),
             repository = repo,
             rssRepository = TestRssRepository()
-        )
+        ))
         advanceUntilIdle()
 
         viewModel.coin()
@@ -412,11 +412,11 @@ class BiliDetailViewModelTest {
             videoDetailResult = BiliResult(code = 0, data = sampleBiliVideoDetail(item))
             coinResult = BiliResult(code = 0, data = false)
         }
-        val viewModel = BiliDetailViewModel(
+        val viewModel = mainDispatcherRule.track(BiliDetailViewModel(
             savedStateHandle = SavedStateHandle(mapOf("aid" to "91", "bvid" to "BV91", "cid" to "191")),
             repository = repo,
             rssRepository = TestRssRepository()
-        )
+        ))
         advanceUntilIdle()
 
         viewModel.coin()
@@ -435,11 +435,11 @@ class BiliDetailViewModelTest {
             videoDetailResult = BiliResult(code = 0, data = sampleBiliVideoDetail(item))
             favoriteResult = BiliResult(code = 0, data = true)
         }
-        val viewModel = BiliDetailViewModel(
+        val viewModel = mainDispatcherRule.track(BiliDetailViewModel(
             savedStateHandle = SavedStateHandle(mapOf("aid" to "92", "bvid" to "BV92", "cid" to "192")),
             repository = repo,
             rssRepository = TestRssRepository()
-        )
+        ))
         advanceUntilIdle()
 
         viewModel.favorite()
@@ -459,11 +459,11 @@ class BiliDetailViewModelTest {
             videoDetailResult = BiliResult(code = 0, data = sampleBiliVideoDetail(item))
             likeResult = BiliResult(code = BiliErrorCodes.REQUEST_FAILED)
         }
-        val viewModel = BiliDetailViewModel(
+        val viewModel = mainDispatcherRule.track(BiliDetailViewModel(
             savedStateHandle = SavedStateHandle(mapOf("aid" to "77", "bvid" to "BV77", "cid" to "177")),
             repository = repo,
             rssRepository = TestRssRepository()
-        )
+        ))
         advanceUntilIdle()
 
         viewModel.like()
@@ -485,11 +485,11 @@ class BiliDetailViewModelTest {
             val item = sampleBiliItem(aid = 66L, bvid = "BV66", cid = 166L)
             videoDetailResult = BiliResult(code = 0, data = sampleBiliVideoDetail(item))
         }
-        val viewModel = BiliDetailViewModel(
+        val viewModel = mainDispatcherRule.track(BiliDetailViewModel(
             savedStateHandle = SavedStateHandle(mapOf("aid" to "66", "bvid" to "BV66", "cid" to "166")),
             repository = repo,
             rssRepository = TestRssRepository()
-        )
+        ))
         advanceUntilIdle()
 
         viewModel.like()
@@ -515,11 +515,11 @@ class BiliDetailViewModelTest {
             val item = sampleBiliItem(aid = 67L, bvid = "BV67", cid = 167L)
             videoDetailResult = BiliResult(code = 0, data = sampleBiliVideoDetail(item))
         }
-        val viewModel = BiliDetailViewModel(
+        val viewModel = mainDispatcherRule.track(BiliDetailViewModel(
             savedStateHandle = SavedStateHandle(mapOf("aid" to "67", "bvid" to "BV67", "cid" to "167")),
             repository = repo,
             rssRepository = TestRssRepository()
-        )
+        ))
         advanceUntilIdle()
 
         viewModel.like()

@@ -185,7 +185,7 @@ class RssPlayerViewModelTest {
         awemeId: String?,
         channelId: Long = 0L
     ): RssPlayerViewModel {
-        return RssPlayerViewModel(
+        return mainDispatcherRule.track(RssPlayerViewModel(
             savedStateHandle = SavedStateHandle(
                 mapOf(
                     RssPlayerViewModel.KEY_PLAY_URL to playUrl,
@@ -196,6 +196,6 @@ class RssPlayerViewModelTest {
             ),
             douyinRepository = repository,
             rssRepository = rssRepository
-        )
+        ))
     }
 }

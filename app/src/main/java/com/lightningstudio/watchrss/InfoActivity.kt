@@ -5,7 +5,6 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.annotation.RawRes
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,13 +22,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.ui.components.WatchButton
 import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
+import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.screen.InfoScreen
 import com.lightningstudio.watchrss.ui.reader.ProvideReaderPreset
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
@@ -155,25 +154,14 @@ class InfoActivity : BaseWatchActivity() {
 
 @androidx.compose.runtime.Composable
 private fun LegalDocumentLoadingState() {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black),
-        contentAlignment = Alignment.Center
-    ) {
+    WatchSurface {
         WatchCircularProgressIndicator()
     }
 }
 
 @androidx.compose.runtime.Composable
 private fun LegalDocumentErrorState(onRetry: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .padding(24.dp),
-        contentAlignment = Alignment.Center
-    ) {
+    WatchSurface(modifier = Modifier.padding(24.dp)) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp)

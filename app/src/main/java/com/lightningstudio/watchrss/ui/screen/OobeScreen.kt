@@ -1,9 +1,14 @@
 package com.lightningstudio.watchrss.ui.screen
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -43,8 +49,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.toBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
@@ -53,7 +70,6 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.Dp
@@ -69,7 +85,6 @@ import com.lightningstudio.watchrss.data.settings.formatMediaPlaybackStartVolume
 import com.lightningstudio.watchrss.data.settings.nextMediaPlaybackStartVolumeLimitPercent
 import com.lightningstudio.watchrss.data.settings.previousMediaPlaybackStartVolumeLimitPercent
 import com.lightningstudio.watchrss.ui.components.InternetAvailabilityPage
-import com.lightningstudio.watchrss.ui.components.WatchCheckbox
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.components.WatchSwitch
 import com.lightningstudio.watchrss.ui.components.internetAvailabilityGuidanceMessage
@@ -82,15 +97,18 @@ import com.lightningstudio.watchrss.ui.settings.WatchRoundIconButtonIcon
 import com.lightningstudio.watchrss.ui.settings.WatchSettingsPillRow
 import com.lightningstudio.watchrss.ui.settings.WatchStepperValue
 import com.lightningstudio.watchrss.ui.testing.OobeTestTags
+import com.lightningstudio.watchrss.ui.theme.BrandOrangeLight
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import com.lightningstudio.watchrss.ui.viewmodel.OobeUiState
 
-private val OobeOrange = Color(0xFFFF8A3D)
 private const val OOBE_WELCOME_PAGE = 0
 private const val OOBE_AGREEMENT_PAGE = 1
 private const val OOBE_CUSTOM_PAGE = 2
 private const val OOBE_INTERNET_PAGE = 3
+
+private fun InternetAvailabilityStatus.isInternetConnected(): Boolean =
+    this == InternetAvailabilityStatus.Available || this == InternetAvailabilityStatus.Bluetooth
 
 private data class IntroPageContent(
     val label: String,
@@ -145,13 +163,13 @@ private fun OobeIntroStep(
                 label = "欢迎使用",
                 title = "腕上RSS",
                 badgeText = "RSS",
-                accentColor = OobeOrange
+                accentColor = BrandOrangeLight
             ),
             IntroPageContent(
                 label = "腕上RSS",
                 title = "腕上RSS",
                 badgeText = "RSS",
-                accentColor = OobeOrange
+                accentColor = BrandOrangeLight
             )
         )
     }
@@ -161,9 +179,12 @@ private fun OobeIntroStep(
     var showAgreementError by rememberSaveable { mutableStateOf(false) }
     var showOfflineWarning by rememberSaveable { mutableStateOf(false) }
 
-    LaunchedEffect(uiState.internetAvailabilityStatus) {
-        if (uiState.internetAvailabilityStatus == InternetAvailabilityStatus.Available) {
+    LaunchedEffect(introPage, uiState.internetAvailabilityStatus) {
+        if (uiState.internetAvailabilityStatus.isInternetConnected()) {
             showOfflineWarning = false
+            if (introPage == OOBE_INTERNET_PAGE) {
+                onContinue()
+            }
         }
     }
 
@@ -190,9 +211,9 @@ private fun OobeIntroStep(
                             .testTag(OobeTestTags.INTERNET_PAGE),
                         onContinue = {
                             when (uiState.internetAvailabilityStatus) {
-                                InternetAvailabilityStatus.Available -> onContinue()
-                                InternetAvailabilityStatus.Unavailable,
-                                InternetAvailabilityStatus.Bluetooth -> showOfflineWarning = true
+                                InternetAvailabilityStatus.Available,
+                                InternetAvailabilityStatus.Bluetooth -> onContinue()
+                                InternetAvailabilityStatus.Unavailable -> showOfflineWarning = true
                                 InternetAvailabilityStatus.Checking -> Unit
                             }
                         }
@@ -205,7 +226,13 @@ private fun OobeIntroStep(
                             .fillMaxWidth()
                             .weight(1f)
                             .testTag(OobeTestTags.CUSTOM_PAGE),
-                        onNext = { onSetIntroPage(OOBE_INTERNET_PAGE) },
+                        onNext = {
+                            if (uiState.internetAvailabilityStatus.isInternetConnected()) {
+                                onContinue()
+                            } else {
+                                onSetIntroPage(OOBE_INTERNET_PAGE)
+                            }
+                        },
                         readerDisplayDark = readerDisplayDark,
                         onToggleReaderDisplayMode = onToggleReaderDisplayMode
                     )
@@ -311,7 +338,7 @@ private fun OobeAgreementStep(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
-            WatchCheckbox(
+            OobeAgreementCheckbox(
                 checked = isAgreed,
                 onCheckedChange = onAgreementChange,
                 modifier = Modifier
@@ -323,8 +350,7 @@ private fun OobeAgreementStep(
 
             val linkStyle = TextLinkStyles(
                 style = SpanStyle(
-                    color = MaterialTheme.colorScheme.primary,
-                    textDecoration = TextDecoration.Underline
+                    color = MaterialTheme.colorScheme.primary
                 )
             )
             val annotatedText = buildAnnotatedString {
@@ -385,10 +411,8 @@ private fun OobeCustomizationStep(
     val fontOptions = remember { (12..32 step 2).toList() }
     val entrySpacing = WatchDimens.hey_distance_8dp
     val pillHeight = WatchDimens.hey_multiple_item_height
-    val stepperSpacing = WatchDimens.hey_distance_6dp
-    val compactStepperSpacing = WatchDimens.hey_distance_4dp
-    val stepperValueWidth = watchDimensionResource(R.dimen.watch_action_button_height)
-    val playbackStartVolumeValueWidth = stepperValueWidth + compactStepperSpacing
+    val stepperValueWidth = 38.dp
+    val playbackStartVolumeValueWidth = 42.dp
     var previewFontSizeSp by rememberSaveable { mutableStateOf(DEFAULT_READING_FONT_SIZE_SP) }
     var previewMediaVolumeControlEnabled by rememberSaveable {
         mutableStateOf(DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED)
@@ -418,6 +442,7 @@ private fun OobeCustomizationStep(
 
         Text(
             text = "自定义",
+            modifier = Modifier.semantics { heading() },
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Center
@@ -453,19 +478,19 @@ private fun OobeCustomizationStep(
                 icon = Icons.Outlined.Remove,
                 contentDescription = "减小字体",
                 enabled = lowerFont != null,
+                minimumTouchSize = 32.dp,
                 onClick = { lowerFont?.let { previewFontSizeSp = it } }
             )
-            Spacer(modifier = Modifier.width(stepperSpacing))
-            WatchStepperValue(
+            OobeCompactStepperValue(
                 text = "${previewFontSizeSp}sp",
                 width = stepperValueWidth,
                 modifier = Modifier.testTag(OobeTestTags.CUSTOM_FONT_VALUE)
             )
-            Spacer(modifier = Modifier.width(stepperSpacing))
             WatchRoundIconButtonIcon(
                 icon = Icons.Filled.Add,
                 contentDescription = "增大字体",
                 enabled = higherFont != null,
+                minimumTouchSize = 32.dp,
                 onClick = { higherFont?.let { previewFontSizeSp = it } }
             )
         }
@@ -505,6 +530,7 @@ private fun OobeCustomizationStep(
                 icon = Icons.Outlined.Remove,
                 contentDescription = "降低静音开播上限",
                 enabled = true,
+                minimumTouchSize = 32.dp,
                 onClick = {
                     previewMediaPlaybackStartVolumeLimitPercent =
                         previousMediaPlaybackStartVolumeLimitPercent(
@@ -512,19 +538,18 @@ private fun OobeCustomizationStep(
                         )
                 }
             )
-            Spacer(modifier = Modifier.width(compactStepperSpacing))
-            WatchStepperValue(
+            OobeCompactStepperValue(
                 text = formatMediaPlaybackStartVolumeLimitPercent(
                     previewMediaPlaybackStartVolumeLimitPercent
                 ),
                 width = playbackStartVolumeValueWidth,
                 modifier = Modifier.testTag(OobeTestTags.CUSTOM_PLAYBACK_START_VOLUME_VALUE)
             )
-            Spacer(modifier = Modifier.width(compactStepperSpacing))
             WatchRoundIconButtonIcon(
                 icon = Icons.Filled.Add,
                 contentDescription = "提高静音开播上限",
                 enabled = true,
+                minimumTouchSize = 32.dp,
                 onClick = {
                     previewMediaPlaybackStartVolumeLimitPercent =
                         nextMediaPlaybackStartVolumeLimitPercent(
@@ -572,6 +597,15 @@ private fun OobeCustomizationSetting(
 }
 
 @Composable
+private fun OobeCompactStepperValue(text: String, width: Dp, modifier: Modifier = Modifier) {
+    Box(modifier = modifier.width(width), contentAlignment = Alignment.Center) {
+        Text(text = text, style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center,
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+@Composable
 private fun OobeInternetStep(
     status: InternetAvailabilityStatus,
     modifier: Modifier = Modifier,
@@ -613,7 +647,7 @@ private fun OobeOfflineWarningDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.92f))
+                .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.92f))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -631,7 +665,7 @@ private fun OobeOfflineWarningDialog(
                 modifier = Modifier
                     .size(containerSize)
                     .clip(CircleShape)
-                    .background(Color.Black)
+                    .background(MaterialTheme.colorScheme.surface)
                     .padding(top = scaleDp(96.dp), bottom = scaleDp(30.dp))
                     .testTag(OobeTestTags.OFFLINE_WARNING_DIALOG),
                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -709,6 +743,7 @@ private fun OobeOfflineWarningDialogButtons(
             background = MaterialTheme.colorScheme.surfaceVariant,
             icon = Icons.Filled.Close,
             iconTint = MaterialTheme.colorScheme.onSurface,
+            actionLabel = "取消离线继续",
             testTag = OobeTestTags.OFFLINE_WARNING_CANCEL_BUTTON,
             scaleDp = scaleDp,
             onClick = onCancel
@@ -717,6 +752,7 @@ private fun OobeOfflineWarningDialogButtons(
             background = MaterialTheme.colorScheme.primary,
             icon = Icons.Filled.Check,
             iconTint = MaterialTheme.colorScheme.onPrimary,
+            actionLabel = "确认离线继续",
             testTag = OobeTestTags.OFFLINE_WARNING_CONFIRM_BUTTON,
             scaleDp = scaleDp,
             onClick = onConfirm
@@ -729,6 +765,7 @@ private fun OobeDialogIconButton(
     background: Color,
     icon: ImageVector,
     iconTint: Color,
+    actionLabel: String,
     testTag: String,
     scaleDp: (Dp) -> Dp,
     onClick: () -> Unit
@@ -741,7 +778,11 @@ private fun OobeDialogIconButton(
             .size(size)
             .clip(CircleShape)
             .background(background)
-            .clickable(onClick = onClick)
+            .clickable(
+                role = Role.Button,
+                onClickLabel = actionLabel,
+                onClick = onClick
+            )
             .testTag(testTag),
         contentAlignment = Alignment.Center
     ) {
@@ -775,11 +816,7 @@ private fun IntroPage(
                 .padding(top = if (compact) 0.dp else 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            IntroHero(
-                badgeText = page.badgeText,
-                accentColor = page.accentColor,
-                size = heroSize
-            )
+            IntroHero(size = heroSize)
 
             Spacer(modifier = Modifier.height(if (compact) 6.dp else 10.dp))
 
@@ -794,12 +831,12 @@ private fun IntroPage(
 
                 Text(
                     text = page.title,
+                    modifier = Modifier.widthIn(max = textWidth).semantics { heading() },
                     style = MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.Center,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.widthIn(max = textWidth)
                 )
             }
 
@@ -809,76 +846,46 @@ private fun IntroPage(
 }
 
 @Composable
-private fun IntroHero(
-    badgeText: String,
-    accentColor: Color,
-    size: Dp
-) {
-    val ringSize = (size * 0.84f).coerceAtLeast(78.dp)
-    val coreSize = (size * 0.66f).coerceAtLeast(58.dp)
-    val topDotSize = if (size < 110.dp) 10.dp else 12.dp
-    val bottomDotSize = if (size < 110.dp) 7.dp else 8.dp
+private fun IntroHero(size: Dp) {
+    val context = LocalContext.current
+    val icon = remember(context) {
+        ContextCompat.getDrawable(context, R.mipmap.ic_launcher)
+            ?.toBitmap(width = 256, height = 256)?.asImageBitmap()
+    }
+    icon?.let {
+        Image(bitmap = it, contentDescription = "腕上RSS应用图标", modifier = Modifier.size(size).clip(CircleShape))
+    }
+}
 
-    Box(
-        modifier = Modifier.size(size),
-        contentAlignment = Alignment.Center
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clip(CircleShape)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            accentColor.copy(alpha = 0.22f),
-                            Color.Transparent
-                        )
-                    )
-                )
-        )
-        Box(
-            modifier = Modifier
-                .size(ringSize)
-                .clip(CircleShape)
-                .border(1.dp, accentColor.copy(alpha = 0.35f), CircleShape)
-        )
-        Box(
-            modifier = Modifier
-                .size(coreSize)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.94f))
-                .border(1.dp, accentColor.copy(alpha = 0.3f), CircleShape),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = badgeText,
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.SemiBold
-            )
+@Composable
+private fun OobeAgreementCheckbox(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val progress by animateFloatAsState(
+        targetValue = if (checked) 1f else 0f,
+        animationSpec = tween(durationMillis = 360),
+        label = "agreementCheckmark"
+    )
+    val checkedColor = MaterialTheme.colorScheme.primary
+    val uncheckedColor = MaterialTheme.colorScheme.onSurfaceVariant
+    val markColor = MaterialTheme.colorScheme.onPrimary
+    Canvas(modifier.toggleable(value = checked, role = Role.Checkbox, onValueChange = onCheckedChange)) {
+        val corner = CornerRadius(2.dp.toPx())
+        if (checked) {
+            drawRoundRect(color = checkedColor, cornerRadius = corner)
+        } else {
+            drawRoundRect(color = uncheckedColor, cornerRadius = corner, style = Stroke(width = 1.5.dp.toPx()))
         }
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(
-                    top = if (size < 110.dp) 16.dp else 22.dp,
-                    end = if (size < 110.dp) 12.dp else 18.dp
-                )
-                .size(topDotSize)
-                .clip(CircleShape)
-                .background(accentColor)
-        )
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(
-                    bottom = if (size < 110.dp) 16.dp else 20.dp,
-                    start = if (size < 110.dp) 14.dp else 20.dp
-                )
-                .size(bottomDotSize)
-                .clip(CircleShape)
-                .background(accentColor.copy(alpha = 0.7f))
-        )
+        val first = (progress / 0.4f).coerceIn(0f, 1f)
+        val second = ((progress - 0.4f) / 0.6f).coerceIn(0f, 1f)
+        val start = Offset(size.width * 0.22f, size.height * 0.51f)
+        val middle = Offset(size.width * 0.42f, size.height * 0.71f)
+        val end = Offset(size.width * 0.80f, size.height * 0.30f)
+        val stroke = 2.dp.toPx()
+        if (first > 0f) drawLine(markColor, start, start + (middle - start) * first, stroke, cap = StrokeCap.Round)
+        if (second > 0f) drawLine(markColor, middle, middle + (end - middle) * second, stroke, cap = StrokeCap.Round)
     }
 }
 
@@ -893,6 +900,7 @@ private fun OobePrimaryButton(
     val shape = RoundedCornerShape(24.dp)
     Box(
         modifier = modifier
+            .heightIn(min = 48.dp)
             .testTag(testTag)
             .clip(shape)
             .background(
@@ -902,7 +910,7 @@ private fun OobePrimaryButton(
                     MaterialTheme.colorScheme.surfaceVariant
                 }
             )
-            .clickable(enabled = enabled, onClick = onClick)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .padding(horizontal = 22.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center
     ) {

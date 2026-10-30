@@ -37,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
@@ -58,6 +59,7 @@ import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.sdk.bili.BiliItem
 import com.lightningstudio.watchrss.ui.components.EmptyStateCard
 import com.lightningstudio.watchrss.ui.components.PullRefreshBox
+import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.components.SwipeActionButton
 import com.lightningstudio.watchrss.ui.components.SwipeActionRow
 import com.lightningstudio.watchrss.ui.components.rememberPullRefreshEnabled
@@ -120,81 +122,83 @@ fun BiliRssFeedScreen(
                 }
         }
 
-        PullRefreshBox(
-            isRefreshing = uiState.isRefreshing,
-            onRefresh = onRefresh,
-            modifier = Modifier.fillMaxSize(),
-            indicatorPadding = safePadding,
-            canRefresh = canRefresh
-        ) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = safePadding),
-                state = listState,
-                contentPadding = PaddingValues(
-                    top = safePadding,
-                    bottom = safePadding + itemSpacing
-                ),
-                verticalArrangement = Arrangement.spacedBy(itemSpacing)
+        WatchSurface {
+            PullRefreshBox(
+                isRefreshing = uiState.isRefreshing,
+                onRefresh = onRefresh,
+                modifier = Modifier.fillMaxSize(),
+                indicatorPadding = safePadding,
+                canRefresh = canRefresh
             ) {
-                item {
-                    BiliRssFeedHeader(
-                        isLoggedIn = uiState.isLoggedIn,
-                        onLoginClick = onLoginClick,
-                        onHeaderClick = onHeaderClick
-                    )
-                }
-                if (!uiState.isLoggedIn) {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = safePadding),
+                    state = listState,
+                    contentPadding = PaddingValues(
+                        top = safePadding,
+                        bottom = safePadding + itemSpacing
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(itemSpacing)
+                ) {
                     item {
-                        EmptyStateCard(
-                            title = "需要登录",
-                            subtitle = "登录后获取推荐内容"
+                        BiliRssFeedHeader(
+                            isLoggedIn = uiState.isLoggedIn,
+                            onLoginClick = onLoginClick,
+                            onHeaderClick = onHeaderClick
                         )
                     }
-                } else if (uiState.items.isEmpty()) {
+                    if (!uiState.isLoggedIn) {
+                        item {
+                            EmptyStateCard(
+                                title = "需要登录",
+                                subtitle = "登录后获取推荐内容"
+                            )
+                        }
+                    } else if (uiState.items.isEmpty()) {
+                        item {
+                            EmptyStateCard(
+                                title = "暂无内容",
+                                subtitle = "稍后再试或刷新"
+                            )
+                        }
+                    } else {
+                        items(uiState.items, key = { it.bvid ?: it.aid ?: it.title.orEmpty() }) { item ->
+                            val summary = remember(item) { buildRssSummary(item) }
+                            val itemId = remember(item) { itemSwipeId(item) }
+                            BiliRssFeedItemEntry(
+                                title = item.title.orEmpty(),
+                                summary = summary,
+                                itemId = itemId,
+                                isScrolling = isScrolling,
+                                openSwipeId = openSwipeId,
+                                onOpenSwipe = { openSwipeId = it },
+                                onCloseSwipe = { openSwipeId = null },
+                                draggingSwipeId = draggingSwipeId,
+                                onDragStart = { draggingSwipeId = it },
+                                onDragEnd = { draggingSwipeId = null },
+                                onClick = {
+                                    openSwipeId = null
+                                    onItemClick(item)
+                                },
+                                onLongClick = {
+                                    openSwipeId = null
+                                    onItemLongClick(item)
+                                },
+                                onFavoriteClick = { onFavoriteClick(item) },
+                                onWatchLaterClick = { onWatchLaterClick(item) }
+                            )
+                        }
+                    }
                     item {
-                        EmptyStateCard(
-                            title = "暂无内容",
-                            subtitle = "稍后再试或刷新"
-                        )
-                    }
-                } else {
-                    items(uiState.items, key = { it.bvid ?: it.aid ?: it.title.orEmpty() }) { item ->
-                        val summary = remember(item) { buildRssSummary(item) }
-                        val itemId = remember(item) { itemSwipeId(item) }
-                        BiliRssFeedItemEntry(
-                            title = item.title.orEmpty(),
-                            summary = summary,
-                            itemId = itemId,
-                            isScrolling = isScrolling,
-                            openSwipeId = openSwipeId,
-                            onOpenSwipe = { openSwipeId = it },
-                            onCloseSwipe = { openSwipeId = null },
-                            draggingSwipeId = draggingSwipeId,
-                            onDragStart = { draggingSwipeId = it },
-                            onDragEnd = { draggingSwipeId = null },
-                            onClick = {
-                                openSwipeId = null
-                                onItemClick(item)
-                            },
-                            onLongClick = {
-                                openSwipeId = null
-                                onItemLongClick(item)
-                            },
-                            onFavoriteClick = { onFavoriteClick(item) },
-                            onWatchLaterClick = { onWatchLaterClick(item) }
-                        )
-                    }
-                }
-                item {
-                    if (uiState.isLoadingMore) {
-                        Text(
-                            text = "加载中...",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                        if (uiState.isLoadingMore) {
+                            Text(
+                                text = "加载中...",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
                     }
                 }
             }
@@ -266,7 +270,7 @@ private fun BiliRssFeedItemEntry(
                 modifier = Modifier
                     .matchParentSize()
                     .then(backgroundScaleModifier)
-                    .background(Color.Black)
+                    .background(MaterialTheme.colorScheme.surface)
             )
             BiliRssTextCard(
                 title = title,
@@ -360,6 +364,8 @@ private fun BiliRssTextCard(
                 enabled = enabled,
                 onClick = onClick,
                 onLongClick = onLongClick,
+                onClickLabel = "打开文章",
+                onLongClickLabel = "文章操作",
                 interactionSource = interactionSource
             )
             .padding(padding)
@@ -374,7 +380,7 @@ private fun BiliRssTextCard(
             )
             Text(
                 text = summary,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = summarySize,
                 lineHeight = summaryLineHeight,
                 maxLines = 2,
@@ -402,12 +408,19 @@ private fun BiliRssFeedHeader(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickableWithRipple(onClick = onHeaderClick),
+                .clickableWithRipple(
+                    onClick = onHeaderClick,
+                    onClickLabel = "查看频道信息"
+                ),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(spacing)
         ) {
             Text(
-                text = channelTitleWithStyledHint("腕上RSS · 哔哩哔哩频道", titleSize),
+                text = channelTitleWithStyledHint(
+                    "腕上RSS · 哔哩哔哩频道",
+                    titleSize,
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                ),
                 color = MaterialTheme.colorScheme.onSurface,
                 fontSize = titleSize,
                 textAlign = TextAlign.Center,
@@ -435,14 +448,15 @@ private fun BiliRssFeedHeader(
 
 private fun channelTitleWithStyledHint(
     title: String,
-    titleSize: TextUnit
+    titleSize: TextUnit,
+    hintColor: Color
 ): androidx.compose.ui.text.AnnotatedString {
     val hintSize = (titleSize.value - 2f).coerceAtLeast(8f).sp
     return buildAnnotatedString {
         append("$title ")
         withStyle(
             SpanStyle(
-                color = Color(0xFFBDBDBD),
+                color = hintColor,
                 fontWeight = FontWeight.Bold,
                 fontSize = hintSize
             )
@@ -464,7 +478,9 @@ private fun textSize(id: Int): TextUnit {
 private fun Modifier.clickableWithRipple(
     enabled: Boolean = true,
     onClick: () -> Unit,
+    onClickLabel: String? = null,
     onLongClick: (() -> Unit)? = null,
+    onLongClickLabel: String? = null,
     interactionSource: androidx.compose.foundation.interaction.MutableInteractionSource =
         remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
 ): Modifier {
@@ -473,7 +489,10 @@ private fun Modifier.clickableWithRipple(
         interactionSource = interactionSource,
         indication = LocalIndication.current,
         onClick = onClick,
-        onLongClick = onLongClick
+        onClickLabel = onClickLabel,
+        onLongClick = onLongClick,
+        onLongClickLabel = onLongClickLabel,
+        role = Role.Button
     )
 }
 

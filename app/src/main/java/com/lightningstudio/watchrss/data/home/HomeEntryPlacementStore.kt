@@ -14,7 +14,7 @@ data class NotesHomePlacement(
 
 /** Persists the notes entry with the same placement semantics used by RSS channels. */
 class HomeEntryPlacementStore(context: Context) {
-    private val preferences = context.applicationContext.getSharedPreferences(
+    private val preferences = com.lightningstudio.watchrss.data.account.workspace.libraryContext(context).getSharedPreferences(
         PREFERENCES_NAME,
         Context.MODE_PRIVATE
     )
@@ -43,6 +43,10 @@ class HomeEntryPlacementStore(context: Context) {
         preferences.registerOnSharedPreferenceChangeListener(listener)
         awaitClose { preferences.unregisterOnSharedPreferenceChangeListener(listener) }
     }.distinctUntilChanged()
+
+    fun setNotesOrder(sortOrder: Long) {
+        preferences.edit().putLong(KEY_NOTES_SORT_ORDER, sortOrder).putBoolean(KEY_NOTES_PINNED, false).apply()
+    }
 
     fun moveNotesToTop() {
         preferences.edit()

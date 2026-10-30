@@ -49,11 +49,11 @@ class BiliDetailActivity : BaseWatchActivity() {
                     }
                     val readingFontSizeSp by settingsRepository.readingFontSizeSp.collectAsState(initial = 14)
 
-                    LaunchedEffect(uiState.message) {
+                    LaunchedEffect(uiState.messageEventId) {
                         val message = uiState.message
                         if (!message.isNullOrBlank()) {
                             com.lightningstudio.watchrss.ui.util.showAppToast(context, message, android.widget.Toast.LENGTH_SHORT)
-                            viewModel.clearMessage()
+                            viewModel.clearMessage(uiState.messageEventId)
                         }
                     }
 
@@ -118,7 +118,14 @@ class BiliDetailActivity : BaseWatchActivity() {
                                     BiliCommentActivity.createIntent(context, oid, uploaderMid)
                                 )
                             },
-                            showCommentEntry = false
+                            showCommentEntry = false,
+                            shareLabel = if (useSystemShare) "系统分享" else "扫码分享",
+                            onListenAudio = {
+                                val cid = viewModel.selectedCid()
+                                if (cid != null && cid > 0) context.startActivity(BiliAudioActivity.createIntent(
+                                    context, cid, viewModel.selectedAid(), viewModel.selectedBvid(), uiState.detail?.item?.title
+                                ))
+                            }
                         )
                     }
                 }

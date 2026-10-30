@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 data class DouyinSettingsUiState(
     val isLoggedIn: Boolean = false,
     val message: String? = null,
+    val messageEventId: Long = 0L,
     val channelId: Long? = null,
     val originalContentEnabled: Boolean = false,
     val deleteEnabled: Boolean = false,
@@ -48,6 +49,7 @@ class DouyinSettingsViewModel(
                 it.copy(
                     isLoggedIn = false,
                     message = "已退出登录",
+                    messageEventId = it.messageEventId + 1,
                     shouldReturnHome = true
                 )
             }
@@ -92,7 +94,8 @@ class DouyinSettingsViewModel(
         }
     }
 
-    fun clearMessage() {
+    fun clearMessage(expectedEventId: Long? = null) {
+        if (expectedEventId != null && _uiState.value.messageEventId != expectedEventId) return
         _uiState.update { it.copy(message = null) }
     }
 

@@ -26,15 +26,17 @@ class BiliReplyViewModel(
     private val _rootComment = MutableStateFlow<BiliCommentData?>(null)
     val rootComment: StateFlow<BiliCommentData?> = _rootComment.asStateFlow()
 
-    private val replyPagingSource = ReplyPagingSource(repository, oid, root)
-
     val replyFlow: Flow<PagingData<BiliCommentData>> = Pager(
         config = PagingConfig(
             pageSize = 20,
             enablePlaceholders = false,
             initialLoadSize = 20
         ),
-        pagingSourceFactory = { replyPagingSource }
+        pagingSourceFactory = {
+            ReplyPagingSource(repository, oid, root) { comment ->
+                _rootComment.value = comment
+            }
+        }
     ).flow.cachedIn(viewModelScope)
 
     fun updateRootComment(comment: BiliCommentData?) {

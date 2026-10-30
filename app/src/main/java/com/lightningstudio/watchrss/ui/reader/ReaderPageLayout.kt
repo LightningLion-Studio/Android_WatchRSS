@@ -25,5 +25,5 @@ object ReaderPageLayout {
         @Composable get() = WatchDimens.detail_block_spacing
 
     fun bottomPadding(hasFloatingAction: Boolean): Dp =
-        if (hasFloatingAction) 56.dp else 15.dp
+        if (hasFloatingAction) 56.dp else 48.dp
 }
