@@ -6,6 +6,8 @@ import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -38,6 +40,8 @@ data class DouyinPlaybackSourceRefreshEvent(
 
 interface DouyinPlaybackSourceCoordinatorContract {
     val updates: SharedFlow<DouyinPlaybackSourceRefreshEvent>
+
+    suspend fun replenishFeed(): List<DouyinStreamItem> = emptyList()
 
     suspend fun refresh(
         item: DouyinStreamItem,
@@ -75,6 +79,25 @@ class DouyinPlaybackSourceCoordinator(
         extraBufferCapacity = 32
     )
     private val eventIds = AtomicLong()
+    private val candidateRecovery = DouyinCandidateRecovery()
+    private val feedRefreshMutex = Mutex()
+    private var replenishedAtMs = 0L
+    private var replenishedItems: List<DouyinStreamItem> = emptyList()
+
+    override suspend fun replenishFeed(): List<DouyinStreamItem> = feedRefreshMutex.withLock {
+        val nowMs = System.currentTimeMillis()
+        if (nowMs - replenishedAtMs < 30_000 && replenishedItems.isNotEmpty()) return@withLock replenishedItems
+        val result = withTimeoutOrNull(10_000) { repository.fetchFeedPage(null, 12) }
+        val fresh = result?.takeIf { it.isSuccess }?.data?.items.orEmpty().mapNotNull { it.toStreamItem(nowMs) }
+        if (fresh.isNotEmpty()) {
+            persistenceMutex.withLock {
+                feedCacheStore.save(fresh, result?.data?.nextCursor, result?.data?.hasMore ?: false, nowMs)
+            }
+            replenishedAtMs = nowMs
+            replenishedItems = fresh
+        }
+        fresh
+    }
 
     override val updates: SharedFlow<DouyinPlaybackSourceRefreshEvent> = mutableUpdates
 
@@ -92,7 +115,7 @@ class DouyinPlaybackSourceCoordinator(
         }
         val request = inFlightMutex.withLock {
             inFlight[awemeId]?.takeIf { it.isActive }
-                ?: appScope.async {
+                ?: CoroutineScope(currentCoroutineContext()).async {
                     performRefresh(item.copy(awemeId = awemeId), trigger)
                 }.also { inFlight[awemeId] = it }
         }
@@ -124,7 +147,12 @@ class DouyinPlaybackSourceCoordinator(
             "refresh start awemeId=${item.awemeId} trigger=${trigger.name} resolvedAt=${item.playUrlResolvedAtMs}"
         )
         val result = try {
-            repository.fetchVideo(item.awemeId)
+            (if (trigger == DouyinPlaybackRefreshTrigger.STARTUP_TTL) null else candidateRecovery.next(item))
+                ?.let { DouyinResult(DouyinErrorCodes.OK, data = it) }
+                ?: (if (candidateRecovery.allowFeedRefresh(item)) {
+                    withTimeoutOrNull(10_000) { refreshDouyinItemFromFeed(repository, item) }
+                } else DouyinResult(DouyinErrorCodes.REQUEST_FAILED, "播放源候选已用尽"))
+                ?: DouyinResult(DouyinErrorCodes.REQUEST_FAILED, "播放源刷新超时")
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Throwable) {
@@ -141,19 +169,8 @@ class DouyinPlaybackSourceCoordinator(
             )
             return event
         }
-        val content = result.data as? DouyinContent.Video
-        val refreshedPlayUrl = content?.playUrl?.trim().orEmpty()
-        val event = if (result.isSuccess && content != null && refreshedPlayUrl.isNotEmpty()) {
-            val refreshedItem = item.copy(
-                playUrl = refreshedPlayUrl,
-                coverUrl = content.coverUrl.takeIf { it.isNotBlank() } ?: item.coverUrl,
-                title = content.desc.takeIf { it.isNotBlank() } ?: item.title,
-                author = content.authorName.takeIf { it.isNotBlank() } ?: item.author,
-                likeCount = content.diggCount,
-                playUrlResolvedAtMs = System.currentTimeMillis(),
-                sourceOrigin = DouyinSourceOrigin.VIDEO_REFRESH,
-                variants = content.variants
-            )
+        val refreshedItem = result.data
+        val event = if (result.isSuccess && refreshedItem != null && refreshedItem.playUrl.isNotBlank()) {
             persistRefreshedItem(refreshedItem)
             DouyinPlaybackSourceRefreshEvent(
                 eventId = eventIds.incrementAndGet(),

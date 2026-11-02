@@ -11,6 +11,7 @@ internal fun encodeDouyinVariants(variants: List<DouyinVideoVariant>): JSONArray
         array.put(
             JSONObject().apply {
                 put("playUrl", variant.playUrl)
+                put("playUrls", JSONArray(variant.playUrls))
                 put("codec", variant.codec.name)
                 put("bitrate", variant.bitrate)
                 put("width", variant.width)
@@ -47,7 +48,10 @@ internal fun decodeDouyinVariants(array: JSONArray?): List<DouyinVideoVariant> {
                     height = item.optInt("height", 0),
                     definition = item.optString("definition").takeIf { it.isNotBlank() },
                     quality = item.optString("quality").takeIf { it.isNotBlank() },
-                    gearName = item.optString("gearName").takeIf { it.isNotBlank() }
+                    gearName = item.optString("gearName").takeIf { it.isNotBlank() },
+                    playUrls = item.optJSONArray("playUrls")?.let { urls ->
+                        (0 until urls.length()).map { urls.optString(it) }.filter { it.isNotBlank() }.distinct()
+                    }?.takeIf { it.isNotEmpty() } ?: listOf(playUrl)
                 )
             )
         }

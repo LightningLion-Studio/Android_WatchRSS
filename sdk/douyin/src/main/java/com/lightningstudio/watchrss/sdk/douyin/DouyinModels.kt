@@ -16,7 +16,8 @@ data class DouyinVideoVariant(
     val height: Int,
     val definition: String? = null,
     val quality: String? = null,
-    val gearName: String? = null
+    val gearName: String? = null,
+    val playUrls: List<String> = listOf(playUrl)
 )
 
 class DouyinVideo {

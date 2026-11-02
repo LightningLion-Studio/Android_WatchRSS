@@ -70,6 +70,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -107,6 +112,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.douyin.DOUYIN_PLAYBACK_PREVIEW_ENTRY_LIMIT
+import com.lightningstudio.watchrss.data.douyin.DouyinOfflineReadiness
 import com.lightningstudio.watchrss.data.douyin.DouyinCodecRuntimePolicy
 import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackPreviewCache
 import com.lightningstudio.watchrss.data.douyin.DouyinPlaybackRefreshOutcome
@@ -284,9 +290,10 @@ private object DouyinPlayerPool {
 
     fun acquire(
         context: Context,
-        headers: Map<String, String>
+        headers: Map<String, String>,
+        namespace: String
     ): DouyinPlayerPoolSession {
-        val headersSignature = buildDouyinPlayerHeadersSignature(headers)
+        val headersSignature = "$namespace:${buildDouyinPlayerHeadersSignature(headers)}"
         synchronized(lock) {
             entriesBySignature[headersSignature]?.let { entry ->
                 entry.refCount += 1
@@ -379,19 +386,21 @@ private object DouyinPlayerPool {
 @Composable
 internal fun rememberDouyinPlayerPoolSession(
     headers: Map<String, String>,
-    enabled: Boolean
+    enabled: Boolean,
+    namespace: String = "feed"
 ): DouyinPlayerPoolSession? {
     val context = LocalContext.current
     val headersSignature = remember(headers) {
         buildDouyinPlayerHeadersSignature(headers)
     }
-    val playerSession = remember(context.applicationContext, headersSignature, enabled) {
+    val playerSession = remember(context.applicationContext, headersSignature, enabled, namespace) {
         if (!enabled) {
             null
         } else {
             DouyinPlayerPool.acquire(
                 context = context.applicationContext,
-                headers = headers
+                headers = headers,
+                namespace = namespace
             )
         }
     }
@@ -558,12 +567,6 @@ private fun hasIOExceptionCause(error: Throwable): Boolean {
     return false
 }
 
-private fun String?.requiresInternetConnection(): Boolean {
-    val value = this?.trim().orEmpty()
-    return value.startsWith("http://", ignoreCase = true) ||
-        value.startsWith("https://", ignoreCase = true)
-}
-
 private fun isLikelyDouyinCodecFailure(error: PlaybackException): Boolean {
     val summary = buildString {
         append(error.errorCodeName)
@@ -600,6 +603,7 @@ internal fun DouyinImmersiveScreen(
     onDiscardPlaybackItem: (String) -> Unit,
     onMessageShown: (Long) -> Unit,
     onHeaderClick: () -> Unit,
+    onOfflinePrefixEnded: (String) -> Unit = { },
     onPlaybackActiveChanged: (Boolean) -> Unit = { }
 ) {
     var entryStartIndex by rememberSaveable {
@@ -645,8 +649,6 @@ internal fun DouyinImmersiveScreen(
     var pendingAutoSkipPage by remember { mutableIntStateOf(-1) }
     var autoSkipMessage by remember { mutableStateOf<String?>(null) }
     var controlsVisible by rememberSaveable { mutableStateOf(true) }
-    var sessionMuted by remember { mutableStateOf(true) }
-    val latestSessionMuted by rememberUpdatedState(sessionMuted)
     val latestTitlePage by rememberUpdatedState(uiState.showTitlePage)
     var singleItemImmersive by rememberSaveable { mutableStateOf(false) }
     BackHandler(enabled = singleItemImmersive) {
@@ -655,7 +657,6 @@ internal fun DouyinImmersiveScreen(
     }
     LaunchedEffect(uiState.showTitlePage) {
         if (uiState.showTitlePage) {
-            sessionMuted = true
             singleItemImmersive = false
         }
     }
@@ -672,12 +673,17 @@ internal fun DouyinImmersiveScreen(
         }
     }
     fun enforceEntryPlaybackStartVolumeLimit() {
-        if (uiState.showTitlePage || latestSessionMuted || playbackStartVolumeLimitConsumed) return
+        if (uiState.showTitlePage || volumeState.isMuted || playbackStartVolumeLimitConsumed) return
         volumeState.enforcePlaybackStartGuard()
         playbackStartVolumeLimitConsumed = true
     }
     var foregroundSlotKey by rememberSaveable { mutableStateOf(DouyinPlayerSlotKey.Primary) }
     val context = LocalContext.current
+    LaunchedEffect(uiState.showTitlePage, volumeState.isMuted) {
+        if (!uiState.showTitlePage && !volumeState.isMuted) {
+            context.stopService(android.content.Intent(context, com.lightningstudio.watchrss.data.media.BiliAudioService::class.java))
+        }
+    }
     val networkBandwidthEstimateBytesPerSecond by produceState<Long?>(
         initialValue = null,
         key1 = context.applicationContext
@@ -730,6 +736,10 @@ internal fun DouyinImmersiveScreen(
         awemeId = preparedItem?.awemeId,
         proxyPlayUris = uiState.proxyPlayUris
     )
+    val preparedLocalUri = preparedItem?.awemeId?.let { id ->
+        uiState.localPlayPaths[id]?.takeIf { uiState.offlineReadiness[id] == DouyinOfflineReadiness.FULL_READY }
+            ?.let { if (it.startsWith("file://")) it else "file://$it" }
+    }
     val preparedPlaybackOverrideUri = preparedItem?.awemeId?.let(runtimePlaybackOverrides::get)
     val preparedPlaybackTarget = when {
         preparedItem == null -> null
@@ -746,7 +756,7 @@ internal fun DouyinImmersiveScreen(
             codecPolicyVersion
             resolveDouyinPlaybackTarget(
                 item = preparedItem,
-                overridePlayUrl = preparedPlaybackOverrideUri ?: preparedProxyUri
+                overridePlayUrl = preparedLocalUri ?: preparedPlaybackOverrideUri ?: preparedProxyUri
             )
         }
     }
@@ -827,9 +837,9 @@ internal fun DouyinImmersiveScreen(
         }
     }
     val allSlots = listOf(primarySlot, secondarySlot)
-    LaunchedEffect(sessionMuted, foregroundSlotKey, uiState.showTitlePage) {
+    LaunchedEffect(playerSession, foregroundSlotKey, uiState.showTitlePage) {
         allSlots.forEach { slot ->
-            slot.player.volume = if (!sessionMuted && !uiState.showTitlePage && slot.key == foregroundSlotKey) 1f else 0f
+            slot.player.volume = if (!uiState.showTitlePage && slot.key == foregroundSlotKey) 1f else 0f
         }
     }
     val preparedPosterBytes = remember(
@@ -1023,7 +1033,7 @@ internal fun DouyinImmersiveScreen(
                 isStillTarget = shouldPausePrewarmPlayback()
             )
             if (!keepMutedAfterTimeout) {
-                slot.player.volume = if (!latestSessionMuted && !latestTitlePage && slot.key == latestPrewarmForegroundSlotKey.value) DOUYIN_PLAYER_AUDIBLE_VOLUME else 0f
+                slot.player.volume = if (!latestTitlePage && slot.key == foregroundSlotKey) DOUYIN_PLAYER_AUDIBLE_VOLUME else 0f
             }
             if (shouldPausePrewarmPlayback() && !keepMutedAfterTimeout) {
                 slot.player.playWhenReady = false
@@ -1049,8 +1059,13 @@ internal fun DouyinImmersiveScreen(
         onDispose { playbackActiveCallback.value(false) }
     }
     val activeHasError = activeSlotMatchesCurrentItem && foregroundSlot.hasError
-    val activePlaybackNeedsInternet = (activeMediaUri ?: preparedPlaybackTargetMediaUri)
-        .requiresInternetConnection()
+    val activeOfflineReadiness = uiState.offlineReadiness[activeItem?.awemeId] ?: DouyinOfflineReadiness.NONE
+    val activePlaybackNeedsInternet = douyinPlaybackNeedsInternet(
+        activeMediaUri ?: preparedPlaybackTargetMediaUri, activeOfflineReadiness
+    )
+    val showOfflinePrefixEnded = internetAvailabilityStatus == InternetAvailabilityStatus.Unavailable &&
+        activeOfflineReadiness == DouyinOfflineReadiness.PREFIX_READY &&
+        activeItem?.awemeId in uiState.offlinePrefixEndedIds
     val shouldShowBluetoothPrompt =
         internetAvailabilityStatus == InternetAvailabilityStatus.Bluetooth && !allowBluetoothPlayback
     val showNetworkUnavailable = (
@@ -1068,7 +1083,7 @@ internal fun DouyinImmersiveScreen(
         isPlaying = activeIsPlaying,
         hasError = activeHasError,
         isScrollInProgress = pagerState.isScrollInProgress
-    ) && !showNetworkUnavailable
+    ) && !showNetworkUnavailable && !showOfflinePrefixEnded
     val shouldKeepScreenOn = activeItem != null &&
         !showNetworkUnavailable &&
         !activeHasError &&
@@ -1077,6 +1092,7 @@ internal fun DouyinImmersiveScreen(
         slot: DouyinPlayerSlotState,
         suppressBuffering: Boolean = false
     ) {
+        slot.player.volume = 0f
         slot.player.playWhenReady = false
         slot.player.pause()
         slot.isPlaying = false
@@ -1086,7 +1102,7 @@ internal fun DouyinImmersiveScreen(
     }
 
     fun restoreAudibleSlotVolume(slot: DouyinPlayerSlotState) {
-        slot.player.volume = if (latestSessionMuted) 0f else DOUYIN_PLAYER_AUDIBLE_VOLUME
+        slot.player.volume = if (latestTitlePage || slot.key != foregroundSlotKey) 0f else DOUYIN_PLAYER_AUDIBLE_VOLUME
     }
 
     fun stopSlotPlayback(slot: DouyinPlayerSlotState) {
@@ -1423,10 +1439,10 @@ internal fun DouyinImmersiveScreen(
         showSystemUi = false,
         reverseDirection = true,
         supportsDigitalCrown = true,
-        onVolumeAdjust = volumeState::adjustByDelta
+        onVolumeAdjust = { volumeState.adjustByDelta(douyinCrownVolumeDelta(it)) }
     )
 
-    LaunchedEffect(pagerState, entryStartIndex) {
+    LaunchedEffect(pagerState, entryStartIndex, pageCount) {
         snapshotFlow {
             resolveDouyinSettledPageOrNull(
                 isScrollInProgress = pagerState.isScrollInProgress,
@@ -1437,6 +1453,16 @@ internal fun DouyinImmersiveScreen(
             .filterNotNull()
             .distinctUntilChanged()
             .collect { settledPage ->
+                // Never publish the cover as a settled page after entering the feed.
+                if (!latestTitlePage && pagerState.currentPage == 0 && pageCount > 1) {
+                    pagerState.animateScrollToPage(1)
+                    return@collect
+                }
+                val incomingId = latestItems.value.getOrNull(settledPage - 1)?.awemeId
+                val outgoingSlot = slotFor(foregroundSlotKey)
+                if (settledPage > 0 && outgoingSlot.boundAwemeId != incomingId) {
+                    commitDouyinForegroundAudio(outgoingSlot.player) { outgoingSlot.isPlaying = false }
+                }
                 settledPagerPage = pagerState.currentPage
                 onPageSettled(settledPage)
                 if (settledPage > 0) {
@@ -1616,6 +1642,24 @@ internal fun DouyinImmersiveScreen(
     val latestPreparedAwemeId = rememberUpdatedState(preparedItem?.awemeId)
     val latestActivePrepareKey = rememberUpdatedState(activePrepareKey)
     val latestShowTitlePage = rememberUpdatedState(uiState.showTitlePage)
+    val latestOfflineReadiness = rememberUpdatedState(uiState.offlineReadiness)
+    val latestInternetStatus = rememberUpdatedState(internetAvailabilityStatus)
+    val latestPrefixEndedCallback = rememberUpdatedState(onOfflinePrefixEnded)
+    fun handleOfflinePrefixEnd(slot: DouyinPlayerSlotState): Boolean {
+        val id = slot.boundAwemeId ?: return false
+        if (slot.key != latestForegroundSlotKey.value || id != latestActiveAwemeId.value) return false
+        if (!shouldEndDouyinOfflinePrefix(
+                unavailable = latestInternetStatus.value == InternetAvailabilityStatus.Unavailable,
+                readiness = latestOfflineReadiness.value[id] ?: DouyinOfflineReadiness.NONE,
+                hasPlayed = slot.hasRenderedFirstFrame || slot.player.currentPosition > 0L
+            )) return false
+        activeAutoplayEnabled = false
+        activePausedByGesture = true
+        pauseSlotPlayback(slot, suppressBuffering = true)
+        latestPrefixEndedCallback.value(id)
+        return true
+    }
+
     LaunchedEffect(Unit) {
         DouyinPlaybackPreviewCache.prefetchHttpFailures.collect { failure ->
             if (latestItems.value.none { it.awemeId == failure.awemeId }) return@collect
@@ -1819,7 +1863,7 @@ internal fun DouyinImmersiveScreen(
             )
         } finally {
             if (!keepMutedAfterTimeout) {
-                currentForegroundSlot.player.volume = if (!latestSessionMuted && !latestTitlePage && currentForegroundSlot.key == latestPrewarmForegroundSlotKey.value) DOUYIN_PLAYER_AUDIBLE_VOLUME else 0f
+                currentForegroundSlot.player.volume = if (!latestTitlePage && currentForegroundSlot.key == foregroundSlotKey) DOUYIN_PLAYER_AUDIBLE_VOLUME else 0f
             }
         }
 
@@ -2136,6 +2180,7 @@ internal fun DouyinImmersiveScreen(
                 if (playbackState == Player.STATE_IDLE || playbackState == Player.STATE_ENDED) {
                     primarySlot.isPlaying = false
                 }
+                if (playbackState == Player.STATE_ENDED && handleOfflinePrefixEnd(primarySlot)) return
                 if (playbackState == Player.STATE_READY) {
                     primarySlot.hasError = false
                     resetActiveFailureTracking(primarySlot)
@@ -2176,6 +2221,7 @@ internal fun DouyinImmersiveScreen(
                     discardStandbyPlaybackItem(primarySlot, error)
                     return
                 }
+                if (handleOfflinePrefixEnd(primarySlot)) return
                 if (applyH264FallbackIfAvailable(primarySlot, error, isForegroundCurrentSlot)) {
                     return
                 }
@@ -2253,6 +2299,7 @@ internal fun DouyinImmersiveScreen(
                 if (playbackState == Player.STATE_IDLE || playbackState == Player.STATE_ENDED) {
                     secondarySlot.isPlaying = false
                 }
+                if (playbackState == Player.STATE_ENDED && handleOfflinePrefixEnd(secondarySlot)) return
                 if (playbackState == Player.STATE_READY) {
                     secondarySlot.hasError = false
                     resetActiveFailureTracking(secondarySlot)
@@ -2293,6 +2340,7 @@ internal fun DouyinImmersiveScreen(
                     discardStandbyPlaybackItem(secondarySlot, error)
                     return
                 }
+                if (handleOfflinePrefixEnd(secondarySlot)) return
                 if (applyH264FallbackIfAvailable(secondarySlot, error, isForegroundCurrentSlot)) {
                     return
                 }
@@ -2426,6 +2474,7 @@ internal fun DouyinImmersiveScreen(
     }
 
     LaunchedEffect(
+        playerSession,
         preparedItem?.awemeId,
         activePrepareKey,
         lookaheadTargets.map { it.prepareKey },
@@ -2449,7 +2498,11 @@ internal fun DouyinImmersiveScreen(
                 TAG,
                 "promote slot=${desiredForegroundKey.name} awemeId=${preparedItem.awemeId}"
             )
-            foregroundSlotKey = desiredForegroundKey
+            val outgoingSlot = slotFor(foregroundSlotKey)
+            commitDouyinForegroundAudio(outgoingSlot.player) {
+                outgoingSlot.isPlaying = false
+                foregroundSlotKey = desiredForegroundKey
+            }
             promotedSlot?.let { slot ->
                 if (slot.isReady || slot.hasRenderedFirstFrame) {
                     logPlaybackStarted(
@@ -2475,7 +2528,7 @@ internal fun DouyinImmersiveScreen(
             autoplayEnabled = activeAutoplayEnabled,
             pausedByGesture = activePausedByGesture,
             pausedByLifecycle = activePausedByLifecycle,
-            hasError = activeHasError || showNetworkUnavailable,
+            hasError = activeHasError || showNetworkUnavailable || showOfflinePrefixEnded,
             isScrollInProgress = pagerState.isScrollInProgress
         )
         bindSlotTarget(
@@ -2510,6 +2563,7 @@ internal fun DouyinImmersiveScreen(
         activePausedByLifecycle,
         activeHasError,
         showNetworkUnavailable,
+        showOfflinePrefixEnded,
         uiState.showTitlePage,
         activeAutoplayEnabled,
         useImmediateEntryPlayback
@@ -2521,7 +2575,7 @@ internal fun DouyinImmersiveScreen(
             showTitlePage = uiState.showTitlePage,
             pausedByGesture = activePausedByGesture,
             pausedByLifecycle = activePausedByLifecycle,
-            hasError = activeHasError || showNetworkUnavailable
+            hasError = activeHasError || showNetworkUnavailable || showOfflinePrefixEnded
         )
         if (targetItem == null || targetPrepareKey.isNullOrBlank() || !canAutoPlay) {
             activeAutoplayEnabled = false
@@ -2591,6 +2645,7 @@ internal fun DouyinImmersiveScreen(
         activePausedByLifecycle,
         activeHasError,
         showNetworkUnavailable,
+        showOfflinePrefixEnded,
         uiState.showTitlePage,
         pagerState.isScrollInProgress
     ) {
@@ -2606,7 +2661,7 @@ internal fun DouyinImmersiveScreen(
                 showTitlePage = uiState.showTitlePage,
                 pausedByGesture = activePausedByGesture,
                 pausedByLifecycle = activePausedByLifecycle,
-                hasError = activeHasError || showNetworkUnavailable
+                hasError = activeHasError || showNetworkUnavailable || showOfflinePrefixEnded
             ) &&
             !showNetworkUnavailable &&
             !pagerState.isScrollInProgress
@@ -2649,6 +2704,22 @@ internal fun DouyinImmersiveScreen(
         )
     }
     val pagerUserScrollEnabled = pageCount > 1 && !singleItemImmersive
+    val firstVideoBoundary = remember(pagerState) {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset =
+                if (shouldBlockDouyinReverseSwipe(
+                        latestTitlePage, pagerState.currentPage,
+                        pagerState.currentPageOffsetFraction, available.y
+                    )) Offset(0f, available.y) else Offset.Zero
+
+            override suspend fun onPreFling(available: Velocity): Velocity =
+                if (shouldBlockDouyinReverseSwipe(
+                        latestTitlePage, pagerState.currentPage,
+                        pagerState.currentPageOffsetFraction, available.y
+                    )) Velocity(0f, available.y) else Velocity.Zero
+        }
+    }
+
 
     Box(
         modifier = Modifier
@@ -2670,6 +2741,7 @@ internal fun DouyinImmersiveScreen(
         VerticalPager(
             state = pagerState,
             modifier = Modifier
+                .nestedScroll(firstVideoBoundary)
                 .fillMaxSize()
                 .pointerInput(Unit) {
                     awaitPointerEventScope {
@@ -2689,6 +2761,7 @@ internal fun DouyinImmersiveScreen(
                 DouyinTitlePage(
                     hasItems = uiState.items.isNotEmpty(),
                     isRefreshing = uiState.isLoading,
+                    loadNotice = douyinFeedLoadNotice(uiState.isSlowLoading, uiState.loadDeadlineExceeded),
                     onRefresh = onRefresh,
                     onEnterFlow = { requestEnterVideoFlowImmediately() },
                     onHeaderClick = onHeaderClick
@@ -2752,15 +2825,14 @@ internal fun DouyinImmersiveScreen(
                     videoSlot = visibleVideoSlot,
                     controlsVisible = controlsVisible,
                     paused = pageIsActive && activePausedByGesture,
-                    muted = sessionMuted,
+                    muted = volumeState.isMuted,
                     immersive = singleItemImmersive,
                     onToggleMuted = {
-                        if (sessionMuted && !playbackStartVolumeLimitConsumed) {
-                            volumeState.enforcePlaybackStartGuard()
-                            playbackStartVolumeLimitConsumed = true
+                        volumeState.toggleMute()
+                        if (!volumeState.isMuted) {
+                            context.stopService(android.content.Intent(context, com.lightningstudio.watchrss.data.media.BiliAudioService::class.java))
+                            enforceEntryPlaybackStartVolumeLimit()
                         }
-                        if (sessionMuted) context.stopService(android.content.Intent(context, com.lightningstudio.watchrss.data.media.BiliAudioService::class.java))
-                        sessionMuted = !sessionMuted
                     },
                     onToggleImmersive = { singleItemImmersive = !singleItemImmersive },
                     scaleMode = scaleMode,
@@ -2834,6 +2906,31 @@ internal fun DouyinImmersiveScreen(
             modifier = Modifier.align(Alignment.Center)
         )
 
+        if (showOfflinePrefixEnded) {
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.8f)), contentAlignment = Alignment.Center) {
+                Text(
+                    text = "离线预览已结束，请联网继续播放",
+                    color = Color.White,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(watchDimensionResource(R.dimen.watch_safe_padding))
+                )
+            }
+        }
+        val feedLoadNotice = douyinFeedLoadNotice(uiState.isSlowLoading, uiState.loadDeadlineExceeded)
+        if (!uiState.showTitlePage && feedLoadNotice != null) {
+            Text(
+                text = feedLoadNotice,
+                color = Color.White,
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.align(Alignment.TopCenter)
+                    .padding(top = 44.dp, start = 40.dp, end = 40.dp)
+                    .background(Color.Black.copy(alpha = 0.85f))
+                    .clickable(onClick = onRefresh)
+                    .padding(8.dp)
+            )
+        }
+
         if (showNetworkUnavailable) {
             InternetAvailabilityOverlay(
                 status = internetAvailabilityStatus,
@@ -2868,6 +2965,7 @@ internal fun DouyinImmersiveScreen(
 private fun DouyinTitlePage(
     hasItems: Boolean,
     isRefreshing: Boolean,
+    loadNotice: String?,
     onRefresh: () -> Unit,
     onEnterFlow: () -> Unit,
     onHeaderClick: () -> Unit
@@ -2925,7 +3023,8 @@ private fun DouyinTitlePage(
                             )
                             Spacer(modifier = Modifier.height(subtitleSpacing))
                             Text(
-                                text = if (isRefreshing) {
+                                modifier = Modifier.clickable(onClick = onRefresh),
+                                text = loadNotice ?: if (isRefreshing) {
                                     "刷新中..."
                                 } else if (hasItems) {
                                     "下拉刷新，向上进入短视频流"

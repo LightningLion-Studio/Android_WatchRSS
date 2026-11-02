@@ -157,7 +157,8 @@ class DouyinUnifiedParser {
             height = playAddr.optInt("height"),
             definition = definition,
             quality = quality,
-            gearName = gearName
+            gearName = gearName,
+            playUrls = allStrings(playAddr.optJSONArray("url_list"))
         )
     }
 
@@ -174,7 +175,8 @@ class DouyinUnifiedParser {
             bitrate = 0L,
             width = playAddr.optInt("width"),
             height = playAddr.optInt("height"),
-            gearName = fieldName
+            gearName = fieldName,
+            playUrls = allStrings(playAddr.optJSONArray("url_list"))
         )
     }
 
@@ -201,6 +203,13 @@ class DouyinUnifiedParser {
             else -> DouyinVideoCodec.UNKNOWN
         }
     }
+
+    private fun allStrings(array: JSONArray?): List<String> = buildList {
+        if (array != null) for (i in 0 until array.length()) {
+            val url = array.optString(i).trim()
+            if (url.startsWith("https://") || url.startsWith("http://")) add(url)
+        }
+    }.distinct()
 
     private fun firstNonBlankString(array: JSONArray?): String? {
         if (array == null) return null

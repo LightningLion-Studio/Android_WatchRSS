@@ -1,6 +1,5 @@
 package com.lightningstudio.watchrss.sdk.douyin.utils
 
-import android.util.Log
 import java.nio.charset.StandardCharsets
 import java.time.Instant
 import kotlin.random.Random
@@ -19,17 +18,13 @@ class SM3HashUtils {
      */
     fun generateMethodCode(method: String): List<Long> {
         val l0Input = method + endString
-        Log.d("WatchRSS", "调用generate_method_code得到的l0Input：$l0Input")
         val l0Output = sm3ToArrayL0(l0Input)
-        Log.d("WatchRSS", "调用generate_method_code得到的l0Output：$l0Output")
         return sm3ToArrayL1(l0Output)
     }
 
     fun generateParamsCode(params: String): List<Long> {
         val l0Input = params + endString
-        Log.d("WatchRSS", "调用generate_params_code得到的l0Input：$l0Input")
         val l0Output = sm3ToArrayL0(l0Input)
-        Log.d("WatchRSS", "调用generate_params_code得到的l0Output：$l0Output")
         return sm3ToArrayL1(l0Output)
     }
 
@@ -37,10 +32,8 @@ class SM3HashUtils {
     fun generateString2List(urlParams: String): List<Long> {
         // 1. 计算毫秒级时间戳，对应 Python 的 time() * 1000
         val startTime = Instant.now().toEpochMilli()
-        Log.d("WatchRSS", "调用generateString2List得到的startTime：$startTime")
         // 2. 生成 4-8 之间的随机整数，对应 Python 的 randint(4, 8)
         val randomDelta = Random.nextInt(4, 9)
-        Log.d("WatchRSS", "调用generateString2List的randomOffset：$randomDelta")
         val endTime = startTime + randomDelta
 
         // 3. 获取参数数组

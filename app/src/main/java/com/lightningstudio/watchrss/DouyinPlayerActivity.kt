@@ -9,10 +9,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.pager.VerticalPager
-import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -21,10 +17,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import com.lightningstudio.watchrss.data.douyin.DouyinSourceOrigin
+import com.lightningstudio.watchrss.data.douyin.DouyinStreamItem
+import com.lightningstudio.watchrss.ui.screen.douyin.DouyinImmersiveScreen
+import com.lightningstudio.watchrss.ui.screen.douyin.rememberDouyinPlayerPoolSession
+import com.lightningstudio.watchrss.ui.viewmodel.DouyinFeedUiState
 import com.lightningstudio.watchrss.data.network.InternetAvailabilityStatus
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT
@@ -32,12 +32,7 @@ import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_CONTROL_E
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
 import com.lightningstudio.watchrss.ui.components.ThirdPartyPlatformNotice
 import com.lightningstudio.watchrss.ui.screen.PlatformEntryScreen
-import com.lightningstudio.watchrss.ui.screen.bili.BiliPlayerScreen
-import com.lightningstudio.watchrss.ui.viewmodel.BiliPlaybackSource
-import com.lightningstudio.watchrss.ui.viewmodel.BiliPlaybackSourceKind
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
-import com.lightningstudio.watchrss.ui.viewmodel.BiliPlayerUiState
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.map
 
 class DouyinPlayerActivity : BaseWatchActivity() {
@@ -47,7 +42,6 @@ class DouyinPlayerActivity : BaseWatchActivity() {
     private val settingsRepository by lazy { container.settingsRepository }
     private var currentPageIndex: Int = 0
 
-    @OptIn(ExperimentalFoundationApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setupSystemBars()
@@ -75,98 +69,108 @@ class DouyinPlayerActivity : BaseWatchActivity() {
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         )
                         Box(modifier = Modifier.weight(1f).fillMaxSize()) {
-                    val volumeGuardEnabled by settingsRepository.mediaVolumeGuardEnabled.collectAsState(
-                        initial = DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
-                    )
-                    val volumeControlEnabled by settingsRepository.mediaVolumeControlEnabled.collectAsState(
-                        initial = DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED
-                    )
-                    val playbackStartVolumeLimitPercent by settingsRepository.mediaPlaybackStartVolumeLimitPercent.collectAsState(
-                        initial = DEFAULT_MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT
-                    )
-                    val internetAvailabilityStatus by container.internetAvailabilityMonitor.internetAvailability.collectAsState(
-                        initial = InternetAvailabilityStatus.Checking
-                    )
-                    val continuePlaybackInBackground by remember(rssRepository) {
-                        rssRepository.observeChannels().map { channels ->
-                            channels.firstOrNull { it.url == BuiltinChannelType.DOUYIN.url }
-                                ?.continuePlaybackInBackground ?: false
-                        }
-                    }.collectAsState(initial = false)
-                    if (items.isEmpty()) {
-                        PlatformEntryScreen(title = "腕上RSS · 抖音频道", message = "暂无可播放内容")
-                    } else {
-                        val headers by produceState(initialValue = emptyMap<String, String>()) {
-                            value = repository.buildPlayHeaders()
-                        }
+                            val volumeGuardEnabled by settingsRepository.mediaVolumeGuardEnabled.collectAsState(
+                                initial = DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
+                            )
+                            val volumeControlEnabled by settingsRepository.mediaVolumeControlEnabled.collectAsState(
+                                initial = DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED
+                            )
+                            val playbackStartVolumeLimitPercent by settingsRepository.mediaPlaybackStartVolumeLimitPercent.collectAsState(
+                                initial = DEFAULT_MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT
+                            )
+                            val internetAvailabilityStatus by container.internetAvailabilityMonitor.internetAvailability.collectAsState(
+                                initial = InternetAvailabilityStatus.Checking
+                            )
+                            val continuePlaybackInBackground by remember(rssRepository) {
+                                rssRepository.observeChannels().map { channels ->
+                                    channels.firstOrNull { it.url == BuiltinChannelType.DOUYIN.url }
+                                        ?.continuePlaybackInBackground ?: false
+                                }
+                            }.collectAsState(initial = false)
+                            if (items.isEmpty()) {
+                                PlatformEntryScreen(title = "腕上RSS · 抖音频道", message = "暂无可播放内容")
+                            } else {
+                                var headersReady by remember { mutableStateOf(false) }
+                                val headers by produceState(initialValue = emptyMap<String, String>()) {
+                                    value = repository.buildPlayHeaders()
+                                    headersReady = true
+                                }
 
-                        val pagerState = rememberPagerState(
-                            initialPage = startIndex,
-                            pageCount = { items.size }
-                        )
-
-                        LaunchedEffect(pagerState) {
-                            snapshotFlow { pagerState.currentPage }
-                                .collectLatest { page -> currentPageIndex = page }
-                        }
-
-                        VerticalPager(state = pagerState) { page ->
-                            val item = items[page]
-                            var retryKey by remember(page) { mutableStateOf(0) }
-                            val uiState = remember(item, headers) {
-                                val playUrl = item.playUrl?.takeIf { it.isNotBlank() }
-                                BiliPlayerUiState(
-                                    isLoading = false,
-                                    initialSource = playUrl?.let {
-                                        BiliPlaybackSource(
-                                            url = it,
-                                            headers = headers,
-                                            kind = BiliPlaybackSourceKind.REMOTE
+                                var currentPage by remember { mutableStateOf(startIndex + 1) }
+                                var retryGeneration by remember { mutableStateOf(0) }
+                                val streamItems = remember(items) {
+                                    items.mapIndexed { index, item ->
+                                        DouyinStreamItem(
+                                            awemeId = item.awemeId?.takeIf(String::isNotBlank) ?: "saved-$index",
+                                            playUrl = item.playUrl.orEmpty(),
+                                            coverUrl = item.coverUrl,
+                                            title = item.title,
+                                            author = item.author,
+                                            likeCount = 0L,
+                                            playUrlResolvedAtMs = 0L,
+                                            sourceOrigin = DouyinSourceOrigin.BOOTSTRAP_CACHE
                                         )
-                                    },
-                                    upgradeSource = null,
-                                    message = if (playUrl.isNullOrBlank()) "播放地址为空" else null,
-                                    title = item.title,
-                                    owner = item.author
-                                )
-                            }
-
-                            key(retryKey, item.playUrl) {
-                                // VerticalPager may keep neighboring pages composed for
-                                // smoother swipes. Those pages share the same Activity
-                                // window, so window-scoped side effects inside
-                                // BiliPlayerScreen must know whether this page is the
-                                // one currently presented to the user.
-                                BiliPlayerScreen(
-                                    uiState = uiState,
-                                    onRetry = { retryKey += 1 },
-                                    onOpenWeb = {
-                                        val link = item.awemeId?.let { "https://www.douyin.com/video/$it" }
-                                            ?: return@BiliPlayerScreen
-                                        WebViewActivity.open(this@DouyinPlayerActivity, link)
-                                    },
-                                    internetAvailabilityStatus = internetAvailabilityStatus,
-                                    onPanStateChange = { _, _ -> },
-                                    allowPan = false,
-                                    isActive = page == pagerState.currentPage,
-                                    digitalCrownVolumeEnabled = page == pagerState.currentPage && volumeControlEnabled,
-                                    volumeGuardEnabled = volumeGuardEnabled,
-                                    playbackStartVolumeLimitPercent = playbackStartVolumeLimitPercent,
-                                    continuePlaybackInBackground = continuePlaybackInBackground,
-                                    onPlaybackActiveChanged = { active ->
-                                        if (page == pagerState.currentPage) {
-                                            setVideoPlaybackBatteryTracking("douyin", active)
-                                        }
                                     }
-                                )
+                                }
+                                if (headersReady) key(retryGeneration) {
+                                    val session = rememberDouyinPlayerPoolSession(
+                                        headers,
+                                        enabled = true,
+                                        namespace = "saved:${System.identityHashCode(this@DouyinPlayerActivity)}:$retryGeneration"
+                                    )
+                                    if (session != null) {
+                                        DouyinImmersiveScreen(
+                                            playerSession = session,
+                                            uiState = DouyinFeedUiState(
+                                                isLoggedIn = true,
+                                                items = streamItems,
+                                                hasMore = false,
+                                                currentPage = currentPage,
+                                                playHeaders = headers,
+                                                showTitlePage = false
+                                            ),
+                                            digitalCrownVolumeEnabled = volumeControlEnabled,
+                                            volumeGuardEnabled = volumeGuardEnabled,
+                                            playbackStartVolumeLimitPercent = playbackStartVolumeLimitPercent,
+                                            continuePlaybackInBackground = continuePlaybackInBackground,
+                                            internetAvailabilityStatus = internetAvailabilityStatus,
+                                            onRefresh = { retryGeneration += 1 },
+                                            onPageSettled = { page ->
+                                                if (page > 0) {
+                                                    currentPage = page
+                                                    currentPageIndex = page - 1
+                                                }
+                                            },
+                                            onEnterFlow = { },
+                                            onItemLongPress = { item ->
+                                                startActivity(DouyinVideoActionsActivity.createIntent(
+                                                    context = this@DouyinPlayerActivity,
+                                                    awemeId = item.awemeId,
+                                                    title = item.title,
+                                                    author = item.author,
+                                                    playUrl = item.playUrl,
+                                                    coverUrl = item.coverUrl,
+                                                    likeCount = item.likeCount
+                                                ))
+                                            },
+                                            // Saved URLs use the screen's bounded local reprepare;
+                                            // only an explicit refresh starts a new playback session.
+                                            onRequestPlaybackRefresh = { _, _, _ -> },
+                                            onDiscardPlaybackItem = { },
+                                            onMessageShown = { },
+                                            onHeaderClick = { },
+                                            onPlaybackActiveChanged = { active ->
+                                                setVideoPlaybackBatteryTracking("douyin", active)
+                                            }
+                                        )
+                                    }
+                                }
                             }
-                        }
                         }
                     }
                 }
             }
         }
-    }
     }
 
     override fun buildResumeIntent(): Intent? {

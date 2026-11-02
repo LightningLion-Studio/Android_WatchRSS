@@ -1,7 +1,5 @@
 package com.lightningstudio.watchrss.data.douyin
 
-import com.lightningstudio.watchrss.sdk.douyin.DouyinContent
-
 data class DouyinBootstrapPlayUrlRefreshResult(
     val items: List<DouyinStreamItem>,
     val refreshedAwemeIds: List<String>
@@ -30,33 +28,12 @@ suspend fun refreshExpiredDouyinBootstrapPlayUrls(
         )
     }
 
-    val refreshedAwemeIds = mutableListOf<String>()
-    val refreshedItems = items.map { item ->
-        if (!isDouyinPlayUrlExpired(item = item, nowMs = nowMs, ttlMs = ttlMs)) {
-            return@map item
-        }
-        val result = repository.fetchVideo(item.awemeId)
-        val content = result.data as? DouyinContent.Video
-        val refreshedPlayUrl = content?.playUrl?.trim().orEmpty()
-        if (!result.isSuccess || content == null || refreshedPlayUrl.isEmpty()) {
-            return@map item
-        }
-        refreshedAwemeIds += item.awemeId
-        item.copy(
-            playUrl = refreshedPlayUrl,
-            coverUrl = content.coverUrl.takeIf { it.isNotBlank() } ?: item.coverUrl,
-            title = content.desc.takeIf { it.isNotBlank() } ?: item.title,
-            author = content.authorName.takeIf { it.isNotBlank() } ?: item.author,
-            likeCount = content.diggCount,
-            playUrlResolvedAtMs = nowMs,
-            sourceOrigin = DouyinSourceOrigin.VIDEO_REFRESH,
-            variants = content.variants
-        )
+    if (items.none { isDouyinPlayUrlExpired(it, nowMs, ttlMs) }) {
+        return DouyinBootstrapPlayUrlRefreshResult(items, emptyList())
     }
-    return DouyinBootstrapPlayUrlRefreshResult(
-        items = refreshedItems,
-        refreshedAwemeIds = refreshedAwemeIds
-    )
+    val feed = kotlinx.coroutines.withTimeoutOrNull(10_000) { repository.fetchFeedPage(null, 12) }
+    val fresh = feed?.takeIf { it.isSuccess }?.data?.items.orEmpty().mapNotNull { it.toStreamItem(nowMs) }
+    return replenishExpiredBootstrap(items, fresh, nowMs, ttlMs)
 }
 
 suspend fun refreshExpiredDouyinBootstrapPlayUrls(
@@ -72,22 +49,17 @@ suspend fun refreshExpiredDouyinBootstrapPlayUrls(
             refreshedAwemeIds = emptyList()
         )
     }
-    val refreshedAwemeIds = mutableListOf<String>()
-    val refreshedItems = items.map { item ->
-        if (!isDouyinPlayUrlExpired(item = item, nowMs = nowMs, ttlMs = ttlMs)) {
-            return@map item
-        }
-        val event = coordinator.refresh(item = item, trigger = trigger)
-        val refreshedItem = event.item
-        if (event.outcome == DouyinPlaybackRefreshOutcome.SUCCESS && refreshedItem != null) {
-            refreshedAwemeIds += item.awemeId
-            refreshedItem
-        } else {
-            item
-        }
+    if (items.none { isDouyinPlayUrlExpired(it, nowMs, ttlMs) }) {
+        return DouyinBootstrapPlayUrlRefreshResult(items, emptyList())
     }
-    return DouyinBootstrapPlayUrlRefreshResult(
-        items = refreshedItems,
-        refreshedAwemeIds = refreshedAwemeIds
-    )
+    return replenishExpiredBootstrap(items, coordinator.replenishFeed(), nowMs, ttlMs)
+}
+
+private fun replenishExpiredBootstrap(
+    items: List<DouyinStreamItem>, fresh: List<DouyinStreamItem>, nowMs: Long, ttlMs: Long
+): DouyinBootstrapPlayUrlRefreshResult {
+    if (fresh.isEmpty()) return DouyinBootstrapPlayUrlRefreshResult(items, emptyList())
+    val retained = items.filterNot { isDouyinPlayUrlExpired(it, nowMs, ttlMs) }
+    val merged = mergeDouyinPrioritizedItems(retained, fresh, maxOf(items.size, fresh.size))
+    return DouyinBootstrapPlayUrlRefreshResult(merged, fresh.map { it.awemeId })
 }

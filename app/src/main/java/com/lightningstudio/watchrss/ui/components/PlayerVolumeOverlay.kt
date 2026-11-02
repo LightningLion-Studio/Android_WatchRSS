@@ -1,20 +1,29 @@
 package com.lightningstudio.watchrss.ui.components
 
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.database.ContentObserver
 import android.media.AudioManager
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
+import android.provider.Settings
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
+import androidx.compose.material.icons.automirrored.outlined.VolumeOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -23,11 +32,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.media.DigitalCrownVolumeGuardState
 import com.lightningstudio.watchrss.data.media.applyDigitalCrownVolumeGuard
@@ -38,11 +51,11 @@ import com.lightningstudio.watchrss.data.media.volumeForPercent
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import com.lightningstudio.watchrss.ui.util.showAppToast
 import com.lightningstudio.watchrss.util.AppLogger
+import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 
 @Stable
 class PlayerVolumeState internal constructor(
@@ -77,12 +90,15 @@ class PlayerVolumeState internal constructor(
     )
         private set
 
+    var isMuted by mutableStateOf(audioManager.isStreamMute(AudioManager.STREAM_MUSIC))
+        private set
+
     var isVisible by mutableStateOf(false)
         private set
 
     val progress: Float
         get() {
-            if (maxVolume <= minVolume) return 0f
+            if (isMuted || maxVolume <= minVolume) return 0f
             return ((virtualVolume - minVolume) / (maxVolume - minVolume)).coerceIn(0f, 1f)
         }
 
@@ -90,7 +106,7 @@ class PlayerVolumeState internal constructor(
         get() = "${(progress * 100f).roundToInt()}%"
 
     fun adjustByDelta(delta: Float, eventUptimeMs: Long = SystemClock.elapsedRealtime()) {
-        if (delta == 0f) return
+        if (!delta.isFinite() || delta == 0f) return
         playbackStartGuardDismissedByUser = true
         syncOutOfBandVolumeChange()
         val prevVirtual = virtualVolume
@@ -164,19 +180,42 @@ class PlayerVolumeState internal constructor(
         return audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).coerceIn(minVolume, maxVolume)
     }
 
-    private fun syncOutOfBandVolumeChange() {
-        val actual = readCurrentVolume()
-        if (!hasOutOfBandVolumeChange(observedVolume = currentVolume, actualVolume = actual)) {
-            return
+    /** Read the system immediately before choosing an explicit mute/unmute command. */
+    fun toggleMute() {
+        val actuallyMuted = audioManager.isStreamMute(AudioManager.STREAM_MUSIC)
+        if (!audioManager.isVolumeFixed) {
+            audioManager.adjustStreamVolume(
+                AudioManager.STREAM_MUSIC,
+                if (actuallyMuted) AudioManager.ADJUST_UNMUTE else AudioManager.ADJUST_MUTE,
+                0
+            )
         }
-        AppLogger.d(
-            VOLUME_TAG,
-            "dismiss playback start guard after external volume change observed=$currentVolume actual=$actual"
-        )
+        // A local mute command must not dismiss the first-play volume limit.
+        currentVolume = readCurrentVolume()
+        isMuted = audioManager.isStreamMute(AudioManager.STREAM_MUSIC)
+        virtualVolume = currentVolume.toFloat()
+        digitalCrownGuardState = DigitalCrownVolumeGuardState()
+        show()
+    }
+
+    fun refreshFromSystem(showOverlayOnChange: Boolean = true) {
+        val actual = readCurrentVolume()
+        val muted = audioManager.isStreamMute(AudioManager.STREAM_MUSIC)
+        if (!hasOutOfBandVolumeChange(currentVolume, actual) && isMuted == muted) return
         playbackStartGuardDismissedByUser = true
         digitalCrownGuardState = DigitalCrownVolumeGuardState()
         currentVolume = actual
+        isMuted = muted
         virtualVolume = actual.toFloat()
+        if (showOverlayOnChange) show()
+    }
+
+    private fun syncOutOfBandVolumeChange() = refreshFromSystem()
+
+    internal fun dispose() {
+        hideJob?.cancel()
+        hideJob = null
+        isVisible = false
     }
 
     private fun setVolume(target: Int, syncVirtual: Boolean = false) {
@@ -189,6 +228,7 @@ class PlayerVolumeState internal constructor(
             AppLogger.d(VOLUME_TAG, "setVolume skipped target=$clampedTarget current=$current fixed=${audioManager.isVolumeFixed}")
         }
         currentVolume = readCurrentVolume()
+        isMuted = audioManager.isStreamMute(AudioManager.STREAM_MUSIC)
         if (syncVirtual) {
             virtualVolume = currentVolume.toFloat()
         }
@@ -215,7 +255,7 @@ fun rememberPlayerVolumeState(
         appContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     }
     val scope = rememberCoroutineScope()
-    return remember(audioManager, scope, guardEnabled, playbackStartVolumeLimitPercent, appContext) {
+    val state = remember(audioManager, scope, guardEnabled, playbackStartVolumeLimitPercent, appContext) {
         PlayerVolumeState(
             audioManager = audioManager,
             scope = scope,
@@ -230,6 +270,37 @@ fun rememberPlayerVolumeState(
             }
         )
     }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(appContext, state, lifecycleOwner) {
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) = state.refreshFromSystem()
+        }
+        // Some OEMs notify Settings, while AOSP also broadcasts stream mute changes.
+        // Read AudioManager rather than trusting broadcast extras.
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                state.refreshFromSystem()
+            }
+        }
+        val filter = IntentFilter().apply {
+            addAction("android.media.VOLUME_CHANGED_ACTION")
+            addAction("android.media.STREAM_MUTE_CHANGED_ACTION")
+        }
+        appContext.contentResolver.registerContentObserver(Settings.System.CONTENT_URI, true, observer)
+        ContextCompat.registerReceiver(appContext, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
+        val lifecycleObserver = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) state.refreshFromSystem()
+        }
+        lifecycleOwner.lifecycle.addObserver(lifecycleObserver)
+        state.refreshFromSystem()
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(lifecycleObserver)
+            appContext.unregisterReceiver(receiver)
+            appContext.contentResolver.unregisterContentObserver(observer)
+            state.dispose()
+        }
+    }
+    return state
 }
 
 @Composable
@@ -253,7 +324,7 @@ fun PlayerVolumeOverlay(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            imageVector = Icons.AutoMirrored.Outlined.VolumeUp,
+            imageVector = if (state.isMuted) Icons.AutoMirrored.Outlined.VolumeOff else Icons.AutoMirrored.Outlined.VolumeUp,
             contentDescription = "音量",
             tint = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier

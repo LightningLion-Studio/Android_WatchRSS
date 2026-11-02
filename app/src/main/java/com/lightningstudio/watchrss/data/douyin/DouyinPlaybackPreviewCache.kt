@@ -49,18 +49,17 @@ private const val DOUYIN_PLAYBACK_SNAPSHOT_COUNT = 6
 internal const val DOUYIN_PLAYBACK_PREFETCH_COUNT = 2
 private const val DOUYIN_PLAYBACK_PREFETCH_CONCURRENCY = 2
 private const val DOUYIN_PLAYBACK_BACKWARD_REGISTRATION_COUNT = 5
-private const val PREVIEW_DURATION_MS = 30_000L
-private const val PREFETCH_DURATION_MS = 16_000L
-private const val MIN_ENTRY_BYTES = 512 * 1024
+private const val PREVIEW_DURATION_MS = 1_500L
+private const val MIN_ENTRY_BYTES = 128 * 1024
 private const val PREFETCH_PROGRESS_COMMIT_BYTES = 512 * 1024
 private const val PREFETCH_READ_CHUNK_BYTES = 64 * 1024
-private const val DEFAULT_UNKNOWN_DURATION_BYTES = 4 * 1024 * 1024
+private const val HEADER_ALLOWANCE_BYTES = 128 * 1024
 private const val MAX_ENTRY_BYTES = 4 * 1024 * 1024
 private const val MAX_PREFETCH_ENTRY_BYTES = 2 * 1024 * 1024
 private const val MIN_TOTAL_PREVIEW_BYTES = 6L * 1024L * 1024L
 private const val MAX_TOTAL_PREVIEW_BYTES = 16L * 1024L * 1024L
 private const val MAX_TOTAL_POSTER_BYTES = 4L * 1024L * 1024L
-private const val DEFAULT_ESTIMATED_BYTES_PER_SECOND = 256 * 1024L
+private const val DEFAULT_ESTIMATED_BYTES_PER_SECOND = 64 * 1024L
 private const val FOREGROUND_BANDWIDTH_RESERVE_NUMERATOR = 13L
 private const val FOREGROUND_BANDWIDTH_RESERVE_DENOMINATOR = 80L
 private const val PREFETCH_BANDWIDTH_WINDOW_MS = 1_000L
@@ -73,12 +72,14 @@ data class DouyinPlaybackPreviewWarmTarget(
     val awemeId: String,
     val mediaUri: String,
     val playUrlResolvedAtMs: Long,
-    val durationMs: Long
+    val durationMs: Long,
+    val bitrate: Long = 0L
 )
 
 internal data class DouyinPlaybackPreviewKey(
     val awemeId: String,
-    val playUrlResolvedAtMs: Long
+    val playUrlResolvedAtMs: Long,
+    val mediaUri: String = ""
 )
 
 private data class DouyinPlaybackPreviewRegistration(
@@ -263,6 +264,12 @@ object DouyinPlaybackPreviewCache {
     internal val prefetchHttpFailures: SharedFlow<DouyinPlaybackPrefetchHttpFailure> =
         _prefetchHttpFailures.asSharedFlow()
 
+    internal fun cachedPrefixBytes(uri: String): ByteArray? = manager.peekBytes(uri)
+
+    internal fun restoreVerifiedPrefix(item: DouyinStreamItem, bytes: ByteArray) {
+        manager.putLocalPrefix(item, bytes, isComplete = false)
+    }
+
     fun configure(context: Context) {
         manager.configure(File(context.applicationContext.cacheDir, SNAPSHOT_DIR_NAME))
     }
@@ -434,7 +441,7 @@ object DouyinPlaybackPreviewCache {
         bytes: ByteArray,
         isComplete: Boolean = false
     ) {
-        manager.putPreviewBytesForTests(item, bytes, isComplete)
+        manager.putLocalPrefix(item, bytes, isComplete)
     }
 
     internal fun markDownloadFailureForTests(
@@ -820,7 +827,7 @@ private class DouyinPlaybackPreviewManager {
         )
     }
 
-    fun putPreviewBytesForTests(
+    fun putLocalPrefix(
         item: DouyinStreamItem,
         bytes: ByteArray,
         isComplete: Boolean
@@ -1031,11 +1038,13 @@ private class DouyinPlaybackPreviewManager {
         val awemeId = item.awemeId.trim()
         val mediaUri = item.playUrl.trim()
         if (awemeId.isEmpty() || mediaUri.isEmpty()) return null
+        val remoteUri = synchronized(lock) { remoteTargetsByUri[mediaUri]?.remoteUri } ?: mediaUri
         return DouyinPlaybackPreviewWarmTarget(
             awemeId = awemeId,
             mediaUri = mediaUri,
             playUrlResolvedAtMs = item.playUrlResolvedAtMs,
-            durationMs = item.durationMs.coerceAtLeast(0L)
+            durationMs = item.durationMs.coerceAtLeast(0L),
+            bitrate = item.variants.firstOrNull { remoteUri == it.playUrl || remoteUri in it.playUrls }?.bitrate ?: 0L
         )
     }
 
@@ -1050,7 +1059,8 @@ private class DouyinPlaybackPreviewManager {
                     durationMs = target.durationMs,
                     budgetBytes = estimatePreviewBytes(
                         contentLength = null,
-                        durationMs = target.durationMs
+                        durationMs = target.durationMs,
+                        bitrate = target.bitrate
                     ),
                     captureEnabled = true,
                     remoteUri = remoteTarget?.remoteUri
@@ -1089,7 +1099,8 @@ private class DouyinPlaybackPreviewManager {
             val requiredBytes = estimatePrefetchBytes(
                 contentLength = null,
                 durationMs = target.durationMs,
-                prefetchOrder = index
+                prefetchOrder = index,
+                bitrate = target.bitrate
             )
             val existingBytes = synchronized(lock) { entries[target.key()]?.bytes?.size ?: 0 }
             if (existingBytes >= requiredBytes) return@mapIndexedNotNull null
@@ -1902,6 +1913,7 @@ private class DouyinPlaybackPreviewManager {
         variants.forEachIndexed { index, variant ->
             val prefix = "variants.$index"
             setProperty("$prefix.playUrl", variant.playUrl)
+            setProperty("$prefix.playUrls", org.json.JSONArray(variant.playUrls).toString())
             setProperty("$prefix.codec", variant.codec.name)
             setProperty("$prefix.bitrate", variant.bitrate.toString())
             setProperty("$prefix.width", variant.width.toString())
@@ -1933,7 +1945,10 @@ private class DouyinPlaybackPreviewManager {
                         height = getProperty("$prefix.height")?.toIntOrNull() ?: 0,
                         definition = getProperty("$prefix.definition")?.takeIf { it.isNotBlank() },
                         quality = getProperty("$prefix.quality")?.takeIf { it.isNotBlank() },
-                        gearName = getProperty("$prefix.gearName")?.takeIf { it.isNotBlank() }
+                        gearName = getProperty("$prefix.gearName")?.takeIf { it.isNotBlank() },
+                        playUrls = runCatching { org.json.JSONArray(getProperty("$prefix.playUrls")) }.getOrNull()?.let { urls ->
+                            (0 until urls.length()).map { urls.optString(it) }.filter { it.isNotBlank() }
+                        }?.takeIf { it.isNotEmpty() } ?: listOf(playUrl)
                     )
                 )
             }
@@ -1948,31 +1963,25 @@ private class DouyinPlaybackPreviewManager {
 private fun DouyinPlaybackPreviewWarmTarget.key(): DouyinPlaybackPreviewKey {
     return DouyinPlaybackPreviewKey(
         awemeId = awemeId,
-        playUrlResolvedAtMs = playUrlResolvedAtMs
+        playUrlResolvedAtMs = playUrlResolvedAtMs,
+        mediaUri = mediaUri
     )
 }
 
 internal fun estimatePreviewBytes(
     contentLength: Long?,
-    durationMs: Long
+    durationMs: Long,
+    bitrate: Long = 0L
 ): Int {
-    val boundedLength = contentLength?.coerceAtMost(Int.MAX_VALUE.toLong())
-    if (boundedLength != null && boundedLength > 0L && durationMs > 0L) {
-        val targetDurationMs = min(durationMs, PREVIEW_DURATION_MS)
-        val estimated = max(
-            MIN_ENTRY_BYTES.toLong(),
-            boundedLength * targetDurationMs / durationMs
-        )
-        return estimated.coerceAtMost(min(boundedLength, MAX_ENTRY_BYTES.toLong())).toInt()
+    val rate = when {
+        bitrate > 0 -> bitrate.toDouble() / 8
+        contentLength != null && contentLength > 0 && durationMs > 0 -> contentLength.toDouble() * 1000 / durationMs
+        else -> DEFAULT_ESTIMATED_BYTES_PER_SECOND.toDouble()
     }
-    if (durationMs > 0L) {
-        val estimated = max(
-            MIN_ENTRY_BYTES.toLong(),
-            DEFAULT_ESTIMATED_BYTES_PER_SECOND * min(durationMs, PREVIEW_DURATION_MS) / 1_000L
-        )
-        return estimated.coerceAtMost(MAX_ENTRY_BYTES.toLong()).toInt()
-    }
-    return DEFAULT_UNKNOWN_DURATION_BYTES.coerceAtMost(MAX_ENTRY_BYTES)
+    val samples = kotlin.math.ceil(rate * PREVIEW_DURATION_MS / 1000).toLong()
+    val estimate = (samples.coerceAtMost(MAX_ENTRY_BYTES.toLong()) + HEADER_ALLOWANCE_BYTES)
+        .coerceIn(MIN_ENTRY_BYTES.toLong(), MAX_ENTRY_BYTES.toLong())
+    return estimate.coerceAtMost(contentLength?.takeIf { it > 0 } ?: Long.MAX_VALUE).toInt()
 }
 
 private fun maxTotalPreviewBytes(): Long {
@@ -1983,23 +1992,9 @@ private fun maxTotalPreviewBytes(): Long {
 internal fun estimatePrefetchBytes(
     contentLength: Long?,
     durationMs: Long,
-    prefetchOrder: Int = 0
-): Int {
-    val cappedDuration = min(durationMs.coerceAtLeast(0L), PREFETCH_DURATION_MS)
-    val base = estimatePreviewBytes(
-        contentLength = contentLength,
-        durationMs = cappedDuration
-    )
-    val boundedBase = base.coerceAtMost(MAX_PREFETCH_ENTRY_BYTES)
-    val normalizedOrder = prefetchOrder.coerceAtLeast(0)
-    val targetBytes = when (normalizedOrder) {
-        0 -> boundedBase
-        1 -> boundedBase * 3 / 4
-        2, 3 -> boundedBase / 2
-        else -> boundedBase / 4
-    }
-    return max(MIN_ENTRY_BYTES, targetBytes)
-}
+    prefetchOrder: Int = 0,
+    bitrate: Long = 0L
+): Int = estimatePreviewBytes(contentLength, durationMs, bitrate).coerceAtMost(MAX_PREFETCH_ENTRY_BYTES)
 
 internal fun estimateDouyinPrefetchBandwidthBytesPerSecond(
     foregroundBitrateBitsPerSecond: Long?,

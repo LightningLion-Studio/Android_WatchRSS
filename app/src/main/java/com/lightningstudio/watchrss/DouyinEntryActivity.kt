@@ -90,6 +90,7 @@ class DouyinEntryActivity : BaseWatchActivity() {
 
     override fun onResume() {
         super.onResume()
+        viewModel.refreshOfflineReadiness()
         val currentToken = AppLaunchSignal.currentToken()
         if (currentToken != handledLauncherOpenToken) {
             handledLauncherOpenToken = currentToken
@@ -98,6 +99,11 @@ class DouyinEntryActivity : BaseWatchActivity() {
                 viewModel.loadCachedFeedForAppLaunch()
             }
         }
+    }
+
+    override fun onStop() {
+        viewModel.cancelFeedLoad()
+        super.onStop()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -235,13 +241,8 @@ class DouyinEntryActivity : BaseWatchActivity() {
                                     playbackStartVolumeLimitPercent = playbackStartVolumeLimitPercent,
                                     continuePlaybackInBackground = continuePlaybackInBackground,
                                     internetAvailabilityStatus = internetAvailabilityStatus,
-                                    onRefresh = {
-                                        if (uiState.showTitlePage) {
-                                            viewModel.refreshTitlePageFeed()
-                                        } else {
-                                            viewModel.loadInitial()
-                                        }
-                                    },
+                                    onRefresh = viewModel::retryFeedLoad,
+                                    onOfflinePrefixEnded = viewModel::onOfflinePrefixEnded,
                                     onPageSettled = viewModel::onPageSettled,
                                     onEnterFlow = viewModel::enterVideoFlow,
                                     onItemLongPress = { item ->

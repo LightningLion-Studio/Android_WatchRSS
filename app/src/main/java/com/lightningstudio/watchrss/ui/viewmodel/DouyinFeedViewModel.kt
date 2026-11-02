@@ -1,5 +1,16 @@
 package com.lightningstudio.watchrss.ui.viewmodel
 
+import com.lightningstudio.watchrss.data.douyin.DouyinOfflineReadiness
+import com.lightningstudio.watchrss.data.douyin.DouyinStockRuntime
+import com.lightningstudio.watchrss.data.douyin.DouyinCandidateRecovery
+import com.lightningstudio.watchrss.data.douyin.refreshDouyinItemFromFeed
+import com.lightningstudio.watchrss.data.douyin.toStreamItem
+import com.lightningstudio.watchrss.data.douyin.DouyinResult
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lightningstudio.watchrss.data.douyin.DouyinErrorCodes
@@ -31,7 +42,6 @@ import com.lightningstudio.watchrss.data.douyin.isDouyinPlayUrlExpired
 import com.lightningstudio.watchrss.data.douyin.mergeDouyinBootstrapItems
 import com.lightningstudio.watchrss.data.douyin.mergeDouyinPrioritizedItems
 import com.lightningstudio.watchrss.data.douyin.resolveDouyinPlaybackAnchorAwemeId
-import com.lightningstudio.watchrss.sdk.douyin.DouyinContent
 import com.lightningstudio.watchrss.util.AppLogger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -56,7 +66,11 @@ data class DouyinFeedUiState(
     val playbackRefreshEvents: Map<String, DouyinPlaybackSourceRefreshEvent> = emptyMap(),
     val message: String? = null,
     val messageEventId: Long = 0L,
-    val showTitlePage: Boolean = true
+    val showTitlePage: Boolean = true,
+    val isSlowLoading: Boolean = false,
+    val loadDeadlineExceeded: Boolean = false,
+    val offlineReadiness: Map<String, DouyinOfflineReadiness> = emptyMap(),
+    val offlinePrefixEndedIds: Set<String> = emptySet()
 )
 
 private data class DouyinBootstrapState(
@@ -65,7 +79,8 @@ private data class DouyinBootstrapState(
     val savedAtMs: Long,
     val resumeAnchorAwemeId: String?,
     val nextCursor: String?,
-    val hasMore: Boolean
+    val hasMore: Boolean,
+    val stockedAwemeIds: Set<String> = emptySet()
 )
 
 class DouyinFeedViewModel(
@@ -86,6 +101,12 @@ class DouyinFeedViewModel(
     private val _uiState = MutableStateFlow(DouyinFeedUiState())
     val uiState: StateFlow<DouyinFeedUiState> = _uiState
 
+    private var feedLoadJob: Job? = null
+    private var loadGeneration = 0L
+    private var loadMoreJob: Job? = null
+    private var stockJob: Job? = null
+    private val directCandidateRecovery = DouyinCandidateRecovery()
+
     private var nextCursor: String? = null
     private var isRequestingMore: Boolean = false
     private var sourceItems: List<DouyinStreamItem> = emptyList()
@@ -94,50 +115,28 @@ class DouyinFeedViewModel(
     private val sessionQuarantinedAwemeIds = linkedSetOf<String>()
     private val playbackRefreshJobs = linkedMapOf<String, Job>()
     private val handledPlaybackRefreshEventIds = linkedSetOf<Long>()
+    private val stopNetworkObserver = DouyinStockRuntime.observeNetworkChanges {
+        viewModelScope.launch { schedulePreload(_uiState.value.items, _uiState.value.playHeaders) }
+    }
+
+    override fun onCleared() {
+        stopNetworkObserver()
+        super.onCleared()
+    }
 
     init {
         viewModelScope.launch {
             playbackSourceCoordinator.updates.collect(::applyPlaybackSourceRefreshEvent)
         }
-        viewModelScope.launch {
-            val loggedIn = repository.isLoggedIn()
-            if (loggedIn) {
-                val headers = repository.buildPlayHeaders()
-                _uiState.update {
-                    it.copy(
-                        isLoggedIn = true,
-                        playHeaders = headers,
-                        message = null
-                    )
-                }
-                val hasBootstrapItems = restoreEntryPlayback(
-                    headers = headers,
-                    resumeToVideoFlow = resumeToVideoFlowOnEntry,
-                    resumeAwemeId = resumeAwemeIdOnEntry
-                )
-                if (shouldLoadInitialAfterRestore(hasBootstrapItems, resumeToVideoFlowOnEntry)) {
-                    loadInitial()
-                }
-            } else {
-                _uiState.update { it.copy(isLoggedIn = false) }
-            }
-        }
+        loadInitial(replaceExistingFeed = false, restoreEntry = true)
     }
 
     fun applyCookie(rawCookie: String) {
         viewModelScope.launch {
             val result = repository.applyCookieHeader(rawCookie)
             if (result.isSuccess) {
-                val headers = repository.buildPlayHeaders()
-                _uiState.update {
-                    it.copy(
-                        isLoggedIn = true,
-                        playHeaders = headers,
-                        message = null
-                    )
-                }
-                loadCachedBootstrap(headers)
-                loadInitial()
+                cancelFeedLoad()
+                loadInitial(replaceExistingFeed = false, restoreEntry = true)
             } else {
                 _uiState.update {
                     it.copy(
@@ -150,21 +149,8 @@ class DouyinFeedViewModel(
     }
 
     fun loadCachedFeedForAppLaunch() {
-        if (_uiState.value.isLoading) return
-        viewModelScope.launch {
-            val headers = repository.buildPlayHeaders()
-            _uiState.update {
-                it.copy(
-                    isLoggedIn = true,
-                    playHeaders = headers,
-                    message = null
-                )
-            }
-            val hasBootstrapItems = restoreEntryPlayback(headers)
-            if (shouldLoadInitialAfterRestore(hasBootstrapItems, resumeToVideoFlow = false)) {
-                loadInitial()
-            }
-        }
+        if (feedLoadJob?.isActive == true) return
+        loadInitial(replaceExistingFeed = false, restoreEntry = true)
     }
 
     fun loadInitial() {
@@ -175,103 +161,186 @@ class DouyinFeedViewModel(
         loadInitial(replaceExistingFeed = true)
     }
 
-    private fun loadInitial(replaceExistingFeed: Boolean) {
-        if (_uiState.value.isLoading) return
-        viewModelScope.launch {
-            val headers = repository.buildPlayHeaders()
-            _uiState.update {
-                it.copy(
-                    isLoading = true,
-                    playHeaders = headers,
-                    message = null
-                )
+    fun retryFeedLoad() {
+        cancelFeedLoad()
+        loadInitial(replaceExistingFeed = _uiState.value.showTitlePage)
+    }
+
+    fun cancelFeedLoad() {
+        loadGeneration += 1
+        feedLoadJob?.cancel()
+        feedLoadJob = null
+        _uiState.update { it.copy(isLoading = false, isSlowLoading = false) }
+    }
+
+    fun onOfflinePrefixEnded(awemeId: String) {
+        if (_uiState.value.offlineReadiness[awemeId] != DouyinOfflineReadiness.PREFIX_READY) return
+        _uiState.update { it.copy(
+            offlinePrefixEndedIds = it.offlinePrefixEndedIds + awemeId,
+            message = "离线预览已结束，请联网继续播放", messageEventId = it.messageEventId + 1
+        ) }
+    }
+
+    fun refreshOfflineReadiness() {
+        viewModelScope.launch(storageDispatcher) {
+            val snapshot = _uiState.value
+            val readiness = snapshot.items.associate { item ->
+                item.awemeId to when {
+                    snapshot.localPlayPaths.containsKey(item.awemeId) -> DouyinOfflineReadiness.FULL_READY
+                    DouyinStockRuntime.hydrate(item, snapshot.proxyPlayUris[item.awemeId]) -> DouyinOfflineReadiness.PREFIX_READY
+                    else -> DouyinOfflineReadiness.NONE
+                }
             }
-            awemeIdSet.clear()
-            nextCursor = null
-            val result = repository.fetchFeedPage(cursor = null, count = PAGE_SIZE)
-            if (result.isSuccess) {
-                val page = result.data
-                val mapped = mapToStreamItems(page?.items.orEmpty())
-                val latestState = _uiState.value
-                val currentVideoIndex = latestState.currentPage - 1
-                val preservePrefix = if (
-                    !replaceExistingFeed &&
-                    currentVideoIndex >= 0 &&
-                    latestState.items.isNotEmpty()
-                ) {
-                    latestState.items.take((currentVideoIndex + 1).coerceAtMost(latestState.items.size))
-                } else {
-                    emptyList()
-                }
-                val mergedItems = mergeFreshItemsWithPreservedPrefix(
-                    preservedPrefix = preservePrefix,
-                    freshItems = mapped
-                )
-                replaceSourceState(items = mergedItems)
-                mergedItems.forEach { awemeIdSet.add(it.awemeId) }
-                nextCursor = page?.nextCursor
-                val hasMore = page?.hasMore ?: false
-                if (replaceExistingFeed) {
-                    withContext(storageDispatcher) {
-                        recentWindowStore.clear()
-                        DouyinPlaybackPreviewCache.clearAll()
+            // Hydrate the remote URL first, then alias those bytes into the player's proxy URI.
+            val proxyUris = projectVisibleProxyPlayUris(snapshot.items, snapshot.playHeaders, "offline_readiness")
+            _uiState.update { current ->
+                if (current.items != snapshot.items) current else current.copy(offlineReadiness = readiness, proxyPlayUris = proxyUris)
+            }
+        }
+    }
+
+    private fun loadInitial(replaceExistingFeed: Boolean, restoreEntry: Boolean = false) {
+        if (feedLoadJob?.isActive == true) return
+        val generation = ++loadGeneration
+        loadMoreJob?.cancel()
+        playbackRefreshJobs.values.toList().forEach { it.cancel() }
+        playbackRefreshJobs.clear()
+        isRequestingMore = false
+        _uiState.update { it.copy(isLoadingMore = false) }
+        _uiState.update { it.copy(isLoading = true, isSlowLoading = false, loadDeadlineExceeded = false, message = null) }
+        feedLoadJob = viewModelScope.launch {
+            val slow = launch {
+                delay(1_500)
+                if (generation == loadGeneration) _uiState.update { it.copy(
+                    isSlowLoading = true, message = "加载较慢，请稍候", messageEventId = it.messageEventId + 1
+                ) }
+            }
+            try {
+                val completed = withTimeoutOrNull(10_000) {
+                    if (restoreEntry) {
+                        val loggedIn = repository.isLoggedIn()
+                        currentCoroutineContext().ensureActive()
+                        _uiState.update { it.copy(isLoggedIn = loggedIn) }
+                        if (!loggedIn) return@withTimeoutOrNull true
+                        val entryHeaders = repository.buildPlayHeaders()
+                        _uiState.update { it.copy(playHeaders = entryHeaders) }
+                        val restored = restoreEntryPlayback(entryHeaders,
+                            resumeToVideoFlowOnEntry, resumeAwemeIdOnEntry)
+                        currentCoroutineContext().ensureActive()
+                        if (!shouldLoadInitialAfterRestore(restored, resumeToVideoFlowOnEntry) &&
+                            _uiState.value.items.none { isDouyinPlayUrlExpired(it) }) return@withTimeoutOrNull true
                     }
+                    val headers = repository.buildPlayHeaders()
+                    _uiState.update {
+                        it.copy(
+                            isLoading = true,
+                            playHeaders = headers,
+                            message = null
+                        )
+                    }
+                    val result = repository.fetchFeedPage(cursor = null, count = PAGE_SIZE)
+                    currentCoroutineContext().ensureActive()
+                    if (generation != loadGeneration) return@withTimeoutOrNull true
+                    if (result.isSuccess) {
+                        val page = result.data
+                        val mapped = mapToStreamItems(page?.items.orEmpty())
+                        if (mapped.isEmpty() && _uiState.value.items.isNotEmpty()) {
+                            handleFeedFailure(DouyinErrorCodes.REQUEST_FAILED, "暂无新的推荐，请重试", false)
+                            return@withTimeoutOrNull true
+                        }
+                        val latestState = _uiState.value
+                        val currentVideoIndex = latestState.currentPage - 1
+                        val preservePrefix = if (
+                            !replaceExistingFeed &&
+                            currentVideoIndex >= 0 &&
+                            latestState.items.isNotEmpty()
+                        ) {
+                            latestState.items.take((currentVideoIndex + 1).coerceAtMost(latestState.items.size))
+                        } else {
+                            emptyList()
+                        }
+                        val mergedItems = mergeFreshItemsWithPreservedPrefix(
+                            preservedPrefix = preservePrefix,
+                            freshItems = mapped
+                        )
+                        val hasMore = page?.hasMore ?: false
+                        val localPaths = withContext(storageDispatcher) {
+                            preloadManager.resolveLocalPaths(mergedItems.map { it.awemeId })
+                        }
+                        currentCoroutineContext().ensureActive()
+                        if (generation != loadGeneration) return@withTimeoutOrNull true
+                        awemeIdSet.clear()
+                        mergedItems.forEach { awemeIdSet.add(it.awemeId) }
+                        nextCursor = page?.nextCursor
+                        replaceSourceState(
+                            items = mergedItems,
+                            localPlayPaths = localPaths
+                        )
+                        val visibleMergedItems = projectVisibleItems()
+                        val visibleLocalPaths = projectVisibleLocalPlayPaths(visibleMergedItems)
+                        val visibleProxyUris = projectVisibleProxyPlayUris(
+                            visibleItems = visibleMergedItems,
+                            headers = headers,
+                            reason = "load_initial"
+                        )
+                        val adjustedCurrentPage = when {
+                            replaceExistingFeed -> 0
+                            latestState.showTitlePage -> latestState.currentPage.coerceAtMost(visibleMergedItems.size)
+                            visibleMergedItems.isEmpty() -> 0
+                            latestState.currentPage <= 0 -> 1
+                            else -> latestState.currentPage.coerceAtMost(visibleMergedItems.size)
+                        }
+                        _uiState.update {
+                            it.copy(
+                                isLoading = false,
+                                items = visibleMergedItems,
+                                offlineReadiness = emptyMap(),
+                                offlinePrefixEndedIds = emptySet(),
+                                hasMore = hasMore,
+                                playHeaders = headers,
+                                localPlayPaths = visibleLocalPaths,
+                                proxyPlayUris = visibleProxyUris,
+                                showTitlePage = if (replaceExistingFeed) true else latestState.showTitlePage,
+                                currentPage = adjustedCurrentPage,
+                                message = null
+                            )
+                        }
+                        if (!latestState.showTitlePage) {
+                            maybePersistRecentWindow(
+                                visibleItems = visibleMergedItems,
+                                sourceItems = sourceItems,
+                                targetPage = adjustedCurrentPage,
+                                headers = headers,
+                                reason = "load_initial"
+                            )
+                        }
+                        cacheBootstrapPage(
+                            items = sourceItems,
+                            nextCursorSnapshot = nextCursor,
+                            hasMore = hasMore
+                        )
+                        schedulePreload(visibleMergedItems, headers)
+                    } else {
+                        handleFeedFailure(
+                            code = result.code,
+                            message = result.message,
+                            isLoadingMore = false
+                        )
+                    }
+                    true
                 }
-                val localPaths = withContext(storageDispatcher) {
-                    preloadManager.resolveLocalPaths(mergedItems.map { it.awemeId })
-                }
-                replaceSourceState(
-                    items = mergedItems,
-                    localPlayPaths = localPaths
-                )
-                val visibleMergedItems = projectVisibleItems()
-                val visibleLocalPaths = projectVisibleLocalPlayPaths(visibleMergedItems)
-                val visibleProxyUris = projectVisibleProxyPlayUris(
-                    visibleItems = visibleMergedItems,
-                    headers = headers,
-                    reason = "load_initial"
-                )
-                val adjustedCurrentPage = when {
-                    replaceExistingFeed -> 0
-                    latestState.showTitlePage -> latestState.currentPage.coerceAtMost(visibleMergedItems.size)
-                    visibleMergedItems.isEmpty() -> 0
-                    latestState.currentPage <= 0 -> 1
-                    else -> latestState.currentPage.coerceAtMost(visibleMergedItems.size)
-                }
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        items = visibleMergedItems,
-                        hasMore = hasMore,
-                        playHeaders = headers,
-                        localPlayPaths = visibleLocalPaths,
-                        proxyPlayUris = visibleProxyUris,
-                        showTitlePage = if (replaceExistingFeed) true else latestState.showTitlePage,
-                        currentPage = adjustedCurrentPage,
-                        message = null
-                    )
-                }
-                if (!latestState.showTitlePage) {
-                    maybePersistRecentWindow(
-                        visibleItems = visibleMergedItems,
-                        sourceItems = sourceItems,
-                        targetPage = adjustedCurrentPage,
-                        headers = headers,
-                        reason = "load_initial"
-                    )
-                }
-                cacheBootstrapPage(
-                    items = sourceItems,
-                    nextCursorSnapshot = nextCursor,
-                    hasMore = hasMore
-                )
-                schedulePreload(visibleMergedItems, headers)
-            } else {
-                handleFeedFailure(
-                    code = result.code,
-                    message = result.message,
-                    isLoadingMore = false
-                )
+                if (completed == null && generation == loadGeneration) _uiState.update { it.copy(
+                    loadDeadlineExceeded = true, message = "加载超时，请重试", messageEventId = it.messageEventId + 1
+                ) }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                if (generation == loadGeneration) _uiState.update { it.copy(
+                    message = "网络请求失败", messageEventId = it.messageEventId + 1
+                ) }
+            } finally {
+                slow.cancel()
+                if (generation == loadGeneration) _uiState.update { it.copy(isLoading = false, isSlowLoading = false) }
             }
         }
     }
@@ -286,48 +355,49 @@ class DouyinFeedViewModel(
         if (playbackRefreshJobs[normalizedAwemeId]?.isActive == true) return
 
         playbackRefreshJobs[normalizedAwemeId] = viewModelScope.launch {
-            val localFallbackAvailable = sourceItems.any {
-                it.awemeId == normalizedAwemeId && it.playUrl.isNotBlank()
-            }
-            if (failedSource == DouyinPlaybackSourceKind.LOCAL) {
-                preloadManager.invalidate(normalizedAwemeId)
-                sourceLocalPlayPaths = sourceLocalPlayPaths - normalizedAwemeId
-                val visibleItems = projectVisibleItems()
-                _uiState.update { state ->
-                    state.copy(
-                        localPlayPaths = projectVisibleLocalPlayPaths(visibleItems),
-                        proxyPlayUris = projectVisibleProxyPlayUris(
-                            visibleItems = visibleItems,
-                            headers = state.playHeaders,
-                            reason = "local_invalidate"
+            try {
+                val localFallbackAvailable = sourceItems.any {
+                    it.awemeId == normalizedAwemeId && it.playUrl.isNotBlank()
+                }
+                if (failedSource == DouyinPlaybackSourceKind.LOCAL) {
+                    preloadManager.invalidate(normalizedAwemeId)
+                    sourceLocalPlayPaths = sourceLocalPlayPaths - normalizedAwemeId
+                    val visibleItems = projectVisibleItems()
+                    _uiState.update { state ->
+                        state.copy(
+                            localPlayPaths = projectVisibleLocalPlayPaths(visibleItems),
+                            proxyPlayUris = projectVisibleProxyPlayUris(
+                                visibleItems = visibleItems,
+                                headers = state.playHeaders,
+                                reason = "local_invalidate"
+                            )
                         )
+                    }
+                }
+
+                val currentItem = sourceItems.firstOrNull { it.awemeId == normalizedAwemeId }
+                val coordinatedEvent = currentItem?.let {
+                    playbackSourceCoordinator.refresh(item = it, trigger = trigger)
+                }
+                if (coordinatedEvent != null && coordinatedEvent.outcome != DouyinPlaybackRefreshOutcome.SKIPPED) {
+                    applyPlaybackSourceRefreshEvent(coordinatedEvent)
+                    if (coordinatedEvent.outcome == DouyinPlaybackRefreshOutcome.FAILURE) {
+                        handlePlaybackRefreshFailure(
+                            event = coordinatedEvent,
+                            suppressMessage = failedSource == DouyinPlaybackSourceKind.LOCAL &&
+                                localFallbackAvailable
+                        )
+                    }
+                } else {
+                    refreshPlaybackSourceDirect(
+                        awemeId = normalizedAwemeId,
+                        failedSource = failedSource,
+                        trigger = trigger,
+                        localFallbackAvailable = localFallbackAvailable
                     )
                 }
-            }
 
-            val currentItem = sourceItems.firstOrNull { it.awemeId == normalizedAwemeId }
-            val coordinatedEvent = currentItem?.let {
-                playbackSourceCoordinator.refresh(item = it, trigger = trigger)
-            }
-            if (coordinatedEvent != null && coordinatedEvent.outcome != DouyinPlaybackRefreshOutcome.SKIPPED) {
-                applyPlaybackSourceRefreshEvent(coordinatedEvent)
-                if (coordinatedEvent.outcome == DouyinPlaybackRefreshOutcome.FAILURE) {
-                    handlePlaybackRefreshFailure(
-                        event = coordinatedEvent,
-                        suppressMessage = failedSource == DouyinPlaybackSourceKind.LOCAL &&
-                            localFallbackAvailable
-                    )
-                }
-            } else {
-                refreshPlaybackSourceDirect(
-                    awemeId = normalizedAwemeId,
-                    failedSource = failedSource,
-                    trigger = trigger,
-                    localFallbackAvailable = localFallbackAvailable
-                )
-            }
-
-            playbackRefreshJobs.remove(normalizedAwemeId)
+            } finally { playbackRefreshJobs.remove(normalizedAwemeId) }
         }
     }
 
@@ -337,55 +407,18 @@ class DouyinFeedViewModel(
         trigger: DouyinPlaybackRefreshTrigger,
         localFallbackAvailable: Boolean
     ) {
-        val result = repository.fetchVideo(awemeId)
-        val content = result.data
-        val event = when {
-            result.isSuccess && content is DouyinContent.Video -> {
-                val updated = updatePlaybackSource(awemeId, content)
-                val refreshedItem = sourceItems.firstOrNull { it.awemeId == awemeId }
-                if (updated) {
-                    val currentState = _uiState.value
-                    cacheBootstrapPage(
-                        items = sourceItems,
-                        nextCursorSnapshot = nextCursor,
-                        hasMore = currentState.hasMore
-                    )
-                    schedulePreload(currentState.items, currentState.playHeaders)
-                }
-                DouyinPlaybackSourceRefreshEvent(
-                    eventId = System.nanoTime(),
-                    awemeId = awemeId,
-                    trigger = trigger,
-                    outcome = if (updated) {
-                        DouyinPlaybackRefreshOutcome.SUCCESS
-                    } else {
-                        DouyinPlaybackRefreshOutcome.FAILURE
-                    },
-                    item = refreshedItem
-                )
-            }
-
-            result.isSuccess && content is DouyinContent.Note -> {
-                DouyinPlaybackSourceRefreshEvent(
-                    eventId = System.nanoTime(),
-                    awemeId = awemeId,
-                    trigger = trigger,
-                    outcome = DouyinPlaybackRefreshOutcome.FAILURE,
-                    message = "当前内容暂无可播放视频"
-                )
-            }
-
-            else -> {
-                DouyinPlaybackSourceRefreshEvent(
-                    eventId = System.nanoTime(),
-                    awemeId = awemeId,
-                    trigger = trigger,
-                    outcome = DouyinPlaybackRefreshOutcome.FAILURE,
-                    errorCode = result.code,
-                    message = result.message
-                )
-            }
-        }
+        val current = sourceItems.firstOrNull { it.awemeId == awemeId } ?: return
+        val result = directCandidateRecovery.next(current)?.let { DouyinResult(DouyinErrorCodes.OK, data = it) }
+            ?: (if (directCandidateRecovery.allowFeedRefresh(current)) {
+                withTimeoutOrNull(10_000) { refreshDouyinItemFromFeed(repository, current) }
+            } else DouyinResult(DouyinErrorCodes.REQUEST_FAILED, "播放源候选已用尽"))
+            ?: DouyinResult(DouyinErrorCodes.REQUEST_FAILED, "播放源刷新超时")
+        val updated = result.data?.let(::updatePlaybackItem) == true
+        val event = DouyinPlaybackSourceRefreshEvent(
+            eventId = System.nanoTime(), awemeId = awemeId, trigger = trigger,
+            outcome = if (updated) DouyinPlaybackRefreshOutcome.SUCCESS else DouyinPlaybackRefreshOutcome.FAILURE,
+            item = result.data, errorCode = if (updated) null else result.code, message = result.message
+        )
         applyPlaybackSourceRefreshEvent(event)
         if (event.outcome == DouyinPlaybackRefreshOutcome.FAILURE) {
             handlePlaybackRefreshFailure(
@@ -401,19 +434,7 @@ class DouyinFeedViewModel(
         suppressMessage: Boolean
     ) {
         if (event.errorCode == DouyinErrorCodes.NOT_LOGGED_IN) {
-            repository.clearCookie()
-            replaceSourceState(items = emptyList(), localPlayPaths = emptyMap())
-            _uiState.update {
-                it.copy(
-                    isLoggedIn = false,
-                    items = emptyList(),
-                    localPlayPaths = emptyMap(),
-                    proxyPlayUris = emptyMap(),
-                    message = "需要登录",
-                    messageEventId = it.messageEventId + 1
-                )
-            }
-            return
+            _uiState.update { it.copy(isLoggedIn = false) }
         }
         if (!suppressMessage) {
             _uiState.update {
@@ -438,59 +459,6 @@ class DouyinFeedViewModel(
         }
     }
 
-    private fun scheduleStartupPlaybackRefresh(
-        items: List<DouyinStreamItem>,
-        targetPage: Int
-    ) {
-        if (items.isEmpty()) return
-        val preparedIndex = if (targetPage > 0) {
-            (targetPage - 1).coerceIn(0, items.lastIndex)
-        } else {
-            0
-        }
-        val candidates = items
-            .drop(preparedIndex)
-            .take(STARTUP_PLAYBACK_REFRESH_COUNT)
-            .filter(::isDouyinPlayUrlExpired)
-        if (candidates.isEmpty()) return
-        viewModelScope.launch {
-            candidates.forEach { item ->
-                playbackSourceCoordinator.refresh(
-                    item = item,
-                    trigger = DouyinPlaybackRefreshTrigger.STARTUP_TTL
-                ).takeIf { it.outcome != DouyinPlaybackRefreshOutcome.SKIPPED }
-                    ?.let(::applyPlaybackSourceRefreshEvent)
-            }
-        }
-    }
-
-    private suspend fun loadCachedBootstrap(headers: Map<String, String>): Long {
-        val bootstrapState = readBootstrapState()
-        replaceSourceState(
-            items = bootstrapState.items,
-            localPlayPaths = bootstrapState.localPaths
-        )
-        seedFeedWindow(sourceItems)
-        nextCursor = bootstrapState.nextCursor
-        val visibleItems = projectVisibleItems()
-        val visibleLocalPaths = projectVisibleLocalPlayPaths(visibleItems)
-        val visibleProxyUris = projectVisibleProxyPlayUris(
-            visibleItems = visibleItems,
-            headers = headers,
-            reason = "load_cached_bootstrap"
-        )
-        _uiState.update {
-            it.copy(
-                items = visibleItems,
-                hasMore = bootstrapState.hasMore,
-                playHeaders = headers,
-                localPlayPaths = visibleLocalPaths,
-                proxyPlayUris = visibleProxyUris
-            )
-        }
-        return bootstrapState.savedAtMs
-    }
-
     private suspend fun restoreEntryPlayback(
         headers: Map<String, String>,
         resumeToVideoFlow: Boolean = false,
@@ -506,9 +474,10 @@ class DouyinFeedViewModel(
         val persistedResumeAnchorAwemeId = resumeAwemeId
             ?: bootstrapState.resumeAnchorAwemeId
         val resumeAnchorAwemeId = persistedResumeAnchorAwemeId ?: latestAwemeId
-        val restoredItems = dropDouyinItemsBeforeAwemeId(
-            items = bootstrapState.items,
-            anchorAwemeId = persistedResumeAnchorAwemeId
+        val restoredItems = mergeDouyinPrioritizedItems(
+            prioritizedItems = bootstrapState.items.filter { it.awemeId in bootstrapState.stockedAwemeIds },
+            remainingItems = dropDouyinItemsBeforeAwemeId(bootstrapState.items, persistedResumeAnchorAwemeId),
+            limit = BOOTSTRAP_ITEMS + DOUYIN_PLAYBACK_SNAPSHOT_STARTUP_COUNT
         )
         replaceSourceState(
             items = restoredItems,
@@ -530,6 +499,7 @@ class DouyinFeedViewModel(
             items = visibleBootstrapItems
         )
         val targetPage = when {
+            bootstrapState.stockedAwemeIds.isNotEmpty() && !resumeToVideoFlow -> 1
             resumeAnchorPage != null -> resumeAnchorPage
             !latestAwemeId.isNullOrBlank() -> {
                 resolvePageAfterAwemeId(
@@ -564,10 +534,6 @@ class DouyinFeedViewModel(
             )
         }
         schedulePreload(visibleBootstrapItems, headers)
-        scheduleStartupPlaybackRefresh(
-            items = visibleBootstrapItems,
-            targetPage = targetPage
-        )
         return hasBootstrapItems
     }
 
@@ -601,6 +567,8 @@ class DouyinFeedViewModel(
     }
 
     private suspend fun readBootstrapState(): DouyinBootstrapState = withContext(storageDispatcher) {
+        val stockItems = DouyinStockRuntime.restore(watchHistoryStore.readWatchedIds())
+            .map { it.copy(sourceOrigin = DouyinSourceOrigin.BOOTSTRAP_CACHE) }
         val feedSnapshot = feedCacheStore.readSnapshot(limit = BOOTSTRAP_ITEMS)
         val pinnedSnapshotItems = DouyinPlaybackPreviewCache.restorePinnedItems()
             .map { it.copy(sourceOrigin = DouyinSourceOrigin.BOOTSTRAP_CACHE) }
@@ -627,8 +595,8 @@ class DouyinFeedViewModel(
                 anchorAwemeId = anchorAwemeId
             )
         }
-        val bootstrapItems = mergedWithPinnedItems
-            .take(BOOTSTRAP_ITEMS + DOUYIN_PLAYBACK_SNAPSHOT_STARTUP_COUNT)
+        val bootstrapItems = mergeDouyinPrioritizedItems(stockItems, mergedWithPinnedItems,
+            BOOTSTRAP_ITEMS + DOUYIN_PLAYBACK_SNAPSHOT_STARTUP_COUNT)
         AppLogger.d(
             TAG,
             "read bootstrap pinned=${pinnedSnapshotItems.size} feed=${cachedItems.size} recent=${recentItems.size} " +
@@ -653,7 +621,8 @@ class DouyinFeedViewModel(
             savedAtMs = maxOf(feedSnapshot.savedAtMs, recentWindowSnapshot.savedAtMs),
             resumeAnchorAwemeId = recentWindowSnapshot.anchorAwemeId,
             nextCursor = feedSnapshot.nextCursor,
-            hasMore = feedSnapshot.hasMore
+            hasMore = feedSnapshot.hasMore,
+            stockedAwemeIds = stockItems.mapTo(linkedSetOf()) { it.awemeId }
         )
     }
 
@@ -690,6 +659,7 @@ class DouyinFeedViewModel(
         val playHeaders = _uiState.value.playHeaders
         viewModelScope.launch(storageDispatcher) {
             watchHistoryStore.markWatched(current)
+            DouyinStockRuntime.consume(current.awemeId)
             persistRecentWindow(
                 items = sourceItems,
                 anchorIndex = rawAnchorIndex,
@@ -761,47 +731,63 @@ class DouyinFeedViewModel(
         val state = _uiState.value
         if (isRequestingMore || !state.hasMore || state.isLoadingMore || state.isLoading) return
         isRequestingMore = true
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoadingMore = true) }
-            val result = repository.fetchFeedPage(cursor = nextCursor, count = PAGE_SIZE)
-            if (result.isSuccess) {
-                val page = result.data
-                val incoming = mapToStreamItems(page?.items.orEmpty())
-                    .filter { awemeIdSet.add(it.awemeId) }
-                nextCursor = page?.nextCursor ?: nextCursor
-                val merged = sourceItems + incoming
-                val localPaths = withContext(storageDispatcher) {
-                    preloadManager.resolveLocalPaths(merged.map { it.awemeId })
-                }
-                replaceSourceState(
-                    items = merged,
-                    localPlayPaths = localPaths
-                )
-                val visibleMergedItems = projectVisibleItems()
-                val visibleLocalPaths = projectVisibleLocalPlayPaths(visibleMergedItems)
-                val visibleProxyUris = projectVisibleProxyPlayUris(
-                    visibleItems = visibleMergedItems,
-                    headers = _uiState.value.playHeaders,
-                    reason = "load_more"
-                )
-                _uiState.update {
-                    it.copy(
-                        isLoadingMore = false,
-                        hasMore = page?.hasMore ?: false,
-                        items = visibleMergedItems,
-                        localPlayPaths = visibleLocalPaths,
-                        proxyPlayUris = visibleProxyUris
+        val generation = loadGeneration
+        loadMoreJob = viewModelScope.launch {
+            try {
+                _uiState.update { it.copy(isLoadingMore = true) }
+                val result = withTimeoutOrNull(10_000) { repository.fetchFeedPage(cursor = nextCursor, count = PAGE_SIZE) }
+                    ?: DouyinResult(DouyinErrorCodes.REQUEST_FAILED, "加载超时，请重试")
+                currentCoroutineContext().ensureActive()
+                if (generation != loadGeneration) return@launch
+                if (result.isSuccess) {
+                    val page = result.data
+                    val incoming = mapToStreamItems(page?.items.orEmpty())
+                        .filter { awemeIdSet.add(it.awemeId) }
+                    nextCursor = page?.nextCursor ?: nextCursor
+                    val merged = sourceItems + incoming
+                    val localPaths = withContext(storageDispatcher) {
+                        preloadManager.resolveLocalPaths(merged.map { it.awemeId })
+                    }
+                    currentCoroutineContext().ensureActive()
+                    if (generation != loadGeneration) return@launch
+                    replaceSourceState(
+                        items = merged,
+                        localPlayPaths = localPaths
+                    )
+                    val visibleMergedItems = projectVisibleItems()
+                    val visibleLocalPaths = projectVisibleLocalPlayPaths(visibleMergedItems)
+                    val visibleProxyUris = projectVisibleProxyPlayUris(
+                        visibleItems = visibleMergedItems,
+                        headers = _uiState.value.playHeaders,
+                        reason = "load_more"
+                    )
+                    _uiState.update {
+                        it.copy(
+                            isLoadingMore = false,
+                            hasMore = page?.hasMore ?: false,
+                            items = visibleMergedItems,
+                            localPlayPaths = visibleLocalPaths,
+                            proxyPlayUris = visibleProxyUris
+                        )
+                    }
+                    schedulePreload(visibleMergedItems, _uiState.value.playHeaders)
+                } else {
+                    handleFeedFailure(
+                        code = result.code,
+                        message = result.message,
+                        isLoadingMore = true
                     )
                 }
-                schedulePreload(visibleMergedItems, _uiState.value.playHeaders)
-            } else {
-                handleFeedFailure(
-                    code = result.code,
-                    message = result.message,
-                    isLoadingMore = true
-                )
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                if (generation == loadGeneration) handleFeedFailure(DouyinErrorCodes.REQUEST_FAILED, null, true)
+            } finally {
+                if (generation == loadGeneration) {
+                    isRequestingMore = false
+                    _uiState.update { it.copy(isLoadingMore = false) }
+                }
             }
-            isRequestingMore = false
         }
     }
 
@@ -811,21 +797,7 @@ class DouyinFeedViewModel(
         isLoadingMore: Boolean
     ) {
         if (code == DouyinErrorCodes.NOT_LOGGED_IN) {
-            viewModelScope.launch {
-                repository.clearCookie()
-                replaceSourceState(items = emptyList(), localPlayPaths = emptyMap())
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        isLoadingMore = false,
-                        isLoggedIn = false,
-                        items = emptyList(),
-                        localPlayPaths = emptyMap(),
-                        proxyPlayUris = emptyMap()
-                    )
-                }
-            }
-            return
+            _uiState.update { it.copy(isLoggedIn = false) }
         }
 
         _uiState.update {
@@ -871,33 +843,22 @@ class DouyinFeedViewModel(
     }
 
     private fun schedulePreload(items: List<DouyinStreamItem>, headers: Map<String, String>) {
+        refreshOfflineReadiness()
+        stockJob?.cancel()
         if (items.isEmpty()) return
-        AppLogger.d(
-            TAG,
-            "proxy playback window active; skip full-file preload items=${items.size} anchor=${
-                resolveDouyinPlaybackAnchorAwemeId(items = items, currentPage = _uiState.value.currentPage)
-            }"
-        )
-    }
-
-    private fun updatePlaybackSource(
-        awemeId: String,
-        content: DouyinContent.Video
-    ): Boolean {
-        val resolvedAtMs = System.currentTimeMillis()
-        val current = sourceItems.firstOrNull { it.awemeId == awemeId } ?: return false
-        return updatePlaybackItem(
-            current.copy(
-                playUrl = content.playUrl.trim(),
-                coverUrl = content.coverUrl.takeIf { it.isNotBlank() } ?: current.coverUrl,
-                title = content.desc.takeIf { it.isNotBlank() } ?: current.title,
-                author = content.authorName.takeIf { it.isNotBlank() } ?: current.author,
-                likeCount = content.diggCount,
-                playUrlResolvedAtMs = resolvedAtMs,
-                sourceOrigin = DouyinSourceOrigin.VIDEO_REFRESH,
-                variants = content.variants
-            )
-        )
+        stockJob = viewModelScope.launch(storageDispatcher) {
+            try {
+                DouyinStockRuntime.refill(items, headers, watchHistoryStore::readWatchedIds) {
+                    withTimeoutOrNull(10_000) { repository.fetchFeedPage(null, 12) }
+                        ?.takeIf { it.isSuccess }?.data?.items.orEmpty().mapNotNull { it.toStreamItem() }
+                }
+                refreshOfflineReadiness()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                // Inventory failures must not terminate the foreground player.
+            }
+        }
     }
 
     private fun updatePlaybackItem(refreshedItem: DouyinStreamItem): Boolean {
@@ -924,10 +885,13 @@ class DouyinFeedViewModel(
         _uiState.update { state ->
             state.copy(
                 items = visibleItems,
+                offlineReadiness = state.offlineReadiness - refreshedItem.awemeId,
+                offlinePrefixEndedIds = state.offlinePrefixEndedIds - refreshedItem.awemeId,
                 localPlayPaths = visibleLocalPaths,
                 proxyPlayUris = visibleProxyUris
             )
         }
+        refreshOfflineReadiness()
         return true
     }
 

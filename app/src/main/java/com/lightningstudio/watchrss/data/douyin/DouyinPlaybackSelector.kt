@@ -4,10 +4,8 @@ import com.lightningstudio.watchrss.sdk.douyin.DouyinContent
 import com.lightningstudio.watchrss.sdk.douyin.DouyinVideo
 import com.lightningstudio.watchrss.sdk.douyin.DouyinVideoCodec
 import com.lightningstudio.watchrss.sdk.douyin.DouyinVideoVariant
-import kotlin.math.abs
-import kotlin.math.max
 
-internal const val DOUYIN_TARGET_VERTICAL_RESOLUTION = 540
+internal const val DOUYIN_TARGET_VERTICAL_RESOLUTION = 466
 
 internal fun applyPreferredPlayback(video: DouyinVideo) {
     video.playUrl = selectPreferredPlayUrl(
@@ -32,7 +30,9 @@ internal fun selectPreferredPlayUrl(
     variants: List<DouyinVideoVariant>,
     fallbackPlayUrl: String?
 ): String? {
-    val preferredVariant = selectPreferredVariant(variants = variants)
+    val preferredVariant = selectPreferredVariant(variants = variants,
+        hevcSupported = variants.any { it.codec == DouyinVideoCodec.H265 } &&
+            variants.filter { it.codec == DouyinVideoCodec.H265 }.all(DouyinDecoderCapabilities::supports))
     val fallback = fallbackPlayUrl?.trim()?.takeIf { it.isNotEmpty() }
     return preferredVariant?.playUrl ?: fallback?.takeUnless {
         variants.any { variant ->
@@ -41,35 +41,34 @@ internal fun selectPreferredPlayUrl(
     }
 }
 
-internal fun selectPreferredVariant(variants: List<DouyinVideoVariant>): DouyinVideoVariant? {
+internal fun selectPreferredVariant(
+    variants: List<DouyinVideoVariant>,
+    hevcSupported: Boolean = false
+): DouyinVideoVariant? {
     val playableVariants = variants
         .asSequence()
         .filter { it.playUrl.isNotBlank() }
-        .filter { it.codec != DouyinVideoCodec.H265 }
+        .filter { it.codec != DouyinVideoCodec.H265 || hevcSupported }
         .toList()
     if (playableVariants.isEmpty()) return null
     val preferredVariants = playableVariants
-        .filter { it.codec == DouyinVideoCodec.H264 }
-        .ifEmpty { playableVariants }
     return preferredVariants.minWithOrNull(
-        compareBy<DouyinVideoVariant> { resolutionDistance(it) }
+        compareBy<DouyinVideoVariant> {
+            val resolution = normalizedVerticalResolution(it)
+            if (resolution == null) 2 else if (resolution >= DOUYIN_TARGET_VERTICAL_RESOLUTION) 0 else 1
+        }.thenBy {
+            val resolution = normalizedVerticalResolution(it) ?: Int.MAX_VALUE / 4
+            if (resolution >= DOUYIN_TARGET_VERTICAL_RESOLUTION) resolution else -resolution
+        }.thenBy { it.bitrate.takeIf { rate -> rate > 0 } ?: Long.MAX_VALUE }
             .thenBy { codecPriority(it.codec) }
-            .thenByDescending { it.bitrate }
-            .thenByDescending { max(it.width, it.height) }
     )
 }
 
-private fun resolutionDistance(variant: DouyinVideoVariant): Int {
-    val normalized = normalizedVerticalResolution(variant) ?: return Int.MAX_VALUE / 4
-    return abs(normalized - DOUYIN_TARGET_VERTICAL_RESOLUTION)
-}
-
 private fun normalizedVerticalResolution(variant: DouyinVideoVariant): Int? {
-    extractLabeledResolution(variant)?.let { return it }
     val shortSide = listOf(variant.width, variant.height)
         .filter { it > 0 }
         .minOrNull()
-        ?: return null
+        ?: return extractLabeledResolution(variant)
     return when {
         shortSide in 540..576 -> 540
         shortSide in 720..768 -> 720
