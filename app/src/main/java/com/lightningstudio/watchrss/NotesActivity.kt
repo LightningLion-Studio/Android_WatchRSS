@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss
 
+import com.lightningstudio.watchrss.ui.reader.readerViewportBoundary
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
@@ -79,6 +80,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -99,7 +101,6 @@ import com.lightningstudio.watchrss.data.note.WatchNoteEntity
 import com.lightningstudio.watchrss.data.note.watchPlainText
 import com.lightningstudio.watchrss.data.rss.RssItem
 import com.lightningstudio.watchrss.phoneconnection.WatchDeviceIdentity
-import com.lightningstudio.watchrss.ui.components.ContentEditingDownloadPhoneAppButton
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownHandler
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
@@ -138,7 +139,7 @@ class NotesActivity : BaseWatchActivity() {
             WatchRSSTheme {
                 ProvideReaderPreset(container.readerPresetRepository) {
                     val notes by repository.observe().collectAsState(initial = emptyList())
-                    WatchSurface(pureBlack = true) {
+                    WatchSurface {
                         NotesFeedList(
                             notes = notes,
                             onNoteClick = { note -> openNote(note.noteId) },
@@ -208,41 +209,43 @@ class NoteDetailActivity : BaseWatchActivity() {
                         }
                     }
 
-                    WatchSurface(pureBlack = true) {
+                    WatchSurface {
                         when {
                             !loaded -> NoteLoadingScreen()
                             note == null && !createMode -> NoteMissingScreen(onBack = ::finish)
                             editing -> {
                                 val editorNote = if (createMode) null else note
-                                WatchNoteRawEditor(
-                                    note = editorNote,
-                                    safeInset = notesEditorSafeInset(),
-                                    scrollState = remember(editorNote?.noteId ?: NEW_NOTE_DOCUMENT_KEY) {
-                                        ScrollState(0)
-                                    },
-                                    initialAnchorOffset = editorAnchorOffset,
-                                    saveDraft = { persistedNoteId, title, markdown ->
-                                        repository.saveRawMarkdown(
-                                            persistedNoteId,
-                                            markdown,
-                                            deviceId,
-                                            rawTitle = title
-                                        ).also { saved ->
-                                            note = saved
-                                            preparedBlocks = withContext(Dispatchers.Default) {
-                                                prepareWatchNotePreviewBlocks(saved.markdown)
+                                ReaderBackgroundSurface(modifier = Modifier.fillMaxSize()) {
+                                    WatchNoteRawEditor(
+                                        note = editorNote,
+                                        safeInset = notesEditorSafeInset(),
+                                        scrollState = remember(editorNote?.noteId ?: NEW_NOTE_DOCUMENT_KEY) {
+                                            ScrollState(0)
+                                        },
+                                        initialAnchorOffset = editorAnchorOffset,
+                                        saveDraft = { persistedNoteId, title, markdown ->
+                                            repository.saveRawMarkdown(
+                                                persistedNoteId,
+                                                markdown,
+                                                deviceId,
+                                                rawTitle = title
+                                            ).also { saved ->
+                                                note = saved
+                                                preparedBlocks = withContext(Dispatchers.Default) {
+                                                    prepareWatchNotePreviewBlocks(saved.markdown)
+                                                }
+                                            }
+                                        },
+                                        onClose = { _, _ ->
+                                            editorAnchorOffset = null
+                                            if (createMode) {
+                                                finish()
+                                            } else {
+                                                editing = false
                                             }
                                         }
-                                    },
-                                    onClose = { _, _ ->
-                                        editorAnchorOffset = null
-                                        if (createMode) {
-                                            finish()
-                                        } else {
-                                            editing = false
-                                        }
-                                    }
-                                )
+                                    )
+                                }
                             }
                             else -> {
                                 val loadedNote = requireNotNull(note)
@@ -373,9 +376,6 @@ private fun NotesFeedList(
                         onClick = {}
                     )
                 }
-            }
-            item(key = "phone_sync_prompt") {
-                ContentEditingDownloadPhoneAppButton(operation = "同步备忘录")
             }
             if (notes.isEmpty()) {
                 item(key = "empty") {
@@ -542,7 +542,7 @@ private fun WatchNoteReader(
 
     BackHandler(onBack = onBack)
     InstallDigitalCrownLazyListHandler(listState)
-    ReaderBackgroundSurface(modifier = Modifier.fillMaxSize()) {
+    ReaderBackgroundSurface(modifier = Modifier.fillMaxSize().readerViewportBoundary()) {
         Box(modifier = Modifier.fillMaxSize()) {
             WatchNoteRichTextLazyColumn(
                 markup = note.markdown,
@@ -556,7 +556,7 @@ private fun WatchNoteReader(
                     context.startActivity(
                         ImagePreviewActivity.createIntent(
                             context = context,
-                            url = resolveWatchNoteImageSource(context.filesDir, image.path),
+                            url = resolveWatchNoteImageSource(com.lightningstudio.watchrss.data.account.workspace.libraryContext(context).filesDir, image.path),
                             alt = image.description
                         )
                     )
@@ -656,7 +656,7 @@ private fun CompactEditButton(onClick: () -> Unit) {
 }
 
 @androidx.compose.runtime.Composable
-private fun WatchNoteRawEditor(
+internal fun WatchNoteRawEditor(
     note: WatchNoteEntity?,
     safeInset: androidx.compose.ui.unit.Dp,
     scrollState: ScrollState,
@@ -678,8 +678,13 @@ private fun WatchNoteRawEditor(
             )
         )
     }
+    val imageTransformation = remember(note?.noteId) { NoteImageVisualTransformation() }
     val history = remember(note?.noteId) { RawTextUndoManager(initialValue) }
     var editorValue by remember(note?.noteId) { mutableStateOf(initialValue) }
+    val imageOffsetMapping = remember(editorValue.text) {
+        imageTransformation.filter(androidx.compose.ui.text.AnnotatedString(editorValue.text)).offsetMapping
+    }
+    val latestImageOffsetMapping by rememberUpdatedState(imageOffsetMapping)
     var titleValue by remember(note?.noteId) {
         val title = note?.title.orEmpty()
         mutableStateOf(TextFieldValue(title, selection = TextRange(title.length)))
@@ -758,7 +763,7 @@ private fun WatchNoteRawEditor(
         var next = editorValue
         var boundarySteps = 0
         repeat(kotlin.math.abs(steps)) {
-            val moved = moveNoteCursor(next, direction)
+            val moved = moveNoteCursor(next, direction, protectImages = true)
             if (direction < 0 && moved.selection == next.selection) {
                 boundarySteps++
             } else {
@@ -915,7 +920,8 @@ private fun WatchNoteRawEditor(
         val layout = textLayoutResult ?: return@LaunchedEffect
         val bodyTopInDocument = editorBodyTopInDocument ?: return@LaunchedEffect
         val cursorRect = layout.getCursorRect(
-            editorValue.selection.end.coerceIn(0, editorValue.text.length)
+            imageOffsetMapping.originalToTransformed(editorValue.selection.end)
+                .coerceIn(0, layout.layoutInput.text.length)
         )
         val target = if (centerInitialAnchor) {
             noteCursorCenteredScrollTarget(
@@ -956,26 +962,11 @@ private fun WatchNoteRawEditor(
                         value = titleValue,
                         onValueChange = { incoming ->
                             val normalized = normalizeWatchNoteTitleInput(incoming)
-                            val preservedSelection = titleSelectionToRestoreOnFocus
-                            val corrected = preserveActivatedNoteSelection(
-                                current = titleValue,
-                                incoming = normalized,
-                                preservedSelection = preservedSelection,
-                                focused = titleFieldFocused
-                            )
-                            if (
-                                corrected.selection == normalized.selection &&
-                                preservedSelection != null &&
-                                (
-                                    normalized.text != titleValue.text ||
-                                        normalized.selection != preservedSelection
-                                )
-                            ) {
-                                titleSelectionToRestoreOnFocus = null
-                            }
-                            titleValue = corrected
+                            titleSelectionToRestoreOnFocus = null
+                            titleValue = normalized
                         },
                         modifier = Modifier
+                            .testTag("note-editor-title")
                             .fillMaxWidth()
                             .padding(horizontal = ReaderPageLayout.titleHorizontalPadding)
                             .focusRequester(titleFocusRequester)
@@ -1038,7 +1029,9 @@ private fun WatchNoteRawEditor(
             Box(modifier = Modifier.fillMaxWidth()) {
                 BasicTextField(
                     value = editorValue,
+                    visualTransformation = imageTransformation,
                     modifier = Modifier
+                        .testTag("note-editor-body")
                         .fillMaxWidth()
                         .heightIn(min = minimumBodyHeight)
                         .focusRequester(editorFocusRequester)
@@ -1065,7 +1058,8 @@ private fun WatchNoteRawEditor(
                             if (!textFieldFocused) {
                                 val cursorRect = textLayoutResult
                                     ?.getCursorRect(
-                                        editorValue.selection.end.coerceIn(0, editorValue.text.length)
+                                        imageOffsetMapping.originalToTransformed(editorValue.selection.end)
+                                            .coerceIn(0, textLayoutResult?.layoutInput?.text?.length ?: 0)
                                     )
                                 if (cursorRect != null) {
                                     drawLine(
@@ -1086,28 +1080,15 @@ private fun WatchNoteRawEditor(
                     textStyle = bodyTextStyle,
                     cursorBrush = SolidColor(cursorColor),
                     onValueChange = { incoming ->
-                        val current = editorValue
-                        val preservedSelection = selectionToRestoreOnFocus
-                        val corrected = preserveActivatedNoteSelection(
-                            current = current,
-                            incoming = incoming,
-                            preservedSelection = preservedSelection,
-                            focused = textFieldFocused
-                        )
-                        if (
-                            corrected.selection == incoming.selection &&
-                            preservedSelection != null &&
-                            (incoming.text != current.text || incoming.selection != preservedSelection)
-                        ) {
-                            selectionToRestoreOnFocus = null
-                        }
-                        editorValue = history.record(corrected, SystemClock.uptimeMillis())
+                        // Focus restoration is a one-time effect, never a filter on user/IME edits.
+                        selectionToRestoreOnFocus = null
+                        editorValue = history.record(normalizeNoteImageEdit(editorValue, incoming), SystemClock.uptimeMillis())
                     },
                     onTextLayout = { textLayoutResult = it },
                     decorationBox = { innerTextField ->
                         if (editorValue.text.isEmpty()) {
                             Text(
-                                text = "直接输入原始文本",
+                                text = "输入正文，图片引用显示为占位",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 style = bodyTextStyle
                             )
@@ -1134,8 +1115,16 @@ private fun WatchNoteRawEditor(
                                             ?: break
                                         if (!change.pressed) {
                                             if (!dragging) {
-                                                val activationSelection =
-                                                    latestEditorValueForGesture.selection
+                                                val current = latestEditorValueForGesture
+                                                val offset = latestTextLayoutForGesture
+                                                    ?.getOffsetForPosition(down.position)
+                                                    ?.coerceIn(0, current.text.length)
+                                                    ?: current.selection.end
+                                                val activationSelection = TextRange(offset)
+                                                editorValue = current.copy(
+                                                    selection = activationSelection,
+                                                    composition = null
+                                                )
                                                 selectionToRestoreOnFocus = activationSelection
                                                 editorFocusRequester.requestFocus()
                                             }
@@ -1159,9 +1148,9 @@ private fun WatchNoteRawEditor(
                                                 val layout = latestTextLayoutForGesture
                                                 repeat(kotlin.math.abs(steps)) {
                                                     val moved = if (layout == null) {
-                                                        moveNoteCursor(next, direction)
+                                                        moveNoteCursor(next, direction, protectImages = true)
                                                     } else {
-                                                        moveNoteCursorByVisualLine(next, layout, direction)
+                                                        moveNoteCursorByVisualLine(next, layout, direction, latestImageOffsetMapping)
                                                     }
                                                     if (
                                                         direction < 0 &&
@@ -1361,12 +1350,29 @@ internal fun mapNoteTextAnchorOffset(
     for (radius in listOf(32, 24, 16, 12, 8)) {
         val start = (safeOffset - radius).coerceAtLeast(0)
         val end = (safeOffset + radius).coerceAtMost(sourceText.length)
-        val anchor = sourceText.substring(start, end).trim()
+        val rawAnchor = sourceText.substring(start, end)
+        val anchor = rawAnchor.trim()
         if (anchor.length < 4) continue
-        val match = targetText.indexOf(anchor)
-        if (match >= 0) {
-            return (match + safeOffset - start).coerceIn(0, targetText.length)
+        val leadingTrimmedChars = rawAnchor.indexOf(anchor)
+        val offsetInAnchor = (safeOffset - start - leadingTrimmedChars)
+            .coerceIn(0, anchor.length)
+        val expectedMatch = (targetText.length.toLong() * safeOffset / sourceText.length)
+            .toInt()
+        var searchFrom = 0
+        var nearestOffset: Int? = null
+        var nearestDistance = Int.MAX_VALUE
+        while (searchFrom <= targetText.length - anchor.length) {
+            val match = targetText.indexOf(anchor, searchFrom)
+            if (match < 0) break
+            val candidate = (match + offsetInAnchor).coerceIn(0, targetText.length)
+            val distance = kotlin.math.abs(candidate - expectedMatch)
+            if (distance < nearestDistance) {
+                nearestDistance = distance
+                nearestOffset = candidate
+            }
+            searchFrom = match + 1
         }
+        if (nearestOffset != null) return nearestOffset
     }
 
     return (targetText.length * safeOffset.toLong() / sourceText.length)
@@ -1406,7 +1412,7 @@ internal fun noteCursorCenteredScrollTarget(
     return (scrollValue + correction).roundToInt().coerceIn(0, scrollMaxValue.coerceAtLeast(0))
 }
 
-internal fun moveNoteCursor(value: TextFieldValue, direction: Int): TextFieldValue {
+internal fun moveNoteCursor(value: TextFieldValue, direction: Int, protectImages: Boolean = false): TextFieldValue {
     if (direction == 0 || value.text.isEmpty()) return value.copy(composition = null)
     val anchor = if (direction > 0) value.selection.max else value.selection.min
     val target = when {
@@ -1416,25 +1422,9 @@ internal fun moveNoteCursor(value: TextFieldValue, direction: Int): TextFieldVal
             Character.offsetByCodePoints(value.text, anchor, -1)
         else -> anchor
     }
-    return value.copy(selection = TextRange(target), composition = null)
-}
-
-internal fun preserveActivatedNoteSelection(
-    current: TextFieldValue,
-    incoming: TextFieldValue,
-    preservedSelection: TextRange?,
-    focused: Boolean
-): TextFieldValue {
-    val inputMethodResetSelection =
-        focused &&
-            preservedSelection != null &&
-            incoming.text == current.text &&
-            incoming.selection != preservedSelection
-    return if (inputMethodResetSelection) {
-        incoming.copy(selection = preservedSelection, composition = null)
-    } else {
-        incoming
-    }
+    val image = if (protectImages) noteImageSpans(value.text).firstOrNull { target > it.start && target < it.end } else null
+    val atomicTarget = image?.let { if (direction > 0) it.end else it.start } ?: target
+    return value.copy(selection = TextRange(atomicTarget), composition = null)
 }
 
 internal fun normalizeWatchNoteTitleInput(value: TextFieldValue): TextFieldValue {
@@ -1450,21 +1440,23 @@ internal fun normalizeWatchNoteTitleInput(value: TextFieldValue): TextFieldValue
 internal fun moveNoteCursorByVisualLine(
     value: TextFieldValue,
     layout: TextLayoutResult,
-    direction: Int
+    direction: Int,
+    offsetMapping: androidx.compose.ui.text.input.OffsetMapping = androidx.compose.ui.text.input.OffsetMapping.Identity
 ): TextFieldValue {
     if (direction == 0 || value.text.isEmpty() || layout.lineCount <= 0) {
         return value.copy(composition = null)
     }
     val anchor = (if (direction > 0) value.selection.max else value.selection.min)
         .coerceIn(0, value.text.length)
-    val currentLine = layout.getLineForOffset(anchor)
+    val visualAnchor = offsetMapping.originalToTransformed(anchor).coerceIn(0, layout.layoutInput.text.length)
+    val currentLine = layout.getLineForOffset(visualAnchor)
     val targetLine = (currentLine + direction).coerceIn(0, layout.lineCount - 1)
     if (targetLine == currentLine) {
         return value.copy(selection = TextRange(anchor), composition = null)
     }
-    val horizontal = layout.getHorizontalPosition(anchor, usePrimaryDirection = true)
+    val horizontal = layout.getHorizontalPosition(visualAnchor, usePrimaryDirection = true)
     val targetY = (layout.getLineTop(targetLine) + layout.getLineBottom(targetLine)) / 2f
-    val target = layout.getOffsetForPosition(Offset(horizontal, targetY))
+    val target = offsetMapping.transformedToOriginal(layout.getOffsetForPosition(Offset(horizontal, targetY)))
         .coerceIn(0, value.text.length)
     return value.copy(selection = TextRange(target), composition = null)
 }

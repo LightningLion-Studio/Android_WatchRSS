@@ -27,7 +27,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import com.lightningstudio.watchrss.ui.theme.watchColorResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -48,8 +50,10 @@ fun DeleteConfirmDialog(
     WatchConfirmDialog(
         title = title,
         message = message,
-        confirmBackground = watchColorResource(R.color.danger_red),
+        confirmBackground = MaterialTheme.colorScheme.error,
         confirmIcon = Icons.Outlined.DeleteForever,
+        confirmIconTint = MaterialTheme.colorScheme.onError,
+        confirmActionLabel = "删除",
         onConfirm = onConfirm,
         onCancel = onCancel
     )
@@ -81,6 +85,8 @@ fun WatchConfirmDialog(
     confirmIcon: ImageVector,
     onConfirm: () -> Unit,
     onCancel: () -> Unit,
+    confirmActionLabel: String = "确认",
+    cancelActionLabel: String = "取消",
     confirmIconTint: Color = Color.Unspecified,
     cancelBackground: Color = Color.Unspecified,
     cancelIcon: ImageVector = Icons.Filled.Close,
@@ -109,7 +115,7 @@ fun WatchConfirmDialog(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.92f))
+                .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.92f))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -126,7 +132,7 @@ fun WatchConfirmDialog(
                 modifier = Modifier
                     .size(containerSize)
                     .clip(CircleShape)
-                    .background(Color.Black)
+                    .background(MaterialTheme.colorScheme.surface)
                     .padding(top = scaleDp(96.dp), bottom = scaleDp(30.dp)),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(scaleDp(32.dp))
@@ -144,6 +150,8 @@ fun WatchConfirmDialog(
                     cancelBackground = resolvedCancelBackground,
                     cancelIcon = cancelIcon,
                     cancelIconTint = resolvedCancelIconTint,
+                    cancelActionLabel = cancelActionLabel,
+                    confirmActionLabel = confirmActionLabel,
                     onConfirm = onConfirm,
                     onCancel = onCancel,
                     scaleDp = scaleDp
@@ -201,6 +209,8 @@ private fun DialogButtons(
     cancelBackground: Color,
     cancelIcon: ImageVector,
     cancelIconTint: Color,
+    cancelActionLabel: String,
+    confirmActionLabel: String,
     onConfirm: () -> Unit,
     onCancel: () -> Unit,
     scaleDp: (Dp) -> Dp
@@ -213,6 +223,7 @@ private fun DialogButtons(
             background = cancelBackground,
             icon = cancelIcon,
             iconTint = cancelIconTint,
+            actionLabel = cancelActionLabel,
             onClick = onCancel,
             scaleDp = scaleDp
         )
@@ -220,6 +231,7 @@ private fun DialogButtons(
             background = confirmBackground,
             icon = confirmIcon,
             iconTint = confirmIconTint,
+            actionLabel = confirmActionLabel,
             onClick = onConfirm,
             scaleDp = scaleDp
         )
@@ -231,6 +243,7 @@ private fun RoundIconButton(
     background: Color,
     icon: ImageVector,
     iconTint: Color,
+    actionLabel: String,
     onClick: () -> Unit,
     scaleDp: (Dp) -> Dp
 ) {
@@ -241,7 +254,12 @@ private fun RoundIconButton(
             .size(size)
             .clip(CircleShape)
             .background(background)
-            .clickable(onClick = onClick),
+            .semantics { contentDescription = actionLabel }
+            .clickable(
+                role = Role.Button,
+                onClickLabel = actionLabel,
+                onClick = onClick
+            ),
         contentAlignment = Alignment.Center
     ) {
         Icon(

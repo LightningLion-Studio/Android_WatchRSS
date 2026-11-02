@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
 import com.lightningstudio.watchrss.data.bili.BiliErrorCodes
 import com.lightningstudio.watchrss.data.bili.formatBiliError
-import com.lightningstudio.watchrss.sdk.bili.BiliFavoritePage
 import com.lightningstudio.watchrss.sdk.bili.BiliHistoryCursor
 import com.lightningstudio.watchrss.sdk.bili.BiliHistoryPage
 import com.lightningstudio.watchrss.sdk.bili.BiliItem
@@ -14,6 +13,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 
 enum class BiliListType(val id: String, val title: String) {
     WATCH_LATER("watch_later", "稍后再看"),
@@ -37,41 +38,55 @@ data class BiliListItem(
     val durationSeconds: Int?
 )
 
+data class BiliFavoriteFolderChoice(val id: Long, val title: String)
+
 data class BiliListUiState(
     val type: BiliListType,
     val isRefreshing: Boolean = true,
     val isLoadingMore: Boolean = false,
     val items: List<BiliListItem> = emptyList(),
     val message: String? = null,
-    val canLoadMore: Boolean = false
+    val messageEventId: Long = 0L,
+    val canLoadMore: Boolean = false,
+    val favoriteFolders: List<BiliFavoriteFolderChoice> = emptyList(),
+    val selectedFavoriteFolderId: Long? = null,
+    val favoriteError: String? = null
 )
 
-private data class FavoritePageResult(
-    val page: BiliFavoritePage?,
-    val code: Int
+private data class FavoriteFolderSnapshot(
+    val items: List<BiliListItem>, val nextPage: Int, val hasMore: Boolean
 )
 
 class BiliListViewModel(
-    savedStateHandle: SavedStateHandle,
+    private val savedStateHandle: SavedStateHandle,
     private val repository: BiliRepositoryContract
 ) : ViewModel() {
     private val type: BiliListType = BiliListType.from(savedStateHandle.get<String>("type"))
-    private val _uiState = MutableStateFlow(BiliListUiState(type = type))
+    private val _uiState = MutableStateFlow(BiliListUiState(
+        type = type,
+        selectedFavoriteFolderId = if (type == BiliListType.FAVORITE) {
+            savedStateHandle.get<Long>(SAVED_FAVORITE_FOLDER_ID)
+        } else null
+    ))
     val uiState: StateFlow<BiliListUiState> = _uiState
 
     private var historyCursor: BiliHistoryCursor? = null
-    private var favoritePage = 1
-    private var favoriteMediaId: Long? = null
+    private val favoriteSnapshots = mutableMapOf<Long, FavoriteFolderSnapshot>()
+    private var favoriteJob: Job? = null
+    private var favoriteRequestVersion = 0L
 
     init {
         refresh()
     }
 
     fun refresh() {
+        if (type == BiliListType.FAVORITE) {
+            refreshFavoriteFolders()
+            return
+        }
         viewModelScope.launch {
             _uiState.update { it.copy(isRefreshing = true, isLoadingMore = false, message = null) }
             historyCursor = null
-            favoritePage = 1
             when (type) {
                 BiliListType.WATCH_LATER -> {
                     val result = repository.fetchToView()
@@ -88,7 +103,8 @@ class BiliListViewModel(
                         _uiState.update {
                             it.copy(
                                 isRefreshing = false,
-                                message = formatBiliError(result.code, result.message)
+                                message = formatBiliError(result.code, result.message),
+                                messageEventId = it.messageEventId + 1
                             )
                         }
                     }
@@ -102,92 +118,110 @@ class BiliListViewModel(
                     }
                     handleHistoryResult(result.data, errorCode)
                 }
-                BiliListType.FAVORITE -> {
-                    val page = fetchFavoritePage(reset = true)
-                    handleFavoritePage(page)
-                }
+                BiliListType.FAVORITE -> Unit
             }
         }
     }
 
     fun loadMore() {
-        viewModelScope.launch {
-            when (type) {
-                BiliListType.HISTORY -> return@launch
-                BiliListType.FAVORITE -> {
-                    if (_uiState.value.isLoadingMore || !_uiState.value.canLoadMore) return@launch
-                    _uiState.update { it.copy(isLoadingMore = true, message = null) }
-                    val page = fetchFavoritePage(reset = false)
-                    handleFavoritePage(page, append = true)
-                }
-                else -> Unit
-            }
-        }
+        if (type != BiliListType.FAVORITE || _uiState.value.isRefreshing ||
+            _uiState.value.isLoadingMore || !_uiState.value.canLoadMore) return
+        val id = _uiState.value.selectedFavoriteFolderId ?: return
+        val snapshot = favoriteSnapshots[id] ?: return
+        _uiState.update { it.copy(isLoadingMore = true) }
+        startFavoriteRequest { version -> loadFavoritePage(id, snapshot.nextPage, version) }
     }
 
-    fun clearMessage() {
+    fun selectFavoriteFolder(id: Long) {
+        if (type != BiliListType.FAVORITE || id == _uiState.value.selectedFavoriteFolderId ||
+            _uiState.value.favoriteFolders.none { it.id == id }) return
+        favoriteJob?.cancel()
+        favoriteRequestVersion++
+        savedStateHandle[SAVED_FAVORITE_FOLDER_ID] = id
+        val snapshot = favoriteSnapshots[id]
+        _uiState.update { it.copy(
+            selectedFavoriteFolderId = id, items = snapshot?.items.orEmpty(),
+            isRefreshing = snapshot == null, isLoadingMore = false,
+            canLoadMore = snapshot?.hasMore ?: false, message = null, favoriteError = null
+        ) }
+        if (snapshot == null) startFavoriteRequest { version -> loadFavoritePage(id, 1, version) }
+    }
+
+    fun clearMessage(expectedEventId: Long? = null) {
+        if (expectedEventId != null && _uiState.value.messageEventId != expectedEventId) return
         _uiState.update { it.copy(message = null) }
     }
 
-    private suspend fun fetchFavoritePage(reset: Boolean): FavoritePageResult {
-        if (reset) {
-            favoritePage = 1
-            favoriteMediaId = null
-        }
-        val mediaId = favoriteMediaId ?: run {
-            val folders = repository.fetchFavoriteFolders()
-            if (!folders.isSuccess) return FavoritePageResult(null, folders.code)
-            val first = folders.data?.firstOrNull()
-                ?: return FavoritePageResult(null, BiliErrorCodes.MISSING_FAVORITE_FOLDER)
-            val id = first.id ?: first.fid
-                ?: return FavoritePageResult(null, BiliErrorCodes.MISSING_FAVORITE_FOLDER)
-            favoriteMediaId = id
-            id
-        }
-        val result = repository.fetchFavoriteItems(mediaId, pn = favoritePage)
-        return if (result.isSuccess && result.data != null) {
-            FavoritePageResult(result.data, result.code)
-        } else if (result.isSuccess) {
-            FavoritePageResult(null, BiliErrorCodes.REQUEST_FAILED)
-        } else {
-            FavoritePageResult(null, result.code)
+    private fun startFavoriteRequest(block: suspend (Long) -> Unit) {
+        favoriteJob?.cancel()
+        val version = ++favoriteRequestVersion
+        favoriteJob = viewModelScope.launch {
+            try {
+                block(version)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                if (version == favoriteRequestVersion) favoriteFailure(BiliErrorCodes.REQUEST_FAILED)
+            }
         }
     }
 
-    private fun handleFavoritePage(
-        result: FavoritePageResult,
-        append: Boolean = false
-    ) {
-        val page = result.page
-        if (page == null) {
-            _uiState.update {
-                it.copy(
-                    isRefreshing = false,
-                    isLoadingMore = false,
-                    message = formatBiliError(result.code)
-                )
+    private fun refreshFavoriteFolders() {
+        startFavoriteRequest { version ->
+            _uiState.update { it.copy(isRefreshing = true, isLoadingMore = false, message = null, favoriteError = null) }
+            val result = repository.fetchFavoriteFolders()
+            if (version != favoriteRequestVersion) return@startFavoriteRequest
+            if (!result.isSuccess) {
+                favoriteFailure(result.code)
+                return@startFavoriteRequest
             }
+            val folders = result.data.orEmpty().mapNotNull { folder ->
+                (folder.id ?: folder.fid)?.takeIf { it > 0 }?.let {
+                    BiliFavoriteFolderChoice(it, folder.title?.takeIf(String::isNotBlank) ?: "收藏夹 $it")
+                }
+            }.distinctBy { it.id }
+            favoriteSnapshots.keys.retainAll(folders.map { it.id }.toSet())
+            val selected = _uiState.value.selectedFavoriteFolderId?.takeIf { id -> folders.any { it.id == id } }
+                ?: folders.firstOrNull()?.id
+            savedStateHandle[SAVED_FAVORITE_FOLDER_ID] = selected
+            val previous = selected?.let(favoriteSnapshots::get)
+            _uiState.update { it.copy(
+                favoriteFolders = folders, selectedFavoriteFolderId = selected,
+                items = previous?.items.orEmpty(), canLoadMore = previous?.hasMore ?: false
+            ) }
+            if (selected == null) {
+                _uiState.update { it.copy(isRefreshing = false, isLoadingMore = false) }
+            } else loadFavoritePage(selected, 1, version)
+        }
+    }
+
+    private suspend fun loadFavoritePage(id: Long, pageNumber: Int, version: Long) {
+        _uiState.update { it.copy(isRefreshing = pageNumber == 1, isLoadingMore = pageNumber > 1, message = null, favoriteError = null) }
+        val result = repository.fetchFavoriteItems(id, pn = pageNumber)
+        if (version != favoriteRequestVersion || _uiState.value.selectedFavoriteFolderId != id) return
+        val page = result.data
+        if (!result.isSuccess || page == null) {
+            favoriteFailure(if (result.isSuccess) BiliErrorCodes.REQUEST_FAILED else result.code)
             return
         }
-        val items = page.medias.map { media ->
-            BiliListItem(
-                aid = null,
-                bvid = media.bvid,
-                cid = null,
-                title = media.title.orEmpty(),
-                cover = media.cover,
-                subtitle = media.owner?.name,
-                durationSeconds = media.duration
-            )
+        val incoming = page.medias.map { media ->
+            BiliListItem(null, media.bvid, null, media.title.orEmpty(), media.cover,
+                media.owner?.name, media.duration)
         }
-        favoritePage += 1
+        val items = if (pageNumber == 1) incoming else favoriteSnapshots[id]?.items.orEmpty() + incoming
+        favoriteSnapshots[id] = FavoriteFolderSnapshot(items, pageNumber + 1, page.hasMore)
+        _uiState.update { it.copy(items = items, canLoadMore = page.hasMore,
+            isRefreshing = false, isLoadingMore = false, message = null, favoriteError = null) }
+    }
+
+    private fun favoriteFailure(code: Int) {
         _uiState.update {
-            val merged = if (append) it.items + items else items
             it.copy(
                 isRefreshing = false,
                 isLoadingMore = false,
-                items = merged,
-                canLoadMore = page.hasMore
+                message = formatBiliError(code),
+                messageEventId = it.messageEventId + 1,
+                favoriteError = formatBiliError(code)
             )
         }
     }
@@ -202,7 +236,8 @@ class BiliListViewModel(
                 it.copy(
                     isRefreshing = false,
                     isLoadingMore = false,
-                    message = formatBiliError(errorCode)
+                    message = formatBiliError(errorCode),
+                    messageEventId = it.messageEventId + 1
                 )
             }
             return
@@ -240,5 +275,9 @@ class BiliListViewModel(
             subtitle = owner?.name,
             durationSeconds = duration
         )
+    }
+
+    private companion object {
+        const val SAVED_FAVORITE_FOLDER_ID = "bili_list_selected_favorite_folder_id"
     }
 }

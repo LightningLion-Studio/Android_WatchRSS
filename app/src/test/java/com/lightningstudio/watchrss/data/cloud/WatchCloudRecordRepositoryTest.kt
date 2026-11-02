@@ -237,7 +237,7 @@ class WatchCloudRecordRepositoryTest {
                     .`when`(tombstones).upsert(any(SavedSyncStateEntity::class.java) ?: SavedSyncStateEntity("fixture", "FAVORITE", null, "fixture", false, 1, 0, "fixture"))
                 `when`(sourceStates.getCloudExportPage(anyString(), anyInt())).thenReturn(emptyList())
             }
-            repo = DefaultRssRepository(channels, items, saved, tombstones, mock(OfflineMediaDao::class.java),
+            repo = DefaultRssRepository(mock(WatchRssDatabase::class.java), channels, items, saved, tombstones, mock(OfflineMediaDao::class.java),
                 mock(SyncChangeLogDao::class.java), mock(SyncPeerStateDao::class.java), sourceStates,
                 mock(ManagedCacheService::class.java), CoroutineScope(Dispatchers.Unconfined),
                 mock(RssFetchService::class.java), mock(RssReadableService::class.java), mock(RssParseService::class.java),

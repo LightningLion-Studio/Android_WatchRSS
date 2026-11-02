@@ -115,35 +115,14 @@ class NotesActivityTest {
     }
 
     @Test
-    fun activatedCursor_rejectsSelectionOnlyResetFromInputMethod() {
-        val current = TextFieldValue("第一行\n第二行", selection = TextRange(7))
-        val reset = current.copy(selection = TextRange.Zero)
-
-        assertEquals(
-            TextRange(7),
-            preserveActivatedNoteSelection(
-                current = current,
-                incoming = reset,
-                preservedSelection = TextRange(7),
-                focused = true
-            ).selection
-        )
-    }
-
-    @Test
-    fun activatedCursor_acceptsRealTextChangeAndUserSelection() {
-        val current = TextFieldValue("正文内容", selection = TextRange(3))
-        val typed = TextFieldValue("正文新内容", selection = TextRange(3))
-        val selectedStart = current.copy(selection = TextRange.Zero)
-
-        assertEquals(
-            typed,
-            preserveActivatedNoteSelection(current, typed, TextRange(3), focused = true)
-        )
-        assertEquals(
-            selectedStart,
-            preserveActivatedNoteSelection(current, selectedStart, null, focused = true)
-        )
+    fun editorCursorMovement_preservesSelectionAndCompositionAcrossHistoryUpdates() {
+        val initial = TextFieldValue("正文内容", selection = TextRange(4))
+        val history = com.lightningstudio.watchrss.data.note.RawTextUndoManager(initial)
+        val moved = initial.copy(selection = TextRange(1))
+        assertEquals(moved, history.record(moved, 1L))
+        val composing = TextFieldValue("正新文内容", TextRange(2), TextRange(1, 2))
+        assertEquals(composing, history.record(composing, 2L))
+        assertEquals(moved, history.undo())
     }
 
     @Test

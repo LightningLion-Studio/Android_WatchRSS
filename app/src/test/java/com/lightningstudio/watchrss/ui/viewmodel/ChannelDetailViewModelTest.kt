@@ -24,7 +24,7 @@ class ChannelDetailViewModelTest {
 
     @Test
     fun invalidChannelId_reportsInvalid() = runTest {
-        val viewModel = ChannelDetailViewModel(SavedStateHandle(), TestRssRepository())
+        val viewModel = mainDispatcherRule.track(ChannelDetailViewModel(SavedStateHandle(), TestRssRepository()))
         advanceUntilIdle()
 
         assertFalse(viewModel.isValid())
@@ -40,7 +40,7 @@ class ChannelDetailViewModelTest {
                 listOf(sampleRssItem(id = 120L, channelId = 12L, videoUrl = "https://example.com/a.mp4"))
             )
         }
-        val viewModel = ChannelDetailViewModel(SavedStateHandle(mapOf("channelId" to 12L)), repo)
+        val viewModel = mainDispatcherRule.track(ChannelDetailViewModel(SavedStateHandle(mapOf("channelId" to 12L)), repo))
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             viewModel.hasPlayableMedia.collect()
         }

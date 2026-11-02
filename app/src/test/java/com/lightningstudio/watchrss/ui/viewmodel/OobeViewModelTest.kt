@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss.ui.viewmodel
 
+import androidx.lifecycle.viewModelScope
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import com.lightningstudio.watchrss.data.network.InternetAvailabilityMonitor
 import com.lightningstudio.watchrss.data.network.InternetAvailabilityStatus
@@ -10,6 +11,8 @@ import com.lightningstudio.watchrss.testutil.MainDispatcherRule
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -33,11 +36,11 @@ class OobeViewModelTest {
     @Test
     fun completeOobe_recordsOobeVersionAndPrivacyPolicyVersion() = runTest {
         val (settingsRepository, scope) = createTestSettingsRepository()
+        val viewModel = mainDispatcherRule.track(OobeViewModel(
+            settingsRepository = settingsRepository,
+            internetAvailabilityMonitor = fakeMonitor()
+        ))
         try {
-            val viewModel = OobeViewModel(
-                settingsRepository = settingsRepository,
-                internetAvailabilityMonitor = fakeMonitor()
-            )
 
             viewModel.completeOobe()
             advanceUntilIdle()
@@ -45,18 +48,19 @@ class OobeViewModelTest {
             assertEquals(CURRENT_OOBE_VERSION, settingsRepository.oobeSeenVersion.first())
             assertEquals(PRIVACY_POLICY_VERSION, settingsRepository.privacyPolicyAgreedVersion.first())
         } finally {
-            scope.cancel()
+            viewModel.viewModelScope.coroutineContext[Job]?.cancelAndJoin()
+            scope.coroutineContext[Job]?.cancelAndJoin()
         }
     }
 
     @Test
     fun setIntroPage_clampsToValidRange() = runTest {
         val (settingsRepository, scope) = createTestSettingsRepository()
+        val viewModel = mainDispatcherRule.track(OobeViewModel(
+            settingsRepository = settingsRepository,
+            internetAvailabilityMonitor = fakeMonitor()
+        ))
         try {
-            val viewModel = OobeViewModel(
-                settingsRepository = settingsRepository,
-                internetAvailabilityMonitor = fakeMonitor()
-            )
             advanceUntilIdle()
 
             assertEquals(0, viewModel.uiState.value.introPage)
@@ -67,12 +71,13 @@ class OobeViewModelTest {
             viewModel.setIntroPage(-1)
             assertEquals(0, viewModel.uiState.value.introPage)
         } finally {
-            scope.cancel()
+            viewModel.viewModelScope.coroutineContext[Job]?.cancelAndJoin()
+            scope.coroutineContext[Job]?.cancelAndJoin()
         }
     }
 
     private fun createTestSettingsRepository(): Pair<SettingsRepository, CoroutineScope> {
-        val scope = CoroutineScope(SupervisorJob() + kotlinx.coroutines.Dispatchers.Unconfined)
+        val scope = CoroutineScope(SupervisorJob() + mainDispatcherRule.dispatcher)
         val file = File(tempFolder.root, "oobe-viewmodel.preferences_pb").apply {
             parentFile?.mkdirs()
             if (!exists()) {

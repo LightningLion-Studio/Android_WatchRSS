@@ -4,7 +4,6 @@ import android.content.Context
 import java.io.File
 import java.io.FileOutputStream
 import java.io.RandomAccessFile
-import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
@@ -62,7 +61,7 @@ class FileArticleContentStore internal constructor(
                     StandardCopyOption.ATOMIC_MOVE,
                     StandardCopyOption.REPLACE_EXISTING
                 )
-            } catch (_: AtomicMoveNotSupportedException) {
+            } catch (_: java.io.IOException) {
                 Files.move(
                     temporary.toPath(),
                     target.toPath(),

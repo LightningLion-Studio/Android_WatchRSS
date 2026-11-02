@@ -1,5 +1,8 @@
 package com.lightningstudio.watchrss.ui.reader
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.graphics.Paint
 import android.graphics.Typeface
 import android.text.TextPaint
@@ -8,6 +11,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -18,6 +22,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -59,7 +64,8 @@ data class ReaderPresetRuntime(
     val preset: ReaderPreset,
     val fontFile: (String?) -> File? = { null },
     val backgroundFile: (String?) -> File? = { null },
-    val backgroundVideoFile: (String?) -> File? = { null }
+    val backgroundVideoFile: (String?) -> File? = { null },
+    val resourceRevision: Long = 0L
 )
 
 data class ReaderChromeStyle(
@@ -89,13 +95,20 @@ fun ProvideReaderPreset(
     content: @Composable () -> Unit
 ) {
     val preset by repository.activePreset.collectAsStateWithLifecycle()
-    CompositionLocalProvider(
-        LocalReaderPresetRuntime provides ReaderPresetRuntime(
+    val fonts by repository.fonts.collectAsStateWithLifecycle()
+    val backgrounds by repository.backgrounds.collectAsStateWithLifecycle()
+    val resourceRevision by repository.resourceRevision.collectAsStateWithLifecycle()
+    val runtime = remember(preset, fonts, backgrounds, resourceRevision) {
+        ReaderPresetRuntime(
             preset = preset,
-            fontFile = repository::fontFile,
-            backgroundFile = repository::backgroundFile,
-            backgroundVideoFile = repository::backgroundVideoFile
-        ),
+            fontFile = { repository.fontFile(it) },
+            backgroundFile = { repository.backgroundFile(it) },
+            backgroundVideoFile = { repository.backgroundVideoFile(it) },
+            resourceRevision = resourceRevision
+        )
+    }
+    CompositionLocalProvider(
+        LocalReaderPresetRuntime provides runtime,
         content = content
     )
 }
@@ -163,6 +176,30 @@ fun ReaderBackgroundSurface(
 ) {
     val runtime = LocalReaderPresetRuntime.current
     val background = runtime.preset.background
+    val activity = LocalView.current.context.findActivity()
+    DisposableEffect(activity, background.colorArgb) {
+        val window = activity?.window
+        if (window == null) {
+            onDispose { }
+        } else {
+            val previousBackground = window.decorView.background
+            val previousNavigationColor = window.navigationBarColor
+            val navigationController =
+                androidx.core.view.WindowInsetsControllerCompat(window, window.decorView)
+            val previousLightNavigationBars = navigationController.isAppearanceLightNavigationBars
+            window.setBackgroundDrawable(
+                android.graphics.drawable.ColorDrawable(background.colorArgb.toInt())
+            )
+            window.navigationBarColor = background.colorArgb.toInt()
+            navigationController.isAppearanceLightNavigationBars =
+                Color(background.colorArgb).luminance() > 0.5f
+            onDispose {
+                window.setBackgroundDrawable(previousBackground)
+                window.navigationBarColor = previousNavigationColor
+                navigationController.isAppearanceLightNavigationBars = previousLightNavigationBars
+            }
+        }
+    }
     val assetId = if (background.type == ReaderBackgroundType.VIDEO) {
         background.assetId
     } else {
@@ -194,6 +231,12 @@ fun ReaderBackgroundSurface(
         }
         content()
     }
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
 
 internal fun backgroundColorMatrix(brightness: Float, saturation: Float): ColorMatrix {

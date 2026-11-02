@@ -79,9 +79,16 @@ class WatchCloudKeyManager(context: Context) {
         } finally { existing?.fill(0) }
     }
 
+    fun deviceKeyAlgorithm(userId: String, deviceId: String): String =
+        if (getOrCreateDeviceKey(userId, deviceId).public.algorithm == "RSA") "RSA-2048" else "P-256"
+
     private fun getOrCreateDeviceKey(userId: String, deviceId: String): KeyPair = synchronized(deviceKeyLock) {
         val alias = alias(userId, deviceId)
         val keyStore = keyStore()
+        val rsaAlias = alias.replace("_ecdh", "_rsa")
+        val rsaPrivate = keyStore.getKey(rsaAlias, null) as? PrivateKey
+        val rsaPublic = keyStore.getCertificate(rsaAlias)?.publicKey
+        if (rsaPrivate != null && rsaPublic != null) return@synchronized KeyPair(rsaPublic, rsaPrivate)
         val private = keyStore.getKey(alias, null) as? PrivateKey
         val public = keyStore.getCertificate(alias)?.publicKey
         if (private != null && public != null) return@synchronized KeyPair(public, private)

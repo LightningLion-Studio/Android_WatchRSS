@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -32,7 +33,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
-import com.lightningstudio.watchrss.ui.theme.watchColorResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -40,6 +44,7 @@ import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownScrollHandler
 import com.lightningstudio.watchrss.ui.testing.ProfileTestTags
+import androidx.compose.ui.unit.dp
 
 @Composable
 fun ProfileScreen(
@@ -61,7 +66,7 @@ fun ProfileScreen(
     val entrySpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_8dp
     val pillHeight = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_multiple_item_height
     val pillRadius = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_button_default_radius
-    val pillColor = watchColorResource(R.color.watch_pill_background)
+    val pillColor = MaterialTheme.colorScheme.surfaceVariant
     val pillHorizontalPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_10dp
     val pillVerticalPadding = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_8dp
     val iconSize = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_listitem_lefticon_height_width
@@ -70,7 +75,7 @@ fun ProfileScreen(
 
     InstallDigitalCrownScrollHandler(scrollState)
 
-    WatchSurface(pureBlack = true) {
+    WatchSurface {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -225,16 +230,22 @@ fun ProfileScreen(
             Spacer(modifier = Modifier.height(pillHeight))
 
             Box(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp)
+                    .clip(RoundedCornerShape(pillRadius))
+                    .clickable(onClick = onBeianClick)
+                    .semantics {
+                        contentDescription = "备案信息"
+                        role = Role.Button
+                    }
+                    .testTag(ProfileTestTags.BEIAN_ENTRY),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = "浙ICP备2024111886号-5A",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .testTag(ProfileTestTags.BEIAN_ENTRY)
-                        .clickable(onClick = onBeianClick)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -258,11 +269,15 @@ private fun ProfileEntry(
     androidx.compose.foundation.layout.Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(pillHeight)
+            .height(pillHeight.coerceAtLeast(48.dp))
             .clip(RoundedCornerShape(pillRadius))
             .background(pillColor)
             .testTag(testTag)
-            .clickable(onClick = onClick)
+            .clickable(
+                role = Role.Button,
+                onClickLabel = title,
+                onClick = onClick
+            )
             .padding(
                 start = pillHorizontalPadding,
                 end = pillHorizontalPadding,

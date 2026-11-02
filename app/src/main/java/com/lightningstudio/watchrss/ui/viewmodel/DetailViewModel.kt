@@ -27,10 +27,13 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+data class DetailMessageEvent(val id: Long, val text: String)
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DetailViewModel(
@@ -44,9 +47,23 @@ class DetailViewModel(
     )
     private val _message = MutableStateFlow<String?>(null)
     val message = _message.asStateFlow()
+    private val _messageEvent = MutableStateFlow<DetailMessageEvent?>(null)
+    val messageEvent = _messageEvent.asStateFlow()
+    private var nextMessageId = 0L
 
     val item = repository.observeItem(itemId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val novelNavigation = item.flatMapLatest { current ->
+        val source = com.lightningstudio.watchrss.data.rss.novelBookSource(current?.link)
+        if (current == null || source == null) flowOf(null)
+        else repository.observeNovelChapters(current.channelId).map { chapters ->
+            com.lightningstudio.watchrss.data.rss.novelNavigation(
+                com.lightningstudio.watchrss.data.rss.orderedNovelChapters(chapters, source), current.id
+            )
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
 
     val channel = item
         .flatMapLatest { current ->
@@ -103,6 +120,9 @@ class DetailViewModel(
 
     val readingFontSizeSp = settingsRepository.readingFontSizeSp
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DEFAULT_READING_FONT_SIZE_SP)
+
+    val readerTapToScrollEnabled = settingsRepository.readerTapToScrollEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     val readerAutoScrollEnabled = settingsRepository.readerAutoScrollEnabled
         .stateIn(
@@ -164,6 +184,12 @@ class DetailViewModel(
             viewModelScope.launch {
                 repository.markItemRead(itemId)
             }
+            viewModelScope.launch {
+                val currentItem = item.filterNotNull().first()
+                if (com.lightningstudio.watchrss.data.rss.novelBookSource(currentItem.link) != null) {
+                    repository.markNovelChapterOpened(itemId)
+                }
+            }
         }
         viewModelScope.launch {
             combine(item, channel) { currentItem, currentChannel ->
@@ -201,7 +227,7 @@ class DetailViewModel(
             if (!channelOriginalEnabled &&
                 settingsRepository.recordTemporaryOriginalContentEnableAndShouldShowHint(currentItem.channelId)
             ) {
-                _message.value = ORIGINAL_CONTENT_MODE_HINT_MESSAGE
+                publishMessage(ORIGINAL_CONTENT_MODE_HINT_MESSAGE)
             }
         }
     }
@@ -266,8 +292,15 @@ class DetailViewModel(
         return repository.loadImportedTextChunk(marker, chunkIndex)
     }
 
-    fun clearMessage() {
+    private fun publishMessage(text: String) {
+        _message.value = text
+        _messageEvent.value = DetailMessageEvent(++nextMessageId, text)
+    }
+
+    fun clearMessage(expectedEventId: Long? = null) {
+        if (expectedEventId != null && _messageEvent.value?.id != expectedEventId) return
         _message.value = null
+        _messageEvent.value = null
     }
 
     private fun setTemporaryOriginalContentOverride(value: Boolean?) {

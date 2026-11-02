@@ -2,8 +2,10 @@ package com.lightningstudio.watchrss.ui.screen.bili
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -11,8 +13,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.runtime.remember
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.TextUnit
@@ -23,6 +30,7 @@ import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.sdk.bili.BiliSearchedVideo
 import com.lightningstudio.watchrss.ui.components.LoadingIndicator
 import com.lightningstudio.watchrss.ui.components.SearchInputBar
+import com.lightningstudio.watchrss.ui.components.WatchButton
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.utils.BiliFormatUtils
@@ -44,11 +52,16 @@ fun BiliSearchResultScreen(
     val titleSize = textSize(R.dimen.hey_s_title)
     val listSpacing = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_distance_6dp
     val listState = rememberLazyListState()
+    val visibleItemIndices by remember(listState) {
+        derivedStateOf {
+            listState.layoutInfo.visibleItemsInfo.mapTo(hashSetOf()) { it.index }
+        }
+    }
 
     BackHandler(onBack = onNavigateBack)
     InstallDigitalCrownLazyListHandler(listState)
 
-    WatchSurface(pureBlack = true) {
+    WatchSurface {
         LazyColumn(
             modifier = modifier.fillMaxSize(),
             state = listState,
@@ -66,7 +79,9 @@ fun BiliSearchResultScreen(
                     color = MaterialTheme.colorScheme.onSurface,
                     fontSize = titleSize,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { heading() }
                 )
             }
 
@@ -89,7 +104,12 @@ fun BiliSearchResultScreen(
                     item { LoadingIndicator(searchResults.loadState.refresh) }
                 }
                 searchResults.loadState.refresh is LoadState.Error -> {
-                    item { LoadingIndicator(searchResults.loadState.refresh) }
+                    item {
+                        SearchRetryState(
+                            message = "搜索加载失败",
+                            onRetry = searchResults::retry
+                        )
+                    }
                 }
                 searchResults.itemCount == 0 -> {
                     item { EmptyHint(text = "没有找到相关结果") }
@@ -98,18 +118,52 @@ fun BiliSearchResultScreen(
                     items(searchResults.itemCount) { index ->
                         val item = searchResults[index] ?: return@items
                         BiliFeedCard(
+                            coverRecoveryEnabled = true,
                             title = BiliFormatUtils.stripKeywordHighlight(item.data.title),
                             summary = buildVideoSummary(item.data),
                             coverUrl = item.data.pic,
+                            isVisible = index + 2 in visibleItemIndices,
                             onClick = { onVideoClick(item.data.aid, item.data.bvid) }
                         )
                     }
 
                     item {
-                        LoadingIndicator(searchResults.loadState.append)
+                        when (val appendState = searchResults.loadState.append) {
+                            is LoadState.Error -> SearchRetryState(
+                                message = "加载更多失败",
+                                onRetry = searchResults::retry
+                            )
+                            else -> LoadingIndicator(appendState)
+                        }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SearchRetryState(
+    message: String,
+    onRetry: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(
+            text = message,
+            color = MaterialTheme.colorScheme.error,
+            textAlign = TextAlign.Center
+        )
+        WatchButton(
+            onClick = onRetry,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("重试")
         }
     }
 }

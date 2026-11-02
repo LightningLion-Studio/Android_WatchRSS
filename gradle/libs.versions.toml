@@ -106,6 +106,8 @@ androidx-test-runner = { group = "androidx.test", name = "runner", version = "1.
 androidx-test-rules = { group = "androidx.test", name = "rules", version = "1.7.0" }
 androidx-test-core = { group = "androidx.test", name = "core", version = "1.7.0" }
 
+androidx-media3-session = { group = "androidx.media3", name = "media3-session", version.ref = "media3" }
+
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }

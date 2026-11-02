@@ -11,6 +11,7 @@ import com.lightningstudio.watchrss.data.cache.ManagedCacheService
 import com.lightningstudio.watchrss.data.rss.RssRemoteRequestPolicy
 import com.lightningstudio.watchrss.debug.PerfTrace
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -18,6 +19,7 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
 
 object RssImageLoader {
     internal const val DISK_CACHE_DIR_NAME = "rss_images"
@@ -26,19 +28,29 @@ object RssImageLoader {
 
     @Volatile
     private var cacheService: ManagedCacheService? = null
+    private fun cacheId(context: Context, url: String): String =
+        com.lightningstudio.watchrss.data.account.workspace.libraryContext(context).cacheDir.absolutePath + "\u0000" + url
 
     private val cache = object : LruCache<String, Bitmap>(cacheSizeBytes) {
         override fun sizeOf(key: String, value: Bitmap): Int = value.byteCount
     }
 
     private val ratioCache = object : LruCache<String, Float>(ratioCacheSize) {}
+    private val inFlightBitmapLoads = ConcurrentHashMap<String, CompletableDeferred<Bitmap?>>()
 
-    fun getCachedBitmap(url: String): Bitmap? = cache.get(url)
+    fun getCachedBitmap(context: Context, url: String): Bitmap? {
+        val storageContext = com.lightningstudio.watchrss.data.account.workspace.libraryContext(context)
+        return cache.get(cacheId(storageContext, url))
+    }
 
-    fun getCachedAspectRatio(url: String): Float? = ratioCache.get(url)
+    fun getCachedAspectRatio(context: Context, url: String): Float? {
+        val storageContext = com.lightningstudio.watchrss.data.account.workspace.libraryContext(context)
+        return ratioCache.get(cacheId(storageContext, url))
+    }
 
-    fun putCachedAspectRatio(url: String, width: Int, height: Int) {
-        storeAspectRatio(url, width, height)
+    fun putCachedAspectRatio(context: Context, url: String, width: Int, height: Int) {
+        val storageContext = com.lightningstudio.watchrss.data.account.workspace.libraryContext(context)
+        storeAspectRatio(cacheId(storageContext, url), width, height)
     }
 
     fun configure(cacheService: ManagedCacheService?) {
@@ -46,9 +58,11 @@ object RssImageLoader {
     }
 
     suspend fun preloadAndCacheRatio(context: Context, url: String, maxWidthPx: Int): Float? {
+        val storageContext = com.lightningstudio.watchrss.data.account.workspace.libraryContext(context)
+        val key = cacheId(storageContext, url)
         val startNanos = PerfTrace.now()
-        loadBitmap(context, url, maxWidthPx)
-        val ratio = ratioCache.get(url)
+        loadBitmap(storageContext, url, maxWidthPx)
+        val ratio = ratioCache.get(key)
         PerfTrace.log(
             "img",
             "preload ratio key=${imageLabel(url)} ratio=${ratio ?: "null"} durMs=${PerfTrace.elapsedMs(startNanos)}"
@@ -57,21 +71,23 @@ object RssImageLoader {
     }
 
     fun load(context: Context, url: String, imageView: ImageView, scope: CoroutineScope, maxWidthPx: Int) {
+        val storageContext = com.lightningstudio.watchrss.data.account.workspace.libraryContext(context)
+        val key = cacheId(storageContext, url)
         imageView.tag = url
-        val cached = cache.get(url)
+        val cached = cache.get(key)
         if (cached != null) {
-            storeAspectRatio(url, cached.width, cached.height)
+            storeAspectRatio(key, cached.width, cached.height)
             prepareBitmap(cached)
             imageView.setImageBitmap(cached)
             imageView.visibility = View.VISIBLE
             return
         }
         if (isLocalPath(url)) {
-            val bitmap = decodeLocalBitmap(url, maxWidthPx)
+            val bitmap = decodeLocalBitmap(url, maxWidthPx, key)
             if (bitmap != null) {
                 prepareBitmap(bitmap)
-                cache.put(url, bitmap)
-                storeAspectRatio(url, bitmap.width, bitmap.height)
+                cache.put(key, bitmap)
+                storeAspectRatio(key, bitmap.width, bitmap.height)
                 imageView.setImageBitmap(bitmap)
                 imageView.visibility = View.VISIBLE
             } else {
@@ -79,26 +95,26 @@ object RssImageLoader {
             }
             return
         }
-        val diskBitmap = decodeDiskBitmap(context, url, maxWidthPx)
+        val diskBitmap = decodeDiskBitmap(storageContext, url, maxWidthPx, key)
         if (diskBitmap != null) {
             prepareBitmap(diskBitmap)
-            cache.put(url, diskBitmap)
-            storeAspectRatio(url, diskBitmap.width, diskBitmap.height)
+            cache.put(key, diskBitmap)
+            storeAspectRatio(key, diskBitmap.width, diskBitmap.height)
             imageView.setImageBitmap(diskBitmap)
             imageView.visibility = View.VISIBLE
             return
         }
         imageView.visibility = View.GONE
         scope.launch(Dispatchers.IO) {
-            val bitmap = fetchBitmap(context, url, maxWidthPx)
+            val bitmap = fetchBitmap(storageContext, url, maxWidthPx, key)
             withContext(Dispatchers.Main) {
                 if (imageView.tag != url) {
                     return@withContext
                 }
                 if (bitmap != null) {
                     prepareBitmap(bitmap)
-                    cache.put(url, bitmap)
-                    storeAspectRatio(url, bitmap.width, bitmap.height)
+                    cache.put(key, bitmap)
+                    storeAspectRatio(key, bitmap.width, bitmap.height)
                     imageView.setImageBitmap(bitmap)
                     imageView.visibility = View.VISIBLE
                 } else {
@@ -109,71 +125,86 @@ object RssImageLoader {
     }
 
     fun preload(context: Context, url: String, scope: CoroutineScope, maxWidthPx: Int) {
-        if (cache.get(url) != null) return
-        scope.launch(Dispatchers.IO) {
-            if (cache.get(url) != null) return@launch
-            val bitmap = if (isLocalPath(url)) {
-                decodeLocalBitmap(url, maxWidthPx)
-            } else {
-                decodeDiskBitmap(context, url, maxWidthPx) ?: fetchBitmap(context, url, maxWidthPx)
-            }
-            if (bitmap != null) {
-                prepareBitmap(bitmap)
-                cache.put(url, bitmap)
-                storeAspectRatio(url, bitmap.width, bitmap.height)
-            }
+        val storageContext = com.lightningstudio.watchrss.data.account.workspace.libraryContext(context)
+        val key = cacheId(storageContext, url)
+        if (cache.get(key) != null) return
+        scope.launch {
+            loadBitmap(context, url, maxWidthPx)
         }
     }
 
-    suspend fun loadBitmap(context: Context, url: String, maxWidthPx: Int): Bitmap? {
+    suspend fun loadBitmap(
+        context: Context,
+        url: String,
+        maxWidthPx: Int,
+        retryAfterInFlightFailure: Boolean = false
+    ): Bitmap? {
+        val storageContext = com.lightningstudio.watchrss.data.account.workspace.libraryContext(context)
+        val key = cacheId(storageContext, url)
         return withContext(Dispatchers.IO) {
             val startNanos = PerfTrace.now()
-            cache.get(url)?.let { cached ->
-                PerfTrace.log(
-                    "img",
-                    "loadBitmap source=mem key=${imageLabel(url)} size=${bitmapSize(cached)} durMs=${PerfTrace.elapsedMs(startNanos)}"
-                )
-                return@withContext cached
-            }
-            if (isLocalPath(url)) {
-                val bitmap = decodeLocalBitmap(url, maxWidthPx)
-                if (bitmap != null) {
-                    prepareBitmap(bitmap)
-                    cache.put(url, bitmap)
-                    storeAspectRatio(url, bitmap.width, bitmap.height)
+            var retriedJoinedFailure = false
+            while (true) {
+                cache.get(key)?.let { cached ->
+                    PerfTrace.log(
+                        "img",
+                        "loadBitmap source=mem key=${imageLabel(url)} size=${bitmapSize(cached)} durMs=${PerfTrace.elapsedMs(startNanos)}"
+                    )
+                    return@withContext cached
                 }
-                PerfTrace.log(
-                    "img",
-                    "loadBitmap source=local key=${imageLabel(url)} hit=${bitmap != null} size=${bitmapSize(bitmap)} durMs=${PerfTrace.elapsedMs(startNanos)}"
-                )
-                return@withContext bitmap
+
+                val pending = CompletableDeferred<Bitmap?>()
+                val existing = inFlightBitmapLoads.putIfAbsent(key, pending)
+                if (existing != null) {
+                    val joinedBitmap = existing.await()
+                    if (joinedBitmap != null || !retryAfterInFlightFailure || retriedJoinedFailure) {
+                        return@withContext joinedBitmap
+                    }
+                    // The joined request may have started on the old network. Wait for its
+                    // slot to be removed, then make one fresh attempt on the new network.
+                    retriedJoinedFailure = true
+                    while (inFlightBitmapLoads[key] === existing) {
+                        kotlinx.coroutines.yield()
+                    }
+                    continue
+                }
+
+                try {
+                    // The previous request may have populated the cache between our first
+                    // cache lookup and winning the in-flight slot.
+                    val cached = cache.get(key)
+                    val (source, bitmap) = when {
+                        cached != null -> "mem" to cached
+                        isLocalPath(url) -> "local" to decodeLocalBitmap(url, maxWidthPx, key)
+                        else -> {
+                            val diskBitmap = decodeDiskBitmap(storageContext, url, maxWidthPx, key)
+                            if (diskBitmap != null) "disk" to diskBitmap
+                            else "network" to fetchBitmap(storageContext, url, maxWidthPx, key)
+                        }
+                    }
+                    if (bitmap != null) {
+                        prepareBitmap(bitmap)
+                        cache.put(key, bitmap)
+                        storeAspectRatio(key, bitmap.width, bitmap.height)
+                    }
+                    PerfTrace.log(
+                        "img",
+                        "loadBitmap source=$source key=${imageLabel(url)} hit=${bitmap != null} size=${bitmapSize(bitmap)} durMs=${PerfTrace.elapsedMs(startNanos)}"
+                    )
+                    pending.complete(bitmap)
+                    return@withContext bitmap
+                } catch (failure: Throwable) {
+                    pending.completeExceptionally(failure)
+                    throw failure
+                } finally {
+                    inFlightBitmapLoads.remove(key, pending)
+                }
             }
-            val diskBitmap = decodeDiskBitmap(context, url, maxWidthPx)
-            if (diskBitmap != null) {
-                prepareBitmap(diskBitmap)
-                cache.put(url, diskBitmap)
-                storeAspectRatio(url, diskBitmap.width, diskBitmap.height)
-                PerfTrace.log(
-                    "img",
-                    "loadBitmap source=disk key=${imageLabel(url)} size=${bitmapSize(diskBitmap)} durMs=${PerfTrace.elapsedMs(startNanos)}"
-                )
-                return@withContext diskBitmap
-            }
-            val bitmap = fetchBitmap(context, url, maxWidthPx)
-            if (bitmap != null) {
-                prepareBitmap(bitmap)
-                cache.put(url, bitmap)
-                storeAspectRatio(url, bitmap.width, bitmap.height)
-            }
-            PerfTrace.log(
-                "img",
-                "loadBitmap source=network key=${imageLabel(url)} hit=${bitmap != null} size=${bitmapSize(bitmap)} durMs=${PerfTrace.elapsedMs(startNanos)}"
-            )
-            bitmap
+            error("Unreachable image load loop exit")
         }
     }
 
-    private fun fetchBitmap(context: Context, urlString: String, maxWidthPx: Int): Bitmap? {
+    private fun fetchBitmap(context: Context, urlString: String, maxWidthPx: Int, key: String): Bitmap? {
         var connection: HttpURLConnection? = null
         val cacheFile = cacheFile(context, urlString)
         val tempFile = File(cacheFile.parentFile, "${cacheFile.name}.tmp")
@@ -202,7 +233,7 @@ object RssImageLoader {
                     input.copyTo(output)
                 }
             }
-            val bitmap = decodeBitmapFile(tempFile, urlString, maxWidthPx)
+            val bitmap = decodeBitmapFile(tempFile, key, maxWidthPx)
             if (bitmap == null) {
                 PerfTrace.log(
                     "img",
@@ -234,22 +265,22 @@ object RssImageLoader {
         return url.startsWith("/") || url.startsWith("file://")
     }
 
-    private fun decodeLocalBitmap(url: String, maxWidthPx: Int): Bitmap? {
+    private fun decodeLocalBitmap(url: String, maxWidthPx: Int, key: String): Bitmap? {
         return try {
             val path = if (url.startsWith("file://")) url.removePrefix("file://") else url
             val file = java.io.File(path)
             if (!file.exists()) return null
-            decodeBitmapFile(file, url, maxWidthPx)
+            decodeBitmapFile(file, key, maxWidthPx)
         } catch (e: Exception) {
             null
         }
     }
 
-    private fun decodeDiskBitmap(context: Context, url: String, maxWidthPx: Int): Bitmap? {
+    private fun decodeDiskBitmap(context: Context, url: String, maxWidthPx: Int, key: String): Bitmap? {
         val file = cacheFile(context, url)
         if (!file.exists()) return null
         return try {
-            decodeBitmapFile(file, url, maxWidthPx)?.also { touchFile(file) }
+            decodeBitmapFile(file, key, maxWidthPx)?.also { touchFile(file) }
         } catch (e: Exception) {
             null
         }
@@ -282,7 +313,7 @@ object RssImageLoader {
     }
 
     private fun cacheFile(context: Context, url: String): File {
-        val dir = File(context.cacheDir, DISK_CACHE_DIR_NAME).apply { mkdirs() }
+        val dir = File(com.lightningstudio.watchrss.data.account.workspace.libraryContext(context).cacheDir, DISK_CACHE_DIR_NAME).apply { mkdirs() }
         return File(dir, "${hashUrl(url)}.img")
     }
 

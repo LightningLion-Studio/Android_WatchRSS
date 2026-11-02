@@ -4,6 +4,10 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.activity.viewModels
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
@@ -11,11 +15,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.data.network.InternetAvailabilityStatus
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
+import com.lightningstudio.watchrss.ui.components.ThirdPartyPlatformNotice
 import com.lightningstudio.watchrss.ui.screen.bili.BiliPlayerScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.BiliPlayerViewModel
@@ -36,6 +42,7 @@ class BiliPlayerActivity : BaseWatchActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        stopService(Intent(this, com.lightningstudio.watchrss.data.media.BiliAudioService::class.java))
         setupSystemBars()
 
         val aid = intent.getStringExtra(EXTRA_AID)?.toLongOrNull()
@@ -71,15 +78,39 @@ class BiliPlayerActivity : BaseWatchActivity() {
                                 ?.continuePlaybackInBackground ?: false
                         }
                     }.collectAsState(initial = false)
-                    BiliPlayerScreen(
+                    Column(modifier = androidx.compose.ui.Modifier.fillMaxSize()) {
+                        ThirdPartyPlatformNotice(
+                            platform = "哔哩哔哩",
+                            compact = true,
+                            modifier = androidx.compose.ui.Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                        Box(modifier = androidx.compose.ui.Modifier.weight(1f).fillMaxSize()) {
+                            BiliPlayerScreen(
                         uiState = uiState,
                         onRetry = viewModel::loadPlayUrl,
+                        onOpenDetails = {
+                            startActivity(BiliDetailActivity.createIntent(
+                                this@BiliPlayerActivity, aid, bvid,
+                                intent.getStringExtra(EXTRA_CID)?.toLongOrNull()
+                            ))
+                        },
                         onPlaybackError = viewModel::onPlaybackError,
                         onOpenWeb = {
                             val safeLink = link ?: return@BiliPlayerScreen
-                            WebViewActivity.open(this, safeLink)
+                            runCatching {
+                                startActivity(android.content.Intent(
+                                    android.content.Intent.ACTION_VIEW,
+                                    android.net.Uri.parse(safeLink)
+                                ).addCategory(android.content.Intent.CATEGORY_BROWSABLE))
+                            }.onFailure {
+                                com.lightningstudio.watchrss.ui.util.showAppToast(
+                                    this@BiliPlayerActivity,
+                                    "浏览器暂不可用，请稍后重试"
+                                )
+                            }
                         },
                         internetAvailabilityStatus = internetAvailabilityStatus,
+                        showRepeatOneControl = true,
                         onPlaybackReady = viewModel::onPlaybackReady,
                         onPlaybackProgress = { positionMs, durationMs ->
                             viewModel.onPlaybackProgress(positionMs, durationMs)
@@ -97,12 +128,19 @@ class BiliPlayerActivity : BaseWatchActivity() {
                         digitalCrownVolumeEnabled = volumeControlEnabled,
                         volumeGuardEnabled = volumeGuardEnabled,
                         playbackStartVolumeLimitPercent = playbackStartVolumeLimitPercent,
-                        continuePlaybackInBackground = continuePlaybackInBackground
-                    )
+                        continuePlaybackInBackground = continuePlaybackInBackground,
+                        onPlaybackActiveChanged = { active ->
+                            setVideoPlaybackBatteryTracking("bilibili", active)
+                        }
+                            )
+                        }
+                    }
                 }
             }
         }
     }
+
+    override fun shouldUsePlatformSwipeDismissFeature(): Boolean = false
 
     override fun shouldDeferSwipeBack(dx: Float, dy: Float): Boolean {
         if (dx <= 0f) return false

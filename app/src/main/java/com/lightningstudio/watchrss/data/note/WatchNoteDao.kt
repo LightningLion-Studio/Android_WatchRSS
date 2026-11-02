@@ -23,6 +23,9 @@ interface WatchNoteDao {
     @Query("SELECT * FROM watch_notes")
     suspend fun all(): List<WatchNoteEntity>
 
+    @Query("SELECT * FROM watch_note_folders")
+    suspend fun allFolders(): List<WatchNoteFolderEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(notes: List<WatchNoteEntity>)
 

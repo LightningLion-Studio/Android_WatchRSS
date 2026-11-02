@@ -22,10 +22,12 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -51,11 +53,14 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -89,7 +94,16 @@ internal fun AiSummaryParagraph(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .then(if (isError) Modifier.clickableWithRipple(onClick = onRetry) else Modifier)
+            .then(
+                if (isError) {
+                    Modifier.clickableWithRipple(
+                        onClickLabel = "重试 AI 总结",
+                        onClick = onRetry
+                    )
+                } else {
+                    Modifier
+                }
+            )
             .padding(horizontal = 4.dp)
     ) {
         androidx.compose.foundation.layout.Row(
@@ -125,10 +139,15 @@ internal fun AiSummaryParagraph(
             summaryState.status == SummaryStatus.Generating -> "正在生成总结..."
             else -> "正在准备总结..."
         }
+        val errorTextColor = if (textColor.luminance() > 0.5f) {
+            Color(0xFFB00020)
+        } else {
+            Color(0xFFFF8A80)
+        }
         Text(
             text = displayText,
             style = MaterialTheme.typography.bodyMedium,
-            color = if (isError) Color(0xFFFF8A80) else textColor.copy(alpha = 0.92f)
+            color = if (isError) errorTextColor else textColor.copy(alpha = 0.92f)
         )
     }
 }
@@ -153,7 +172,7 @@ internal fun AiSummaryButton(
 
     Box(
         modifier = modifier
-            .size(38.dp)
+            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
             .semantics {
                 contentDescription = when {
                     loading -> "AI 总结加载中"
@@ -161,30 +180,36 @@ internal fun AiSummaryButton(
                     else -> "展开 AI 总结"
                 }
             }
-            .clip(CircleShape)
-            .background(backgroundColor)
-            .then(
-                if (borderColor.alpha > 0f) Modifier.border(1.dp, borderColor, CircleShape)
-                else Modifier
-            )
             .clickableWithRipple(interactionSource = interactionSource, onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        if (loading) {
-            WatchCircularProgressIndicator(
-                modifier = Modifier.size(18.dp),
-                color = activeColor,
-                strokeWidth = 2.dp
-            )
-        } else {
-            androidx.compose.material3.Icon(
-                imageVector = Icons.Outlined.AutoAwesome,
-                contentDescription = null,
-                tint = activeColor,
-                modifier = Modifier
-                    .size(38.dp)
-                    .padding(watchDimensionResource(R.dimen.hey_distance_6dp))
-            )
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .clip(CircleShape)
+                .background(backgroundColor)
+                .then(
+                    if (borderColor.alpha > 0f) Modifier.border(1.dp, borderColor, CircleShape)
+                    else Modifier
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            if (loading) {
+                WatchCircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    color = activeColor,
+                    strokeWidth = 2.dp
+                )
+            } else {
+                androidx.compose.material3.Icon(
+                    imageVector = Icons.Outlined.AutoAwesome,
+                    contentDescription = null,
+                    tint = activeColor,
+                    modifier = Modifier
+                        .size(38.dp)
+                        .padding(watchDimensionResource(R.dimen.hey_distance_6dp))
+                )
+            }
         }
     }
 }
@@ -261,17 +286,19 @@ internal fun DetailActionButton(
     contentColor: Color,
     borderColor: Color,
     enabled: Boolean = true,
+    singleLine: Boolean = true,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null
 ) {
     val shape = RoundedCornerShape(WatchDimens.hey_button_default_radius)
     val padding = PaddingValues(
-        horizontal = WatchDimens.hey_content_horizontal_distance,
+        horizontal = if (singleLine) 8.dp else WatchDimens.hey_content_horizontal_distance,
         vertical = watchDimensionResource(R.dimen.hey_distance_6dp)
     )
     val interactionSource = remember { MutableInteractionSource() }
     Box(
         modifier = Modifier
+            .then(if (singleLine) Modifier.height(48.dp) else Modifier.sizeIn(minHeight = 48.dp))
             .clip(shape)
             .background(if (enabled) containerColor else containerColor.copy(alpha = 0.72f))
             .then(
@@ -287,17 +314,25 @@ internal fun DetailActionButton(
             )
             .combinedClickable(
                 enabled = enabled,
+                role = Role.Button,
                 interactionSource = interactionSource,
                 indication = LocalIndication.current,
+                onClickLabel = text,
+                onLongClickLabel = if (onLongClick != null) "查看${text}说明" else null,
                 onClick = onClick,
                 onLongClick = onLongClick
             )
-            .padding(padding)
+            .padding(padding),
+        contentAlignment = Alignment.Center
     ) {
         Text(
             text = text,
             color = if (enabled) contentColor else contentColor.copy(alpha = 0.72f),
-            fontSize = fontSize
+            fontSize = if (singleLine) 14.sp else fontSize,
+            maxLines = if (singleLine) 1 else Int.MAX_VALUE,
+            softWrap = !singleLine,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center
         )
     }
 }
@@ -427,7 +462,8 @@ internal fun FavoriteButtonWithStars(
     }
 
     Box(
-        modifier = Modifier.size(iconSize),
+        // Keep particle bursts outside measurement so the action row never jumps.
+        modifier = Modifier.size(48.dp),
         contentAlignment = Alignment.Center
     ) {
         if (buttonPulseKey > 0) {
@@ -737,13 +773,7 @@ internal fun CircleIconButton(
 
     Box(
         modifier = Modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(backgroundColor)
-            .then(
-                if (borderColor.alpha > 0f) Modifier.border(1.dp, borderColor, CircleShape)
-                else Modifier
-            )
+            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
             .clickableWithRipple(
                 enabled = enabled,
                 interactionSource = interactionSource,
@@ -751,15 +781,27 @@ internal fun CircleIconButton(
             ),
         contentAlignment = Alignment.Center
     ) {
-        androidx.compose.material3.Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
+        Box(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .offset(x = iconOffsetX),
-            tint = tint
-        )
+                .size(size)
+                .clip(CircleShape)
+                .background(backgroundColor)
+                .then(
+                    if (borderColor.alpha > 0f) Modifier.border(1.dp, borderColor, CircleShape)
+                    else Modifier
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            androidx.compose.material3.Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .offset(x = iconOffsetX),
+                tint = tint
+            )
+        }
     }
 }
 
@@ -773,12 +815,15 @@ private fun textSize(id: Int): TextUnit {
 internal fun Modifier.clickableWithRipple(
     enabled: Boolean = true,
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
+    onClickLabel: String? = null,
     onClick: () -> Unit
 ): Modifier {
     return clickable(
         enabled = enabled,
         interactionSource = interactionSource,
         indication = LocalIndication.current,
+        onClickLabel = onClickLabel,
+        role = Role.Button,
         onClick = onClick
     )
 }

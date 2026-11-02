@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -30,9 +31,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -56,17 +59,25 @@ fun AutoScrollControlScreen(
     linesPerSecond: Float,
     readerSessionActive: Boolean,
     isPlaying: Boolean,
+    hasStarted: Boolean = isPlaying,
+    isAtBottom: Boolean = false,
     onPlayingChange: (Boolean) -> Unit,
     onAutoStartEnabledChange: (Boolean) -> Unit,
     onLinesPerSecondChange: (Float) -> Unit,
-    onReturnToArticle: (() -> Unit)? = null
+    onReturnToArticle: (() -> Unit)? = null,
+    tapToScrollEnabled: Boolean = false,
+    onTapToScrollEnabledChange: (Boolean) -> Unit = {}
 ) {
-    WatchSurface(pureBlack = true) {
+    WatchSurface {
         if (readerSessionActive) {
             AutoScrollReaderControlContent(
+                tapToScrollEnabled = tapToScrollEnabled,
+                onTapToScrollEnabledChange = onTapToScrollEnabledChange,
                 autoStartEnabled = autoStartEnabled,
                 linesPerSecond = linesPerSecond,
                 isPlaying = isPlaying,
+                hasStarted = hasStarted,
+                isAtBottom = isAtBottom,
                 onPlayingChange = onPlayingChange,
                 onAutoStartEnabledChange = onAutoStartEnabledChange,
                 onLinesPerSecondChange = onLinesPerSecondChange,
@@ -74,6 +85,8 @@ fun AutoScrollControlScreen(
             )
         } else {
             AutoScrollSettingsContent(
+                tapToScrollEnabled = tapToScrollEnabled,
+                onTapToScrollEnabledChange = onTapToScrollEnabledChange,
                 autoStartEnabled = autoStartEnabled,
                 linesPerSecond = linesPerSecond,
                 onAutoStartEnabledChange = onAutoStartEnabledChange,
@@ -85,25 +98,33 @@ fun AutoScrollControlScreen(
 
 @Composable
 private fun AutoScrollReaderControlContent(
+    tapToScrollEnabled: Boolean,
+    onTapToScrollEnabledChange: (Boolean) -> Unit,
     autoStartEnabled: Boolean,
     linesPerSecond: Float,
     isPlaying: Boolean,
+    hasStarted: Boolean,
+    isAtBottom: Boolean,
     onPlayingChange: (Boolean) -> Unit,
     onAutoStartEnabledChange: (Boolean) -> Unit,
     onLinesPerSecondChange: (Float) -> Unit,
     onReturnToArticle: () -> Unit
 ) {
+    val scrollState = rememberScrollState()
+    InstallDigitalCrownScrollHandler(scrollState)
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 18.dp, vertical = 10.dp),
+            .verticalScroll(scrollState)
+            .padding(horizontal = 18.dp, vertical = 26.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
             text = "自动滚动控制",
-            color = Color.White,
+            color = MaterialTheme.colorScheme.onSurface,
             style = MaterialTheme.typography.titleSmall,
-            maxLines = 1
+            maxLines = 1,
+            modifier = Modifier.semantics { heading() }
         )
 
         Spacer(modifier = Modifier.height(7.dp))
@@ -125,20 +146,35 @@ private fun AutoScrollReaderControlContent(
             ) {
                 Text(
                     text = "当前文章",
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     style = MaterialTheme.typography.titleSmall
                 )
                 Text(
-                    text = if (isPlaying) "正在自动滚动" else "自动滚动已暂停",
-                    color = Color(0xFFBDBDBD),
-                    style = MaterialTheme.typography.bodySmall
+                    text = when {
+                        isAtBottom -> "已到文章底部，请先向上滚动"
+                        isPlaying -> "正在自动滚动"
+                        hasStarted -> "自动滚动已暂停"
+                        else -> "自动滚动尚未开始"
+                    },
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.semantics {
+                        liveRegion = LiveRegionMode.Polite
+                    }
                 )
             }
             AutoScrollRoundIconButton(
                 icon = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                 contentDescription = if (isPlaying) "暂停自动滚动" else "启动自动滚动",
+                stateDescription = when {
+                    isAtBottom -> "已到文章底部"
+                    isPlaying -> "正在自动滚动"
+                    hasStarted -> "自动滚动已暂停"
+                    else -> "自动滚动尚未开始"
+                },
                 size = 46.dp,
                 selected = true,
+                enabled = isPlaying || !isAtBottom,
                 modifier = Modifier.offset(x = (-2).dp),
                 onClick = { onPlayingChange(!isPlaying) }
             )
@@ -149,13 +185,13 @@ private fun AutoScrollReaderControlContent(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(42.dp),
+                .heightIn(min = 48.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 text = "自动开始",
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.bodyMedium
             )
             WatchSwitch(
@@ -164,6 +200,7 @@ private fun AutoScrollReaderControlContent(
             )
         }
 
+        TapToScrollOption(tapToScrollEnabled, onTapToScrollEnabledChange)
         AutoScrollSpeedControls(
             linesPerSecond = linesPerSecond,
             onLinesPerSecondChange = onLinesPerSecondChange,
@@ -181,6 +218,8 @@ private fun AutoScrollReaderControlContent(
 
 @Composable
 private fun AutoScrollSettingsContent(
+    tapToScrollEnabled: Boolean,
+    onTapToScrollEnabledChange: (Boolean) -> Unit,
     autoStartEnabled: Boolean,
     linesPerSecond: Float,
     onAutoStartEnabledChange: (Boolean) -> Unit,
@@ -229,6 +268,7 @@ private fun AutoScrollSettingsContent(
 
         Spacer(modifier = Modifier.height(entrySpacing))
 
+        TapToScrollOption(tapToScrollEnabled, onTapToScrollEnabledChange)
         WatchSettingsPillRow(label = "速度") {
             AutoScrollSpeedControls(
                 linesPerSecond = linesPerSecond,
@@ -269,7 +309,7 @@ private fun AutoScrollSpeedControls(
     showUnit: Boolean = false
 ) {
     Row(
-        modifier = Modifier.height(36.dp),
+        modifier = Modifier.heightIn(min = 48.dp),
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -291,7 +331,7 @@ private fun AutoScrollSpeedControls(
             } else {
                 formatAutoScrollSpeed(linesPerSecond)
             },
-            color = Color.White,
+            color = MaterialTheme.colorScheme.onSurface,
             style = MaterialTheme.typography.titleSmall,
             textAlign = TextAlign.Center,
             maxLines = 1,
@@ -321,37 +361,45 @@ private fun AutoScrollRoundIconButton(
     size: Dp,
     modifier: Modifier = Modifier,
     selected: Boolean = false,
+    stateDescription: String? = null,
     enabled: Boolean = true,
     onClick: () -> Unit
 ) {
     val background = if (selected) {
         MaterialTheme.colorScheme.primary
     } else {
-        Color(0xFF242424)
+        MaterialTheme.colorScheme.surfaceVariant
     }
     val foreground = if (selected) {
         MaterialTheme.colorScheme.onPrimary
     } else {
-        Color.White
+        MaterialTheme.colorScheme.onSurface
     }
     Box(
         modifier = modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(background.copy(alpha = if (enabled) 1f else 0.45f))
+            .size(48.dp)
             .clickable(enabled = enabled, onClick = onClick)
             .semantics {
                 this.contentDescription = contentDescription
                 role = Role.Button
+                if (stateDescription != null) this.stateDescription = stateDescription
             },
         contentAlignment = Alignment.Center
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = foreground.copy(alpha = if (enabled) 1f else 0.45f),
-            modifier = Modifier.size(size * 0.52f)
-        )
+        Box(
+            modifier = Modifier
+                .size(size)
+                .clip(CircleShape)
+                .background(background.copy(alpha = if (enabled) 1f else 0.45f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = foreground.copy(alpha = if (enabled) 1f else 0.45f),
+                modifier = Modifier.size(size * 0.52f)
+            )
+        }
     }
 }
 
@@ -367,12 +415,14 @@ private fun AutoScrollTextAction(
         textAlign = TextAlign.Center,
         modifier = Modifier
             .fillMaxWidth()
-            .height(36.dp)
-            .clickable(onClick = onClick)
+            .heightIn(min = 48.dp)
+            .clickable(
+                onClickLabel = text,
+                role = Role.Button,
+                onClick = onClick
+            )
             .semantics {
                 contentDescription = text
-                role = Role.Button
-                stateDescription = "可点击"
             }
             .padding(top = 8.dp)
     )
@@ -384,3 +434,17 @@ internal fun formatAutoScrollSpeed(linesPerSecond: Float): String =
 private const val AUTO_SCROLL_SPEED_STEP = 0.5f
 private val AUTO_SCROLL_SPEED_VALUE_WIDTH = 54.dp
 private val AUTO_SCROLL_SPEED_WITH_UNIT_WIDTH = 96.dp
+
+@Composable
+private fun TapToScrollOption(enabled: Boolean, onChange: (Boolean) -> Unit) {
+    WatchSettingsPillRow(label = "点击正文控制滚动") {
+        WatchSwitch(checked = enabled, onCheckedChange = onChange)
+    }
+    Text(
+        text = if (enabled) "点击正文暂停或继续；工具按钮独立操作"
+            else "正文点击不会开始滚动；请在本面板开始或暂停",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(vertical = 6.dp)
+    )
+}

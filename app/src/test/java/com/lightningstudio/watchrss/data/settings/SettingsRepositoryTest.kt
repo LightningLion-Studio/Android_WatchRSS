@@ -25,6 +25,23 @@ class SettingsRepositoryTest {
     val tempFolder = TemporaryFolder()
 
     @Test
+    fun readerTapControl_defaultsOffAndIsIndependentOfAutoStart() = runBlocking {
+        val env = createRepository("reader-tap-control.preferences_pb")
+        try {
+            assertFalse(env.repository.readerTapToScrollEnabled.first())
+            env.repository.setReaderTapToScrollEnabled(true)
+            assertTrue(env.repository.readerTapToScrollEnabled.first())
+            assertFalse(env.repository.readerAutoScrollEnabled.first())
+            env.repository.setReaderAutoScrollEnabled(true)
+            env.repository.setReaderTapToScrollEnabled(false)
+            assertFalse(env.repository.readerTapToScrollEnabled.first())
+            assertTrue(env.repository.readerAutoScrollEnabled.first())
+        } finally {
+            env.scope.cancel()
+        }
+    }
+
+    @Test
     fun readerAutoScroll_defaultsToOffAndDefaultSpeed() = runBlocking {
         val env = createRepository("reader-auto-scroll-default.preferences_pb")
         try {

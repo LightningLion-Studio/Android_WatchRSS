@@ -294,7 +294,7 @@ WaitInput --> UIUpdate
 
 ### 手势处理机制（DigitalCrown、拖拽、点击）
 - DigitalCrown输入
-  - DigitalCrownInput封装滚轮事件，提供value与onValueChange回调
+  - DigitalCrownInput封装表冠事件，提供value与onValueChange回调
   - DigitalCrownOverscrollGuard提供越界保护，避免滚动超出范围
 - 拖拽与点击
   - 使用PointerInput修饰符处理触摸/指针事件

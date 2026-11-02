@@ -24,6 +24,8 @@ data class HomePlatformLoginState(
     val isDouyinLoggedIn: Boolean = false
 )
 
+data class HomeMessageEvent(val id: Long, val text: String)
+
 class HomeViewModel(
     private val repository: RssRepository,
     private val isBiliLoggedIn: suspend () -> Boolean,
@@ -42,6 +44,9 @@ class HomeViewModel(
 
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
+    private val _messageEvent = MutableStateFlow<HomeMessageEvent?>(null)
+    val messageEvent: StateFlow<HomeMessageEvent?> = _messageEvent.asStateFlow()
+    private var nextMessageId = 0L
 
     private val _platformLoginState = MutableStateFlow(HomePlatformLoginState())
     val platformLoginState: StateFlow<HomePlatformLoginState> = _platformLoginState.asStateFlow()
@@ -70,7 +75,7 @@ class HomeViewModel(
                 success = result.isSuccess
             )
             if (result.isFailure) {
-                _message.value = result.exceptionOrNull()?.message ?: "刷新失败"
+                publishMessage(result.exceptionOrNull()?.message ?: "刷新失败")
             }
             _isRefreshing.value = false
         }
@@ -98,7 +103,7 @@ class HomeViewModel(
                 success = errorMessage == null
             )
             if (errorMessage != null) {
-                _message.value = errorMessage
+                publishMessage(errorMessage)
             }
             _isRefreshing.value = false
         }
@@ -128,7 +133,14 @@ class HomeViewModel(
         }
     }
 
-    fun clearMessage() {
+    private fun publishMessage(text: String) {
+        _message.value = text
+        _messageEvent.value = HomeMessageEvent(++nextMessageId, text)
+    }
+
+    fun clearMessage(expectedEventId: Long? = null) {
+        if (expectedEventId != null && _messageEvent.value?.id != expectedEventId) return
         _message.value = null
+        _messageEvent.value = null
     }
 }

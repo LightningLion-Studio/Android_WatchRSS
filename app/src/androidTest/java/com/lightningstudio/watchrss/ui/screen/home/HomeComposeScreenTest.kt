@@ -2,14 +2,17 @@ package com.lightningstudio.watchrss.ui.screen.home
 
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.rss.RssChannel
@@ -50,7 +53,10 @@ class HomeComposeScreenTest {
             )
         }
 
-        composeRule.onNodeWithTag(HomeTestTags.PROFILE_ENTRY).assertExists()
+        composeRule.onNodeWithTag(HomeTestTags.PROFILE_ENTRY)
+            .assertExists()
+            .assertWidthIsAtLeast(48.dp)
+            .assertHeightIsAtLeast(48.dp)
         composeRule.onNodeWithTag(HomeTestTags.NOTES_ENTRY).assertExists()
         composeRule.onNodeWithTag(HomeTestTags.EMPTY_ENTRY).assertExists()
         composeRule.onNodeWithTag(HomeTestTags.CHANNEL_LIST)
@@ -330,7 +336,10 @@ class HomeComposeScreenTest {
         }
 
         composeRule.onNodeWithText("未读 7", substring = true).assertExists()
-        composeRule.onNodeWithTag(HomeTestTags.channelIndicator(99L)).assertExists()
+        composeRule.onNodeWithTag(
+            HomeTestTags.channelIndicator(99L),
+            useUnmergedTree = true
+        ).assertExists()
     }
 
     private fun sampleChannel(id: Long): RssChannel {

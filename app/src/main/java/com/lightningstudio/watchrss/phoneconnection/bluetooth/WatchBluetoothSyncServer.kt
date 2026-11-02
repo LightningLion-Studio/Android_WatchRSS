@@ -196,6 +196,18 @@ class WatchBluetoothSyncServer(
     private val onActionCompleted: ((BluetoothSyncResult) -> Unit)? = null,
     private val responseAckTimeoutMs: Long = RESPONSE_ACK_TIMEOUT_MS
 ) {
+    private var sessionContainer: com.lightningstudio.watchrss.data.AppContainer? = null
+    private fun dataContainer(): com.lightningstudio.watchrss.data.AppContainer = sessionContainer ?: run {
+        (context.applicationContext as WatchRssApplication).container.also { sessionContainer = it }
+    }
+    private fun dataContext(): Context = (dataContainer() as? com.lightningstudio.watchrss.data.DefaultAppContainer)?.libraryContext ?: context
+    private fun requireLibraryAccount(request: JSONObject) {
+        val selected = dataContainer()
+        val identity = (selected as? com.lightningstudio.watchrss.data.DefaultAppContainer)?.accountIdentity
+            ?: selected.watchAccountStore.state.value?.let { it.backendBaseUrl.trimEnd('/') to it.userId }
+        LibraryAccountScope.requireMatching(request, identity)
+    }
+
     @SuppressLint("MissingPermission")
     suspend fun acceptOnce(timeoutMs: Long = DEFAULT_TIMEOUT_MS): BluetoothSyncResult {
         val sessionId = WatchBluetoothDebugLog.newSessionId("watchSync")
@@ -210,60 +222,64 @@ class WatchBluetoothSyncServer(
                 "allowedActions" to allowedActions.orEmpty().joinToString("|")
             )
         )
-        return runCatching {
-            requireBluetoothConnectPermission()
-            val adapter = context.getSystemService(BluetoothManager::class.java)
-                ?.adapter
-                ?: error("此设备没有蓝牙适配器")
-            require(adapter.isEnabled) { "蓝牙未开启" }
+        return try {
+            runCatching {
+                requireBluetoothConnectPermission()
+                val adapter = context.getSystemService(BluetoothManager::class.java)
+                    ?.adapter
+                    ?: error("此设备没有蓝牙适配器")
+                require(adapter.isEnabled) { "蓝牙未开启" }
 
-            val listenStartedAt = SystemClock.elapsedRealtime()
-            val serverSocket = adapter.listenUsingRfcommWithServiceRecord(
-                BluetoothSyncProtocol.SERVICE_NAME,
-                BluetoothSyncProtocol.SERVICE_UUID
-            )
-            Log.i(TAG, "listening uuid=${BluetoothSyncProtocol.SERVICE_UUID} timeoutMs=$timeoutMs")
-            WatchBluetoothDebugLog.event(
-                sessionId = sessionId,
-                event = "server.listen.success",
-                fields = mapOf("elapsedMs" to elapsedSince(listenStartedAt))
-            )
-            serverSocket.use { socket ->
-                val acceptStartedAt = SystemClock.elapsedRealtime()
+                val listenStartedAt = SystemClock.elapsedRealtime()
+                val serverSocket = adapter.listenUsingRfcommWithServiceRecord(
+                    BluetoothSyncProtocol.SERVICE_NAME,
+                    BluetoothSyncProtocol.SERVICE_UUID
+                )
+                Log.i(TAG, "listening uuid=${BluetoothSyncProtocol.SERVICE_UUID} timeoutMs=$timeoutMs")
                 WatchBluetoothDebugLog.event(
                     sessionId = sessionId,
-                    event = "server.accept.start",
-                    fields = mapOf("timeoutMs" to timeoutMs)
+                    event = "server.listen.success",
+                    fields = mapOf("elapsedMs" to elapsedSince(listenStartedAt))
                 )
-                val bluetoothSocket = socket.acceptWithTimeout(timeoutMs)
-                WatchBluetoothDebugLog.event(
-                    sessionId = sessionId,
-                    event = "server.accept.success",
-                    fields = mapOf("elapsedMs" to elapsedSince(acceptStartedAt))
-                )
-                bluetoothSocket.use { socketClient ->
-                    serveTransport(
-                        client = BluetoothWatchSyncTransport(socketClient),
-                        remoteName = socketClient.remoteDevice?.name.orEmpty(),
-                        remoteAddress = socketClient.remoteDevice?.address.orEmpty(),
+                serverSocket.use { socket ->
+                    val acceptStartedAt = SystemClock.elapsedRealtime()
+                    WatchBluetoothDebugLog.event(
                         sessionId = sessionId,
-                        totalStartedAt = totalStartedAt,
-                        initialRequestTimeoutMs = INITIAL_REQUEST_READ_TIMEOUT_MS
+                        event = "server.accept.start",
+                        fields = mapOf("timeoutMs" to timeoutMs)
                     )
+                    val bluetoothSocket = socket.acceptWithTimeout(timeoutMs)
+                    WatchBluetoothDebugLog.event(
+                        sessionId = sessionId,
+                        event = "server.accept.success",
+                        fields = mapOf("elapsedMs" to elapsedSince(acceptStartedAt))
+                    )
+                    bluetoothSocket.use { socketClient ->
+                        serveTransport(
+                            client = BluetoothWatchSyncTransport(socketClient),
+                            remoteName = socketClient.remoteDevice?.name.orEmpty(),
+                            remoteAddress = socketClient.remoteDevice?.address.orEmpty(),
+                            sessionId = sessionId,
+                            totalStartedAt = totalStartedAt,
+                            initialRequestTimeoutMs = INITIAL_REQUEST_READ_TIMEOUT_MS
+                        )
+                    }
                 }
-            }
-        }.onFailure { throwable ->
-            WatchBluetoothDebugLog.error(
-                sessionId = sessionId,
-                event = "server.acceptOnce.failed",
-                fields = mapOf(
-                    "elapsedMs" to elapsedSince(totalStartedAt),
-                    "errorClass" to throwable::class.java.name,
-                    "message" to throwable.message.orEmpty()
-                ),
-                throwable = throwable
-            )
-        }.getOrThrow()
+            }.onFailure { throwable ->
+                WatchBluetoothDebugLog.error(
+                    sessionId = sessionId,
+                    event = "server.acceptOnce.failed",
+                    fields = mapOf(
+                        "elapsedMs" to elapsedSince(totalStartedAt),
+                        "errorClass" to throwable::class.java.name,
+                        "message" to throwable.message.orEmpty()
+                    ),
+                    throwable = throwable
+                )
+            }.getOrThrow()
+        } finally {
+            (context.applicationContext as WatchRssApplication).finishAccountSyncUi(sessionId)
+        }
     }
 
     suspend fun serveStreams(
@@ -276,28 +292,33 @@ class WatchBluetoothSyncServer(
     ): BluetoothSyncResult {
         val sessionId = WatchBluetoothDebugLog.newSessionId("watchIpSync")
         val startedAt = SystemClock.elapsedRealtime()
-        return runCatching {
-            serveTransport(
-                client = StreamWatchSyncTransport(inputStream, outputStream, closeTransport),
-                remoteName = remoteName,
-                remoteAddress = remoteAddress,
-                sessionId = sessionId,
-                totalStartedAt = startedAt,
-                initialRequestTimeoutMs = initialRequestTimeoutMs
-            )
-        }.onFailure { throwable ->
-            WatchBluetoothDebugLog.error(
-                sessionId = sessionId,
-                event = "server.ip.failed",
-                fields = mapOf(
-                    "elapsedMs" to elapsedSince(startedAt),
-                    "errorClass" to throwable::class.java.name,
-                    "message" to throwable.message.orEmpty()
-                ),
-                throwable = throwable
-            )
-        }.getOrThrow()
+        return try {
+            runCatching {
+                serveTransport(
+                    client = StreamWatchSyncTransport(inputStream, outputStream, closeTransport),
+                    remoteName = remoteName,
+                    remoteAddress = remoteAddress,
+                    sessionId = sessionId,
+                    totalStartedAt = startedAt,
+                    initialRequestTimeoutMs = initialRequestTimeoutMs
+                )
+            }.onFailure { throwable ->
+                WatchBluetoothDebugLog.error(
+                    sessionId = sessionId,
+                    event = "server.ip.failed",
+                    fields = mapOf(
+                        "elapsedMs" to elapsedSince(startedAt),
+                        "errorClass" to throwable::class.java.name,
+                        "message" to throwable.message.orEmpty()
+                    ),
+                    throwable = throwable
+                )
+            }.getOrThrow()
+        } finally {
+            (context.applicationContext as WatchRssApplication).finishAccountSyncUi(sessionId)
+        }
     }
+
 
     private suspend fun serveTransport(
         client: WatchSyncTransport,
@@ -325,6 +346,15 @@ class WatchBluetoothSyncServer(
                 timeoutMs = requestTimeoutMs
             )
             onRequestReceived?.invoke()
+            try {
+                requireLibraryAccount(request)
+            } catch (mismatch: IllegalArgumentException) {
+                val rejection = JSONObject().put("success", false)
+                    .put("action", request.optString("action"))
+                    .put("message", mismatch.message)
+                writeFrameLogged(client, sessionId, "accountScopeRejected", rejection)
+                return BluetoothSyncResult(remoteName, remoteAddress, request, rejection)
+            }
             val acceptsPersistentSession =
                 BluetoothSyncProtocol.requestsPersistentSession(request)
             val persistentSessionAccepted = !persistentSession && acceptsPersistentSession
@@ -379,6 +409,7 @@ class WatchBluetoothSyncServer(
                     label = "manifestRequest",
                     timeoutMs = requestTimeoutMs
                 )
+                requireLibraryAccount(request)
                 unsupportedPhoneProtocolResponse =
                     LibrarySyncPayload.buildUnsupportedPhoneProtocolResponse(request)
             }
@@ -465,7 +496,7 @@ class WatchBluetoothSyncServer(
         val app = context.applicationContext as WatchRssApplication
         val localDeviceId = WatchDeviceIdentity(context).deviceId
         val remoteDeviceId = request.optString("deviceId").trim().ifBlank { "phone" }
-        val cursor = app.container.rssRepository.getLibrarySyncCursor(remoteDeviceId)
+        val cursor = dataContainer().rssRepository.getLibrarySyncCursor(remoteDeviceId)
         WatchBluetoothDebugLog.event(
             sessionId = sessionId,
             event = "library.cursor.exchanged",
@@ -525,7 +556,7 @@ class WatchBluetoothSyncServer(
                 )
             )
             var sourceStats = if (libraryMode == BluetoothSyncProtocol.LIBRARY_MODE_MERGE) {
-                app.container.rssRepository.mergeSyncedRssSources(
+                dataContainer().rssRepository.mergeSyncedRssSources(
                     sources = incomingSources,
                     remoteDeviceId = remoteDeviceId,
                     localDeviceId = localDeviceId
@@ -544,7 +575,7 @@ class WatchBluetoothSyncServer(
             val supportsChunkedBodies = request.optBoolean("supportsChunkedBodies", false) &&
                 request.optInt("version") > LibrarySyncPayload.LEGACY_PROTOCOL_VERSION
             val supportsMetadataOnlyArticles = LibrarySyncPayload.supportsMetadataOnlyArticles(request)
-            val preparedWindow = app.container.rssRepository.prepareLibrarySyncWindow(
+            val preparedWindow = dataContainer().rssRepository.prepareLibrarySyncWindow(
                 peerDeviceId = remoteDeviceId,
                 localDeviceId = localDeviceId,
                 peerAppliedLocalSeq = remoteCursor.lastRemoteSeqApplied
@@ -552,7 +583,7 @@ class WatchBluetoothSyncServer(
             val outgoingWindow = if (request.optBoolean("forceFull") || libraryMode != BluetoothSyncProtocol.LIBRARY_MODE_MERGE || !LibrarySyncPayload.supportsChangeSequences(request)) {
                 preparedWindow.copy(
                     articleManifest = preparedWindow.fullArticleManifest,
-                    rssSources = app.container.rssRepository.exportSyncedRssSources(localDeviceId),
+                    rssSources = dataContainer().rssRepository.exportSyncedRssSources(localDeviceId),
                     fullSnapshot = true,
                     fromSeqExclusive = 0L,
                     fallbackReason = if (request.optBoolean("forceFull")) "forcedFull" else "peerProtocol"
@@ -598,7 +629,7 @@ class WatchBluetoothSyncServer(
                     )
                 )
             } else {
-                val outgoing = app.container.rssRepository.exportSyncedSavedArticles(localDeviceId)
+                val outgoing = dataContainer().rssRepository.exportSyncedSavedArticles(localDeviceId)
                 LibrarySyncPayload.buildManifestResponse(
                     deviceId = localDeviceId,
                     articles = outgoing,
@@ -632,7 +663,7 @@ class WatchBluetoothSyncServer(
                 readChunkedArticleRequestFrames(client, sessionId) { articles ->
                     if (watchIsSource) {
                         SyncedSavedArticleMergeStats(articles.size, 0)
-                    } else app.container.rssRepository.mergeSyncedChunkedArticles(
+                    } else dataContainer().rssRepository.mergeSyncedChunkedArticles(
                         articles = articles,
                         remoteDeviceId = remoteDeviceId,
                         localDeviceId = localDeviceId,
@@ -665,7 +696,7 @@ class WatchBluetoothSyncServer(
             } else if (supportsChunkedBodies) {
                 requireNotNull(chunkedArticleRequests).mergeStats
             } else {
-                app.container.rssRepository.mergeSyncedSavedArticles(
+                dataContainer().rssRepository.mergeSyncedSavedArticles(
                     articles = incoming.filterIsInstance<com.lightningstudio.watchrss.data.rss.SyncedSavedArticle>(),
                     remoteDeviceId = remoteDeviceId,
                     localDeviceId = localDeviceId,
@@ -673,13 +704,13 @@ class WatchBluetoothSyncServer(
                 )
             }
             if (watchIsTarget) {
-                sourceStats = app.container.rssRepository.mergeSyncedRssSources(
+                sourceStats = dataContainer().rssRepository.mergeSyncedRssSources(
                     sources = incomingSources,
                     remoteDeviceId = remoteDeviceId,
                     localDeviceId = localDeviceId,
                     authoritative = true
                 )
-                app.container.rssRepository.finalizeAuthoritativeLibrarySnapshot(
+                dataContainer().rssRepository.finalizeAuthoritativeLibrarySnapshot(
                     retainedArticleIds = remoteManifest.map { it.articleId },
                     retainedSourceUrls = incomingSources.map { it.url } +
                         com.lightningstudio.watchrss.data.rss.ImportedContentIds.PHONE_IMPORT_CHANNEL_URL
@@ -688,7 +719,7 @@ class WatchBluetoothSyncServer(
             val outgoingDiff = if (supportsChunkedBodies) {
                 emptyList()
             } else {
-                val outgoing = app.container.rssRepository.exportSyncedSavedArticles(localDeviceId)
+                val outgoing = dataContainer().rssRepository.exportSyncedSavedArticles(localDeviceId)
                 LibrarySyncPayload.filterArticlesNeedingSync(outgoing, remoteManifest)
             }
             WatchBluetoothDebugLog.event(
@@ -704,7 +735,7 @@ class WatchBluetoothSyncServer(
             val responseFrames = if (supportsChunkedBodies) {
                 val exportStartedAt = SystemClock.elapsedRealtime()
                 val phoneRequests = chunkedArticleRequests?.bodyRequests.orEmpty()
-                val outgoingArticles = app.container.rssRepository.exportSyncedSavedArticlesForRequests(
+                val outgoingArticles = dataContainer().rssRepository.exportSyncedSavedArticlesForRequests(
                     deviceId = localDeviceId,
                     requests = phoneRequests
                 )
@@ -790,7 +821,7 @@ class WatchBluetoothSyncServer(
                 )
             )
             if (watchIsSource) {
-                app.container.rssRepository.resetLibrarySyncPeerState()
+                dataContainer().rssRepository.resetLibrarySyncPeerState()
             }
             LibraryManifestExchangeResult(
                 response = response,
@@ -1180,7 +1211,7 @@ class WatchBluetoothSyncServer(
         val startedAt = SystemClock.elapsedRealtime()
         runCatching {
             val app = context.applicationContext as WatchRssApplication
-            app.container.rssRepository.markLibrarySyncSuccess(
+            dataContainer().rssRepository.markLibrarySyncSuccess(
                 peerDeviceId = pending.remoteDeviceId,
                 localSeqToInclusive = pending.localSeqToInclusive,
                 remoteSeqToInclusive = pending.remoteSeqToInclusive,
@@ -1259,9 +1290,7 @@ class WatchBluetoothSyncServer(
                             SaveType.WATCH_LATER -> PhoneConnectionAbility.SYNC_WATCH_LATER
                         }
                     )
-                    val items = (context.applicationContext as WatchRssApplication)
-                        .container
-                        .rssRepository
+                    val items = dataContainer().rssRepository
                         .observeSavedItems(saveType)
                         .first()
                     val payload = SavedItemsSyncPayload.buildLinksOnly(items)
@@ -1286,7 +1315,11 @@ class WatchBluetoothSyncServer(
                     val app = context.applicationContext as WatchRssApplication
                     val localDeviceId = WatchDeviceIdentity(context).deviceId
                     val state = AccountSyncPayload.parseRequest(request)
-                    app.accountStore.save(state)
+                    if (request.optBoolean("automatic")) {
+                        val current = dataContainer().watchAccountStore.read()?.let { it.backendBaseUrl.trimEnd('/') to it.userId }
+                        LibraryAccountScope.requireAutomaticAccount(current, state.backendBaseUrl.trimEnd('/') to state.userId)
+                    }
+                    sessionContainer = app.acceptAccountSync(state, sessionId)
                     app.usageTelemetry.recordSyncAccount()
                     WatchBluetoothDebugLog.event(
                         sessionId = sessionId,
@@ -1303,7 +1336,7 @@ class WatchBluetoothSyncServer(
                         deviceId = localDeviceId,
                         state = state,
                         telemetryBacklog = app.usageTelemetry.backlogCount()
-                    )
+                    ).apply { put("isolatedLibrary", true) }
                 }
 
                 BluetoothSyncProtocol.ACTION_SYNC_READER -> {
@@ -1317,7 +1350,7 @@ class WatchBluetoothSyncServer(
                     }
                     ReaderPresetSyncPayload.handle(
                         request = request,
-                        repository = app.container.readerPresetRepository
+                        repository = dataContainer().readerPresetRepository
                     )
                 }
 
@@ -1339,7 +1372,7 @@ class WatchBluetoothSyncServer(
                 BluetoothSyncProtocol.ACTION_SYNC_LLM_TOKEN_USAGE -> {
                     val app = context.applicationContext as WatchRssApplication
                     val limit = request.optInt("limit", 200)
-                    val records = app.container.llmTokenUsageRepository.getRecent(limit)
+                    val records = dataContainer().llmTokenUsageRepository.getRecent(limit)
                     val payload = JSONArray().apply {
                         records.forEach { record ->
                             put(JSONObject().apply {
@@ -1392,7 +1425,7 @@ class WatchBluetoothSyncServer(
 
                 BluetoothSyncProtocol.ACTION_CLEAR_LIBRARY -> {
                     val app = context.applicationContext as WatchRssApplication
-                    app.container.rssRepository.clearLibrary()
+                    dataContainer().rssRepository.clearLibrary()
                     JSONObject().apply {
                         put("success", true)
                         put("action", BluetoothSyncProtocol.ACTION_CLEAR_LIBRARY)
@@ -1417,24 +1450,29 @@ class WatchBluetoothSyncServer(
                         return@runCatching LibrarySyncPayload.buildProbeResponse(
                             localDeviceId,
                             WatchMediaCapabilities.inspect(context)
-                        ).apply { put(FIELD_IP_UPGRADE_ACCEPTED, ipUpgradeAccepted) }
+                        ).apply {
+                            put(FIELD_IP_UPGRADE_ACCEPTED, ipUpgradeAccepted)
+                            put("supportsAutomaticAccountSync", true)
+                            val identity = dataContainer().watchAccountStore.read()?.let { it.backendBaseUrl.trimEnd('/') to it.userId }
+                            put("accountMatchesRequest", LibraryAccountScope.matchesAccount(request, identity))
+                        }
                     }
                     val app = context.applicationContext as WatchRssApplication
                     val remoteDeviceId = request.optString("deviceId").ifBlank { "phone" }
                     val incomingSources = LibrarySyncPayload.parseRssSources(request)
-                    val sourceStats = app.container.rssRepository.mergeSyncedRssSources(
+                    val sourceStats = dataContainer().rssRepository.mergeSyncedRssSources(
                         sources = incomingSources,
                         remoteDeviceId = remoteDeviceId,
                         localDeviceId = localDeviceId
                     )
                     val incoming = LibrarySyncPayload.parseArticles(request)
-                    val stats = app.container.rssRepository.mergeSyncedSavedArticles(
+                    val stats = dataContainer().rssRepository.mergeSyncedSavedArticles(
                         articles = incoming,
                         remoteDeviceId = remoteDeviceId,
                         localDeviceId = localDeviceId
                     )
-                    val outgoing = app.container.rssRepository.exportSyncedSavedArticles(localDeviceId)
-                    val outgoingSources = app.container.rssRepository.exportSyncedRssSources(localDeviceId)
+                    val outgoing = dataContainer().rssRepository.exportSyncedSavedArticles(localDeviceId)
+                    val outgoingSources = dataContainer().rssRepository.exportSyncedRssSources(localDeviceId)
                     WatchBluetoothDebugLog.event(
                         sessionId = sessionId,
                         event = "request.syncLibrary.v3.merged",
@@ -1459,13 +1497,13 @@ class WatchBluetoothSyncServer(
                 BluetoothSyncProtocol.ACTION_SYNC_NOTES -> {
                     val app = context.applicationContext as WatchRssApplication
                     val incoming = WatchNoteSyncPayload.parse(request)
-                    val applied = app.container.watchNoteRepository.merge(incoming)
                     val localDeviceId = WatchDeviceIdentity(context).deviceId
-                    WatchNoteSyncPayload.response(localDeviceId, app.container.watchNoteRepository.all(), applied)
+                    val applied = dataContainer().watchNoteRepository.merge(incoming, localDeviceId)
+                    WatchNoteSyncPayload.response(localDeviceId, dataContainer().watchNoteRepository.all(), applied)
                 }
 
                 BluetoothSyncProtocol.ACTION_SYNC_NOTE_ASSET -> {
-                    WatchNoteAssetSyncPayload.apply(context, request)
+                    WatchNoteAssetSyncPayload.apply(dataContext(), request)
                 }
 
                 else -> error("未知蓝牙同步动作：$action")

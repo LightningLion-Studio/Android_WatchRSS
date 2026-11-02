@@ -8,7 +8,8 @@ import com.lightningstudio.watchrss.sdk.bili.BiliCommentData
 class ReplyPagingSource(
     private val repository: BiliRepositoryContract,
     private val oid: Long,
-    private val root: Long
+    private val root: Long,
+    private val onRootCommentLoaded: (BiliCommentData?) -> Unit = {}
 ) : PagingSource<Int, BiliCommentData>() {
 
     var rootComment: BiliCommentData? = null
@@ -32,6 +33,7 @@ class ReplyPagingSource(
             // Store root comment on first page
             if (page == 1) {
                 rootComment = data.root
+                onRootCommentLoaded(data.root)
             }
 
             val items = data.replies ?: emptyList()

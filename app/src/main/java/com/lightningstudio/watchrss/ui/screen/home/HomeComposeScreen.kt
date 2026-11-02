@@ -3,6 +3,7 @@ package com.lightningstudio.watchrss.ui.screen.home
 import android.content.Context
 import android.graphics.Paint
 import android.graphics.RectF
+import android.text.format.DateUtils
 import android.view.Choreographer
 import android.view.View
 import androidx.compose.animation.core.Animatable
@@ -81,6 +82,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.home.NotesHomePlacement
 import com.lightningstudio.watchrss.ui.components.PullRefreshBox
+import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.components.rememberPullRefreshEnabled
 import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.rss.RssChannel
@@ -88,9 +90,7 @@ import com.lightningstudio.watchrss.data.tts.ReadAloudUiState
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.screen.rss.buildPlaybackStatusText
 import com.lightningstudio.watchrss.ui.testing.HomeTestTags
-import com.lightningstudio.watchrss.ui.theme.watchColorResource
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
-import com.lightningstudio.watchrss.ui.util.formatTime
 import com.lightningstudio.watchrss.ui.viewmodel.HomePlatformLoginState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharedFlow
@@ -169,120 +169,121 @@ fun HomeComposeScreen(
                 delay(DEBUG_AUTOSCROLL_TURNAROUND_DELAY_MS)
             }
         }
-        PullRefreshBox(
-            isRefreshing = isRefreshing,
-            onRefresh = onRefreshAll,
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black)
-                .testTag(HomeTestTags.ROOT),
-            indicatorPadding = safePadding,
-            canRefresh = canRefresh
-        ) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = safePadding)
-                        .onGloballyPositioned {
-                            if (firstLayoutReported.compareAndSet(false, true)) {
-                                view.post {
-                                    onMinimalContentReadyState.value()
+        WatchSurface {
+            PullRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = onRefreshAll,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .testTag(HomeTestTags.ROOT),
+                indicatorPadding = safePadding,
+                canRefresh = canRefresh
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = safePadding)
+                            .onGloballyPositioned {
+                                if (firstLayoutReported.compareAndSet(false, true)) {
+                                    view.post {
+                                        onMinimalContentReadyState.value()
+                                    }
                                 }
                             }
-                        }
-                        .testTag(HomeTestTags.CHANNEL_LIST),
-                    state = listState,
-                    contentPadding = PaddingValues(
-                        top = safePadding,
-                        bottom = safePadding + itemSpacing
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(itemSpacing)
-                ) {
-                    items(
-                        entries,
-                        key = { it.key },
-                        contentType = { it::class }
-                    ) { entry ->
-                        when (entry) {
-                            HomeEntry.Profile -> {
-                                HomeProfileEntry(
-                                    onProfileClick = onProfileClick,
-                                    interactionsEnabled = true
-                                )
-                            }
-                            HomeEntry.Empty -> {
-                                HomeDefaultItem(
-                                    title = "还没有 RSS 频道",
-                                    summary = "点击下方添加你的第一个订阅源",
-                                    backgroundColor = MaterialTheme.colorScheme.surface,
-                                    showIndicator = false,
-                                    testTag = HomeTestTags.EMPTY_ENTRY
-                                )
-                            }
-                            HomeEntry.Notes -> {
-                                HomeDefaultItem(
-                                    title = "备忘录",
-                                    summary = "纯文本编辑 · 手机同步",
-                                    backgroundColor = if (notesPlacement.isPinned) {
-                                        MaterialTheme.colorScheme.surfaceVariant
-                                    } else {
-                                        MaterialTheme.colorScheme.surface
-                                    },
-                                    titleFontSize = 16.sp,
-                                    showIndicator = false,
-                                    testTag = HomeTestTags.NOTES_ENTRY,
-                                    onClick = onNotesClick,
-                                    onLongClick = onNotesLongClick
-                                )
-                            }
-                            HomeEntry.Recommend -> {
-                                HomeDefaultItem(
-                                    title = "RSS推荐",
-                                    summary = "一键加入官方支持频道",
-                                    backgroundColor = MaterialTheme.colorScheme.surface,
-                                    showIndicator = false,
-                                    testTag = HomeTestTags.RECOMMEND_ENTRY,
-                                    onClick = onRecommendClick
-                                )
-                            }
-                            HomeEntry.ReadAloud -> {
-                                HomeReadAloudEntry(
-                                    state = readAloudState,
-                                    audioSpectrum = readAloudAudioSpectrum,
-                                    onClick = onReadAloudClick
-                                )
-                            }
-                            HomeEntry.AddRss -> {
-                                HomeAddEntry(
-                                    onAddRssClick = onAddRssClick,
-                                    interactionsEnabled = true
-                                )
-                            }
-                            HomeEntry.Beian -> {
-                                HomeBeianEntry(
-                                    onBeianClick = onBeianClick,
-                                    interactionsEnabled = true
-                                )
-                            }
-                            is HomeEntry.Channel -> {
-                                HomeChannelEntry(
-                                    channel = entry.channel,
-                                    platformLoginState = platformLoginState,
-                                    openSwipeId = openSwipeId,
-                                    onOpenSwipe = onOpenSwipe,
-                                    onCloseSwipe = onCloseSwipe,
-                                    draggingSwipeId = draggingSwipeId,
-                                    onDragStart = onDragStart,
-                                    onDragEnd = onDragEnd,
-                                    onChannelClick = { onChannelClick(entry.channel) },
-                                    onChannelLongClick = { onChannelLongClick(entry.channel) },
-                                    onSwipeBack = onSwipeBack,
-                                    swipeInteractionsEnabled = enableChannelSwipeActions,
-                                    interactionsEnabled = true,
-                                    onMoveTopClick = { onMoveTopClick(entry.channel) },
-                                    onMarkReadClick = { onMarkReadClick(entry.channel) }
-                                )
+                            .testTag(HomeTestTags.CHANNEL_LIST),
+                        state = listState,
+                        contentPadding = PaddingValues(
+                            top = safePadding,
+                            bottom = safePadding + itemSpacing
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(itemSpacing)
+                    ) {
+                        items(
+                            entries,
+                            key = { it.key },
+                            contentType = { it::class }
+                        ) { entry ->
+                            when (entry) {
+                                HomeEntry.Profile -> {
+                                    HomeProfileEntry(
+                                        onProfileClick = onProfileClick,
+                                        interactionsEnabled = true
+                                    )
+                                }
+                                HomeEntry.Empty -> {
+                                    HomeDefaultItem(
+                                        title = "还没有 RSS 频道",
+                                        summary = "点击下方添加你的第一个订阅源",
+                                        backgroundColor = MaterialTheme.colorScheme.surface,
+                                        showIndicator = false,
+                                        testTag = HomeTestTags.EMPTY_ENTRY
+                                    )
+                                }
+                                HomeEntry.Notes -> {
+                                    HomeDefaultItem(
+                                        title = "备忘录",
+                                        summary = "纯文本编辑 · 手机同步",
+                                        backgroundColor = if (notesPlacement.isPinned) {
+                                            MaterialTheme.colorScheme.surfaceVariant
+                                        } else {
+                                            MaterialTheme.colorScheme.surface
+                                        },
+                                        titleFontSize = 16.sp,
+                                        showIndicator = false,
+                                        testTag = HomeTestTags.NOTES_ENTRY,
+                                        onClick = onNotesClick,
+                                        onLongClick = onNotesLongClick
+                                    )
+                                }
+                                HomeEntry.Recommend -> {
+                                    HomeDefaultItem(
+                                        title = "RSS推荐",
+                                        summary = "一键加入官方支持频道",
+                                        backgroundColor = MaterialTheme.colorScheme.surface,
+                                        showIndicator = false,
+                                        testTag = HomeTestTags.RECOMMEND_ENTRY,
+                                        onClick = onRecommendClick
+                                    )
+                                }
+                                HomeEntry.ReadAloud -> {
+                                    HomeReadAloudEntry(
+                                        state = readAloudState,
+                                        audioSpectrum = readAloudAudioSpectrum,
+                                        onClick = onReadAloudClick
+                                    )
+                                }
+                                HomeEntry.AddRss -> {
+                                    HomeAddEntry(
+                                        onAddRssClick = onAddRssClick,
+                                        interactionsEnabled = true
+                                    )
+                                }
+                                HomeEntry.Beian -> {
+                                    HomeBeianEntry(
+                                        onBeianClick = onBeianClick,
+                                        interactionsEnabled = true
+                                    )
+                                }
+                                is HomeEntry.Channel -> {
+                                    HomeChannelEntry(
+                                        channel = entry.channel,
+                                        platformLoginState = platformLoginState,
+                                        openSwipeId = openSwipeId,
+                                        onOpenSwipe = onOpenSwipe,
+                                        onCloseSwipe = onCloseSwipe,
+                                        draggingSwipeId = draggingSwipeId,
+                                        onDragStart = onDragStart,
+                                        onDragEnd = onDragEnd,
+                                        onChannelClick = { onChannelClick(entry.channel) },
+                                        onChannelLongClick = { onChannelLongClick(entry.channel) },
+                                        onSwipeBack = onSwipeBack,
+                                        swipeInteractionsEnabled = enableChannelSwipeActions,
+                                        interactionsEnabled = true,
+                                        onMoveTopClick = { onMoveTopClick(entry.channel) },
+                                        onMarkReadClick = { onMarkReadClick(entry.channel) }
+                                    )
+                                }
                             }
                         }
                     }
@@ -371,7 +372,7 @@ private fun HomeProfileEntry(
     ) {
         Box(
             modifier = Modifier
-                .size(avatarSize)
+                .size(avatarSize.coerceAtLeast(48.dp))
                 .graphicsLayer {
                     this.shape = shape
                     clip = true
@@ -844,7 +845,7 @@ private fun HomeSwipeActionButton(
     val textPadding = watchDimensionResource(R.dimen.hey_distance_8dp)
     val iconSize = watchDimensionResource(R.dimen.hey_distance_16dp)
     val iconSpacing = watchDimensionResource(R.dimen.hey_distance_4dp)
-    val dangerColor = watchColorResource(R.color.danger_red)
+    val dangerColor = MaterialTheme.colorScheme.error
     val actionColor = if (text.contains("删除")) dangerColor else MaterialTheme.colorScheme.onSurface
 
     Box(
@@ -1130,11 +1131,8 @@ private fun buildChannelSummary(
     platformLoginState: HomePlatformLoginState
 ): String {
     val builtinType = BuiltinChannelType.fromUrl(channel.url)
-    val isRealtime = when (builtinType) {
-        BuiltinChannelType.BILI -> platformLoginState.isBiliLoggedIn
-        BuiltinChannelType.DOUYIN -> platformLoginState.isDouyinLoggedIn
-        null -> false
-    }
+    val isPlatformChannel = builtinType == BuiltinChannelType.BILI ||
+        builtinType == BuiltinChannelType.DOUYIN
     val summary = when {
         builtinType == BuiltinChannelType.BILI && platformLoginState.isBiliLoggedIn ->
             "进入以获取推荐内容"
@@ -1147,16 +1145,29 @@ private fun buildChannelSummary(
         shouldShowUnreadUi(builtinType) &&
         channel.unreadCount > 0
     ) {
-        "未读 ${channel.unreadCount} · "
+        "未读 ${channel.unreadCount}"
     } else {
         ""
     }
-    val updateLabel = if (isRealtime) {
-        "更新：实时"
+    val updateLabel = if (isPlatformChannel) {
+        ""
+    } else if (channel.lastFetchedAt == null || channel.lastFetchedAt <= 0L) {
+        "等待首次获取内容"
     } else {
-        "更新: ${formatTime(channel.lastFetchedAt)}"
+        val relativeTime = DateUtils.getRelativeTimeSpanString(
+            channel.lastFetchedAt,
+            System.currentTimeMillis(),
+            DateUtils.MINUTE_IN_MILLIS,
+            DateUtils.FORMAT_ABBREV_RELATIVE
+        )
+        "更新于 $relativeTime"
     }
-    return "$pinLabel$summary\n${unreadLabel}$updateLabel"
+    val statusLine = listOf(unreadLabel, updateLabel)
+        .filter(String::isNotBlank)
+        .joinToString(" · ")
+    return listOf("$pinLabel$summary", statusLine)
+        .filter(String::isNotBlank)
+        .joinToString("\n")
 }
 
 private fun shouldShowUnreadUi(builtinType: BuiltinChannelType?): Boolean {

@@ -166,11 +166,14 @@ fun ImagePreviewScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
                             text = imagePreviewFailureMessage(url),
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.78f),
+                            color = Color.White.copy(alpha = 0.92f),
                             textAlign = TextAlign.Center
                         )
                         if (url.startsWith("/") || url.startsWith("file://")) {
-                            DownloadPhoneAppCompactLink(operation = "同步备忘录")
+                            DownloadPhoneAppCompactLink(
+                                operation = "同步备忘录",
+                                color = Color.White
+                            )
                         }
                     }
                     return@BoxWithConstraints

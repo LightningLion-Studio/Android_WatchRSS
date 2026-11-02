@@ -22,17 +22,13 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.network.InternetAvailabilityStatus
-import com.lightningstudio.watchrss.ui.theme.watchColorResource
-
-private val InternetAvailabilityPageGreen = Color(0xFF41C96B)
-private val InternetAvailabilityPageBluetoothAmber = Color(0xFFFFA726)
 
 @Composable
 fun InternetAvailabilityPage(
@@ -66,6 +62,7 @@ fun InternetAvailabilityPage(
 
             Text(
                 text = "互联网",
+                modifier = Modifier.semantics { heading() },
                 style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center
@@ -167,7 +164,7 @@ private fun InternetAvailabilityPageStatusIndicator(
                     modifier = Modifier
                         .fillMaxSize()
                         .clip(CircleShape)
-                        .background(watchColorResource(R.color.danger_red))
+                        .background(MaterialTheme.colorScheme.error)
                 )
             }
 
@@ -176,7 +173,7 @@ private fun InternetAvailabilityPageStatusIndicator(
                     modifier = Modifier
                         .fillMaxSize()
                         .clip(CircleShape)
-                        .background(InternetAvailabilityPageBluetoothAmber)
+                        .background(MaterialTheme.colorScheme.tertiary)
                 )
             }
 
@@ -185,7 +182,7 @@ private fun InternetAvailabilityPageStatusIndicator(
                     modifier = Modifier
                         .fillMaxSize()
                         .clip(CircleShape)
-                        .background(InternetAvailabilityPageGreen)
+                        .background(MaterialTheme.colorScheme.primary)
                 )
             }
         }
@@ -209,7 +206,12 @@ private fun InternetAvailabilityPageActionButton(
                     MaterialTheme.colorScheme.surfaceVariant
                 }
             )
-            .clickable(enabled = enabled, onClick = onClick)
+            .clickable(
+                enabled = enabled,
+                role = androidx.compose.ui.semantics.Role.Button,
+                onClickLabel = text,
+                onClick = onClick
+            )
             .padding(horizontal = 22.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center
     ) {

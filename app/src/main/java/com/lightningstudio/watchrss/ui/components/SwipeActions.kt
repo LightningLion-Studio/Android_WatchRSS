@@ -34,15 +34,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
-import com.lightningstudio.watchrss.ui.theme.watchColorResource
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
+import com.lightningstudio.watchrss.R
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.TextUnit
-import com.lightningstudio.watchrss.R
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -59,8 +59,11 @@ fun SwipeActionButton(
     val textPadding = watchDimensionResource(R.dimen.hey_distance_8dp)
     val iconSize = watchDimensionResource(R.dimen.hey_distance_16dp)
     val iconSpacing = watchDimensionResource(R.dimen.hey_distance_4dp)
-    val dangerColor = watchColorResource(R.color.danger_red)
-    val actionColor = if (text.contains("删除")) dangerColor else MaterialTheme.colorScheme.onSurface
+    val actionColor = if (text.contains("删除")) {
+        MaterialTheme.colorScheme.error
+    } else {
+        MaterialTheme.colorScheme.onSurface
+    }
 
     Box(
         modifier = Modifier
@@ -69,7 +72,7 @@ fun SwipeActionButton(
             .clip(RoundedCornerShape(radius))
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .semantics { contentDescription = semanticLabel }
-            .clickableWithRipple(onClick),
+            .clickableWithRipple(semanticLabel, onClick),
         contentAlignment = Alignment.Center
     ) {
         if (icon != null) {
@@ -79,7 +82,7 @@ fun SwipeActionButton(
             ) {
                 Icon(
                     imageVector = icon,
-                    contentDescription = text,
+                    contentDescription = null,
                     tint = actionColor,
                     modifier = Modifier.size(iconSize)
                 )
@@ -194,10 +197,15 @@ private fun textSize(id: Int): TextUnit {
 }
 
 @Composable
-private fun Modifier.clickableWithRipple(onClick: () -> Unit): Modifier {
+private fun Modifier.clickableWithRipple(
+    semanticLabel: String,
+    onClick: () -> Unit
+): Modifier {
     return clickable(
         interactionSource = remember { MutableInteractionSource() },
         indication = LocalIndication.current,
+        onClickLabel = semanticLabel,
+        role = Role.Button,
         onClick = onClick
     )
 }

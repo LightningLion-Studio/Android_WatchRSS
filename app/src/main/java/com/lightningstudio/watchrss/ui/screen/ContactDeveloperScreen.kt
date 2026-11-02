@@ -26,7 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
-import com.lightningstudio.watchrss.ui.theme.watchColorResource
+import androidx.compose.ui.semantics.Role
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -46,7 +46,7 @@ fun ContactDeveloperScreen(
     val entrySpacing = WatchDimens.hey_distance_8dp
     val pillHeight = WatchDimens.watch_action_button_height
     val pillRadius = WatchDimens.hey_button_default_radius
-    val pillColor = watchColorResource(R.color.watch_pill_background)
+    val pillColor = MaterialTheme.colorScheme.surfaceVariant
     val pillHorizontalPadding = WatchDimens.hey_content_horizontal_distance
     val pillVerticalPadding = WatchDimens.hey_distance_8dp
     val iconSize = watchDimensionResource(R.dimen.hey_listitem_widget_size)
@@ -55,7 +55,7 @@ fun ContactDeveloperScreen(
 
     InstallDigitalCrownScrollHandler(scrollState)
 
-    WatchSurface(pureBlack = true) {
+    WatchSurface {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -123,10 +123,10 @@ private fun ContactEntry(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(pillHeight)
+            .height(pillHeight.coerceAtLeast(48.dp))
             .clip(RoundedCornerShape(pillRadius))
             .background(pillColor)
-            .clickable(onClick = onClick)
+            .clickable(role = Role.Button, onClick = onClick)
             .padding(
                 start = pillHorizontalPadding,
                 end = pillHorizontalPadding,

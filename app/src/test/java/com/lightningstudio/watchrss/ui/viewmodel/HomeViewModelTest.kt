@@ -30,12 +30,12 @@ class HomeViewModelTest {
         val biliRepository = TestBiliRepository()
         val douyinRepository = TestDouyinRepository()
 
-        val viewModel = HomeViewModel(
+        val viewModel = mainDispatcherRule.track(HomeViewModel(
             repository = repo,
             isBiliLoggedIn = { biliRepository.isLoggedIn() },
             isDouyinLoggedIn = { douyinRepository.isLoggedIn() },
             usageTelemetry = mock(WatchUsageTelemetry::class.java)
-        )
+        ))
         val collection = collectFlow(viewModel.channels)
         advanceUntilIdle()
 
@@ -47,12 +47,12 @@ class HomeViewModelTest {
     @Test
     fun hasLoadedChannels_allowsLegitimateEmptyState_afterFirstEmission() = runTest {
         val repo = TestRssRepository()
-        val viewModel = HomeViewModel(
+        val viewModel = mainDispatcherRule.track(HomeViewModel(
             repository = repo,
             isBiliLoggedIn = { false },
             isDouyinLoggedIn = { false },
             usageTelemetry = mock(WatchUsageTelemetry::class.java)
-        )
+        ))
         val collection = collectFlow(viewModel.channels)
 
         advanceUntilIdle()
@@ -75,12 +75,12 @@ class HomeViewModelTest {
         repo.refreshResults[22L] = Result.failure(IllegalStateException("第二个频道刷新失败"))
         val biliRepository = TestBiliRepository()
         val douyinRepository = TestDouyinRepository()
-        val viewModel = HomeViewModel(
+        val viewModel = mainDispatcherRule.track(HomeViewModel(
             repository = repo,
             isBiliLoggedIn = { biliRepository.isLoggedIn() },
             isDouyinLoggedIn = { douyinRepository.isLoggedIn() },
             usageTelemetry = mock(WatchUsageTelemetry::class.java)
-        )
+        ))
         val collection = collectFlow(viewModel.channels)
         advanceUntilIdle()
 
@@ -100,12 +100,12 @@ class HomeViewModelTest {
         val repo = TestRssRepository(initialChannels = listOf(first, second))
         val biliRepository = TestBiliRepository()
         val douyinRepository = TestDouyinRepository()
-        val viewModel = HomeViewModel(
+        val viewModel = mainDispatcherRule.track(HomeViewModel(
             repository = repo,
             isBiliLoggedIn = { biliRepository.isLoggedIn() },
             isDouyinLoggedIn = { douyinRepository.isLoggedIn() },
             usageTelemetry = mock(WatchUsageTelemetry::class.java)
-        )
+        ))
         val collection = collectFlow(viewModel.channels)
         advanceUntilIdle()
 

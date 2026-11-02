@@ -54,16 +54,17 @@ fun SearchInputBar(
                 style = textStyle.copy(color = placeholderColor)
             )
         },
-        trailingIcon = {
-            WatchIconButton(
-                enabled = onSearch != null,
-                onClick = submitSearch
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = "搜索"
-                )
+        trailingIcon = if (onSearch != null) {
+            {
+                WatchIconButton(onClick = submitSearch) {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "搜索"
+                    )
+                }
             }
+        } else {
+            null
         },
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
         keyboardActions = KeyboardActions(onSearch = { submitSearch() }),

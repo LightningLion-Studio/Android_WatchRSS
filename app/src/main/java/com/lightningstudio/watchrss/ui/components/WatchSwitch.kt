@@ -4,6 +4,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.toggleable
@@ -51,7 +52,8 @@ fun WatchSwitch(
 
     Box(
         modifier = modifier
-            .size(trackWidth, trackHeight)
+            .heightIn(min = 48.dp)
+            .size(width = trackWidth, height = trackHeight)
             .alpha(alpha)
             .toggleable(
                 value = checked,

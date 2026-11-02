@@ -1,5 +1,6 @@
 package com.lightningstudio.watchrss.ui.screen
 
+import com.lightningstudio.watchrss.ui.reader.readerViewportBoundary
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -20,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
@@ -27,7 +30,9 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
+import com.lightningstudio.watchrss.ui.reader.LocalReaderPresetRuntime
 import com.lightningstudio.watchrss.ui.reader.ReaderBackgroundSurface
+import com.lightningstudio.watchrss.ui.reader.readerChromeStyle
 import com.lightningstudio.watchrss.ui.screen.rss.DetailTitle
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 
@@ -41,15 +46,16 @@ fun PrivacyPolicyConsentScreen(
     val pagePadding = watchDimensionResource(R.dimen.detail_page_horizontal_padding)
     val blockSpacing = watchDimensionResource(R.dimen.detail_block_spacing)
     val titlePadding = watchDimensionResource(R.dimen.detail_title_safe_padding)
-    val backgroundColor = Color.Black
-    val textColor = Color.White
+    val readerChrome = LocalReaderPresetRuntime.current.preset.readerChromeStyle()
+    val backgroundColor = readerChrome.backgroundColor
+    val textColor = readerChrome.contentColor
     val contentGap = blockSpacing + 4.dp
     val listState = rememberLazyListState()
 
     InstallDigitalCrownLazyListHandler(listState)
 
     Box(modifier = Modifier.fillMaxSize()) {
-        ReaderBackgroundSurface(modifier = Modifier.fillMaxSize()) {
+        ReaderBackgroundSurface(modifier = Modifier.fillMaxSize().readerViewportBoundary()) {
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 state = listState,
@@ -92,7 +98,12 @@ fun PrivacyPolicyConsentScreen(
                             textDecoration = TextDecoration.Underline,
                             modifier = Modifier
                                 .clip(CircleShape)
-                                .clickable(onClick = onOpenPrivacy)
+                                .heightIn(min = 48.dp)
+                                .clickable(
+                                    role = Role.Button,
+                                    onClickLabel = "打开隐私政策",
+                                    onClick = onOpenPrivacy
+                                )
                                 .padding(horizontal = 12.dp, vertical = 8.dp)
                         )
                     }
@@ -148,7 +159,11 @@ private fun ConsentButton(
             .size(48.dp)
             .clip(CircleShape)
             .background(containerColor)
-            .clickable(onClick = onClick),
+            .clickable(
+                role = Role.Button,
+                onClickLabel = text,
+                onClick = onClick
+            ),
         contentAlignment = Alignment.Center
     ) {
         Text(

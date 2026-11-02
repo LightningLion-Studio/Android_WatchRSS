@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -44,7 +45,7 @@ fun LogUploadPrivacyScreen(
 
     InstallDigitalCrownScrollHandler(scrollState)
 
-    WatchSurface(pureBlack = true) {
+    WatchSurface {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -82,10 +83,14 @@ fun LogUploadPrivacyScreen(
 
             Box(
                 modifier = Modifier
-                    .height(buttonHeight)
+                    .height(buttonHeight.coerceAtLeast(48.dp))
                     .clip(RoundedCornerShape(buttonRadius))
                     .background(buttonColor)
-                    .clickable(onClick = onStartUploadClick)
+                    .clickable(
+                        role = Role.Button,
+                        onClickLabel = "开始上传",
+                        onClick = onStartUploadClick
+                    )
                     .padding(horizontal = buttonHorizontalPadding, vertical = buttonVerticalPadding),
                 contentAlignment = Alignment.Center
             ) {

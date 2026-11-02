@@ -1,6 +1,8 @@
 package com.lightningstudio.watchrss.ui.activity
 
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -8,6 +10,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.AutoScrollControlActivity
 import com.lightningstudio.watchrss.testutil.TestAppContainer
 import com.lightningstudio.watchrss.testutil.TestAppContainerRule
@@ -41,6 +44,10 @@ class AutoScrollControlActivityTest {
             composeRule.onNodeWithText("自动滚动控制").assertExists()
             composeRule.onNodeWithText("打开文章自动开始").assertExists()
             composeRule.onNodeWithText("速度").performScrollTo().assertExists()
+            composeRule.onNodeWithContentDescription("降低自动滚动速度")
+                .performScrollTo().assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
+            composeRule.onNodeWithContentDescription("提高自动滚动速度")
+                .performScrollTo().assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp)
             composeRule.onNodeWithText("你也可以在阅读器中双击进入自动滚动控制")
                 .performScrollTo()
                 .assertExists()
@@ -51,10 +58,11 @@ class AutoScrollControlActivityTest {
     fun readerEntry_togglesCurrentArticlePlayback() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         ActivityScenario.launch<AutoScrollControlActivity>(
-            AutoScrollControlActivity.createReaderIntent(context, isPlaying = true)
+            AutoScrollControlActivity.createReaderIntent(context, isPlaying = true, hasStarted = true, isAtBottom = false)
         ).use {
             composeRule.onNodeWithText("正在自动滚动").assertExists()
-            composeRule.onNodeWithContentDescription("暂停自动滚动").performClick()
+            composeRule.onNodeWithContentDescription("暂停自动滚动")
+                .assertWidthIsAtLeast(48.dp).assertHeightIsAtLeast(48.dp).performClick()
             composeRule.onNodeWithText("自动滚动已暂停").assertExists()
             composeRule.onNodeWithContentDescription("启动自动滚动").assertExists()
         }

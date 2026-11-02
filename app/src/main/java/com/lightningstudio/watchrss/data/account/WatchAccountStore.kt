@@ -15,22 +15,42 @@ import java.security.KeyStore
 
 class WatchAccountStore(
     context: Context,
-    private val prefsName: String = "watchrss_account_state"
+    private val prefsName: String = "watchrss_account_state",
+    private val enforceIdentity: Boolean = false
 ) : AccountStore {
     private val appContext = context.applicationContext
-    private val lock = Any()
+    private val lock = identityLock
     private var prefsRef: SharedPreferences? = null
-    private val _state = MutableStateFlow<WatchAccountState?>(read())
+    private val _state = MutableStateFlow<WatchAccountState?>(readPersisted())
+    private val boundIdentity = identityOf(_state.value)
     override val state: StateFlow<WatchAccountState?> = _state
 
-    override fun read(): WatchAccountState? = synchronized(lock) {
+    private fun readPersisted(): WatchAccountState? = synchronized(lock) {
         withPrefsLocked { prefs ->
             val raw = prefs.getString(KEY_STATE, null)
             raw?.let(::decodeState)
         }
     }
 
+    override fun read(): WatchAccountState? = readPersisted()?.takeIf {
+        !enforceIdentity || identityOf(it) == boundIdentity
+    }
+
+    /** Only the application swaps identities; old refresh jobs cannot overwrite the new login. */
+    internal fun persistNewIdentity(state: WatchAccountState) = synchronized(lock) {
+        writeState(state)
+    }
+
+    private fun writeState(state: WatchAccountState) {
+        withPrefsLocked { prefs ->
+            check(prefs.edit().putString(KEY_STATE, encodeState(state)).commit()) { "无法保存手表账号状态" }
+        }
+    }
+
     override fun save(state: WatchAccountState) = synchronized(lock) {
+        if (enforceIdentity) {
+            check(identityOf(state) == boundIdentity && identityOf(readPersisted()) == boundIdentity) { "账号已切换，请重新连接同步" }
+        }
         withPrefsLocked { prefs ->
             check(prefs.edit().putString(KEY_STATE, encodeState(state)).commit()) {
                 "无法保存手表账号状态"
@@ -40,6 +60,7 @@ class WatchAccountStore(
     }
 
     override fun clear() = synchronized(lock) {
+        if (enforceIdentity && identityOf(readPersisted()) != boundIdentity) return@synchronized
         withPrefsLocked { prefs ->
             check(prefs.edit().remove(KEY_STATE).commit()) {
                 "无法清除手表账号状态"
@@ -189,6 +210,11 @@ class WatchAccountStore(
     }
 
     private companion object {
+        val identityLock = Any()
+        fun identityOf(state: WatchAccountState?): Pair<String, String>? = state?.let {
+            it.backendBaseUrl.trimEnd('/') to it.userId
+        }
+
         private const val TAG = "WatchAccountStore"
         private const val KEY_STATE = "state_json"
         private const val KEYSTORE_PROVIDER = "AndroidKeyStore"

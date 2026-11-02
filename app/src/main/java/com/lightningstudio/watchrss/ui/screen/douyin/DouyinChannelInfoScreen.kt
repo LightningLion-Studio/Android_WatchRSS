@@ -26,7 +26,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import com.lightningstudio.watchrss.ui.theme.watchColorResource
+import androidx.compose.ui.semantics.Role
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.core.content.res.ResourcesCompat
 import com.lightningstudio.watchrss.R
+import com.lightningstudio.watchrss.ui.components.ThirdPartyPlatformScopeCard
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownScrollHandler
 import com.lightningstudio.watchrss.ui.theme.ActionButtonTextStyle
@@ -91,7 +92,7 @@ fun DouyinChannelInfoScreen(
 
     InstallDigitalCrownScrollHandler(scrollState)
 
-    WatchSurface(pureBlack = true) {
+    WatchSurface {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -103,7 +104,7 @@ fun DouyinChannelInfoScreen(
                 val availableWidthPx = with(density) { maxWidth.toPx() }
                 val formattedTitle = remember(availableWidthPx, titleSizePx, typeface) {
                     formatTitleForWidthLimits(
-                        title = "抖音",
+                        title = "腕上RSS · 抖音频道",
                         paint = paint,
                         availableWidthPx = availableWidthPx,
                         firstLimitPx = firstLimitPx,
@@ -142,6 +143,10 @@ fun DouyinChannelInfoScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.fillMaxWidth(),
                 textAlign = TextAlign.Center
+            )
+            ThirdPartyPlatformScopeCard(
+                platform = "抖音",
+                modifier = Modifier.padding(top = infoSpacing)
             )
 
             Spacer(modifier = Modifier.height(buttonSpacing))
@@ -197,7 +202,7 @@ private fun ActionButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val pillColor = watchColorResource(R.color.watch_pill_background)
+    val pillColor = MaterialTheme.colorScheme.surfaceVariant
     val pillRadius = com.lightningstudio.watchrss.ui.theme.WatchDimens.hey_button_default_radius
     val textColor = MaterialTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else 0.6f)
 
@@ -208,7 +213,12 @@ private fun ActionButton(
             .height(height)
             .clip(RoundedCornerShape(pillRadius))
             .background(pillColor)
-            .clickable(enabled = enabled, onClick = onClick),
+            .clickable(
+                enabled = enabled,
+                role = Role.Button,
+                onClickLabel = label,
+                onClick = onClick
+            ),
         contentAlignment = Alignment.Center
     ) {
         Text(

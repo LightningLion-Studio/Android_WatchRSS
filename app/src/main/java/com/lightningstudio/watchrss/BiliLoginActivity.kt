@@ -4,6 +4,10 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.activity.viewModels
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -12,6 +16,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
+import com.lightningstudio.watchrss.ui.components.ThirdPartyPlatformNotice
 import com.lightningstudio.watchrss.ui.screen.bili.BiliLoginScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.BiliLoginViewModel
@@ -37,22 +43,31 @@ class BiliLoginActivity : BaseWatchActivity() {
                 LaunchedEffect(Unit) {
                     viewModel.startLogin()
                 }
-                LaunchedEffect(uiState.message) {
+                LaunchedEffect(uiState.messageEventId) {
                     val message = uiState.message
                     if (!message.isNullOrBlank()) {
                         com.lightningstudio.watchrss.ui.util.showAppToast(context, message, android.widget.Toast.LENGTH_SHORT)
-                        viewModel.clearMessage()
+                        viewModel.clearMessage(uiState.messageEventId)
                     }
                 }
 
-                BiliLoginScreen(
-                    uiState = uiState,
-                    onRefreshQr = viewModel::startLogin,
-                    onLoginSuccess = {
-                        setResult(RESULT_OK)
-                        finish()
+                Column(modifier = androidx.compose.ui.Modifier.fillMaxSize()) {
+                    ThirdPartyPlatformNotice(
+                        platform = "哔哩哔哩",
+                        compact = true,
+                        modifier = androidx.compose.ui.Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                    Box(modifier = androidx.compose.ui.Modifier.weight(1f).fillMaxSize()) {
+                        BiliLoginScreen(
+                            uiState = uiState,
+                            onRefreshQr = viewModel::startLogin,
+                            onLoginSuccess = {
+                                setResult(RESULT_OK)
+                                finish()
+                            }
+                        )
                     }
-                )
+                }
                 }
             }
         }

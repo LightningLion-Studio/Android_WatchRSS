@@ -4,6 +4,8 @@ import android.content.Context
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.security.MessageDigest
 import java.util.Base64
 
@@ -48,8 +50,20 @@ object WatchNoteAssetSyncPayload {
         val complete = chunkIndex == chunkCount - 1
         if (complete) {
             require(temporary.sha256() == expectedSha256) { "备忘录图片校验失败" }
-            if (target.exists()) target.delete()
-            require(temporary.renameTo(target)) { "备忘录图片保存失败" }
+            try {
+                Files.move(
+                    temporary.toPath(),
+                    target.toPath(),
+                    StandardCopyOption.ATOMIC_MOVE,
+                    StandardCopyOption.REPLACE_EXISTING
+                )
+            } catch (_: java.io.IOException) {
+                Files.move(
+                    temporary.toPath(),
+                    target.toPath(),
+                    StandardCopyOption.REPLACE_EXISTING
+                )
+            }
         }
         return response(complete = complete, alreadyPresent = false)
     }

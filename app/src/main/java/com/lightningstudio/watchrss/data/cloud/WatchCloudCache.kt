@@ -2,6 +2,8 @@ package com.lightningstudio.watchrss.data.cloud
 
 import android.content.Context
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 class WatchCloudCache(context: Context) {
     private val root = File(context.applicationContext.filesDir, "watch-cloud-cache")
@@ -54,9 +56,19 @@ class WatchCloudCache(context: Context) {
         file.parentFile?.mkdirs()
         val temporary = File(file.parentFile, "${file.name}.tmp")
         temporary.writeBytes(bytes)
-        check(temporary.renameTo(file) || run {
-            file.delete()
-            temporary.renameTo(file)
-        })
+        try {
+            Files.move(
+                temporary.toPath(),
+                file.toPath(),
+                StandardCopyOption.ATOMIC_MOVE,
+                StandardCopyOption.REPLACE_EXISTING
+            )
+        } catch (_: java.io.IOException) {
+            Files.move(
+                temporary.toPath(),
+                file.toPath(),
+                StandardCopyOption.REPLACE_EXISTING
+            )
+        }
     }
 }

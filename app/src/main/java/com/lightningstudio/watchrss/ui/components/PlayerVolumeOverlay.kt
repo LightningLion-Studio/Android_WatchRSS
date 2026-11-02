@@ -118,6 +118,12 @@ class PlayerVolumeState internal constructor(
         show()
     }
 
+    fun setUserProgress(value: Float) {
+        if (!value.isFinite()) return
+        syncOutOfBandVolumeChange()
+        adjustByDelta((value.coerceIn(0f, 1f) - progress) / VOLUME_SENSITIVITY_PERCENT)
+    }
+
     fun enforcePlaybackStartGuard() {
         syncOutOfBandVolumeChange()
         val current = readCurrentVolume()

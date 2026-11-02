@@ -6,9 +6,11 @@ import android.app.TimePickerDialog
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.location.Location
 import android.location.LocationManager
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -37,14 +39,18 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -63,6 +69,7 @@ import com.lightningstudio.watchrss.ui.reader.ReaderPresetRuntime
 import com.lightningstudio.watchrss.ui.reader.ReaderTextRole
 import com.lightningstudio.watchrss.ui.reader.readerTextStyle
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
+import kotlinx.coroutines.launch
 import java.time.format.DateTimeFormatter
 
 class ReaderPresetActivity : BaseWatchActivity() {
@@ -94,41 +101,54 @@ private fun WatchReaderPresetSelector(repository: ReaderPresetRepository) {
     val selection by repository.selection.collectAsStateWithLifecycle()
     val schedule by repository.schedule.collectAsStateWithLifecycle()
     val scroll = rememberScrollState()
+    val scope = rememberCoroutineScope()
+    var fontSize by remember(active.id, active.body.fontSizeSp) { mutableStateOf(active.body.fontSizeSp) }
+    var savingFontSize by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var locationLoading by remember { mutableStateOf(false) }
+    var locationPermissionDenied by remember { mutableStateOf(false) }
+    var enableSunriseAfterLocation by remember { mutableStateOf(false) }
     InstallDigitalCrownScrollHandler(scroll)
 
     fun applyLocation(location: Location?) {
         locationLoading = false
         if (location == null) {
+            enableSunriseAfterLocation = false
             message = "无法获取当前位置，请到空旷处重试"
         } else {
             repository.setSunLocation(location.latitude, location.longitude)
-            message = "已更新日出日落位置"
+            if (enableSunriseAfterLocation) {
+                repository.setScheduleMode(WatchThemeScheduleMode.SUNRISE_SUNSET)
+                enableSunriseAfterLocation = false
+                message = "已启用日出日落主题切换"
+            } else {
+                message = "已更新日出日落位置"
+            }
         }
     }
 
     val locationPermissionLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
             if (result.values.all { it }) {
+                locationPermissionDenied = false
                 locationLoading = true
                 requestCurrentWatchLocation(context, ::applyLocation)
             } else {
-                message = "需要位置权限才能计算日出日落"
+                locationPermissionDenied = true
+                enableSunriseAfterLocation = false
+                message = "位置权限仅用于计算本地日出日落时间；拒绝后仍可使用固定时间主题。"
             }
         }
 
     fun updateSunLocation() {
-        val permissions = arrayOf(
-            Manifest.permission.ACCESS_COARSE_LOCATION,
-            Manifest.permission.ACCESS_FINE_LOCATION
-        )
+        val permissions = arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION)
         val missing = permissions.any {
             ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
         }
         if (missing) {
             locationPermissionLauncher.launch(permissions)
         } else {
+            locationPermissionDenied = false
             locationLoading = true
             requestCurrentWatchLocation(context, ::applyLocation)
         }
@@ -144,16 +164,45 @@ private fun WatchReaderPresetSelector(repository: ReaderPresetRepository) {
     ) {
         Text(
             text = "阅读器预设",
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().semantics { heading() },
             textAlign = TextAlign.Center,
             style = MaterialTheme.typography.titleLarge
         )
         Text(
-            "手表端只选择手机同步的预设，不提供新建或编辑。",
+            "手表上可直接调整正文字号和主题；更多预设可从手机同步。",
             style = MaterialTheme.typography.bodySmall
         )
-        DownloadPhoneAppButton(operation = "同步阅读器预设")
         Text("当前：${active.name}", fontWeight = FontWeight.SemiBold)
+        Text("正文字号：${fontSize.toInt()} sp")
+        Slider(
+            value = fontSize.coerceIn(10f, 64f),
+            onValueChange = { fontSize = it },
+            valueRange = 10f..64f,
+            steps = 53,
+            enabled = !savingFontSize,
+            onValueChangeFinished = {
+                val id = active.id
+                val size = fontSize
+                savingFontSize = true
+                scope.launch {
+                    try {
+                        val latest = repository.preset(id) ?: active
+                        val draft = latest.copy(body = latest.body.copy(fontSizeSp = size))
+                        if (id == ReaderPreset.FALLBACK_ID) {
+                            val saved = repository.saveAsNew(draft, "手表阅读设置")
+                            repository.setActivePreset(saved.id)
+                        } else {
+                            repository.savePreset(draft)
+                        }
+                        message = "字号已保存，返回文章即可生效"
+                    } catch (error: Exception) {
+                        message = "字号保存失败，请重试"
+                    } finally {
+                        savingFontSize = false
+                    }
+                }
+            }
+        )
 
         Text("显示方式")
         val themeModes = listOf(
@@ -189,7 +238,16 @@ private fun WatchReaderPresetSelector(repository: ReaderPresetRepository) {
                 schedule = schedule,
                 repository = repository,
                 locationLoading = locationLoading,
-                onUpdateLocation = ::updateSunLocation
+                locationPermissionDenied = locationPermissionDenied,
+                onUpdateLocation = ::updateSunLocation,
+                onEnableSunriseMode = {
+                    if (schedule.latitude == null || schedule.longitude == null) {
+                        enableSunriseAfterLocation = true
+                        updateSunLocation()
+                    } else {
+                        repository.setScheduleMode(WatchThemeScheduleMode.SUNRISE_SUNSET)
+                    }
+                }
             )
         }
 
@@ -221,7 +279,9 @@ private fun WatchScheduleSection(
     schedule: WatchReaderThemeSchedule,
     repository: ReaderPresetRepository,
     locationLoading: Boolean,
-    onUpdateLocation: () -> Unit
+    locationPermissionDenied: Boolean,
+    onUpdateLocation: () -> Unit,
+    onEnableSunriseMode: () -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     Column(
@@ -243,16 +303,15 @@ private fun WatchScheduleSection(
             )
             FilterChip(
                 selected = schedule.mode == WatchThemeScheduleMode.SUNRISE_SUNSET,
-                onClick = {
-                    if (schedule.latitude == null || schedule.longitude == null) {
-                        onUpdateLocation()
-                    } else {
-                        repository.setScheduleMode(WatchThemeScheduleMode.SUNRISE_SUNSET)
-                    }
-                },
+                onClick = onEnableSunriseMode,
                 label = { Text("日出日落") }
             )
         }
+        Text(
+            "日出日落模式使用手表当前位置计算切换时间；拒绝位置权限仍可使用固定时间模式。",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         if (schedule.mode == WatchThemeScheduleMode.FIXED_TIME) {
             TimeSettingButton(
                 label = "浅色开始",
@@ -283,6 +342,20 @@ private fun WatchScheduleSection(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(if (locationLoading) "正在定位…" else "更新当前位置")
+            }
+            if (locationPermissionDenied) {
+                OutlinedButton(
+                    onClick = {
+                        context.startActivity(
+                            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = Uri.fromParts("package", context.packageName, null)
+                            }
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("打开位置权限设置")
+                }
             }
         }
     }

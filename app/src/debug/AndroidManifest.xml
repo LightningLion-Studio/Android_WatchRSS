@@ -3,21 +3,24 @@
     xmlns:tools="http://schemas.android.com/tools">
     <application>
         <activity
-            android:name=".DouyinEntryActivity"
-            android:launchMode="singleTask" />
-        <activity-alias
-            android:name=".DouyinDebugEntryActivity"
-            android:enabled="true"
+            android:name=".debug.DebugRssChallengeActivity"
             android:exported="true"
-            android:targetActivity=".DouyinEntryActivity">
+            android:theme="@style/Theme.WatchRSS.Translucent"
+            tools:replace="android:exported">
             <intent-filter>
-                <action android:name="com.lightningstudio.watchrss.debug.action.OPEN_DOUYIN" />
+                <action android:name="com.lightningstudio.watchrss.action.DEBUG_RSS_CHALLENGE" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
-        </activity-alias>
-        <receiver
-            android:name=".debug.DouyinPlaybackDebugReceiver"
+        </activity>
+        <activity
+            android:name=".debug.DebugNovelImportActivity"
             android:exported="true"
-            tools:ignore="ExportedReceiver" />
+            android:theme="@style/Theme.WatchRSS.Translucent"
+            tools:replace="android:exported">
+            <intent-filter>
+                <action android:name="com.lightningstudio.watchrss.action.DEBUG_IMPORT_TEN_PAGE_NOVEL" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
     </application>
 </manifest>

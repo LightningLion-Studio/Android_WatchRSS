@@ -58,11 +58,6 @@ class SavedItemsActivity : BaseWatchActivity() {
                     hasLoadedItems = hasLoadedItems,
                     items = items,
                     undoVisible = lastRemoved != null,
-                    syncOperationLabel = if (viewModel.saveType == SaveType.FAVORITE) {
-                        "同步收藏"
-                    } else {
-                        "同步稍后再看"
-                    },
                     onUndoClick = { handleUndo() },
                     onItemClick = { savedItem ->
                         if (!allowNavigation()) return@SavedItemsScreen

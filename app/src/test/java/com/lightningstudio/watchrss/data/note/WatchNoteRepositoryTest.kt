@@ -129,6 +129,19 @@ class WatchNoteRepositoryTest {
         assertEquals("watch", deleted.modifiedBy)
     }
 
+    @Test
+    fun repeatedClockTicksAndClockRollbackStillAdvanceTheNoteVersion() = runTest {
+        val repository = WatchNoteRepository(FakeWatchNoteDao())
+        val original = repository.saveRawMarkdown(null, "first", "watch", now = 100)
+        val edited = repository.saveRawMarkdown(original.noteId, "second", "watch", now = 100)
+        val moved = repository.move(original.noteId, "folder", "watch", now = 90)
+        val deleted = repository.delete(original.noteId, "watch", now = 90)
+        assertEquals(101L, edited.updatedAt)
+        assertEquals(102L, moved.updatedAt)
+        assertEquals(103L, deleted.updatedAt)
+        assertEquals(103L, deleted.deletedAt)
+    }
+
     private fun note(
         markdown: String,
         contentHash: String,
@@ -159,6 +172,7 @@ private class FakeWatchNoteDao(vararg initial: WatchNoteEntity) : WatchNoteDao {
     override fun observeNote(noteId: String): Flow<WatchNoteEntity?> =
         flow.map { current -> current.firstOrNull { it.noteId == noteId && !it.deleted } }
     override suspend fun get(noteId: String): WatchNoteEntity? = notes[noteId]
+    override suspend fun allFolders(): List<WatchNoteFolderEntity> = emptyList()
     override suspend fun all(): List<WatchNoteEntity> = notes.values.toList()
     override suspend fun upsert(notes: List<WatchNoteEntity>) {
         notes.forEach { this.notes[it.noteId] = it }

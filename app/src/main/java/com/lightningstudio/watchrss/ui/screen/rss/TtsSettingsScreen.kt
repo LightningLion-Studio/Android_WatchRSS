@@ -27,7 +27,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -39,7 +38,6 @@ import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownScrollHandler
 import com.lightningstudio.watchrss.ui.settings.WatchSettingsPillRow
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
-import com.lightningstudio.watchrss.ui.theme.watchColorResource
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 import com.lightningstudio.watchrss.ui.viewmodel.TtsSettingsState
 import com.lightningstudio.watchrss.ui.viewmodel.TtsSettingsViewModel
@@ -88,7 +86,7 @@ private fun TtsSettingsContent(
 
     InstallDigitalCrownScrollHandler(scrollState)
 
-    WatchSurface(pureBlack = true) {
+    WatchSurface {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -149,7 +147,7 @@ private fun TtsSettingsContent(
                     Text(
                         text = if (state.isLoggedIn) "已登录，将使用后端默认语音" else "请先登录以使用应用默认语音",
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (state.isLoggedIn) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFFFF6B6B),
+                        color = if (state.isLoggedIn) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error,
                         modifier = Modifier.padding(start = valueIndent, top = valueSpacing)
                     )
                 }
@@ -175,7 +173,7 @@ private fun TtsSettingsContent(
                         Text(
                             text = if (state.hasApiKey) "已配置" else "未配置",
                             style = MaterialTheme.typography.bodySmall,
-                            color = if (state.hasApiKey) MaterialTheme.colorScheme.onSurfaceVariant else Color(0xFFFF6B6B)
+                            color = if (state.hasApiKey) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.error
                         )
                     }
                     Text(
@@ -234,7 +232,7 @@ private fun TtsSettingsContent(
                             Text(
                                 text = status.message,
                                 style = MaterialTheme.typography.bodyLarge,
-                                color = Color(0xFF4CAF50),
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier.fillMaxWidth()
                             )
@@ -254,7 +252,7 @@ private fun TtsSettingsContent(
                             Text(
                                 text = "连接失败",
                                 style = MaterialTheme.typography.bodyLarge,
-                                color = Color(0xFFFF6B6B),
+                                color = MaterialTheme.colorScheme.onErrorContainer,
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier.fillMaxWidth()
                             )
@@ -262,7 +260,7 @@ private fun TtsSettingsContent(
                             Text(
                                 text = status.message,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier.fillMaxWidth()
                             )
@@ -377,12 +375,16 @@ private fun EnginePicker(
 
 @Composable
 private fun ResultCard(isSuccess: Boolean, content: @Composable ColumnScope.() -> Unit) {
-    val accentColor = if (isSuccess) Color(0xFF4CAF50) else Color(0xFFFF6B6B)
+    val containerColor = if (isSuccess) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        MaterialTheme.colorScheme.errorContainer
+    }
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
-            .background(accentColor.copy(alpha = 0.12f))
+            .background(containerColor)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {

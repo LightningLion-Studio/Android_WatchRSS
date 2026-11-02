@@ -40,11 +40,11 @@ class DetailViewModelTest {
 
         try {
             env.repository.setReaderAutoScrollEnabled(true)
-            val viewModel = DetailViewModel(
+            val viewModel = mainDispatcherRule.track(DetailViewModel(
                 savedStateHandle = SavedStateHandle(mapOf("itemId" to 42L)),
                 repository = repo,
                 settingsRepository = env.repository
-            )
+            ))
             val collection = collectFlow(viewModel.readerAutoScrollPlaying)
             advanceUntilIdle()
 
@@ -75,11 +75,11 @@ class DetailViewModelTest {
         val env = createSettingsRepository("detail-view-model.preferences_pb")
 
         try {
-            val viewModel = DetailViewModel(
+            val viewModel = mainDispatcherRule.track(DetailViewModel(
                 savedStateHandle = SavedStateHandle(mapOf("itemId" to 42L)),
                 repository = repo,
                 settingsRepository = env.repository
-            )
+            ))
             advanceUntilIdle()
 
             assertFalse(viewModel.isRetryingOfflineMedia.value)
@@ -117,11 +117,11 @@ class DetailViewModelTest {
         val env = createSettingsRepository("detail-view-model-original-init.preferences_pb")
 
         try {
-            val viewModel = DetailViewModel(
+            val viewModel = mainDispatcherRule.track(DetailViewModel(
                 savedStateHandle = SavedStateHandle(mapOf("itemId" to 42L)),
                 repository = repo,
                 settingsRepository = env.repository
-            )
+            ))
             val collection = collectFlow(viewModel.effectiveUseOriginalContent)
             advanceUntilIdle()
 
@@ -146,11 +146,11 @@ class DetailViewModelTest {
         val env = createSettingsRepository("detail-view-model-original-toggle.preferences_pb")
 
         try {
-            val viewModel = DetailViewModel(
+            val viewModel = mainDispatcherRule.track(DetailViewModel(
                 savedStateHandle = SavedStateHandle(mapOf("itemId" to 42L)),
                 repository = repo,
                 settingsRepository = env.repository
-            )
+            ))
             val originalCollection = collectFlow(viewModel.effectiveUseOriginalContent)
             advanceUntilIdle()
 

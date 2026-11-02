@@ -44,16 +44,19 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.lightningstudio.watchrss.WatchRssApplication
 import com.lightningstudio.watchrss.ui.util.getWebViewUnavailableMessage
 import com.lightningstudio.watchrss.ui.util.offlineToastMessageOrNull
 import com.lightningstudio.watchrss.ui.util.showAppToast
@@ -90,6 +93,7 @@ fun DouyinLoginScreen(
     var qrCodeBase64 by remember { mutableStateOf<String?>(null) }
     var qrCodeType by remember { mutableStateOf<String?>(null) } // "login" or "twoStep"
     var jsErrorMessage by remember { mutableStateOf<String?>(null) }
+    var qrLoadTimeReported by remember { mutableStateOf(false) }
 
     // Loading state tracking
     var loadingStateStartTime by remember { mutableStateOf(System.currentTimeMillis()) }
@@ -272,6 +276,17 @@ fun DouyinLoginScreen(
                             qrCodeBase64 = base64Data
                             qrCodeType = "login"
                             AppLogger.log("DouyinLogin", "检测到登录二维码")
+
+                            // 上报从登录页出现到二维码出现的耗时
+                            val startTime = loginStartTime
+                            if (startTime != null && !qrLoadTimeReported) {
+                                qrLoadTimeReported = true
+                                val duration = System.currentTimeMillis() - startTime
+                                AppLogger.log("DouyinLogin", "二维码加载耗时: ${duration}ms (${duration / 1000.0}秒)")
+                                (context.applicationContext as? WatchRssApplication)
+                                    ?.usageTelemetry
+                                    ?.recordDouyinQrLoadTime(duration)
+                            }
                         } else if (qrCodeType == "login") {
                             // Login QR disappeared
                             qrCodeBase64 = null
@@ -289,7 +304,7 @@ fun DouyinLoginScreen(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(MaterialTheme.colorScheme.background)
             .pointerInput(Unit) {
                 awaitPointerEventScope {
                     while (true) {
@@ -494,7 +509,7 @@ fun DouyinLoginScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(Color.Black.copy(alpha = 0.8f)),
+                                .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.96f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Column(
@@ -504,29 +519,50 @@ fun DouyinLoginScreen(
                                 Icon(
                                     imageVector = Icons.Default.Warning,
                                     contentDescription = "Error",
-                                    tint = Color(0xFFFF9800),
+                                    tint = MaterialTheme.colorScheme.error,
                                     modifier = Modifier.size(48.dp)
                                 )
                                 Spacer(modifier = Modifier.height(16.dp))
                                 Text(
                                     text = "脚本执行错误",
                                     style = MaterialTheme.typography.titleMedium,
-                                    color = Color.White
+                                    color = MaterialTheme.colorScheme.onErrorContainer
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
                                     text = error,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = Color.Gray
+                                    color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.85f)
                                 )
                             }
                         }
                     }
                 }
 
-                // Match the loading ring style used by WebViewActivity.
-                if (isLoading) {
-                    WebViewStyleLoadingIndicator(progress = animatedProgress)
+                // 在二维码出现前持续显示加载环与提示文案
+                if (qrCodeBase64 == null && !needTwoStepVerification) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        WebViewStyleLoadingIndicator(progress = animatedProgress)
+                        Text(
+                            text = "正在加载抖音登录二维码，需要 30~60 秒，请您耐心等待",
+                            modifier = Modifier
+                                .align(Alignment.Center)
+                                .padding(top = 88.dp)
+                                .padding(horizontal = 20.dp),
+                            color = Color.White,
+                            textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                shadow = Shadow(
+                                    color = Color.Black.copy(alpha = 0.65f),
+                                    offset = Offset(0f, 1f),
+                                    blurRadius = 6f
+                                )
+                            )
+                        )
+                    }
                 }
             }
         }
@@ -565,19 +601,21 @@ private fun WebViewStyleLoadingIndicator(progress: Float) {
 
 @Composable
 private fun LoginSuccessView() {
+    val checkColor = MaterialTheme.colorScheme.onTertiaryContainer
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
         contentAlignment = Alignment.Center
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Green circle background with checkmark
             Box(
                 modifier = Modifier
                     .size(120.dp)
                     .background(
-                        color = Color(0xFF4CAF50), // Medium saturation green
+                        color = MaterialTheme.colorScheme.tertiaryContainer,
                         shape = CircleShape
                     ),
                 contentAlignment = Alignment.Center
@@ -585,7 +623,6 @@ private fun LoginSuccessView() {
                 // Draw checkmark
                 Canvas(modifier = Modifier.size(60.dp)) {
                     val strokeWidth = 6.dp.toPx()
-                    val checkColor = Color.White
 
                     // Short line (left part of checkmark)
                     drawLine(
@@ -612,7 +649,7 @@ private fun LoginSuccessView() {
             Text(
                 text = "登录成功",
                 style = MaterialTheme.typography.titleLarge,
-                color = Color.White
+                color = MaterialTheme.colorScheme.onBackground
             )
         }
     }
@@ -684,7 +721,9 @@ private fun NativeQRCodeView(
 @Composable
 private fun ErrorView(errorMessage: String) {
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -694,20 +733,20 @@ private fun ErrorView(errorMessage: String) {
             Icon(
                 imageVector = Icons.Default.Warning,
                 contentDescription = "Error",
-                tint = Color(0xFFFF9800),
+                tint = MaterialTheme.colorScheme.error,
                 modifier = Modifier.size(48.dp)
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = "加载失败",
                 style = MaterialTheme.typography.titleMedium,
-                color = Color.White
+                color = MaterialTheme.colorScheme.onBackground
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = errorMessage,
                 style = MaterialTheme.typography.bodySmall,
-                color = Color.Gray
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.74f)
             )
         }
     }

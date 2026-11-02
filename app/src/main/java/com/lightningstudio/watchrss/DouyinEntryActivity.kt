@@ -5,6 +5,8 @@ import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -18,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.lifecycleScope
 import com.lightningstudio.watchrss.data.douyin.DouyinStreamItem
 import com.lightningstudio.watchrss.data.douyin.buildDouyinExternalSavedItem
@@ -29,6 +32,10 @@ import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_PLAYBACK_START_V
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
 import com.lightningstudio.watchrss.debug.DouyinPlaybackDebugController
+import com.lightningstudio.watchrss.ui.components.AppTransparencyStore
+import com.lightningstudio.watchrss.ui.components.InitialAppTransparencyDialog
+import com.lightningstudio.watchrss.ui.components.ThirdPartyPlatformConfirmationDialog
+import com.lightningstudio.watchrss.ui.components.ThirdPartyPlatformNotice
 import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.screen.douyin.DouyinImmersiveScreen
 import com.lightningstudio.watchrss.ui.screen.douyin.DouyinLoginScreen
@@ -96,7 +103,7 @@ class DouyinEntryActivity : BaseWatchActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setupSystemBars()
-        pendingAutoEnterFlow = shouldAutoEnterFlow(intent)
+        pendingAutoEnterFlow = true
         pendingResumeAwemeId = readResumeAwemeId(intent)
 
         val initialWebViewError = getWebViewUnavailableMessage(this)
@@ -104,7 +111,32 @@ class DouyinEntryActivity : BaseWatchActivity() {
             WatchRSSTheme {
                 val baseDensity = LocalDensity.current
                 CompositionLocalProvider(LocalDensity provides Density(2f, baseDensity.fontScale)) {
-                    val warningMessage = remember { mutableStateOf<String?>(null) }
+                    var showInitialTransparency by remember {
+                        mutableStateOf(!AppTransparencyStore.isInitialAppDisclosureAcknowledged(this@DouyinEntryActivity))
+                    }
+                    var showPlatformConfirmation by remember { mutableStateOf(!showInitialTransparency) }
+                    if (showInitialTransparency) {
+                        InitialAppTransparencyDialog(
+                            onAcknowledge = {
+                                AppTransparencyStore.acknowledgeInitialAppDisclosure(this@DouyinEntryActivity)
+                                showInitialTransparency = false
+                                showPlatformConfirmation = true
+                            }
+                        )
+                    } else if (showPlatformConfirmation) {
+                        ThirdPartyPlatformConfirmationDialog(
+                            platform = "抖音",
+                            onConfirm = { showPlatformConfirmation = false }
+                        )
+                    }
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        ThirdPartyPlatformNotice(
+                            platform = "抖音",
+                            compact = true,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                        Box(modifier = Modifier.weight(1f).fillMaxSize()) {
+                            val warningMessage = remember { mutableStateOf<String?>(null) }
                     val uiState by viewModel.uiState.collectAsState()
                     val volumeGuardEnabled by container.settingsRepository.mediaVolumeGuardEnabled.collectAsState(
                         initial = DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
@@ -143,7 +175,7 @@ class DouyinEntryActivity : BaseWatchActivity() {
                         warnWebViewUnavailable(this@DouyinEntryActivity, message)
                         warningMessage.value = null
                     }
-                    LaunchedEffect(originalContentEnabled, uiState.message) {
+                    LaunchedEffect(originalContentEnabled, uiState.messageEventId) {
                         if (!originalContentEnabled) {
                             val message = uiState.message
                             if (!message.isNullOrBlank()) {
@@ -152,13 +184,15 @@ class DouyinEntryActivity : BaseWatchActivity() {
                                     message,
                                     android.widget.Toast.LENGTH_SHORT
                                 )
-                                viewModel.clearMessage()
+                                viewModel.clearMessage(uiState.messageEventId)
                             }
                         }
                     }
-                    LaunchedEffect(uiState.isLoggedIn, uiState.items.size, uiState.showTitlePage) {
+                    LaunchedEffect(uiState.isLoggedIn, uiState.items.size, uiState.showTitlePage,
+                        originalContentEnabled, showInitialTransparency, showPlatformConfirmation) {
                         if (
-                            pendingAutoEnterFlow &&
+                            pendingAutoEnterFlow && originalContentEnabled &&
+                            !showInitialTransparency && !showPlatformConfirmation &&
                             uiState.isLoggedIn &&
                             uiState.showTitlePage &&
                             uiState.items.isNotEmpty()
@@ -226,10 +260,13 @@ class DouyinEntryActivity : BaseWatchActivity() {
                                     },
                                     onRequestPlaybackRefresh = viewModel::refreshPlaybackSource,
                                     onDiscardPlaybackItem = viewModel::discardPlaybackItem,
-                                    onMessageShown = viewModel::clearMessage,
+                                    onMessageShown = { eventId -> viewModel.clearMessage(eventId) },
                                     onHeaderClick = {
                                         isNavigating = true
                                         startActivity(DouyinChannelInfoActivity.createIntent(this@DouyinEntryActivity))
+                                    },
+                                    onPlaybackActiveChanged = { active ->
+                                        setVideoPlaybackBatteryTracking("douyin", active)
                                     }
                                 )
                             }
@@ -309,10 +346,12 @@ class DouyinEntryActivity : BaseWatchActivity() {
                         ) {
                             WatchCircularProgressIndicator()
                         }
+                        }
                     }
                 }
             }
         }
+    }
     }
 
     override fun onNewIntent(intent: Intent?) {
@@ -342,6 +381,8 @@ class DouyinEntryActivity : BaseWatchActivity() {
             resumeAwemeId = resolveResumeDouyinAwemeId(state)
         )
     }
+
+    override fun shouldUsePlatformSwipeDismissFeature(): Boolean = false
 
     override fun isSwipeBackEnabled(): Boolean = !disableSwipeBack
 

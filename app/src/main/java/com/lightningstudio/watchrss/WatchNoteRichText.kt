@@ -42,6 +42,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -85,7 +86,7 @@ internal fun WatchNoteRichText(
         watchNoteBlockSourceOffsets(markup, blocks)
     }
     val context = LocalContext.current
-    val imageLoader = remember(context) { WatchNoteImageLoader(context.filesDir) }
+    val imageLoader = remember(context) { WatchNoteImageLoader(com.lightningstudio.watchrss.data.account.workspace.libraryContext(context).filesDir) }
 
     if (markup.isBlank()) {
         Text(
@@ -120,7 +121,7 @@ internal fun WatchNoteRichText(
 
                     is WatchNotePreviewBlock.Image -> WatchNoteImageBlock(
                         image = block,
-                        filesDir = context.filesDir,
+                        filesDir = com.lightningstudio.watchrss.data.account.workspace.libraryContext(context).filesDir,
                         onClick = { onImageClick(block) },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -170,7 +171,7 @@ internal fun WatchNoteRichTextLazyColumn(
     val preset = LocalReaderPresetRuntime.current.preset
     val codeBackground = Color(preset.codeBackgroundColorArgb)
     val context = LocalContext.current
-    val imageLoader = remember(context) { WatchNoteImageLoader(context.filesDir) }
+    val imageLoader = remember(context) { WatchNoteImageLoader(com.lightningstudio.watchrss.data.account.workspace.libraryContext(context).filesDir) }
     val blockSourceOffsets = remember(markup, blocks) {
         watchNoteBlockSourceOffsets(markup, blocks)
     }
@@ -237,7 +238,7 @@ internal fun WatchNoteRichTextLazyColumn(
 
                     is WatchNotePreviewBlock.Image -> WatchNoteImageBlock(
                         image = block,
-                        filesDir = context.filesDir,
+                        filesDir = com.lightningstudio.watchrss.data.account.workspace.libraryContext(context).filesDir,
                         onClick = { onImageClick(block) },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -338,7 +339,11 @@ private fun WatchNoteImageBlock(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(onClickLabel = "查看图片", onClick = onClick),
+                .clickable(
+                    role = Role.Button,
+                    onClickLabel = "查看图片",
+                    onClick = onClick
+                ),
             contentAlignment = Alignment.Center
         ) {
             Image(
@@ -656,10 +661,27 @@ private fun chunkWatchNoteMarkdown(markdown: String, maxChars: Int): List<String
 
 private val WatchNoteImageTagRegex = Regex("""(?is)<img\b[^>]*>(?:\s*</img>)?""")
 private val WatchNoteMarkdownImageRegex = Regex(
-    """!\[([^]]*)]\(([^)\s]+)(?:\s+[\"'][^\"']*[\"'])?\)"""
+    """!\[((?:\\.|[^\]])*)\]\(([^)\s]+)(?:\s+[\"'][^\"']*[\"'])?\)"""
 )
 
 private const val WATCH_NOTE_RICH_TEXT_CHUNK_CHARS = 1_200
+
+private fun String.unescapeWatchNoteMarkdownLabel(): String {
+    val result = StringBuilder(length)
+    var index = 0
+    while (index < length) {
+        val current = this[index]
+        val next = getOrNull(index + 1)
+        if (current == '\\' && next != null && (next == '\\' || next == '[' || next == ']')) {
+            result.append(next)
+            index += 2
+        } else {
+            result.append(current)
+            index++
+        }
+    }
+    return result.toString()
+}
 
 private fun parseWatchNoteHtmlPreviewBlocks(markup: String): List<WatchNotePreviewBlock> {
     val result = mutableListOf<WatchNotePreviewBlock>()
@@ -729,7 +751,7 @@ private fun parseWatchNoteMarkdownImageBlocks(markup: String): List<WatchNotePre
             flushRichText()
             result += WatchNotePreviewBlock.Image(
                 path = image.groupValues[2].replace("%20", " "),
-                description = image.groupValues[1]
+                description = image.groupValues[1].unescapeWatchNoteMarkdownLabel()
             )
             cursor = image.range.last + 1
         }

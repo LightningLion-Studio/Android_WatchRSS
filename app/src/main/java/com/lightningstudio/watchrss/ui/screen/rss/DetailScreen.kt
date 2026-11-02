@@ -1,10 +1,12 @@
 package com.lightningstudio.watchrss.ui.screen.rss
 
+import com.lightningstudio.watchrss.ui.reader.readerViewportBoundary
 import android.os.SystemClock
 import android.view.View
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -15,8 +17,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
@@ -38,6 +44,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.outlined.FormatSize
+import androidx.compose.material.icons.outlined.SwipeUp
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
@@ -68,8 +76,12 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -79,6 +91,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.TextLayoutResult
@@ -143,16 +156,21 @@ import kotlin.math.roundToInt
 @Composable
 fun DetailScreen(
     viewModel: DetailViewModel,
+    novelMenuExpanded: Boolean = false,
+    onNovelMenuExpandedChange: (Boolean) -> Unit = {},
+    initialIsNovelMode: Boolean = false,
     llmSummaryState: LlmSummaryUiState = LlmSummaryUiState(),
     readAloudState: ReadAloudUiState = ReadAloudUiState(),
     isStartingActivity: Boolean = false,
     onRequestAiSummary: () -> Unit = {},
     onOpenReadAloud: (ReadAloudStartAnchor?, Boolean) -> Unit = { _, _ -> },
     onOpenReadAloudControls: (ReadAloudStartAnchor?, Boolean) -> Unit = { _, _ -> },
-    onOpenAutoScrollControls: (Boolean) -> Unit = {},
+    onOpenAutoScrollControls: (Boolean, Boolean, Boolean) -> Unit = { _, _, _ -> },
+    onOpenChapter: (Long) -> Unit = {},
     onBack: (Long, Boolean, Boolean) -> Unit
 ) {
     val item by viewModel.item.collectAsState()
+    val novelNavigation by viewModel.novelNavigation.collectAsState()
     val channel by viewModel.channel.collectAsState()
     val savedState by viewModel.savedState.collectAsState()
     val offlineMedia by viewModel.offlineMedia.collectAsState()
@@ -162,6 +180,7 @@ fun DetailScreen(
     val readingFontSizeSp by viewModel.readingFontSizeSp.collectAsState()
     val readerAutoScrollLinesPerSecond by viewModel.readerAutoScrollLinesPerSecond.collectAsState()
     val readerAutoScrollPlaying by viewModel.readerAutoScrollPlaying.collectAsState()
+    val readerTapToScrollEnabled by viewModel.readerTapToScrollEnabled.collectAsState()
     val shareUseSystem by viewModel.shareUseSystem.collectAsState(initial = false)
     val rssInlineImagePrefetchMode by viewModel.rssInlineImagePrefetchMode.collectAsState()
     val llmEnabled by viewModel.llmEnabled.collectAsState()
@@ -175,6 +194,11 @@ fun DetailScreen(
     CompositionLocalProvider(LocalDensity provides Density(2f, baseDensity.fontScale)) {
         val isImportedText = ImportedContentIds.isImportedTextItemUrl(item?.link)
         DetailContent(
+            novelMenuExpanded = novelMenuExpanded,
+            onNovelMenuExpandedChange = onNovelMenuExpandedChange,
+            initialIsNovelMode = initialIsNovelMode || ImportedContentIds.isNovelContentItemUrl(item?.link),
+            novelNavigation = novelNavigation,
+            onOpenChapter = onOpenChapter,
             item = item,
             showOriginalLoadingNotice = !isImportedText &&
                 effectiveUseOriginalContent &&
@@ -190,6 +214,7 @@ fun DetailScreen(
             readingFontSizeSp = readingFontSizeSp,
             readerAutoScrollLinesPerSecond = readerAutoScrollLinesPerSecond,
             readerAutoScrollPlaying = readerAutoScrollPlaying,
+            readerTapToScrollEnabled = readerTapToScrollEnabled,
             shareUseSystem = shareUseSystem,
             rssInlineImagePrefetchMode = rssInlineImagePrefetchMode,
             llmEnabled = llmEnabled,
@@ -218,12 +243,18 @@ internal fun wholePixelAutoScrollDelta(pendingDeltaPx: Float): Float =
     pendingDeltaPx.coerceAtLeast(0f).toInt().toFloat()
 
 internal fun isReaderAiSummaryEntryVisible(
-    llmEnabled: Boolean
-): Boolean = llmEnabled
+    llmEnabled: Boolean,
+    isNovelMode: Boolean = false
+): Boolean = llmEnabled && !isNovelMode
 
 @OptIn(FlowPreview::class)
 @Composable
 internal fun DetailContent(
+    novelMenuExpanded: Boolean = false,
+    onNovelMenuExpandedChange: (Boolean) -> Unit = {},
+    initialIsNovelMode: Boolean = false,
+    novelNavigation: com.lightningstudio.watchrss.data.rss.NovelNavigation? = null,
+    onOpenChapter: (Long) -> Unit = {},
     item: RssItem?,
     showOriginalLoadingNotice: Boolean,
     contentBlocks: List<ContentBlock>,
@@ -237,6 +268,7 @@ internal fun DetailContent(
     readingFontSizeSp: Int,
     readerAutoScrollLinesPerSecond: Float = 2f,
     readerAutoScrollPlaying: Boolean = false,
+    readerTapToScrollEnabled: Boolean = false,
     shareUseSystem: Boolean,
     rssInlineImagePrefetchMode: RssInlineImagePrefetchMode,
     llmEnabled: Boolean = true,
@@ -253,10 +285,11 @@ internal fun DetailContent(
     onRequestAiSummary: () -> Unit = {},
     onOpenReadAloud: (ReadAloudStartAnchor?, Boolean) -> Unit = { _, _ -> },
     onOpenReadAloudControls: (ReadAloudStartAnchor?, Boolean) -> Unit = { _, _ -> },
-    onOpenAutoScrollControls: (Boolean) -> Unit = {},
+    onOpenAutoScrollControls: (Boolean, Boolean, Boolean) -> Unit = { _, _, _ -> },
     onBack: (Long, Boolean, Boolean) -> Unit
 ) {
     val context = LocalContext.current
+    val rootView = LocalView.current
     val density = LocalDensity.current
     val useSystemShare = remember(context, shareUseSystem) {
         shareUseSystem && isSystemShareSettingSupported(context)
@@ -268,7 +301,6 @@ internal fun DetailContent(
     val titlePadding =
         com.lightningstudio.watchrss.ui.reader.ReaderPageLayout.titleHorizontalPadding
     val actionVerticalSpacing = 15.dp
-    val actionHorizontalSpacing = 12.dp
     val actionIconSize = 32.dp
     val actionIconPadding = watchDimensionResource(R.dimen.hey_distance_6dp)
     val extraSafePadding = 0.dp
@@ -319,6 +351,8 @@ internal fun DetailContent(
     }
     var hasRestoredPosition by remember { mutableStateOf(false) }
     var autoScrollFeedbackPlaying by remember(item?.id) { mutableStateOf<Boolean?>(null) }
+    var autoScrollHasStarted by rememberSaveable(item?.id) { mutableStateOf(false) }
+    var autoScrollReachedBottom by rememberSaveable(item?.id) { mutableStateOf(false) }
     val readerAutoScrollPlayingState = rememberUpdatedState(readerAutoScrollPlaying)
     var lastItemId by remember { mutableStateOf<Long?>(null) }
     var lastSavedProgress by remember { mutableStateOf(-1f) }
@@ -382,8 +416,8 @@ internal fun DetailContent(
 
     val link = item?.link?.trim().orEmpty()
     val isImportedText = ImportedContentIds.isImportedTextItemUrl(link)
-    val isNovelContent = ImportedContentIds.isNovelContentItemUrl(link)
-    val canToggleOriginalContent = link.isNotEmpty() && !ImportedContentIds.isImportedContentUrl(link)
+    val readerCapabilities = ImportedContentIds.readerCapabilities(link)
+    val canToggleOriginalContent = readerCapabilities.originalWeb
     val baseLink = link.takeIf { it.isNotBlank() }
     val bodyFontSize = remember(readingFontSizeSp, density, context) {
         adjustedTextSizeSp(
@@ -402,7 +436,21 @@ internal fun DetailContent(
 
     fun setAutoScrollPlaying(playing: Boolean, showFeedback: Boolean = true) {
         onReaderAutoScrollPlayingChange(playing)
+        if (playing) {
+            autoScrollHasStarted = true
+            autoScrollReachedBottom = false
+        }
         if (showFeedback) autoScrollFeedbackPlaying = playing
+    }
+
+    LaunchedEffect(listState, item?.id) {
+        snapshotFlow { listState.canScrollForward }.collect { canScrollForward ->
+            if (canScrollForward) autoScrollReachedBottom = false
+        }
+    }
+
+    LaunchedEffect(readerAutoScrollPlaying) {
+        if (readerAutoScrollPlaying) autoScrollHasStarted = true
     }
 
     val pauseAutoScrollForManualInput = rememberUpdatedState {
@@ -453,6 +501,9 @@ internal fun DetailContent(
                 if (scrollDeltaPx > 0f) {
                     if (shouldStopReaderAutoScroll(listState.canScrollForward)) {
                         setAutoScrollPlaying(playing = false, showFeedback = false)
+                        autoScrollHasStarted = true
+                        autoScrollReachedBottom = true
+                        com.lightningstudio.watchrss.ui.util.showAppToast(context, "已到文章底部，自动滚动已停止")
                         break
                     }
                     val consumedDeltaPx = listState.scrollBy(scrollDeltaPx).coerceAtLeast(0f)
@@ -481,8 +532,10 @@ internal fun DetailContent(
     val accountState by (context.applicationContext as com.lightningstudio.watchrss.WatchRssApplication)
         .container.watchAccountStore.state.collectAsState()
     val hasPaidAiAuthorization = accountState?.watchDeviceToken?.isNotBlank() == true
+    val isNovelMode = initialIsNovelMode || ImportedContentIds.isNovelContentItemUrl(link)
     val showAiSummaryEntry = isReaderAiSummaryEntryVisible(
-        llmEnabled = llmEnabled
+        llmEnabled = llmEnabled,
+        isNovelMode = isNovelMode
     )
     var aiSummaryExpanded by rememberSaveable(item?.id) { mutableStateOf(false) }
     LaunchedEffect(item?.id, showAiSummaryEntry, hasPaidAiAuthorization, llmAutoSummarize) {
@@ -494,12 +547,15 @@ internal fun DetailContent(
     val aiSummaryError = llmSummaryState.status as? SummaryStatus.Error
     LaunchedEffect(aiSummaryError?.message) {
         aiSummaryError?.message?.let { message ->
-            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+            com.lightningstudio.watchrss.ui.util.showAppToast(context, message, Toast.LENGTH_SHORT)
         }
     }
-    val showReadAloudAction = item != null && !ImportedContentIds.isImportedContentUrl(link)
+    val showReadAloudAction = item != null && (
+        !ImportedContentIds.isImportedContentUrl(link) ||
+            ImportedContentIds.isNovelContentItemUrl(link)
+        )
     val articleActionItemCount = if (
-        canToggleOriginalContent || showAiSummaryEntry || showReadAloudAction
+        canToggleOriginalContent || showAiSummaryEntry || (showReadAloudAction && !isNovelMode)
     ) 1 else 0
     val importedTextFirstItemIndex = remember(
         articleActionItemCount,
@@ -702,16 +758,28 @@ internal fun DetailContent(
     }
 
     fun toggleAutoScroll() {
+        if (!readerTapToScrollEnabled) return
+        if (!readerAutoScrollPlayingState.value && !listState.canScrollForward) {
+            com.lightningstudio.watchrss.ui.util.showAppToast(context, "已到文章底部，请先向上滚动")
+            return
+        }
         setAutoScrollPlaying(!readerAutoScrollPlayingState.value)
     }
 
     fun openAutoScrollControls() {
-        if (item != null) onOpenAutoScrollControls(readerAutoScrollPlayingState.value)
+        if (item != null) {
+            onOpenAutoScrollControls(
+                readerAutoScrollPlayingState.value,
+                autoScrollHasStarted,
+                autoScrollReachedBottom || isReachedBottom(listState, with(density) { 8.dp.toPx() })
+            )
+        }
     }
 
     fun Modifier.readerGestureTarget(onLongPress: () -> Unit): Modifier = pointerInput(
         onLongPress,
         readerAutoScrollPlaying,
+        readerTapToScrollEnabled,
         item?.id
     ) {
         detectTapGestures(
@@ -1059,7 +1127,7 @@ internal fun DetailContent(
 
     com.lightningstudio.watchrss.ui.reader.ReaderBackgroundSurface(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxSize().readerViewportBoundary()
             .semantics {
                 contentDescription = "文章详情页面"
             }
@@ -1207,479 +1275,694 @@ internal fun DetailContent(
         }
 
         val listSemanticsModifier = Modifier.clearAndSetSemantics { }
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .nestedScroll(manualAutoScrollConnection)
-                .then(listSemanticsModifier),
-            state = listState,
-            contentPadding = PaddingValues(horizontal = pagePadding)
-        ) {
-            item(key = "topSpacer") {
-                Spacer(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(safePadding + extraSafePadding)
-                        .readerGestureTarget(::openReadAloudFromBeginning)
-                )
-            }
-            item(key = "titleGap") {
-                Spacer(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(
-                            com.lightningstudio.watchrss.ui.reader.ReaderPageLayout.titleGap
+        val pageTransitionProgress = remember { Animatable(1f) }
+        var pageSnapshot by remember(item?.id) { mutableStateOf<ImageBitmap?>(null) }
+        var pageSnapshotOrigin by remember { mutableStateOf(Offset.Zero) }
+        var pageTurnDirection by remember { mutableStateOf(1) }
+        var isPageTurning by remember { mutableStateOf(false) }
+        var isPageMode by rememberSaveable { mutableStateOf(false) }
+        val isNovelPageMode = isNovelMode && isPageMode
+        val pageTurnScope = rememberCoroutineScope()
+
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val viewportWidthPx = with(density) { maxWidth.toPx() }
+            val viewportHeightPx = with(density) { maxHeight.toPx() }
+
+            fun turnPage(direction: Int) {
+                if (isPageTurning || viewportHeightPx <= 0f || viewportWidthPx <= 0f) return
+                if ((direction > 0 && !listState.canScrollForward) ||
+                    (direction < 0 && !listState.canScrollBackward)
+                ) return
+                pageTurnScope.launch {
+                    if (rootView.width <= 0 || rootView.height <= 0) return@launch
+                    val oldPage = runCatching {
+                        val screenBitmap = android.graphics.Bitmap.createBitmap(
+                            rootView.width,
+                            rootView.height,
+                            android.graphics.Bitmap.Config.ARGB_8888
+                        ).also { bitmap ->
+                            rootView.draw(android.graphics.Canvas(bitmap))
+                        }
+                        val left = pageSnapshotOrigin.x.roundToInt().coerceIn(0, screenBitmap.width - 1)
+                        val top = pageSnapshotOrigin.y.roundToInt().coerceIn(0, screenBitmap.height - 1)
+                        val width = viewportWidthPx.roundToInt()
+                            .coerceAtMost(screenBitmap.width - left).coerceAtLeast(1)
+                        val height = viewportHeightPx.roundToInt()
+                            .coerceAtMost(screenBitmap.height - top).coerceAtLeast(1)
+                        val viewportBitmap = android.graphics.Bitmap.createBitmap(
+                            screenBitmap,
+                            left,
+                            top,
+                            width,
+                            height
                         )
-                        .readerGestureTarget(::openReadAloudFromBeginning)
-                )
-            }
-            item(key = "title") {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .readerGestureTarget(::openReadAloudFromBeginning)
-                ) {
-                    if (item != null) {
-                        DetailTitle(
-                            title = item.title,
-                            titlePadding = titlePadding,
-                            textColor = textColor,
-                            highlightRange = activeReadAloudHighlight
-                                ?.takeIf { highlight -> highlight.isTitle }
-                                ?.let { highlight -> findReadAloudHighlightRange(item.title, highlight) },
-                            highlightColor = readAloudHighlightColor,
-                            onTextLayout = { titleTextLayout = it }
-                        )
+                        screenBitmap.recycle()
+                        viewportBitmap.asImageBitmap()
+                    }.getOrNull() ?: return@launch
+                    isPageTurning = true
+                    pageSnapshot = oldPage
+                    pageTurnDirection = direction
+                    pageTransitionProgress.snapTo(0f)
+                    val consumed = listState.scrollBy(viewportHeightPx * direction)
+                    if (kotlin.math.abs(consumed) < 1f) {
+                        pageSnapshot = null
+                        pageTransitionProgress.snapTo(1f)
+                        isPageTurning = false
+                        return@launch
                     }
-                    BlurFadeVisibility(
-                        visible = item == null,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        DetailTitleSkeleton(
-                            titlePadding = titlePadding,
-                            backgroundColor = backgroundColor,
-                            textColor = textColor
-                        )
-                    }
-                }
-            }
-            if (canToggleOriginalContent || showAiSummaryEntry || showReadAloudAction) {
-                item(key = "articleActions") {
-                    Spacer(modifier = Modifier.height(blockSpacing))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier.weight(1f),
-                            contentAlignment = Alignment.CenterStart
-                        ) {
-                            if (canToggleOriginalContent) {
-                                DetailActionButton(
-                                    text = if (originalContentEnabled) "阅读RSS" else "阅读原文",
-                                    fontSize = bodyFontSize,
-                                    containerColor = actionContainerColor,
-                                    contentColor = textColor,
-                                    borderColor = actionBorderColor,
-                                    onClick = onToggleOriginalContent,
-                                    onLongClick = { showOriginalModeWarning = true }
-                                )
+                    // Align the next viewport to a complete text line when a page
+                    // boundary falls inside a paragraph. Keep the final scroll to
+                    // the end intact so the bottom controls remain reachable.
+                    if (direction < 0 || listState.canScrollForward) {
+                        androidx.compose.runtime.withFrameNanos { }
+                        val info = listState.layoutInfo
+                        val topItem = info.visibleItemsInfo.firstOrNull {
+                            it.offset <= info.viewportStartOffset && it.offset + it.size > info.viewportStartOffset
+                        }
+                        val layout = topItem?.let {
+                            contentTextBlockLayouts[it.index - contentBlockFirstItemIndex]
+                                ?: importedTextChunkLayouts[it.index - importedTextFirstItemIndex]
+                        }
+                        if (topItem != null && layout != null && layout.lineCount > 0) {
+                            val padding = (topItem.size - layout.size.height).coerceAtLeast(0)
+                            val textTop = topItem.offset + padding
+                            val textY = (info.viewportStartOffset - textTop).toFloat()
+                            if (textY > 0f && textY < layout.size.height) {
+                                val line = layout.getLineForVerticalPosition(textY)
+                                val correction = textTop + layout.getLineTop(line) - info.viewportStartOffset
+                                if (correction < -1f) listState.scrollBy(correction)
                             }
                         }
-                        if (showAiSummaryEntry) {
-                            AiSummaryButton(
-                                activeColor = activeColor,
-                                containerColor = actionContainerColor,
-                                borderColor = actionBorderColor,
-                                expanded = aiSummaryExpanded,
-                                loading = llmSummaryState.status == SummaryStatus.WaitingForContent ||
-                                    llmSummaryState.status == SummaryStatus.Generating,
-                                onClick = {
-                                    val expanding = !aiSummaryExpanded
-                                    aiSummaryExpanded = expanding
-                                    if (expanding &&
-                                        (llmSummaryState.status == SummaryStatus.Idle ||
-                                            llmSummaryState.status is SummaryStatus.Error)
-                                    ) {
-                                        onRequestAiSummary()
-                                    }
-                                }
+                    }
+                    pageTransitionProgress.animateTo(
+                        targetValue = 1f,
+                        animationSpec = tween(220, easing = LinearEasing)
+                    )
+                    pageSnapshot = null
+                    isPageTurning = false
+                }
+            }
+
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .onGloballyPositioned { pageSnapshotOrigin = it.positionInRoot() }
+                    .graphicsLayer {
+                        if (isPageTurning) {
+                            translationX = (1f - pageTransitionProgress.value) *
+                                viewportWidthPx * pageTurnDirection
+                        }
+                    }
+                    .nestedScroll(manualAutoScrollConnection)
+                    .then(listSemanticsModifier),
+                state = listState,
+                contentPadding = PaddingValues(horizontal = pagePadding)
+            ) {
+                item(key = "topSpacer") {
+                    Spacer(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(safePadding + extraSafePadding)
+                            .readerGestureTarget(::openReadAloudFromBeginning)
+                    )
+                }
+                item(key = "titleGap") {
+                    Spacer(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(
+                                com.lightningstudio.watchrss.ui.reader.ReaderPageLayout.titleGap
                             )
-                        } else {
-                            Spacer(modifier = Modifier.size(38.dp))
+                            .readerGestureTarget(::openReadAloudFromBeginning)
+                    )
+                }
+                item(key = "title") {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .readerGestureTarget(::openReadAloudFromBeginning)
+                            .semantics { heading() }
+                    ) {
+                        if (item != null) {
+                            DetailTitle(
+                                title = item.title,
+                                titlePadding = titlePadding,
+                                textColor = textColor,
+                                highlightRange = activeReadAloudHighlight
+                                    ?.takeIf { highlight -> highlight.isTitle }
+                                    ?.let { highlight -> findReadAloudHighlightRange(item.title, highlight) },
+                                highlightColor = readAloudHighlightColor,
+                                onTextLayout = { titleTextLayout = it }
+                            )
                         }
-                        Box(
-                            modifier = Modifier.weight(1f),
-                            contentAlignment = Alignment.CenterEnd
+                        BlurFadeVisibility(
+                            visible = item == null,
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            if (showReadAloudAction) {
-                                DetailActionButton(
-                                    text = "大声朗读",
-                                    fontSize = bodyFontSize,
-                                    containerColor = activeActionContainerColor,
-                                    contentColor = activeColor,
-                                    borderColor = activeActionBorderColor,
+                            DetailTitleSkeleton(
+                                titlePadding = titlePadding,
+                                backgroundColor = backgroundColor,
+                                textColor = textColor
+                            )
+                        }
+                    }
+                }
+                if (canToggleOriginalContent || showAiSummaryEntry || (showReadAloudAction && !isNovelMode)) {
+                    item(key = "articleActions") {
+                        Spacer(modifier = Modifier.height(blockSpacing))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier.weight(1f),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                if (canToggleOriginalContent) {
+                                    DetailActionButton(
+                                        text = if (originalContentEnabled) "阅读RSS" else "阅读原文",
+                                        fontSize = bodyFontSize,
+                                        containerColor = actionContainerColor,
+                                        contentColor = textColor,
+                                        borderColor = actionBorderColor,
+                                        onClick = onToggleOriginalContent,
+                                        onLongClick = { showOriginalModeWarning = true }
+                                    )
+                                }
+                            }
+                            if (showAiSummaryEntry) {
+                                AiSummaryButton(
+                                    activeColor = activeColor,
+                                    containerColor = actionContainerColor,
+                                    borderColor = actionBorderColor,
+                                    expanded = aiSummaryExpanded,
+                                    loading = llmSummaryState.status == SummaryStatus.WaitingForContent ||
+                                        llmSummaryState.status == SummaryStatus.Generating,
                                     onClick = {
-                                        if (readerAutoScrollPlayingState.value) {
-                                            setAutoScrollPlaying(playing = false)
+                                        val expanding = !aiSummaryExpanded
+                                        aiSummaryExpanded = expanding
+                                        if (expanding &&
+                                            (llmSummaryState.status == SummaryStatus.Idle ||
+                                                llmSummaryState.status is SummaryStatus.Error)
+                                        ) {
+                                            onRequestAiSummary()
                                         }
-                                        onOpenReadAloud(null, originalContentEnabled)
                                     }
                                 )
+                            } else {
+                                Spacer(modifier = Modifier.size(38.dp))
+                            }
+                            Box(
+                                modifier = Modifier.weight(1f),
+                                contentAlignment = Alignment.CenterEnd
+                            ) {
+                                if (showReadAloudAction && !isNovelMode) {
+                                    DetailActionButton(
+                                        text = "大声朗读",
+                                        fontSize = bodyFontSize,
+                                        containerColor = activeActionContainerColor,
+                                        contentColor = activeColor,
+                                        borderColor = activeActionBorderColor,
+                                        onClick = {
+                                            if (readerAutoScrollPlayingState.value) {
+                                                setAutoScrollPlaying(playing = false)
+                                            }
+                                            onOpenReadAloud(null, originalContentEnabled)
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
                 }
-            }
-            if (hasOfflineFailures || isRetryingOfflineMedia) {
-                item(key = "offlineAction") {
-                    Spacer(modifier = Modifier.height(blockSpacing))
-                    DetailActionButton(
-                        text = if (isRetryingOfflineMedia) "重试中..." else "离线媒体下载失败，点此重试",
-                        fontSize = bodyFontSize,
-                        containerColor = actionContainerColor,
-                        contentColor = textColor,
-                        borderColor = actionBorderColor,
-                        enabled = !isRetryingOfflineMedia,
-                        onClick = onRetryOfflineMedia
-                    )
-                }
-            }
-            if (showAiSummaryParagraph) {
-                item(key = "aiSummaryParagraph") {
-                    Spacer(modifier = Modifier.height(blockSpacing))
-                    AiSummaryParagraph(
-                        summaryState = llmSummaryState,
-                        textColor = textColor,
-                        activeColor = activeColor,
-                        onRetry = onRequestAiSummary
-                    )
-                }
-            }
-            item(key = "contentGap") {
-                Spacer(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(blockSpacing)
-                        .readerGestureTarget(::openReadAloudFromVisibleAnchor)
-                )
-            }
-            if (showOriginalLoadingNotice) {
-                item(key = "originalLoading") {
-                    DetailTextBlock(
-                        text = "原文加载中，您正在查看RSS内容...",
-                        style = ContentTextStyle.QUOTE,
-                        textColor = textColor,
-                        fontSizeSp = bodyFontSize,
-                        topPadding = 0.dp,
-                        isScrolling = isScrolling,
-                        onTap = ::toggleAutoScroll,
-                        onDoubleTap = ::openAutoScrollControls,
-                        onLongClick = { openReadAloudFromVisibleAnchor() }
-                    )
-                }
-            }
-            item(key = "loadingSkeleton") {
-                BlurFadeVisibility(
-                    visible = item == null || (contentBlocks.isEmpty() && importedTextReader == null),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    DetailContentSkeleton(
-                        backgroundColor = backgroundColor,
-                        textColor = textColor,
-                        containerColor = actionContainerColor,
-                        borderColor = actionBorderColor,
-                        blockSpacing = blockSpacing
-                    )
-                }
-            }
-            if (item != null && importedTextReader != null) {
-                items(
-                    count = importedTextReader.chunkCount,
-                    key = { index -> "importedText:${importedTextReader.marker}:$index" },
-                    contentType = { "imported_text" }
-                ) { index ->
-                    val marker = importedTextReader.marker
-                    val chunk by produceState<String?>(initialValue = null, marker, index) {
-                        value = onLoadImportedTextChunk(marker, index)
-                    }
-                    val text = chunk
-                    LaunchedEffect(marker, index, text) {
-                        if (text == null) {
-                            importedTextChunkTexts.remove(index)
-                            importedTextChunkLayouts.remove(index)
-                        } else {
-                            importedTextChunkTexts[index] = text
-                        }
-                    }
-                    val topPadding = if (index == 0) 0.dp else blockSpacing
-                    if (text == null) {
-                        Spacer(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(if (index == 0) 1.dp else blockSpacing)
-                                .readerGestureTarget(::openReadAloudFromVisibleAnchor)
+                if (hasOfflineFailures || isRetryingOfflineMedia) {
+                    item(key = "offlineAction") {
+                        Spacer(modifier = Modifier.height(blockSpacing))
+                        DetailActionButton(
+                            text = if (isRetryingOfflineMedia) "重试中..." else "离线媒体下载失败，点此重试",
+                            fontSize = bodyFontSize,
+                            containerColor = actionContainerColor,
+                            contentColor = textColor,
+                            borderColor = actionBorderColor,
+                            enabled = !isRetryingOfflineMedia,
+                            singleLine = false,
+                            onClick = onRetryOfflineMedia
                         )
-                    } else if (text.isNotBlank()) {
-                        val highlightRange = activeReadAloudHighlight
-                            ?.takeIf { highlight -> highlight.importedChunkIndex == index }
-                            ?.let { highlight ->
-                                directImportedReadAloudHighlightRange(text, highlight)
-                                    ?: findReadAloudHighlightRange(text, highlight)
-                            }
+                    }
+                }
+                if (showAiSummaryParagraph) {
+                    item(key = "aiSummaryParagraph") {
+                        Spacer(modifier = Modifier.height(blockSpacing))
+                        AiSummaryParagraph(
+                            summaryState = llmSummaryState,
+                            textColor = textColor,
+                            activeColor = activeColor,
+                            onRetry = onRequestAiSummary
+                        )
+                    }
+                }
+                item(key = "contentGap") {
+                    Spacer(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(blockSpacing)
+                            .readerGestureTarget(::openReadAloudFromVisibleAnchor)
+                    )
+                }
+                if (showOriginalLoadingNotice) {
+                    item(key = "originalLoading") {
                         DetailTextBlock(
-                            text = text,
-                            style = ContentTextStyle.BODY,
+                            text = "原文加载中，您正在查看RSS内容...",
+                            style = ContentTextStyle.QUOTE,
                             textColor = textColor,
                             fontSizeSp = bodyFontSize,
-                            topPadding = topPadding,
+                            topPadding = 0.dp,
                             isScrolling = isScrolling,
-                            highlightRange = highlightRange,
-                            highlightColor = readAloudHighlightColor,
                             onTap = ::toggleAutoScroll,
                             onDoubleTap = ::openAutoScrollControls,
-                            onLongClick = { pressPosition ->
-                                val pressedCharOffset = importedTextChunkLayouts[index]
-                                    ?.getOffsetForPosition(pressPosition)
-                                AppLogger.d(
-                                    "ReadAloudTouch",
-                                    "imported chunk=$index position=$pressPosition offset=$pressedCharOffset " +
-                                        "text=${pressedCharOffset?.let { text.drop(it).take(40) }}"
-                                )
-                                openReadAloudControlsOnce(
-                                    pressedCharOffset?.let { charOffset ->
-                                        importedTextReadAloudStartAnchorAtCharOffset(
-                                            chunkIndex = index,
-                                            chunkText = text,
-                                            pressedCharOffset = charOffset,
-                                            byteLength = importedTextReader.byteLength
-                                        )
-                                    } ?: currentReadAloudStartAnchor()
-                                )
-                            },
-                            onTextLayout = { importedTextChunkLayouts[index] = it }
+                            onLongClick = { openReadAloudFromVisibleAnchor() }
                         )
                     }
                 }
-            }
-            if (item != null && contentBlocks.isNotEmpty()) {
-                itemsIndexed(
-                    items = contentBlocks,
-                    key = { index, block ->
-                        when (block) {
-                            is ContentBlock.Image -> "img:$index:${block.url}"
-                            is ContentBlock.Video -> "vid:$index:${block.url}:${block.poster.orEmpty()}"
-                            is ContentBlock.Text -> "txt:${block.style}:${block.text.hashCode()}:$index"
-                        }
-                    },
-                    contentType = { _, block ->
-                        when (block) {
-                            is ContentBlock.Text -> "text_${block.style}"
-                            is ContentBlock.Image -> "image"
-                            is ContentBlock.Video -> "video"
-                        }
+                item(key = "loadingSkeleton") {
+                    BlurFadeVisibility(
+                        visible = item == null || (contentBlocks.isEmpty() && importedTextReader == null),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        DetailContentSkeleton(
+                            isNovelMode = isNovelMode,
+                            backgroundColor = backgroundColor,
+                            textColor = textColor,
+                            containerColor = actionContainerColor,
+                            borderColor = actionBorderColor,
+                            blockSpacing = blockSpacing
+                        )
                     }
-                ) { index, block ->
-                    val topPadding = if (index == 0) 0.dp else blockSpacing
-                    when (block) {
-                        is ContentBlock.Text -> {
-                            val blockFontSize = when (block.style) {
-                                ContentTextStyle.TITLE -> titleBlockFontSize
-                                ContentTextStyle.SUBTITLE -> subtitleBlockFontSize
-                                ContentTextStyle.QUOTE -> bodyFontSize
-                                ContentTextStyle.CODE -> bodyFontSize
-                                ContentTextStyle.BODY -> bodyFontSize
+                }
+                if (item != null && importedTextReader != null) {
+                    items(
+                        count = importedTextReader.chunkCount,
+                        key = { index -> "importedText:${importedTextReader.marker}:$index" },
+                        contentType = { "imported_text" }
+                    ) { index ->
+                        val marker = importedTextReader.marker
+                        val chunk by produceState<String?>(initialValue = null, marker, index) {
+                            value = onLoadImportedTextChunk(marker, index)
+                        }
+                        val text = chunk
+                        LaunchedEffect(marker, index, text) {
+                            if (text == null) {
+                                importedTextChunkTexts.remove(index)
+                                importedTextChunkLayouts.remove(index)
+                            } else {
+                                importedTextChunkTexts[index] = text
                             }
+                        }
+                        val topPadding = if (index == 0) 0.dp else blockSpacing
+                        if (text == null) {
+                            Spacer(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(if (index == 0) 1.dp else blockSpacing)
+                                    .readerGestureTarget(::openReadAloudFromVisibleAnchor)
+                            )
+                        } else if (text.isNotBlank()) {
                             val highlightRange = activeReadAloudHighlight
-                                ?.takeIf { highlight ->
-                                    highlight.importedChunkIndex == null &&
-                                        (highlight.contentBlockIndex == null ||
-                                            highlight.contentBlockIndex == index)
-                                }
+                                ?.takeIf { highlight -> highlight.importedChunkIndex == index }
                                 ?.let { highlight ->
-                                    directContentReadAloudHighlightRange(block.text, highlight, index)
-                                        ?: findReadAloudHighlightRange(block.text, highlight)
+                                    directImportedReadAloudHighlightRange(text, highlight)
+                                        ?: findReadAloudHighlightRange(text, highlight)
                                 }
                             DetailTextBlock(
-                                text = block.text,
-                                style = block.style,
+                                text = text,
+                                style = ContentTextStyle.BODY,
                                 textColor = textColor,
-                                fontSizeSp = blockFontSize,
+                                fontSizeSp = bodyFontSize,
                                 topPadding = topPadding,
                                 isScrolling = isScrolling,
-                                // “少数派”返回的 RSS 就是这样的，只有摘要，在摘要结尾说“查看全文”。
-                                inlineActionText = "查看全文",
-                                onInlineActionClick = onToggleOriginalContent,
                                 highlightRange = highlightRange,
                                 highlightColor = readAloudHighlightColor,
                                 onTap = ::toggleAutoScroll,
                                 onDoubleTap = ::openAutoScrollControls,
                                 onLongClick = { pressPosition ->
-                                    val pressedCharOffset = contentTextBlockLayouts[index]
+                                    val pressedCharOffset = importedTextChunkLayouts[index]
                                         ?.getOffsetForPosition(pressPosition)
                                     AppLogger.d(
                                         "ReadAloudTouch",
-                                        "content block=$index position=$pressPosition offset=$pressedCharOffset " +
-                                            "text=${pressedCharOffset?.let { block.text.drop(it).take(40) }}"
+                                        "imported chunk=$index position=$pressPosition offset=$pressedCharOffset " +
+                                            "text=${pressedCharOffset?.let { text.drop(it).take(40) }}"
                                     )
                                     openReadAloudControlsOnce(
                                         pressedCharOffset?.let { charOffset ->
-                                            contentReadAloudStartAnchorAtCharOffset(
-                                                contentBlocks = contentBlocks,
-                                                blockIndex = index,
-                                                pressedCharOffset = charOffset
+                                            importedTextReadAloudStartAnchorAtCharOffset(
+                                                chunkIndex = index,
+                                                chunkText = text,
+                                                pressedCharOffset = charOffset,
+                                                byteLength = importedTextReader.byteLength
                                             )
                                         } ?: currentReadAloudStartAnchor()
                                     )
                                 },
-                                onTextLayout = { contentTextBlockLayouts[index] = it }
+                                onTextLayout = { importedTextChunkLayouts[index] = it }
                             )
                         }
-                        is ContentBlock.Image -> {
-                            val resolvedUrl = resolveMediaUrl(block.url, offlineMedia, baseLink)
-                            DetailImageBlock(
-                                url = resolvedUrl,
-                                alt = block.alt,
-                                initialAspectRatio = block.aspectRatio,
-                                maxWidthPx = maxImageWidthPx,
-                                containerColor = mediaCardContainerColor,
-                                borderColor = mediaCardBorderColor,
-                                topPadding = topPadding,
-                                isScrolling = isScrolling,
-                                onClick = { openImagePreview(context, resolvedUrl, block.alt) }
-                            )
+                    }
+                }
+                if (item != null && contentBlocks.isNotEmpty()) {
+                    itemsIndexed(
+                        items = contentBlocks,
+                        key = { index, block ->
+                            when (block) {
+                                is ContentBlock.Image -> "img:$index:${block.url}"
+                                is ContentBlock.Video -> "vid:$index:${block.url}:${block.poster.orEmpty()}"
+                                is ContentBlock.Text -> "txt:${block.style}:${block.text.hashCode()}:$index"
+                            }
+                        },
+                        contentType = { _, block ->
+                            when (block) {
+                                is ContentBlock.Text -> "text_${block.style}"
+                                is ContentBlock.Image -> "image"
+                                is ContentBlock.Video -> "video"
+                            }
                         }
-                        is ContentBlock.Video -> {
-                            val resolvedUrl = resolveMediaUrl(block.url, offlineMedia, baseLink)
-                            val defaultWebUrl = resolveRemoteUrl(block.url, baseLink)
-                            val biliTarget = parseBiliVideoTarget(block.url)
-                                ?: item?.link?.let(::parseBiliVideoTarget)
-                            val douyinAwemeId = item?.link?.let(::parseDouyinAwemeId)
-                            val douyinWebUrl = buildDouyinPlaybackWebUrl(
-                                awemeId = douyinAwemeId,
-                                fallbackUrl = item?.link
-                            )
-                            DetailVideoBlock(
-                                poster = block.poster?.let { resolveMediaUrl(it, offlineMedia, baseLink) },
-                                videoUrl = resolvedUrl,
-                                maxWidthPx = maxImageWidthPx,
-                                containerColor = mediaCardContainerColor,
-                                borderColor = mediaCardBorderColor,
-                                topPadding = topPadding,
-                                isScrolling = isScrolling,
-                                onClick = {
-                                    val targetWebUrl = douyinWebUrl ?: defaultWebUrl
-                                    if (biliTarget != null) {
-                                        context.startActivity(
-                                            BiliPlayerActivity.createIntent(
-                                                context = context,
-                                                aid = biliTarget.aid,
-                                                bvid = biliTarget.bvid,
-                                                cid = biliTarget.cid,
-                                                title = item?.title
-                                            )
+                    ) { index, block ->
+                        val topPadding = if (index == 0) 0.dp else blockSpacing
+                        when (block) {
+                            is ContentBlock.Text -> {
+                                val blockFontSize = when (block.style) {
+                                    ContentTextStyle.TITLE -> titleBlockFontSize
+                                    ContentTextStyle.SUBTITLE -> subtitleBlockFontSize
+                                    ContentTextStyle.QUOTE -> bodyFontSize
+                                    ContentTextStyle.CODE -> bodyFontSize
+                                    ContentTextStyle.BODY -> bodyFontSize
+                                }
+                                val highlightRange = activeReadAloudHighlight
+                                    ?.takeIf { highlight ->
+                                        highlight.importedChunkIndex == null &&
+                                            (highlight.contentBlockIndex == null ||
+                                                highlight.contentBlockIndex == index)
+                                    }
+                                    ?.let { highlight ->
+                                        directContentReadAloudHighlightRange(block.text, highlight, index)
+                                            ?: findReadAloudHighlightRange(block.text, highlight)
+                                    }
+                                DetailTextBlock(
+                                    text = block.text,
+                                    style = block.style,
+                                    textColor = textColor,
+                                    fontSizeSp = blockFontSize,
+                                    topPadding = topPadding,
+                                    isScrolling = isScrolling,
+                                    // “少数派”返回的 RSS 就是这样的，只有摘要，在摘要结尾说“查看全文”。
+                                    inlineActionText = if (canToggleOriginalContent) "查看全文" else null,
+                                    onInlineActionClick = onToggleOriginalContent,
+                                    highlightRange = highlightRange,
+                                    highlightColor = readAloudHighlightColor,
+                                    onTap = ::toggleAutoScroll,
+                                    onDoubleTap = ::openAutoScrollControls,
+                                    onLongClick = { pressPosition ->
+                                        val pressedCharOffset = contentTextBlockLayouts[index]
+                                            ?.getOffsetForPosition(pressPosition)
+                                        AppLogger.d(
+                                            "ReadAloudTouch",
+                                            "content block=$index position=$pressPosition offset=$pressedCharOffset " +
+                                                "text=${pressedCharOffset?.let { block.text.drop(it).take(40) }}"
                                         )
-                                    } else if (douyinAwemeId != null || !douyinWebUrl.isNullOrBlank()) {
-                                        context.startActivity(
-                                            RssPlayerActivity.createIntent(
+                                        openReadAloudControlsOnce(
+                                            pressedCharOffset?.let { charOffset ->
+                                                contentReadAloudStartAnchorAtCharOffset(
+                                                    contentBlocks = contentBlocks,
+                                                    blockIndex = index,
+                                                    pressedCharOffset = charOffset
+                                                )
+                                            } ?: currentReadAloudStartAnchor()
+                                        )
+                                    },
+                                    onTextLayout = { contentTextBlockLayouts[index] = it }
+                                )
+                            }
+                            is ContentBlock.Image -> {
+                                val resolvedUrl = resolveMediaUrl(block.url, offlineMedia, baseLink)
+                                DetailImageBlock(
+                                    url = resolvedUrl,
+                                    alt = block.alt,
+                                    initialAspectRatio = block.aspectRatio,
+                                    maxWidthPx = maxImageWidthPx,
+                                    containerColor = mediaCardContainerColor,
+                                    borderColor = mediaCardBorderColor,
+                                    topPadding = topPadding,
+                                    isScrolling = isScrolling,
+                                    onClick = { openImagePreview(context, resolvedUrl, block.alt) }
+                                )
+                            }
+                            is ContentBlock.Video -> {
+                                val resolvedUrl = resolveMediaUrl(block.url, offlineMedia, baseLink)
+                                val defaultWebUrl = resolveRemoteUrl(block.url, baseLink)
+                                val biliTarget = parseBiliVideoTarget(block.url)
+                                    ?: item?.link?.let(::parseBiliVideoTarget)
+                                val douyinAwemeId = item?.link?.let(::parseDouyinAwemeId)
+                                val douyinWebUrl = buildDouyinPlaybackWebUrl(
+                                    awemeId = douyinAwemeId,
+                                    fallbackUrl = item?.link
+                                )
+                                DetailVideoBlock(
+                                    poster = block.poster?.let { resolveMediaUrl(it, offlineMedia, baseLink) },
+                                    videoUrl = resolvedUrl,
+                                    maxWidthPx = maxImageWidthPx,
+                                    containerColor = mediaCardContainerColor,
+                                    borderColor = mediaCardBorderColor,
+                                    topPadding = topPadding,
+                                    isScrolling = isScrolling,
+                                    onClick = {
+                                        val targetWebUrl = douyinWebUrl ?: defaultWebUrl
+                                        if (biliTarget != null) {
+                                            context.startActivity(
+                                                BiliPlayerActivity.createIntent(
+                                                    context = context,
+                                                    aid = biliTarget.aid,
+                                                    bvid = biliTarget.bvid,
+                                                    cid = biliTarget.cid,
+                                                    title = item?.title
+                                                )
+                                            )
+                                        } else if (douyinAwemeId != null || !douyinWebUrl.isNullOrBlank()) {
+                                            context.startActivity(
+                                                RssPlayerActivity.createIntent(
+                                                    context = context,
+                                                    playUrl = resolvedUrl,
+                                                    webUrl = targetWebUrl,
+                                                    awemeId = douyinAwemeId,
+                                                    channelId = item?.channelId ?: 0L
+                                                )
+                                            )
+                                        } else {
+                                            openRssVideo(
                                                 context = context,
                                                 playUrl = resolvedUrl,
                                                 webUrl = targetWebUrl,
-                                                awemeId = douyinAwemeId,
                                                 channelId = item?.channelId ?: 0L
                                             )
-                                        )
-                                    } else {
-                                        openRssVideo(
-                                            context = context,
-                                            playUrl = resolvedUrl,
-                                            webUrl = targetWebUrl,
-                                            channelId = item?.channelId ?: 0L
-                                        )
+                                        }
                                     }
+                                )
+                            }
+                        }
+                    }
+                }
+                novelNavigation?.let { navigation ->
+                    item(key = "chapterNavigation") {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                            listOf("上一章" to navigation.previous, "下一章" to navigation.next).forEach { (label, chapter) ->
+                                com.lightningstudio.watchrss.ui.components.WatchTextButton(
+                                    enabled = chapter != null && !backInProgress && hasRestoredPosition,
+                                    onClick = {
+                                        if (chapter != null && !backInProgress) {
+                                            backInProgress = true
+                                            prefetchScope.launch {
+                                                try {
+                                                    if (saveCurrentReadingProgressAfterLayout(force = true)) {
+                                                        setAutoScrollPlaying(false, showFeedback = false)
+                                                        onOpenChapter(chapter.id)
+                                                    } else {
+                                                        com.lightningstudio.watchrss.ui.util.showAppToast(context, "阅读位置尚未就绪，请稍后重试")
+                                                    }
+                                                } catch (error: kotlinx.coroutines.CancellationException) {
+                                                    throw error
+                                                } catch (error: Exception) {
+                                                    com.lightningstudio.watchrss.ui.util.showAppToast(context, "章节切换失败，请重试")
+                                                } finally {
+                                                    backInProgress = false
+                                                }
+                                            }
+                                        }
+                                    }
+                                ) { Text(if (chapter == null) (if (label == "上一章") "已是首章" else "已是末章") else label) }
+                            }
+                        }
+                    }
+                }
+                item(key = "actionSpacing") {
+                    Spacer(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(actionVerticalSpacing)
+                            .readerGestureTarget(::openReadAloudFromVisibleAnchor)
+                    )
+                }
+                item(key = "actions") {
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (!isNovelMode) {
+                                FavoriteButtonWithStars(
+                                    isFavorite = isFavorite,
+                                    activeColor = activeColor,
+                                    normalIconColor = normalIconColor,
+                                    containerColor = if (isFavorite) activeActionContainerColor else actionContainerColor,
+                                    borderColor = if (isFavorite) activeActionBorderColor else actionBorderColor,
+                                    iconSize = actionIconSize,
+                                    iconPadding = actionIconPadding,
+                                    enabled = !isScrolling,
+                                    onClick = onToggleFavorite
+                                )
+                            }
+                            CircleIconButton(
+                                icon = Icons.Outlined.FormatSize,
+                                contentDescription = "字号与主题",
+                                tint = normalIconColor,
+                                containerColor = if (isNovelPageMode) {
+                                    activeActionContainerColor
+                                } else {
+                                    actionContainerColor
+                                },
+                                borderColor = if (isNovelPageMode) {
+                                    activeActionBorderColor
+                                } else {
+                                    actionBorderColor
+                                },
+                                size = actionIconSize,
+                                padding = actionIconPadding,
+                                enabled = !isScrolling,
+                                onClick = {
+                                    context.startActivity(com.lightningstudio.watchrss.ReaderPresetActivity.createIntent(context))
                                 }
+                            )
+                            if (readerCapabilities.shareLink) {
+                                CircleIconButton(
+                                    icon = Icons.Outlined.Share,
+                                    contentDescription = "分享",
+                                    tint = normalIconColor,
+                                    containerColor = actionContainerColor,
+                                    borderColor = actionBorderColor,
+                                    size = actionIconSize,
+                                    padding = actionIconPadding,
+                                    iconOffsetX = (-1).dp,
+                                    enabled = !isScrolling,
+                                    onClick = {
+                                        val title = item?.title.orEmpty()
+                                        val shareLink = item?.link?.trim().orEmpty().ifBlank { null }
+                                        if (useSystemShare) {
+                                            shareCurrent(context, title, shareLink)
+                                        } else {
+                                            showShareQr(context, title, shareLink)
+                                        }
+                                    }
+                                )
+                            }
+                            CircleIconButton(
+                                icon = Icons.Outlined.SwipeUp,
+                                contentDescription = "自动滚动设置",
+                                tint = normalIconColor,
+                                containerColor = actionContainerColor,
+                                borderColor = actionBorderColor,
+                                size = actionIconSize,
+                                padding = actionIconPadding,
+                                enabled = !isScrolling,
+                                onClick = ::openAutoScrollControls
                             )
                         }
                     }
                 }
-            }
-            item(key = "actionSpacing") {
-                Spacer(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(actionVerticalSpacing)
-                        .readerGestureTarget(::openReadAloudFromVisibleAnchor)
-                )
-            }
-            item(key = "actions") {
-                Box(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        FavoriteButtonWithStars(
-                            isFavorite = isFavorite,
-                            activeColor = activeColor,
-                            normalIconColor = normalIconColor,
-                            containerColor = if (isFavorite) activeActionContainerColor else actionContainerColor,
-                            borderColor = if (isFavorite) activeActionBorderColor else actionBorderColor,
-                            iconSize = actionIconSize,
-                            iconPadding = actionIconPadding,
-                            enabled = !isScrolling,
-                            onClick = onToggleFavorite
-                        )
-                        Spacer(modifier = Modifier.width(actionHorizontalSpacing))
-                        CircleIconButton(
-                            icon = Icons.Outlined.Share,
-                            contentDescription = "分享",
-                            tint = normalIconColor,
-                            containerColor = actionContainerColor,
-                            borderColor = actionBorderColor,
-                            size = actionIconSize,
-                            padding = actionIconPadding,
-                            iconOffsetX = (-1).dp,
-                            enabled = !isScrolling,
-                            onClick = {
-                                val title = item?.title.orEmpty()
-                                val shareLink = item?.link?.trim().orEmpty().ifBlank { null }
-                                if (useSystemShare) {
-                                    shareCurrent(context, title, shareLink)
-                                } else {
-                                    showShareQr(context, title, shareLink)
-                                }
-                            }
-                        )
-                        Spacer(modifier = Modifier.width(actionHorizontalSpacing))
-                        CircleIconButton(
-                            icon = if (readerAutoScrollPlaying) {
-                                Icons.Default.Pause
-                            } else {
-                                Icons.Default.PlayArrow
-                            },
-                            contentDescription = "自动滚动",
-                            tint = normalIconColor,
-                            containerColor = actionContainerColor,
-                            borderColor = actionBorderColor,
-                            size = actionIconSize,
-                            padding = actionIconPadding,
-                            enabled = !isScrolling,
-                            onClick = ::openAutoScrollControls
-                        )
-                    }
+                item(key = "bottomSpacer") {
+                    Spacer(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(
+                                com.lightningstudio.watchrss.ui.reader.ReaderPageLayout
+                                    .bottomPadding(hasFloatingAction = false)
+                            )
+                            .readerGestureTarget(::openReadAloudFromVisibleAnchor)
+                    )
                 }
             }
-            item(key = "bottomSpacer") {
-                Spacer(
+
+            if (isNovelPageMode && !isPageTurning) {
+                val noIndication = remember { MutableInteractionSource() }
+                Row(Modifier.fillMaxSize()) {
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .fillMaxSize()
+                            .clickable(
+                                interactionSource = noIndication,
+                                indication = null,
+                                onClickLabel = "上一页",
+                                role = Role.Button,
+                                onClick = { turnPage(-1) }
+                            )
+                    )
+                    Spacer(Modifier.weight(1f).fillMaxSize())
+                    Box(
+                        Modifier
+                            .weight(1f)
+                            .fillMaxSize()
+                            .clickable(
+                                interactionSource = noIndication,
+                                indication = null,
+                                onClickLabel = "下一页",
+                                role = Role.Button,
+                                onClick = { turnPage(1) }
+                            )
+                    )
+                }
+            }
+
+            pageSnapshot?.let { bitmap ->
+                Image(
+                    bitmap = bitmap,
+                    contentDescription = null,
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .height(
-                            com.lightningstudio.watchrss.ui.reader.ReaderPageLayout
-                                .bottomPadding(hasFloatingAction = false)
-                        )
-                        .readerGestureTarget(::openReadAloudFromVisibleAnchor)
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            translationX = -pageTurnDirection *
+                                pageTransitionProgress.value * viewportWidthPx
+                        }
+                )
+            }
+            if (isNovelMode) {
+                NovelReadingMenu(
+                    expanded = novelMenuExpanded,
+                    onExpandedChange = onNovelMenuExpandedChange,
+                    scrolling = isScrolling,
+                    pageTurning = isPageTurning,
+                    pageMode = isNovelPageMode,
+                    backgroundColor = backgroundColor,
+                    surfaceColor = actionContainerColor,
+                    textColor = textColor,
+                    accentColor = activeColor,
+                    readAloudEnabled = item != null,
+                    onReadAloud = {
+                        if (readerAutoScrollPlayingState.value) {
+                            setAutoScrollPlaying(playing = false)
+                        }
+                        onOpenReadAloud(null, originalContentEnabled)
+                    },
+                    onModeSelected = { isPageMode = it }
                 )
             }
         }
@@ -1749,6 +2032,7 @@ private fun DetailTitleSkeleton(
 
 @Composable
 private fun DetailContentSkeleton(
+    isNovelMode: Boolean,
     backgroundColor: Color,
     textColor: Color,
     containerColor: Color,
@@ -1784,29 +2068,31 @@ private fun DetailContentSkeleton(
             lineSpacing = 8.dp
         )
         Spacer(modifier = Modifier.height(blockSpacing))
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1.08f)
-                .clip(cardShape)
-                .detailSkeletonPlaceholder(
-                    backgroundColor = backgroundColor,
-                    tintColor = cardTint,
-                    cornerRadius = WatchDimens.hey_card_normal_bg_radius
-                )
-                .then(
-                    if (borderColor.alpha > 0f) {
-                        Modifier.border(BorderStroke(1.dp, borderColor.copy(alpha = 0.55f)), cardShape)
-                    } else {
-                        Modifier
-                    }
-                )
-        )
-        Spacer(modifier = Modifier.height(blockSpacing))
-        DetailSkeletonChipRow(
-            backgroundColor = backgroundColor,
-            tintColor = lineTint
-        )
+        if (!isNovelMode) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1.08f)
+                    .clip(cardShape)
+                    .detailSkeletonPlaceholder(
+                        backgroundColor = backgroundColor,
+                        tintColor = cardTint,
+                        cornerRadius = WatchDimens.hey_card_normal_bg_radius
+                    )
+                    .then(
+                        if (borderColor.alpha > 0f) {
+                            Modifier.border(BorderStroke(1.dp, borderColor.copy(alpha = 0.55f)), cardShape)
+                        } else {
+                            Modifier
+                        }
+                    )
+            )
+            Spacer(modifier = Modifier.height(blockSpacing))
+            DetailSkeletonChipRow(
+                backgroundColor = backgroundColor,
+                tintColor = lineTint
+            )
+        }
         Spacer(modifier = Modifier.height(12.dp))
         DetailSkeletonParagraph(
             backgroundColor = backgroundColor,

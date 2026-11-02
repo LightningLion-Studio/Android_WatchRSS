@@ -55,7 +55,7 @@ fun PhoneConnectionScreen(
     var appExpanded by rememberSaveable { mutableStateOf(false) }
     InstallDigitalCrownScrollHandler(scrollState)
 
-    WatchSurface(pureBlack = true) {
+    WatchSurface {
         Column(
             modifier = Modifier
                 .fillMaxSize()

@@ -12,8 +12,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import com.lightningstudio.watchrss.ui.theme.WatchBackground
-import com.lightningstudio.watchrss.ui.theme.WatchBackgroundDeep
 import com.lightningstudio.watchrss.ui.theme.WatchSurface
 import com.lightningstudio.watchrss.BuildConfig
 
@@ -36,9 +34,6 @@ fun WatchSurface(
     }
 
     Box(modifier = modifier.fillMaxSize()) {
-        val outerGradient = Brush.linearGradient(
-            colors = listOf(WatchBackground, WatchBackgroundDeep)
-        )
         val innerGradient = Brush.radialGradient(
             colors = listOf(WatchSurface, Color.Black)
         )
@@ -47,7 +42,7 @@ fun WatchSurface(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(outerGradient),
+                    .background(Color.Black),
                 contentAlignment = Alignment.Center
             ) {
                 Box(

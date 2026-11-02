@@ -8,6 +8,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.delay
@@ -66,6 +68,14 @@ class ReaderPresetRepository(
         )
     )
     private val scheduledDark = MutableStateFlow(false)
+    private val resourceRevisionState = MutableStateFlow(0L)
+    val resourceRevision: StateFlow<Long> = resourceRevisionState
+
+    @Synchronized
+    fun notifyResourceApplied() {
+        resourceRevisionState.update { it + 1L }
+    }
+
     val selection: StateFlow<ReaderPresetSelection> = selectionState
     val schedule: StateFlow<WatchReaderThemeSchedule> = scheduleState
 
@@ -110,6 +120,12 @@ class ReaderPresetRepository(
     }.stateIn(scope, SharingStarted.Eagerly, ReaderPreset.fallback)
 
     init {
+        // Resource metadata can arrive independently of the selected preset payload.
+        scope.launch {
+            combine(fonts, backgrounds) { fontRecords, backgroundRecords ->
+                fontRecords to backgroundRecords
+            }.collect { notifyResourcesChanged() }
+        }
         refreshScheduledDark()
         scope.launch {
             while (true) {
@@ -325,6 +341,11 @@ class ReaderPresetRepository(
             .remove(ACTIVE_PRESET_KEY)
             .apply()
         selectionState.value = selection
+    }
+
+    /** Reader-module invalidation only; never reset the page, scroll, or watch selection. */
+    internal fun notifyResourcesChanged() {
+        notifyResourceApplied()
     }
 
     fun fontFile(assetId: String?): File? {

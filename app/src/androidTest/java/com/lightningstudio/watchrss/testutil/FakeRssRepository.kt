@@ -85,6 +85,8 @@ class FakeRssRepository(
 
     override suspend fun markItemRead(itemId: Long) = Unit
 
+    override suspend fun markNovelChapterOpened(itemId: Long) = Unit
+
     override suspend fun toggleFavorite(itemId: Long): Result<SavedState> {
         return Result.success(SavedState(isFavorite = true, isWatchLater = false))
     }

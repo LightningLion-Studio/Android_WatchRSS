@@ -23,7 +23,7 @@ class PhoneConnectionUnavailableActivity : BaseWatchActivity() {
 
         setContent {
             WatchRSSTheme {
-                WatchSurface(pureBlack = true) {
+                WatchSurface {
                     Column(
                         modifier = Modifier
                             .fillMaxSize()

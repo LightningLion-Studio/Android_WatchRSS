@@ -7,6 +7,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -103,6 +104,8 @@ import com.lightningstudio.watchrss.ui.components.rememberPullRefreshEnabled
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.util.formatWatchTitleForWidthLimits
 import com.lightningstudio.watchrss.ui.util.RssImageLoader
+import com.lightningstudio.watchrss.ui.util.ValidatedNetworkRetryBudget
+import com.lightningstudio.watchrss.ui.util.rememberValidatedNetworkRevision
 import com.lightningstudio.watchrss.debug.PerfTrace
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -119,6 +122,7 @@ private const val CHANNEL_TITLE_CLICK_HINT_SYMBOL = "ⓘ"
 @Composable
 fun FeedScreen(
     channel: RssChannel?,
+    isNovelMode: Boolean = false,
     items: List<RssItem>,
     hasLoadedItems: Boolean = true,
     isRefreshing: Boolean,
@@ -139,6 +143,8 @@ fun FeedScreen(
     onBack: () -> Unit,
     onOriginalContentScrollStateChanged: (Boolean) -> Unit = {},
     onRequestOriginalContents: (List<Long>) -> Unit = {},
+    continueReading: com.lightningstudio.watchrss.data.rss.NovelChapter? = null,
+    onContinueReading: (com.lightningstudio.watchrss.data.rss.NovelChapter) -> Unit = {},
     densityScale: Float = 2f
 ) {
     val baseDensity = LocalDensity.current
@@ -166,6 +172,11 @@ fun FeedScreen(
         val prefetchedUrls = remember(channel?.id) { mutableSetOf<String>() }
         val isScrolling by remember(listState) {
             derivedStateOf { listState.isScrollInProgress }
+        }
+        val visibleItemKeys by remember(listState) {
+            derivedStateOf {
+                listState.layoutInfo.visibleItemsInfo.mapTo(hashSetOf()) { it.key }
+            }
         }
 
         LaunchedEffect(channel?.id, items.size, useOriginalContent) {
@@ -300,8 +311,14 @@ fun FeedScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .semantics {
-                        contentDescription = "RSS内容列表"
-                        stateDescription = if (isRefreshing) "刷新中" else if (items.isEmpty()) "无内容" else "共 ${items.size} 条"
+                        contentDescription = if (isNovelMode) "小说目录" else "RSS内容列表"
+                        stateDescription = when {
+                            isRefreshing -> "刷新中"
+                            isNovelMode && !hasLoadedItems && items.isEmpty() -> "小说目录加载中"
+                            items.isEmpty() -> "无内容"
+                            isNovelMode -> "共 ${items.size} 章"
+                            else -> "共 ${items.size} 条"
+                        }
                     },
                 indicatorPadding = safePadding,
                 canRefresh = canRefresh
@@ -317,7 +334,12 @@ fun FeedScreen(
                     )
                 ) {
                     item(key = "header") {
-                        Box(modifier = Modifier.padding(bottom = imageItemSpacing)) {
+                        Column(modifier = Modifier.padding(bottom = imageItemSpacing)) {
+                            continueReading?.let { chapter ->
+                                com.lightningstudio.watchrss.ui.components.WatchTextButton(
+                                    onClick = { onContinueReading(chapter) }, enabled = !isScrolling
+                                ) { Text("继续阅读：${chapter.title}") }
+                            }
                             FeedHeader(
                                 title = channel?.title ?: "RSS",
                                 isRefreshing = isRefreshing,
@@ -335,6 +357,7 @@ fun FeedScreen(
                                 FeedEmptyState()
                             } else {
                                 FeedEmptySkeleton(
+                                    isNovelMode = isNovelMode,
                                     imageItemSpacing = imageItemSpacing,
                                     textItemSpacing = textItemSpacing
                                 )
@@ -360,11 +383,18 @@ fun FeedScreen(
                                 imageItemSpacing
                             }
                             Box(modifier = Modifier.padding(bottom = itemSpacing)) {
-                                FeedItemEntry(
+                                if (isNovelMode) {
+                                    NovelChapterTitleRow(
+                                        item = item,
+                                        enabled = !isScrolling,
+                                        onClick = { onItemClick(item) }
+                                    )
+                                } else FeedItemEntry(
                                     item = item,
                                     thumbUrl = thumbUrl,
                                     maxImageWidthPx = maxImageWidthPx,
                                     isScrolling = isScrolling,
+                                    isVisible = item.id in visibleItemKeys,
                                     useOriginalContent = channel?.useOriginalContent == true,
                                     openSwipeId = openSwipeId,
                                     onOpenSwipe = onOpenSwipe,
@@ -391,6 +421,46 @@ fun FeedScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun NovelChapterTitleRow(
+    item: RssItem,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickableWithRipple(
+                    enabled = enabled,
+                    onClick = onClick,
+                    onLongClick = {},
+                    onClickLabel = "打开章节"
+                )
+                .padding(vertical = 12.dp)
+                .semantics {
+                    contentDescription = if (item.isRead) item.title else "未读：${item.title}"
+                },
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = item.title,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontSize = textSize(R.dimen.feed_card_title_text_size),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(MaterialTheme.colorScheme.outlineVariant)
+        )
     }
 }
 
@@ -433,7 +503,8 @@ internal fun FeedHeader(
             .padding(vertical = verticalPadding)
             .clickableWithRipple(
                 enabled = enabled,
-                onClick = onClick
+                onClick = onClick,
+                onClickLabel = "查看频道信息"
             )
     ) {
         BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
@@ -451,7 +522,11 @@ internal fun FeedHeader(
             }
             Text(
                 text = if (showInfoHint) {
-                    channelTitleWithStyledHint(formattedTitle, titleSize)
+                    channelTitleWithStyledHint(
+                        formattedTitle,
+                        titleSize,
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 } else {
                     androidx.compose.ui.text.AnnotatedString(formattedTitle)
                 },
@@ -480,7 +555,8 @@ internal fun FeedHeader(
 
 private fun channelTitleWithStyledHint(
     text: String,
-    titleSize: TextUnit
+    titleSize: TextUnit,
+    hintColor: Color
 ): androidx.compose.ui.text.AnnotatedString {
     val symbolIndex = text.lastIndexOf(CHANNEL_TITLE_CLICK_HINT_SYMBOL)
     if (symbolIndex < 0) return androidx.compose.ui.text.AnnotatedString(text)
@@ -490,7 +566,7 @@ private fun channelTitleWithStyledHint(
         append(text.substring(0, symbolIndex))
         withStyle(
             SpanStyle(
-                color = Color(0xFFBDBDBD),
+                color = hintColor,
                 fontWeight = FontWeight.Bold,
                 fontSize = hintSize
             )
@@ -505,18 +581,47 @@ private fun channelTitleWithStyledHint(
 
 @Composable
 private fun FeedEmptySkeleton(
+    isNovelMode: Boolean,
     imageItemSpacing: Dp,
     textItemSpacing: Dp
 ) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        FeedImageSkeletonCard()
-        Spacer(modifier = Modifier.height(imageItemSpacing))
-        FeedImageSkeletonCard(
-            titleWidths = listOf(0.68f, 0.46f),
-            summaryWidths = listOf(0.76f, 0.58f)
+    if (isNovelMode) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            repeat(6) { index ->
+                NovelChapterSkeletonRow(widthFraction = listOf(0.78f, 0.56f, 0.9f, 0.66f, 0.72f, 0.48f)[index])
+            }
+        }
+    } else {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            FeedImageSkeletonCard()
+            Spacer(modifier = Modifier.height(imageItemSpacing))
+            FeedImageSkeletonCard(
+                titleWidths = listOf(0.68f, 0.46f),
+                summaryWidths = listOf(0.76f, 0.58f)
+            )
+            Spacer(modifier = Modifier.height(textItemSpacing))
+            FeedTextSkeletonCard()
+        }
+    }
+}
+
+@Composable
+private fun NovelChapterSkeletonRow(widthFraction: Float) {
+    Column {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(widthFraction)
+                .height(18.dp)
+                .feedSkeletonPlaceholder(baseColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.11f), highlightColor = Color.White.copy(alpha = 0.22f), cornerRadius = 6.dp)
         )
-        Spacer(modifier = Modifier.height(textItemSpacing))
-        FeedTextSkeletonCard()
+        Spacer(modifier = Modifier.height(12.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(MaterialTheme.colorScheme.outlineVariant)
+        )
+        Spacer(modifier = Modifier.height(10.dp))
     }
 }
 
@@ -750,7 +855,12 @@ internal fun FeedPillButton(
             .clip(RoundedCornerShape(radius))
             .background(background)
             .alpha(if (enabled) 1f else 0.5f)
-            .clickable(enabled = enabled, onClick = onClick)
+            .clickable(
+                enabled = enabled,
+                role = androidx.compose.ui.semantics.Role.Button,
+                onClickLabel = text,
+                onClick = onClick
+            )
             .padding(horizontal = horizontalPadding, vertical = verticalPadding),
         contentAlignment = Alignment.Center
     ) {
@@ -769,6 +879,7 @@ internal fun FeedItemEntry(
     thumbUrl: String?,
     maxImageWidthPx: Int,
     isScrolling: Boolean,
+    isVisible: Boolean = true,
     useOriginalContent: Boolean,
     openSwipeId: Long?,
     onOpenSwipe: (Long) -> Unit,
@@ -832,7 +943,7 @@ internal fun FeedItemEntry(
                 modifier = Modifier
                     .matchParentSize()
                     .then(backgroundScaleModifier)
-                    .background(Color.Black)
+                    .background(MaterialTheme.colorScheme.surface)
             )
             if (thumbUrl.isNullOrBlank()) {
                 FeedTextCard(
@@ -853,6 +964,7 @@ internal fun FeedItemEntry(
                     pressState = pressState,
                     enabled = !isScrolling,
                     isScrolling = isScrolling,
+                    isVisible = isVisible,
                     useOriginalContent = useOriginalContent,
                     modifier = cardScaleModifier,
                     semanticItemLabel = semanticItemLabel,
@@ -1013,6 +1125,8 @@ private fun FeedTextCard(
                 enabled = enabled,
                 onClick = onClick,
                 onLongClick = onLongClick,
+                onClickLabel = "打开$semanticItemLabel",
+                onLongClickLabel = "文章操作",
                 interactionSource = pressState.interactionSource
             )
             .padding(padding)
@@ -1028,7 +1142,7 @@ private fun FeedTextCard(
             )
             Text(
                 text = summary,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = summarySize,
                 lineHeight = summaryLineHeight,
                 maxLines = 2,
@@ -1047,6 +1161,7 @@ private fun FeedImageCard(
     pressState: PressScaleState,
     enabled: Boolean,
     isScrolling: Boolean,
+    isVisible: Boolean,
     useOriginalContent: Boolean,
     modifier: Modifier,
     semanticItemLabel: String,
@@ -1082,6 +1197,8 @@ private fun FeedImageCard(
                 enabled = enabled,
                 onClick = onClick,
                 onLongClick = onLongClick,
+                onClickLabel = "打开$semanticItemLabel",
+                onLongClickLabel = "文章操作",
                 interactionSource = pressState.interactionSource
             )
             .semantics {
@@ -1092,6 +1209,7 @@ private fun FeedImageCard(
             url = thumbUrl,
             maxWidthPx = maxImageWidthPx,
             isScrolling = isScrolling,
+            isVisible = isVisible,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(imageHeight)
@@ -1114,7 +1232,7 @@ private fun FeedImageCard(
             )
             Text(
                 text = summary,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 fontSize = summarySize,
                 lineHeight = summaryLineHeight,
                 maxLines = 2,
@@ -1126,73 +1244,80 @@ private fun FeedImageCard(
 }
 
 @Composable
-private fun RssThumbnail(
+internal fun RssThumbnail(
     url: String,
     maxWidthPx: Int,
     isScrolling: Boolean,
+    isVisible: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val cached = remember(url) { RssImageLoader.getCachedBitmap(url) }
-    val bitmapState = remember(url, maxWidthPx) { mutableStateOf(cached) }
-    val pendingState = remember(url) { mutableStateOf<android.graphics.Bitmap?>(null) }
+    val imageCacheScope = com.lightningstudio.watchrss.data.account.workspace.libraryContext(context)
+        .cacheDir.absolutePath
+    val bitmapState = remember(imageCacheScope, url, maxWidthPx) {
+        mutableStateOf(RssImageLoader.getCachedBitmap(context, url))
+    }
+    val failed = remember(imageCacheScope, url, maxWidthPx) { mutableStateOf(false) }
+    val retry = remember(imageCacheScope, url) { mutableStateOf(0) }
+    val networkRevision = rememberValidatedNetworkRevision(context)
+    val networkRetryBudget = remember(imageCacheScope, url) { ValidatedNetworkRetryBudget(networkRevision) }
 
-    LaunchedEffect(url, maxWidthPx, isScrolling) {
-        if (isScrolling && bitmapState.value == null) {
-            PerfTrace.log(
-                "feed",
-                "thumbnail defer key=${thumbKey(url)} reason=scroll_no_cache"
-            )
+    // Visible cards take priority, including while scrolling. Successful images remain stable.
+    LaunchedEffect(imageCacheScope, url, maxWidthPx, networkRevision, retry.value, isVisible) {
+        if (!isVisible) return@LaunchedEffect
+        if (bitmapState.value != null) return@LaunchedEffect
+        if (!networkRetryBudget.shouldAttempt(networkRevision)) {
+            failed.value = true
             return@LaunchedEffect
         }
-        val startNanos = PerfTrace.now()
-        val loaded = RssImageLoader.loadBitmap(context, url, maxWidthPx)
-        if (loaded != null) {
-            if (isScrolling && bitmapState.value == null) {
-                pendingState.value = loaded
-            } else {
-                bitmapState.value = loaded
-            }
-            PerfTrace.log(
-                "feed",
-                "thumbnail ready key=${thumbKey(url)} scrolling=$isScrolling applied=${!isScrolling || bitmapState.value === loaded} size=${loaded.width}x${loaded.height} durMs=${PerfTrace.elapsedMs(startNanos)}"
-            )
-        } else {
-            PerfTrace.log(
-                "feed",
-                "thumbnail miss key=${thumbKey(url)} scrolling=$isScrolling durMs=${PerfTrace.elapsedMs(startNanos)}"
-            )
-        }
-    }
-
-    LaunchedEffect(isScrolling) {
-        if (!isScrolling) {
-            pendingState.value?.let { bitmap ->
-                bitmapState.value = bitmap
-                pendingState.value = null
-                PerfTrace.log(
-                    "feed",
-                    "thumbnail promote key=${thumbKey(url)} size=${bitmap.width}x${bitmap.height}"
-                )
-            }
-        }
+        failed.value = false
+        val loaded = RssImageLoader.loadBitmap(
+            context,
+            url,
+            maxWidthPx,
+            retryAfterInFlightFailure = networkRevision > 0 || retry.value > 0
+        )
+        bitmapState.value = loaded
+        failed.value = loaded == null
     }
 
     val bitmap = bitmapState.value
     val imageBitmap = remember(bitmap) { bitmap?.asImageBitmap() }
 
-    if (imageBitmap != null) {
-        androidx.compose.foundation.Image(
-            bitmap = imageBitmap,
-            contentDescription = "缩略图",
-            contentScale = ContentScale.Crop,
-            filterQuality = FilterQuality.None,
-            modifier = modifier
-        )
-    } else {
-        Box(
-            modifier = modifier.background(MaterialTheme.colorScheme.surface)
-        )
+    Crossfade(
+        targetState = imageBitmap,
+        animationSpec = tween(durationMillis = 160),
+        modifier = modifier,
+        label = "rssThumbnailContent"
+    ) { displayedBitmap ->
+        if (displayedBitmap != null) {
+            androidx.compose.foundation.Image(
+                bitmap = displayedBitmap,
+                contentDescription = "缩略图",
+                contentScale = ContentScale.Crop,
+                filterQuality = FilterQuality.None,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.surface)
+                    .clickable(
+                        enabled = failed.value,
+                        role = Role.Button,
+                        onClickLabel = "重试封面加载",
+                        onClick = { retry.value++ }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = if (failed.value) "封面加载失败 · 点击重试" else "封面加载中…",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     }
 }
 
@@ -1228,7 +1353,9 @@ private fun textSize(id: Int): TextUnit {
 private fun Modifier.clickableWithRipple(
     enabled: Boolean = true,
     onClick: () -> Unit,
+    onClickLabel: String? = null,
     onLongClick: (() -> Unit)? = null,
+    onLongClickLabel: String? = null,
     interactionSource: androidx.compose.foundation.interaction.MutableInteractionSource =
         androidx.compose.foundation.interaction.MutableInteractionSource()
 ): Modifier {
@@ -1237,6 +1364,9 @@ private fun Modifier.clickableWithRipple(
             interactionSource = interactionSource,
             indication = LocalIndication.current,
             enabled = enabled,
+            onClickLabel = onClickLabel,
+            onLongClickLabel = onLongClickLabel,
+            role = Role.Button,
             onClick = onClick,
             onLongClick = onLongClick
         )
@@ -1245,6 +1375,8 @@ private fun Modifier.clickableWithRipple(
             interactionSource = interactionSource,
             indication = LocalIndication.current,
             enabled = enabled,
+            onClickLabel = onClickLabel,
+            role = Role.Button,
             onClick = onClick
         )
     }

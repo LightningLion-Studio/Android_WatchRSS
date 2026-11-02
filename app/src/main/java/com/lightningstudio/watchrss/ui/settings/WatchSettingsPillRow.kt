@@ -24,9 +24,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.Role
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
-import com.lightningstudio.watchrss.ui.theme.watchColorResource
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
 
 @Composable
@@ -40,7 +40,7 @@ fun WatchSettingsPillRow(
     endPaddingMultiplier: Float = 1f,
     content: @Composable RowScope.() -> Unit = {}
 ) {
-    val pillColor = watchColorResource(R.color.watch_pill_background)
+    val pillColor = MaterialTheme.colorScheme.surfaceVariant
     val pillHeight = WatchDimens.hey_multiple_item_height
     val startPadding = WatchDimens.hey_distance_10dp
     val endPadding = WatchDimens.hey_distance_10dp * endPaddingMultiplier
@@ -55,7 +55,12 @@ fun WatchSettingsPillRow(
             .clip(shape)
             .background(pillColor)
             .then(testTag?.let(Modifier::testTag) ?: Modifier)
-            .clickable(enabled = onClick != null, onClick = { onClick?.invoke() })
+            .clickable(
+                enabled = onClick != null,
+                onClickLabel = label.takeIf { onClick != null },
+                role = if (onClick != null) Role.Button else null,
+                onClick = { onClick?.invoke() }
+            )
             .padding(
                 start = startPadding,
                 end = endPadding,

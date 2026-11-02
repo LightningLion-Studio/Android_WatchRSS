@@ -52,4 +52,43 @@ class WatchCloudStreamingCodecTest {
         }
         assertEquals(plain.size * 160L, count)
     }
+
+    @Test fun streamingSnapshotKeepsReaderAndNoteAttachmentsCompatibleWithLegacyRestore() = runBlocking {
+        val codec = WatchCloudCodec()
+        val reader = requireNotNull(javaClass.getResourceAsStream("/cloud/phone-reader-cloud.wrss")).use { it.readBytes() }
+        val noteState = """{"notes":[],"folders":[]}""".toByteArray()
+        val archive = ByteArrayOutputStream().also { output ->
+            java.util.zip.ZipOutputStream(output).use { zip ->
+                zip.putNextEntry(java.util.zip.ZipEntry("notes/assets/image.jpg"))
+                zip.write("fixture-image".toByteArray())
+                zip.closeEntry()
+            }
+        }.toByteArray()
+        val payloads = linkedMapOf(
+            "rss-state.json" to "{}".toByteArray(),
+            "library-sync.json" to "{\"articles\":[]}".toByteArray(),
+            "private-library.wrss" to reader,
+            "notes-state.json" to noteState,
+            "notes-assets.zip" to archive
+        )
+        val chunks = mutableMapOf<String, ByteArray>()
+        val prepared = codec.prepareStreamingObjects(key, payloads.map { (name, bytes) ->
+            WatchCloudStreamingObject(name) { it.write(bytes) }
+        }, storeChunk = { hash, bytes -> chunks[hash] = bytes })
+        val snapshot = codec.createFromPrepared(key, 1, "fixture-watch", 1, prepared, emptyMap(), emptyMap())
+        val manifest = codec.decryptManifest(key, snapshot.manifest.snapshotId, snapshot.encryptedManifest)
+        val attachments = manifest.objects.filter { it.name !in setOf("rss-state.json", "library-sync.json") }
+        val restored = codec.restore(key, manifest.copy(objects = attachments), chunks::getValue)
+        assertEquals(setOf("private-library.wrss", "notes-state.json", "notes-assets.zip"), restored.keys)
+        restored.forEach { (name, bytes) -> assertArrayEquals(payloads.getValue(name), bytes) }
+        val stateOnly = codec.prepareStreamingObjects(key,
+            listOf(WatchCloudStreamingObject("rss-state.json") { it.write("{\"updated\":true}".toByteArray()) }),
+            previous = manifest, storeChunk = { hash, bytes -> chunks[hash] = bytes })
+        val carried = manifest.objects.filterNot { it.name == "rss-state.json" }
+        val partial = codec.createFromPrepared(key, 1, "fixture-watch", 2, carried + stateOnly, emptyMap(), emptyMap())
+        val replayed = codec.restore(key, partial.manifest, chunks::getValue)
+        payloads.filterKeys { it != "rss-state.json" }.forEach { (name, bytes) ->
+            assertArrayEquals(bytes, replayed.getValue(name))
+        }
+    }
 }

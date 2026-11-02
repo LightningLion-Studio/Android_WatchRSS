@@ -57,7 +57,7 @@ class ReleaseFeatureVisibilityGuardTest {
         val worker = source("data/cloud/WatchCloudSyncWorker.kt")
         val ipSync = source("phoneconnection/ip/WatchIpSyncManager.kt")
 
-        assertTrue(application.contains("if (BuildConfig.DEBUG)"))
+        assertTrue(application.contains("if (!BuildConfig.DEBUG)"))
         assertTrue(application.contains("WatchCloudSyncWorker.cancel(this)"))
         assertTrue(worker.contains("if (!BuildConfig.DEBUG) return Result.success()"))
         assertTrue(ipSync.contains("if (BuildConfig.DEBUG)"))

@@ -54,7 +54,7 @@ class DouyinFeedViewModelTest {
         resumeToVideoFlowOnEntry: Boolean = false,
         resumeAwemeIdOnEntry: String? = null
     ): DouyinFeedViewModel {
-        return DouyinFeedViewModel(
+        return mainDispatcherRule.track(DouyinFeedViewModel(
             repository = repository,
             preloadManager = preloadManager,
             watchHistoryStore = watchHistoryStore,
@@ -65,7 +65,7 @@ class DouyinFeedViewModelTest {
             storageDispatcher = mainDispatcherRule.dispatcher,
             resumeToVideoFlowOnEntry = resumeToVideoFlowOnEntry,
             resumeAwemeIdOnEntry = resumeAwemeIdOnEntry
-        )
+        ))
     }
 
     @After

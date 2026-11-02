@@ -11,9 +11,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.VolumeUp
@@ -71,7 +75,7 @@ fun ReadAloudPlaybackScreen(
     currentArticleActionText: String = "查看当前文章",
     onOpenCurrentArticle: (() -> Unit)? = null
 ) {
-    WatchSurface(pureBlack = true) {
+    WatchSurface {
         val effectiveVolumeGuardEnabled = volumeGuardEnabled && digitalCrownVolumeEnabled
         val volumeState = rememberPlayerVolumeState(
             guardEnabled = effectiveVolumeGuardEnabled,
@@ -89,7 +93,6 @@ fun ReadAloudPlaybackScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black)
                 .semantics {
                     contentDescription = "朗读播控页面"
                     stateDescription = buildPlaybackStatusText(state)
@@ -98,13 +101,14 @@ fun ReadAloudPlaybackScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
                     .padding(horizontal = 18.dp, vertical = 12.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
                     text = "朗读播控",
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     style = MaterialTheme.typography.titleSmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -175,14 +179,14 @@ internal fun ReadAloudControlPanel(
             ) {
                 Text(
                     text = state.currentTitle.ifBlank { "尚未开始朗读" },
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onSurface,
                     style = MaterialTheme.typography.titleSmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = buildPlaybackStatusText(state),
-                    color = Color(0xFFBDBDBD),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -242,7 +246,7 @@ internal fun ReadAloudControlPanel(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(36.dp),
+                .heightIn(min = 48.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -269,15 +273,15 @@ private fun ReadAloudAutoAdvanceRow(
 ) {
     Row(
         modifier = modifier
-            .height(36.dp)
-            .clickable(onClick = onToggleAutoAdvance)
+            .heightIn(min = 48.dp)
+            .clickable(
+                onClickLabel = "切换自动下一篇",
+                role = Role.Switch,
+                onClick = onToggleAutoAdvance
+            )
             .semantics {
-                contentDescription = if (state.autoAdvanceEnabled) {
-                    "自动下一篇已开启"
-                } else {
-                    "自动下一篇已关闭"
-                }
-                role = Role.Button
+                contentDescription = "自动下一篇"
+                stateDescription = if (state.autoAdvanceEnabled) "已开启" else "已关闭"
             },
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
@@ -289,7 +293,7 @@ private fun ReadAloudAutoAdvanceRow(
             val autoAdvanceContentColor = if (state.autoAdvanceEnabled) {
                 MaterialTheme.colorScheme.primary
             } else {
-                READ_ALOUD_DISABLED_CONTROL_COLOR
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
             }
             Icon(
                 imageVector = ReadAloudAutoNextIcon,
@@ -321,7 +325,7 @@ private fun ReadAloudSpeedRow(
 ) {
     Row(
         modifier = modifier
-            .height(36.dp)
+            .heightIn(min = 48.dp)
             .semantics {
                 contentDescription = "播放速度 ${formatSpeechRate(speechRate)}"
             },
@@ -336,7 +340,7 @@ private fun ReadAloudSpeedRow(
         )
         Text(
             text = formatSpeechRate(speechRate),
-            color = Color.White,
+            color = MaterialTheme.colorScheme.onSurface,
             style = MaterialTheme.typography.titleSmall,
             textAlign = TextAlign.Center,
             maxLines = 1,
@@ -360,13 +364,11 @@ private fun ReadAloudRoundIconButton(
     onClick: () -> Unit
 ) {
     val containerColor = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent
-    val contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else Color.White
+    val contentColor = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
 
     Box(
         modifier = Modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(containerColor)
+            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
             .clickable(onClick = onClick)
             .semantics {
                 this.contentDescription = contentDescription
@@ -374,12 +376,20 @@ private fun ReadAloudRoundIconButton(
             },
         contentAlignment = Alignment.Center
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = contentColor,
-            modifier = Modifier.size(size * 0.5f)
-        )
+        Box(
+            modifier = Modifier
+                .size(size)
+                .clip(CircleShape)
+                .background(containerColor),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = contentColor,
+                modifier = Modifier.size(size * 0.5f)
+            )
+        }
     }
 }
 
@@ -391,7 +401,7 @@ private fun ReadAloudTextAction(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(34.dp)
+            .heightIn(min = 48.dp)
             .clickable(onClick = onClick)
             .semantics {
                 contentDescription = text
@@ -450,9 +460,8 @@ private fun formatDuration(durationMs: Long): String {
     return String.format(Locale.getDefault(), "%02d:%02d", minutes, seconds)
 }
 
-private val READ_ALOUD_SPEED_CONTROL_WIDTH = 106.dp
+private val READ_ALOUD_SPEED_CONTROL_WIDTH = 138.dp
 private val READ_ALOUD_SPEED_VALUE_WIDTH = 42.dp
-private val READ_ALOUD_DISABLED_CONTROL_COLOR = Color(0xFFBDBDBD)
 private val ReadAloudAutoNextIcon: ImageVector = ImageVector.Builder(
     name = "ReadAloudAutoNext",
     defaultWidth = 24.dp,

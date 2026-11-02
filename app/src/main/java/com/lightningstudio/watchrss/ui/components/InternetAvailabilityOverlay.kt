@@ -24,6 +24,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -32,11 +34,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.data.network.InternetAvailabilityStatus
-import com.lightningstudio.watchrss.ui.theme.watchColorResource
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
-
-private val InternetAvailableGreen = Color(0xFF41C96B)
-private val InternetBluetoothAmber = Color(0xFFFFA726)
 
 @Composable
 fun InternetAvailabilityOverlay(
@@ -73,8 +71,9 @@ fun InternetAvailabilityOverlay(
 
                 Text(
                     text = "互联网",
+                    modifier = Modifier.semantics { heading() },
                     style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = Color.White,
                     textAlign = TextAlign.Center
                 )
 
@@ -83,7 +82,7 @@ fun InternetAvailabilityOverlay(
                 Text(
                     text = message,
                     style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = Color.White,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.widthIn(max = guidanceTextWidth)
                 )
@@ -100,7 +99,7 @@ fun InternetAvailabilityOverlay(
                 Text(
                     text = internetAvailabilityStatusMessage(status),
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = Color.White.copy(alpha = 0.78f),
                     textAlign = TextAlign.Center,
                     modifier = Modifier.widthIn(max = textWidth)
                 )
@@ -177,7 +176,7 @@ private fun InternetAvailabilityStatusIndicator(
                     modifier = Modifier
                         .fillMaxSize()
                         .clip(CircleShape)
-                        .background(watchColorResource(R.color.danger_red))
+                        .background(MaterialTheme.colorScheme.error)
                 )
             }
 
@@ -186,7 +185,7 @@ private fun InternetAvailabilityStatusIndicator(
                     modifier = Modifier
                         .fillMaxSize()
                         .clip(CircleShape)
-                        .background(InternetBluetoothAmber)
+                        .background(MaterialTheme.colorScheme.tertiary)
                 )
             }
 
@@ -195,7 +194,7 @@ private fun InternetAvailabilityStatusIndicator(
                     modifier = Modifier
                         .fillMaxSize()
                         .clip(CircleShape)
-                        .background(InternetAvailableGreen)
+                        .background(MaterialTheme.colorScheme.primary)
                 )
             }
         }
@@ -221,7 +220,12 @@ private fun InternetAvailabilityActionButton(
             .clip(RoundedCornerShape(radius))
             .background(MaterialTheme.colorScheme.primary)
             .alpha(if (enabled) 1f else 0.45f)
-            .clickable(enabled = enabled, onClick = onClick)
+            .clickable(
+                enabled = enabled,
+                role = androidx.compose.ui.semantics.Role.Button,
+                onClickLabel = text,
+                onClick = onClick
+            )
             .padding(horizontal = horizontalPadding, vertical = verticalPadding),
         contentAlignment = Alignment.Center
     ) {

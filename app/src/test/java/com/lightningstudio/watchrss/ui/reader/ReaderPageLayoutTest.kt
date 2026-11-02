@@ -7,7 +7,7 @@ import org.junit.Test
 class ReaderPageLayoutTest {
     @Test
     fun bottomPaddingMatchesActualReaderFloatingActionStates() {
-        assertEquals(15.dp, ReaderPageLayout.bottomPadding(hasFloatingAction = false))
+        assertEquals(48.dp, ReaderPageLayout.bottomPadding(hasFloatingAction = false))
         assertEquals(56.dp, ReaderPageLayout.bottomPadding(hasFloatingAction = true))
     }
 }

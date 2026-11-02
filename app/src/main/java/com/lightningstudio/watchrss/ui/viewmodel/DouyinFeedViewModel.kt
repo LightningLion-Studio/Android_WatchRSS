@@ -55,6 +55,7 @@ data class DouyinFeedUiState(
     val proxyPlayUris: Map<String, String> = emptyMap(),
     val playbackRefreshEvents: Map<String, DouyinPlaybackSourceRefreshEvent> = emptyMap(),
     val message: String? = null,
+    val messageEventId: Long = 0L,
     val showTitlePage: Boolean = true
 )
 
@@ -139,7 +140,10 @@ class DouyinFeedViewModel(
                 loadInitial()
             } else {
                 _uiState.update {
-                    it.copy(message = result.exceptionOrNull()?.message ?: "登录失败")
+                    it.copy(
+                        message = result.exceptionOrNull()?.message ?: "登录失败",
+                        messageEventId = it.messageEventId + 1
+                    )
                 }
             }
         }
@@ -405,7 +409,8 @@ class DouyinFeedViewModel(
                     items = emptyList(),
                     localPlayPaths = emptyMap(),
                     proxyPlayUris = emptyMap(),
-                    message = "需要登录"
+                    message = "需要登录",
+                    messageEventId = it.messageEventId + 1
                 )
             }
             return
@@ -414,7 +419,8 @@ class DouyinFeedViewModel(
             _uiState.update {
                 it.copy(
                     message = event.message?.takeIf(String::isNotBlank)
-                        ?: formatDouyinError(event.errorCode ?: -1, event.message)
+                        ?: formatDouyinError(event.errorCode ?: -1, event.message),
+                    messageEventId = it.messageEventId + 1
                 )
             }
         }
@@ -826,7 +832,8 @@ class DouyinFeedViewModel(
             it.copy(
                 isLoading = false,
                 isLoadingMore = false,
-                message = formatDouyinError(code, message)
+                message = formatDouyinError(code, message),
+                messageEventId = it.messageEventId + 1
             )
         }
     }
@@ -858,7 +865,8 @@ class DouyinFeedViewModel(
         }
     }
 
-    fun clearMessage() {
+    fun clearMessage(expectedEventId: Long? = null) {
+        if (expectedEventId != null && _uiState.value.messageEventId != expectedEventId) return
         _uiState.update { it.copy(message = null) }
     }
 

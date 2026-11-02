@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -40,6 +41,8 @@ import com.lightningstudio.watchrss.data.rss.RssChannel
 import com.lightningstudio.watchrss.debug.PerformanceMonitor
 import com.lightningstudio.watchrss.debug.StartupDurationTracker
 import com.lightningstudio.watchrss.sdk.douyin.DouyinVideo
+import com.lightningstudio.watchrss.ui.components.AppTransparencyStore
+import com.lightningstudio.watchrss.ui.components.InitialAppTransparencyDialog
 import com.lightningstudio.watchrss.ui.screen.home.HomeComposeScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.AppViewModelFactory
@@ -158,7 +161,7 @@ class HomeFeedListActivity : BaseWatchActivity() {
                 val channels by viewModel.channels.collectAsState()
                 val hasLoadedChannels by viewModel.hasLoadedChannels.collectAsState()
                 val isRefreshing by viewModel.isRefreshing.collectAsState()
-                val message by viewModel.message.collectAsState()
+                val message by viewModel.messageEvent.collectAsState()
                 val platformLoginState by viewModel.platformLoginState.collectAsState()
                 val readAloudController = (application as WatchRssApplication)
                     .container
@@ -174,14 +177,15 @@ class HomeFeedListActivity : BaseWatchActivity() {
                     }
                 }
 
-                androidx.compose.runtime.LaunchedEffect(message) {
-                    if (message != null) {
+                androidx.compose.runtime.LaunchedEffect(message?.id) {
+                    val event = message
+                    if (event != null) {
                         com.lightningstudio.watchrss.ui.util.showAppToast(
                             context,
-                            message,
+                            event.text,
                             Toast.LENGTH_SHORT
                         )
-                        viewModel.clearMessage()
+                        viewModel.clearMessage(event.id)
                     }
                 }
 
@@ -189,8 +193,19 @@ class HomeFeedListActivity : BaseWatchActivity() {
                     val announcement by pendingAnnouncement
                     val updateState by appUpdateDownloader.state.collectAsState()
                     val pushMessages by pendingPushMessages
+                    var showInitialTransparency by remember(context) {
+                        mutableStateOf(!AppTransparencyStore.isInitialAppDisclosureAcknowledged(context))
+                    }
 
                     val ann = announcement
+                    if (showInitialTransparency && ann == null && pushMessages.isEmpty()) {
+                        InitialAppTransparencyDialog(
+                            onAcknowledge = {
+                                AppTransparencyStore.acknowledgeInitialAppDisclosure(context)
+                                showInitialTransparency = false
+                            }
+                        )
+                    }
                     if (ann != null) {
                         val downloading = updateState is AppUpdateState.Downloading
                         AlertDialog(

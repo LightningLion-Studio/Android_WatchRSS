@@ -26,7 +26,7 @@ class PlatformSettingsViewModelTest {
             )
         )
         val biliRepo = TestBiliRepository(initialLoggedIn = true)
-        val viewModel = BiliSettingsViewModel(biliRepo, rssRepo)
+        val viewModel = mainDispatcherRule.track(BiliSettingsViewModel(biliRepo, rssRepo))
         advanceUntilIdle()
 
         viewModel.refreshLoginState()
@@ -61,7 +61,7 @@ class PlatformSettingsViewModelTest {
             )
         )
         val douyinRepo = TestDouyinRepository(initialLoggedIn = true)
-        val viewModel = DouyinSettingsViewModel(douyinRepo, rssRepo)
+        val viewModel = mainDispatcherRule.track(DouyinSettingsViewModel(douyinRepo, rssRepo))
         advanceUntilIdle()
 
         viewModel.refreshLoginState()

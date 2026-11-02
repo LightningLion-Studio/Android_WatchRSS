@@ -5,8 +5,10 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.util.Base64
 import android.util.Log
 import androidx.activity.compose.setContent
@@ -70,6 +72,7 @@ class AcousticConnectionActivity : BaseWatchActivity() {
     private var detailMessage by mutableStateOf<String?>(null)
     private var primaryButtonLabel by mutableStateOf<String?>(null)
     private var isBusy by mutableStateOf(false)
+    private var permissionDenied by mutableStateOf(false)
     private var estimatedTimeLabel by mutableStateOf<String?>(null)
 
     private var pendingPermissionAction: PendingPermissionAction? = null
@@ -80,14 +83,20 @@ class AcousticConnectionActivity : BaseWatchActivity() {
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
             val granted = result.values.all { it }
             if (granted) {
+                permissionDenied = false
                 when (pendingPermissionAction) {
                     PendingPermissionAction.LISTEN_PURE_SOUND -> startPureSoundListening()
                     PendingPermissionAction.LISTEN_GUIDED_WIFI -> startGuidedWifiListening()
                     null -> Unit
                 }
             } else {
+                permissionDenied = true
                 statusMessage = "未授予所需权限"
-                detailMessage = "声波接收需要麦克风，引导 WiFi 还需要附近 WiFi/位置权限"
+                detailMessage = when (pendingPermissionAction) {
+                    PendingPermissionAction.LISTEN_PURE_SOUND -> "纯声波接收需要麦克风权限。授权后重新开始；若系统不再显示授权弹窗，请打开应用权限设置。"
+                    PendingPermissionAction.LISTEN_GUIDED_WIFI -> "声波引导连接需要麦克风；读取手机 WiFi 信息还需位置与附近 WiFi 权限。授权后重新开始，或打开应用权限设置。"
+                    null -> "此连接操作需要相应权限。授权后重新开始，或打开应用权限设置。"
+                }
                 isBusy = false
             }
             pendingPermissionAction = null
@@ -120,11 +129,13 @@ class AcousticConnectionActivity : BaseWatchActivity() {
                     estimatedTimeLabel = estimatedTimeLabel,
                     primaryButtonLabel = primaryButtonLabel,
                     isBusy = isBusy,
+                    permissionDenied = permissionDenied,
                     onAbilitySelected = { selected ->
                         ability = selected
                         refreshUi()
                     },
                     onPrimaryAction = ::handlePrimaryAction,
+                    onOpenPermissionSettings = ::openPermissionSettings,
                     onDismiss = { finish() }
                 )
             }
@@ -323,8 +334,9 @@ class AcousticConnectionActivity : BaseWatchActivity() {
 
     private fun startPureSoundListening() {
         if (!hasRecordAudioPermission()) {
+            permissionDenied = true
             statusMessage = "未授予麦克风权限"
-            detailMessage = "请授权麦克风后重试"
+            detailMessage = "纯声波接收需要麦克风权限。授权后重新开始；若系统不再显示授权弹窗，请打开应用权限设置。"
             primaryButtonLabel = "重新监听"
             isBusy = false
             return
@@ -363,8 +375,9 @@ class AcousticConnectionActivity : BaseWatchActivity() {
 
     private fun startGuidedWifiListening() {
         if (!hasRecordAudioPermission()) {
+            permissionDenied = true
             statusMessage = "未授予麦克风权限"
-            detailMessage = "请授权麦克风后重试"
+            detailMessage = "声波引导 WiFi 需要麦克风权限。授权后重新开始；若系统不再显示授权弹窗，请打开应用权限设置。"
             primaryButtonLabel = "重新开始"
             isBusy = false
             return
@@ -508,6 +521,14 @@ class AcousticConnectionActivity : BaseWatchActivity() {
         permissionsLauncher.launch(missing.toTypedArray())
     }
 
+    private fun openPermissionSettings() {
+        startActivity(
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.fromParts("package", packageName, null)
+            }
+        )
+    }
+
     private fun pureSoundPermissions(): List<String> = listOf(Manifest.permission.RECORD_AUDIO)
 
     private fun hasRecordAudioPermission(): Boolean {
@@ -579,8 +600,10 @@ private fun AcousticConnectionScreen(
     estimatedTimeLabel: String?,
     primaryButtonLabel: String?,
     isBusy: Boolean,
+    permissionDenied: Boolean,
     onAbilitySelected: (PhoneConnectionAbility) -> Unit,
     onPrimaryAction: () -> Unit,
+    onOpenPermissionSettings: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
@@ -588,7 +611,7 @@ private fun AcousticConnectionScreen(
 
     InstallDigitalCrownScrollHandler(scrollState)
 
-    WatchSurface(pureBlack = true) {
+    WatchSurface {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -665,6 +688,15 @@ private fun AcousticConnectionScreen(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(text = it, textAlign = TextAlign.Center)
+                }
+            }
+
+            if (permissionDenied && !isBusy) {
+                WatchButton(
+                    onClick = onOpenPermissionSettings,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(text = "打开应用权限设置", textAlign = TextAlign.Center)
                 }
             }
 

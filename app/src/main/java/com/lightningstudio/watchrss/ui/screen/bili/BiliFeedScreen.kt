@@ -62,6 +62,7 @@ import com.lightningstudio.watchrss.ui.components.EmptyStateCard
 import com.lightningstudio.watchrss.ui.components.PullRefreshBox
 import com.lightningstudio.watchrss.ui.components.SwipeActionButton
 import com.lightningstudio.watchrss.ui.components.SwipeActionRow
+import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.components.rememberPullRefreshEnabled
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.viewmodel.BiliFeedUiState
@@ -96,6 +97,11 @@ fun BiliFeedScreen(
     val isScrolling by remember(listState) {
         derivedStateOf { listState.isScrollInProgress }
     }
+    val visibleItemKeys by remember(listState) {
+        derivedStateOf {
+            listState.layoutInfo.visibleItemsInfo.mapTo(hashSetOf()) { it.key }
+        }
+    }
     var menuOpen by remember { mutableStateOf(false) }
     var openSwipeId by remember { mutableStateOf<Long?>(null) }
     var draggingSwipeId by remember { mutableStateOf<Long?>(null) }
@@ -127,179 +133,182 @@ fun BiliFeedScreen(
             }
     }
 
-    BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(androidx.compose.ui.graphics.Color.Black)
-    ) {
-        val maxWidth = this.maxWidth
-        val menuWidth = (maxWidth * 0.68f).coerceAtMost(180.dp)
-        val edgeWidth = 44.dp
-        val dragThresholdPx = with(LocalDensity.current) { 20.dp.toPx() }
-        val menuOffset by animateDpAsState(
-            targetValue = if (menuOpen) 0.dp else menuWidth,
-            label = "biliMenuOffset"
-        )
+    WatchSurface {
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val maxWidth = this.maxWidth
+            val menuWidth = (maxWidth * 0.68f).coerceAtMost(180.dp)
+            val edgeWidth = 44.dp
+            val dragThresholdPx = with(LocalDensity.current) { 20.dp.toPx() }
+            val menuOffset by animateDpAsState(
+                targetValue = if (menuOpen) 0.dp else menuWidth,
+                label = "biliMenuOffset"
+            )
 
-        PullRefreshBox(
-            isRefreshing = uiState.isRefreshing,
-            onRefresh = onRefresh,
-            modifier = Modifier.fillMaxSize(),
-            indicatorPadding = safePadding,
-            canRefresh = canRefresh
-        ) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = safePadding),
-                state = listState,
-                contentPadding = PaddingValues(
-                    top = safePadding,
-                    bottom = safePadding + itemSpacing
-                ),
-                verticalArrangement = Arrangement.spacedBy(itemSpacing)
+            PullRefreshBox(
+                isRefreshing = uiState.isRefreshing,
+                onRefresh = onRefresh,
+                modifier = Modifier.fillMaxSize(),
+                indicatorPadding = safePadding,
+                canRefresh = canRefresh
             ) {
-                item {
-                    BiliFeedHeader(
-                        isLoggedIn = uiState.isLoggedIn,
-                        onLoginClick = onLoginClick,
-                        onHeaderClick = onHeaderClick
-                    )
-                }
-                if (!uiState.isLoggedIn) {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = safePadding),
+                    state = listState,
+                    contentPadding = PaddingValues(
+                        top = safePadding,
+                        bottom = safePadding + itemSpacing
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(itemSpacing)
+                ) {
                     item {
-                        EmptyStateCard(
-                            title = "需要登录",
-                            subtitle = "登录后获取推荐内容"
+                        BiliFeedHeader(
+                            isLoggedIn = uiState.isLoggedIn,
+                            onLoginClick = onLoginClick,
+                            onHeaderClick = onHeaderClick
                         )
                     }
-                } else if (uiState.items.isEmpty()) {
+                    if (!uiState.isLoggedIn) {
+                        item {
+                            EmptyStateCard(
+                                title = "需要登录",
+                                subtitle = "登录后获取推荐内容"
+                            )
+                        }
+                    } else if (uiState.items.isEmpty()) {
+                        item {
+                            EmptyStateCard(
+                                title = "暂无内容",
+                                subtitle = "稍后再试或刷新"
+                            )
+                        }
+                    } else {
+                        items(uiState.items, key = { it.bvid ?: it.aid ?: it.title.orEmpty() }) { item ->
+                            val summary = remember(item) { buildFeedSummary(item) }
+                            val itemId = remember(item) { itemSwipeId(item) }
+                            val itemKey = item.bvid ?: item.aid ?: item.title.orEmpty()
+                            BiliFeedItemEntry(
+                                item = item,
+                                itemId = itemId,
+                                summary = summary,
+                                isScrolling = isScrolling,
+                                isVisible = itemKey in visibleItemKeys,
+                                openSwipeId = openSwipeId,
+                                onOpenSwipe = { openSwipeId = it },
+                                onCloseSwipe = { openSwipeId = null },
+                                draggingSwipeId = draggingSwipeId,
+                                onDragStart = { draggingSwipeId = it },
+                                onDragEnd = { draggingSwipeId = null },
+                                onClick = {
+                                    openSwipeId = null
+                                    onItemClick(item)
+                                },
+                                onLongClick = {
+                                    openSwipeId = null
+                                    onItemLongClick(item)
+                                },
+                                onFavoriteClick = { onFavoriteClick(item) },
+                                onWatchLaterClick = { onWatchLaterClick(item) }
+                            )
+                        }
+                    }
                     item {
-                        EmptyStateCard(
-                            title = "暂无内容",
-                            subtitle = "稍后再试或刷新"
-                        )
-                    }
-                } else {
-                    items(uiState.items, key = { it.bvid ?: it.aid ?: it.title.orEmpty() }) { item ->
-                        val summary = remember(item) { buildFeedSummary(item) }
-                        val itemId = remember(item) { itemSwipeId(item) }
-                        BiliFeedItemEntry(
-                            item = item,
-                            itemId = itemId,
-                            summary = summary,
-                            isScrolling = isScrolling,
-                            openSwipeId = openSwipeId,
-                            onOpenSwipe = { openSwipeId = it },
-                            onCloseSwipe = { openSwipeId = null },
-                            draggingSwipeId = draggingSwipeId,
-                            onDragStart = { draggingSwipeId = it },
-                            onDragEnd = { draggingSwipeId = null },
-                            onClick = {
-                                openSwipeId = null
-                                onItemClick(item)
-                            },
-                            onLongClick = {
-                                openSwipeId = null
-                                onItemLongClick(item)
-                            },
-                            onFavoriteClick = { onFavoriteClick(item) },
-                            onWatchLaterClick = { onWatchLaterClick(item) }
-                        )
-                    }
-                }
-                item {
-                    if (uiState.isLoadingMore) {
-                        Text(
-                            text = "加载中...",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                        if (uiState.isLoadingMore) {
+                            Text(
+                                text = "加载中...",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
                     }
                 }
             }
-        }
 
-        if (menuOpen) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background.copy(alpha = 0.45f))
-                    .clickableWithRipple { menuOpen = false }
-            )
-        } else {
-            var dragDistance by remember { mutableStateOf(0f) }
-            Box(
+            if (menuOpen) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background.copy(alpha = 0.45f))
+                        .clickableWithRipple(
+                            onClickLabel = "关闭频道菜单",
+                            onClick = { menuOpen = false }
+                        )
+                )
+            } else {
+                var dragDistance by remember { mutableStateOf(0f) }
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .width(edgeWidth)
+                        .align(Alignment.CenterEnd)
+                        .pointerInput(menuOpen) {
+                            detectHorizontalDragGestures(
+                                onDragStart = { dragDistance = 0f },
+                                onHorizontalDrag = { _, dragAmount ->
+                                    dragDistance += dragAmount
+                                },
+                                onDragEnd = {
+                                    if (dragDistance <= -dragThresholdPx) {
+                                        menuOpen = true
+                                    }
+                                }
+                            )
+                        }
+                )
+            }
+
+            BiliSideMenu(
+                isLoggedIn = uiState.isLoggedIn,
                 modifier = Modifier
                     .fillMaxHeight()
-                    .width(edgeWidth)
+                    .width(menuWidth)
                     .align(Alignment.CenterEnd)
+                    .offset { IntOffset(menuOffset.roundToPx(), 0) }
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(MaterialTheme.colorScheme.surface)
                     .pointerInput(menuOpen) {
+                        if (!menuOpen) return@pointerInput
+                        var dragDistance = 0f
                         detectHorizontalDragGestures(
                             onDragStart = { dragDistance = 0f },
                             onHorizontalDrag = { _, dragAmount ->
                                 dragDistance += dragAmount
                             },
                             onDragEnd = {
-                                if (dragDistance <= -dragThresholdPx) {
-                                    menuOpen = true
+                                if (dragDistance >= dragThresholdPx) {
+                                    menuOpen = false
                                 }
                             }
                         )
-                    }
+                    },
+                onLoginClick = {
+                    menuOpen = false
+                    onLoginClick()
+                },
+                onHeaderClick = {
+                    menuOpen = false
+                    onHeaderClick()
+                },
+                onSearchClick = {
+                    menuOpen = false
+                    onSearchClick()
+                },
+                onOpenWatchLater = {
+                    menuOpen = false
+                    onOpenWatchLater()
+                },
+                onOpenHistory = {
+                    menuOpen = false
+                    onOpenHistory()
+                },
+                onOpenFavorites = {
+                    menuOpen = false
+                    onOpenFavorites()
+                }
             )
         }
-
-        BiliSideMenu(
-            isLoggedIn = uiState.isLoggedIn,
-            modifier = Modifier
-                .fillMaxHeight()
-                .width(menuWidth)
-                .align(Alignment.CenterEnd)
-                .offset { IntOffset(menuOffset.roundToPx(), 0) }
-                .clip(RoundedCornerShape(18.dp))
-                .background(MaterialTheme.colorScheme.surface)
-                .pointerInput(menuOpen) {
-                    if (!menuOpen) return@pointerInput
-                    var dragDistance = 0f
-                    detectHorizontalDragGestures(
-                        onDragStart = { dragDistance = 0f },
-                        onHorizontalDrag = { _, dragAmount ->
-                            dragDistance += dragAmount
-                        },
-                        onDragEnd = {
-                            if (dragDistance >= dragThresholdPx) {
-                                menuOpen = false
-                            }
-                        }
-                    )
-                },
-            onLoginClick = {
-                menuOpen = false
-                onLoginClick()
-            },
-            onHeaderClick = {
-                menuOpen = false
-                onHeaderClick()
-            },
-            onSearchClick = {
-                menuOpen = false
-                onSearchClick()
-            },
-            onOpenWatchLater = {
-                menuOpen = false
-                onOpenWatchLater()
-            },
-            onOpenHistory = {
-                menuOpen = false
-                onOpenHistory()
-            },
-            onOpenFavorites = {
-                menuOpen = false
-                onOpenFavorites()
-            }
-        )
     }
 }
 
@@ -309,6 +318,7 @@ private fun BiliFeedItemEntry(
     itemId: Long,
     summary: String,
     isScrolling: Boolean,
+    isVisible: Boolean,
     openSwipeId: Long?,
     onOpenSwipe: (Long) -> Unit,
     onCloseSwipe: () -> Unit,
@@ -367,12 +377,14 @@ private fun BiliFeedItemEntry(
                 modifier = Modifier
                     .matchParentSize()
                     .then(backgroundScaleModifier)
-                    .background(Color.Black)
+                    .background(MaterialTheme.colorScheme.surface)
             )
             BiliFeedCard(
+                coverRecoveryEnabled = true,
                 title = item.title.orEmpty(),
                 summary = summary,
                 coverUrl = item.cover,
+                isVisible = isVisible,
                 onClick = onClick,
                 onLongClick = onLongClick,
                 interactionSource = pressState.interactionSource,
@@ -451,12 +463,19 @@ private fun BiliFeedHeader(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickableWithRipple(onClick = onHeaderClick),
+                .clickableWithRipple(
+                    onClickLabel = "打开哔哩哔哩频道信息",
+                    onClick = onHeaderClick
+                ),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(spacing)
         ) {
             Text(
-                text = channelTitleWithStyledHint("哔哩哔哩", titleSize),
+                text = channelTitleWithStyledHint(
+                    "腕上RSS · 哔哩哔哩频道",
+                    titleSize,
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                ),
                 color = MaterialTheme.colorScheme.onSurface,
                 fontSize = titleSize,
                 textAlign = TextAlign.Center,
@@ -484,14 +503,15 @@ private fun BiliFeedHeader(
 
 private fun channelTitleWithStyledHint(
     title: String,
-    titleSize: TextUnit
+    titleSize: TextUnit,
+    hintColor: Color
 ): androidx.compose.ui.text.AnnotatedString {
     val hintSize = (titleSize.value - 2f).coerceAtLeast(8f).sp
     return buildAnnotatedString {
         append("$title ")
         withStyle(
             SpanStyle(
-                color = Color(0xFFBDBDBD),
+                color = hintColor,
                 fontWeight = FontWeight.Bold,
                 fontSize = hintSize
             )
@@ -509,10 +529,15 @@ private fun textSize(id: Int): androidx.compose.ui.unit.TextUnit {
 }
 
 @Composable
-private fun Modifier.clickableWithRipple(onClick: () -> Unit): Modifier {
+private fun Modifier.clickableWithRipple(
+    onClickLabel: String,
+    onClick: () -> Unit
+): Modifier {
     return clickable(
         interactionSource = androidx.compose.runtime.remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
         indication = LocalIndication.current,
+        role = androidx.compose.ui.semantics.Role.Button,
+        onClickLabel = onClickLabel,
         onClick = onClick
     )
 }
@@ -610,7 +635,12 @@ private fun BiliSideMenuItem(
             .clip(RoundedCornerShape(radius))
             .background(background)
             .alpha(if (enabled) 1f else 0.45f)
-            .clickable(enabled = enabled, onClick = onClick)
+            .clickable(
+                enabled = enabled,
+                role = androidx.compose.ui.semantics.Role.Button,
+                onClickLabel = label,
+                onClick = onClick
+            )
             .padding(horizontal = padding),
         contentAlignment = Alignment.Center
     ) {

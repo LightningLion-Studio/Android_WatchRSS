@@ -34,6 +34,7 @@ import com.lightningstudio.watchrss.data.douyin.buildDouyinShareLink
 import com.lightningstudio.watchrss.data.rss.RssItem
 import com.lightningstudio.watchrss.ui.components.EmptyStateCard
 import com.lightningstudio.watchrss.ui.components.PullRefreshBox
+import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.components.rememberPullRefreshEnabled
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.screen.rss.FeedActions
@@ -103,95 +104,97 @@ fun DouyinRssFeedScreen(
             }
     }
 
-    PullRefreshBox(
-        isRefreshing = uiState.isLoading,
-        onRefresh = onRefresh,
-        modifier = Modifier.fillMaxSize(),
-        indicatorPadding = safePadding,
-        canRefresh = canRefresh
-    ) {
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = safePadding),
-            state = listState,
-            contentPadding = PaddingValues(
-                top = safePadding,
-                bottom = safePadding + itemSpacing
-            ),
-            verticalArrangement = Arrangement.spacedBy(itemSpacing)
+    WatchSurface {
+        PullRefreshBox(
+            isRefreshing = uiState.isLoading,
+            onRefresh = onRefresh,
+            modifier = Modifier.fillMaxSize(),
+            indicatorPadding = safePadding,
+            canRefresh = canRefresh
         ) {
-            item {
-                FeedHeader(
-                    title = "抖音",
-                    isRefreshing = uiState.isLoading,
-                    enabled = !isScrolling,
-                    onClick = {
-                        if (!closeOpenSwipe()) {
-                            onHeaderClick()
-                        }
-                    }
-                )
-            }
-
-            if (!uiState.isLoggedIn) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = safePadding),
+                state = listState,
+                contentPadding = PaddingValues(
+                    top = safePadding,
+                    bottom = safePadding + itemSpacing
+                ),
+                verticalArrangement = Arrangement.spacedBy(itemSpacing)
+            ) {
                 item {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 4.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = "未登录",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(modifier = Modifier.height(itemSpacing))
-                        FeedPillButton(text = "登录", onClick = onLoginClick)
-                    }
-                }
-            } else if (uiState.items.isEmpty()) {
-                item {
-                    val title = if (uiState.message.isNullOrBlank()) "暂无内容" else "加载失败"
-                    val subtitle = uiState.message ?: "下拉刷新获取推荐内容"
-                    EmptyStateCard(title = title, subtitle = subtitle)
-                }
-            } else {
-                itemsIndexed(feedItems, key = { _, item -> item.id }) { index, feedItem ->
-                    val item = uiState.items[index]
-                    FeedItemEntry(
-                        item = feedItem,
-                        thumbUrl = null,
-                        maxImageWidthPx = 1,
-                        isScrolling = isScrolling,
-                        useOriginalContent = false,
-                        openSwipeId = openSwipeId,
-                        onOpenSwipe = { openSwipeId = it },
-                        onCloseSwipe = { openSwipeId = null },
-                        draggingSwipeId = draggingSwipeId,
-                        onDragStart = { draggingSwipeId = it },
-                        onDragEnd = { draggingSwipeId = null },
+                    FeedHeader(
+                        title = "腕上RSS · 抖音频道",
+                        isRefreshing = uiState.isLoading,
+                        enabled = !isScrolling,
                         onClick = {
                             if (!closeOpenSwipe()) {
-                                onItemClick(item, index)
+                                onHeaderClick()
                             }
-                        },
-                        onLongClick = {
-                            if (!closeOpenSwipe()) {
-                                onItemLongClick(item)
-                            }
-                        },
-                        onFavoriteClick = { onFavoriteClick(item) },
-                        onWatchLaterClick = { onWatchLaterClick(item) }
+                        }
                     )
                 }
-                item {
-                    FeedActions(
-                        canLoadMore = uiState.hasMore && !uiState.isLoadingMore,
-                        onLoadMore = onLoadMore
-                    )
+
+                if (!uiState.isLoggedIn) {
+                    item {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "未登录",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(modifier = Modifier.height(itemSpacing))
+                            FeedPillButton(text = "登录", onClick = onLoginClick)
+                        }
+                    }
+                } else if (uiState.items.isEmpty()) {
+                    item {
+                        val title = if (uiState.message.isNullOrBlank()) "暂无内容" else "加载失败"
+                        val subtitle = uiState.message ?: "下拉刷新获取推荐内容"
+                        EmptyStateCard(title = title, subtitle = subtitle)
+                    }
+                } else {
+                    itemsIndexed(feedItems, key = { _, item -> item.id }) { index, feedItem ->
+                        val item = uiState.items[index]
+                        FeedItemEntry(
+                            item = feedItem,
+                            thumbUrl = null,
+                            maxImageWidthPx = 1,
+                            isScrolling = isScrolling,
+                            useOriginalContent = false,
+                            openSwipeId = openSwipeId,
+                            onOpenSwipe = { openSwipeId = it },
+                            onCloseSwipe = { openSwipeId = null },
+                            draggingSwipeId = draggingSwipeId,
+                            onDragStart = { draggingSwipeId = it },
+                            onDragEnd = { draggingSwipeId = null },
+                            onClick = {
+                                if (!closeOpenSwipe()) {
+                                    onItemClick(item, index)
+                                }
+                            },
+                            onLongClick = {
+                                if (!closeOpenSwipe()) {
+                                    onItemLongClick(item)
+                                }
+                            },
+                            onFavoriteClick = { onFavoriteClick(item) },
+                            onWatchLaterClick = { onWatchLaterClick(item) }
+                        )
+                    }
+                    item {
+                        FeedActions(
+                            canLoadMore = uiState.hasMore && !uiState.isLoadingMore,
+                            onLoadMore = onLoadMore
+                        )
+                    }
                 }
             }
         }

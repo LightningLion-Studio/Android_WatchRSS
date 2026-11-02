@@ -20,7 +20,11 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.lightningstudio.watchrss.R
 import com.lightningstudio.watchrss.WebViewScaleMode
@@ -198,14 +202,20 @@ private fun WebViewIconButton(
 ) {
     Box(
         modifier = modifier
-            .size(size)
+            .size(size.coerceAtLeast(48.dp))
             .alpha(if (enabled) 1f else 0.5f)
-            .clickable(enabled = enabled, onClick = onClick),
+            .semantics { this.contentDescription = contentDescription }
+            .clickable(
+                enabled = enabled,
+                role = Role.Button,
+                onClickLabel = contentDescription,
+                onClick = onClick
+            ),
         contentAlignment = Alignment.Center
     ) {
         Icon(
             imageVector = icon,
-            contentDescription = contentDescription,
+            contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.size(iconSize)
         )

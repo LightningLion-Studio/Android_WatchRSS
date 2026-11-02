@@ -14,7 +14,7 @@
     <dimen name="settings_detail_text_size">@dimen/hey_m_desription</dimen>
     <dimen name="settings_title_text_size">@dimen/hey_m_title</dimen>
     <dimen name="feed_card_title_text_size">@dimen/hey_m_desription</dimen>
-    <dimen name="feed_card_summary_text_size">@dimen/hey_caption</dimen>
+    <dimen name="feed_card_summary_text_size">@dimen/hey_s_desription</dimen>
     <dimen name="feed_card_action_text_size">@dimen/hey_s_desription</dimen>
     <dimen name="feed_card_image_height">100dp</dimen>
     <dimen name="watch_action_button_width">160dp</dimen>

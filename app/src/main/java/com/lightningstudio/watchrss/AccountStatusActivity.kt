@@ -17,12 +17,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.data.account.WatchAccountState
 import com.lightningstudio.watchrss.data.cloud.WatchCloudSyncService
 import com.lightningstudio.watchrss.ui.components.DownloadPhoneAppButton
+import com.lightningstudio.watchrss.ui.components.ThirdPartyPlatformNotice
+import com.lightningstudio.watchrss.ui.components.WatchRssAccessBoundaryCard
 import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownScrollHandler
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
@@ -34,14 +38,7 @@ class AccountStatusActivity : BaseWatchActivity() {
         setContent {
             WatchRSSTheme {
                 val state by (application as WatchRssApplication).accountStore.state.collectAsState()
-                AccountStatusScreen(
-                    state,
-                    if (BuildConfig.DEBUG) {
-                        (application as WatchRssApplication).cloudSyncService
-                    } else {
-                        null
-                    }
-                )
+                AccountStatusScreen(state, (application as WatchRssApplication).cloudSyncService)
             }
         }
     }
@@ -59,7 +56,7 @@ private fun AccountStatusScreen(
 ) {
     val scrollState = androidx.compose.foundation.rememberScrollState()
     InstallDigitalCrownScrollHandler(scrollState)
-    WatchSurface(pureBlack = true) {
+    WatchSurface {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -71,10 +68,15 @@ private fun AccountStatusScreen(
             Text(
                 text = "账号",
                 style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics { heading() },
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(4.dp))
+            ThirdPartyPlatformNotice(platform = "哔哩哔哩", compact = true)
+            ThirdPartyPlatformNotice(platform = "抖音", compact = true)
+            WatchRssAccessBoundaryCard()
             if (state == null) {
                 Text(
                     text = "未绑定",
@@ -88,7 +90,7 @@ private fun AccountStatusScreen(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 DownloadPhoneAppButton(
-                    operation = if (BuildConfig.DEBUG) "登录账号与云同步" else "登录账号",
+                    operation = "登录账号与云同步",
                     modifier = Modifier.offset(y = (-4).dp)
                 )
             } else {
@@ -97,7 +99,7 @@ private fun AccountStatusScreen(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold
                 )
-                Text("会员：${state.entitlement.plan}")
+                Text("WatchRSS云会员：${state.entitlement.plan}")
                 Text("状态：${if (state.entitlement.active) "有效" else "未生效"}")
                 Text("诊断：${if (state.telemetryConfig.diagnosticsEnabled) "已开启" else "未开启"}")
                 Text("Access Token：${if (state.isTokenExpired) "待刷新" else "有效"}")
@@ -108,27 +110,9 @@ private fun AccountStatusScreen(
                         else -> "有效"
                     }}"
                 )
-                cloudSyncService?.let { service ->
-                    val cloudStatus by service.status.collectAsState()
-                    if (state.entitlement.plan == "member" && state.entitlement.active) {
-                        Text("云中继：${cloudStatus.message}")
-                        if (cloudStatus.quotaBytes > 0) {
-                            Text(
-                                "空间：${cloudStatus.usedBytes / 1048576} / " +
-                                    "${cloudStatus.quotaBytes / 1048576} MiB"
-                            )
-                        }
-                        Text(
-                            "首次使用需在手机会员云空间中批准这块手表。",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    } else {
-                        Text(
-                            "云存储：会员可用；本地资料与蓝牙同步不受影响。",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                if (BuildConfig.DEBUG) {
+                    cloudSyncService?.let { service ->
+                        WatchCloudControlsPanel(service)
                     }
                 }
             }

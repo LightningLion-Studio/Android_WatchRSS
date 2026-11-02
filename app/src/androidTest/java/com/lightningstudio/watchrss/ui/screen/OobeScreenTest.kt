@@ -1,6 +1,7 @@
 package com.lightningstudio.watchrss.ui.screen
 
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.assertIsOff
@@ -9,6 +10,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.testutil.setWatchContent
 import com.lightningstudio.watchrss.ui.testing.OobeTestTags
 import com.lightningstudio.watchrss.ui.viewmodel.OobeUiState
@@ -36,7 +38,10 @@ class OobeScreenTest {
             )
         }
 
-        composeRule.onNodeWithTag(OobeTestTags.NEXT_BUTTON).assertExists().performClick()
+        composeRule.onNodeWithTag(OobeTestTags.NEXT_BUTTON)
+            .assertExists()
+            .assertHeightIsAtLeast(48.dp)
+            .performClick()
 
         composeRule.runOnIdle {
             assertEquals(1, targetPage)
@@ -45,10 +50,11 @@ class OobeScreenTest {
 
     @Test
     fun agreementPage_withoutAgreementShowsError() {
+        var targetPage = -1
         composeRule.setWatchContent {
             OobeScreen(
                 uiState = OobeUiState(introPage = 1),
-                onSetIntroPage = {},
+                onSetIntroPage = { targetPage = it },
                 onContinueFromIntro = {},
                 onOpenUserAgreement = {},
                 onOpenPrivacy = {}
@@ -56,8 +62,12 @@ class OobeScreenTest {
         }
 
         composeRule.onNodeWithTag(OobeTestTags.ERROR_TEXT).assertDoesNotExist()
-        composeRule.onNodeWithTag(OobeTestTags.NEXT_BUTTON).performClick()
+        composeRule.onNodeWithTag(OobeTestTags.NEXT_BUTTON)
+            .assertHeightIsAtLeast(48.dp)
+            .performClick()
         composeRule.onNodeWithTag(OobeTestTags.ERROR_TEXT).assertExists()
+        composeRule.onNodeWithTag(OobeTestTags.AGREEMENT_CHECKBOX).assertIsOff()
+        composeRule.runOnIdle { assertEquals(-1, targetPage) }
     }
 
     @Test
@@ -98,7 +108,7 @@ class OobeScreenTest {
         composeRule.onNodeWithText("自定义").assertExists()
         composeRule.onNodeWithText("阅读主题").assertExists()
         composeRule.onNodeWithText("字体大小").assertExists()
-        composeRule.onNodeWithText("使用滚轮调节音量").assertExists()
+        composeRule.onNodeWithText("使用表冠调节音量").assertExists()
         composeRule.onNodeWithText("音量调节防干扰").assertExists()
         composeRule.onNodeWithText("静音开播").assertExists()
         composeRule.onNodeWithTag(OobeTestTags.CUSTOM_FONT_VALUE, useUnmergedTree = true).assertExists()

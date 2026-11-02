@@ -101,7 +101,8 @@ class ReadAloudController(
     private val rssRepository: RssRepository,
     private val ttsEngineFactory: TtsEngineFactory,
     private val playbackStartVolumeLimiter: MediaPlaybackStartVolumeLimiter? = null,
-    private val playbackStartVolumeLimitPercentProvider: suspend () -> Int? = { null }
+    private val playbackStartVolumeLimitPercentProvider: suspend () -> Int? = { null },
+    private val onBeforeNewSession: () -> Unit = {}
 ) {
     private val appContext = context.applicationContext
     private val _uiState = MutableStateFlow(ReadAloudUiState())
@@ -261,6 +262,7 @@ class ReadAloudController(
         startAnchor: ReadAloudStartAnchor? = null,
         preferOriginalContent: Boolean? = null
     ) {
+        onBeforeNewSession()
         playbackJob?.cancel()
         playbackJob = appScope.launch {
             runCatching {
@@ -793,14 +795,18 @@ class ReadAloudController(
         return initial
             .distinctBy { it.id }
             .map { queueItem ->
+                val isNovelChapter = ImportedContentIds.isNovelContentItemUrl(queueItem.link)
+                val useOriginalContent = if (isNovelChapter) {
+                    false
+                } else if (queueItem.id == item.id) {
+                    preferOriginalContent ?: channel.useOriginalContent
+                } else {
+                    channel.useOriginalContent
+                }
                 QueueEntry(
                     item = queueItem,
                     channelTitle = channel.title,
-                    useOriginalContent = if (queueItem.id == item.id) {
-                        preferOriginalContent ?: channel.useOriginalContent
-                    } else {
-                        channel.useOriginalContent
-                    },
+                    useOriginalContent = useOriginalContent,
                     startAnchor = startAnchor.takeIf { queueItem.id == item.id }
                 )
             }

@@ -18,8 +18,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.paging.LoadState
@@ -29,12 +31,17 @@ import com.lightningstudio.watchrss.ui.components.EmptyCommentState
 import com.lightningstudio.watchrss.ui.components.LoadingIndicator
 import com.lightningstudio.watchrss.ui.components.PullRefreshBox
 import com.lightningstudio.watchrss.ui.components.WatchIconButton
+import com.lightningstudio.watchrss.ui.components.WatchSurface
 import com.lightningstudio.watchrss.ui.components.rememberPullRefreshEnabled
 import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownLazyListHandler
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
 import com.lightningstudio.watchrss.ui.viewmodel.BiliCommentViewModel
 import com.lightningstudio.watchrss.ui.viewmodel.BiliViewModelFactory
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,80 +62,110 @@ fun BiliCommentScreen(
     InstallDigitalCrownLazyListHandler(listState)
     val canRefresh = rememberPullRefreshEnabled(listState)
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "评论",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface
+    WatchSurface {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Text(
+                            text = "评论",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    },
+                    navigationIcon = {
+                        WatchIconButton(onClick = onNavigateBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        }
+                    },
+                    colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent,
+                        titleContentColor = MaterialTheme.colorScheme.onSurface,
+                        navigationIconContentColor = MaterialTheme.colorScheme.onSurface
                     )
-                },
-                navigationIcon = {
-                    WatchIconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                )
+            },
+            modifier = modifier,
+            containerColor = Color.Transparent,
+            contentColor = MaterialTheme.colorScheme.onSurface
+        ) { paddingValues ->
+            PullRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = {
+                    if (!isRefreshing) {
+                        isRefreshing = true
+                        scope.launch {
+                            val refreshFinished = async(start = CoroutineStart.UNDISPATCHED) {
+                                var observedLoading = false
+                                snapshotFlow { comments.loadState.refresh }.first { state ->
+                                    if (!observedLoading) {
+                                        observedLoading = state is LoadState.Loading
+                                        false
+                                    } else {
+                                        state !is LoadState.Loading
+                                    }
+                                }
+                            }
+                            comments.refresh()
+                            withTimeoutOrNull(45_000L) { refreshFinished.await() }
+                            isRefreshing = false
+                        }
                     }
                 },
-                colors = androidx.compose.material3.TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface,
-                    navigationIconContentColor = MaterialTheme.colorScheme.onSurface
-                )
-            )
-        },
-        modifier = modifier,
-        containerColor = MaterialTheme.colorScheme.background,
-        contentColor = MaterialTheme.colorScheme.onSurface
-    ) { paddingValues ->
-        PullRefreshBox(
-            isRefreshing = isRefreshing,
-            onRefresh = {
-                scope.launch {
-                    isRefreshing = true
-                    comments.refresh()
-                    isRefreshing = false
-                }
-            },
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(horizontal = safePadding),
-            canRefresh = canRefresh
-        ) {
-            when {
-                comments.loadState.refresh is LoadState.Loading -> {
-                    LoadingIndicator(comments.loadState.refresh)
-                }
-                comments.loadState.refresh is LoadState.Error -> {
-                    LoadingIndicator(comments.loadState.refresh)
-                }
-                comments.itemCount == 0 -> {
-                    EmptyCommentState()
-                }
-                else -> {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        state = listState,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(comments.itemCount) { index ->
-                            val comment = comments[index]
-                            comment?.let {
-                                BiliCommentCard(
-                                    comment = it,
-                                    uploaderMid = viewModel.uploaderMid,
-                                    onReplyClick = {
-                                        it.rpid?.let { rpid ->
-                                            onReplyClick(oid, rpid)
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .padding(horizontal = safePadding),
+                canRefresh = canRefresh
+            ) {
+                when {
+                    comments.itemCount == 0 && comments.loadState.refresh is LoadState.Loading -> {
+                        LoadingIndicator(comments.loadState.refresh)
+                    }
+                    comments.itemCount == 0 && comments.loadState.refresh is LoadState.Error -> {
+                        LoadingIndicator(
+                            loadState = comments.loadState.refresh,
+                            onRetry = comments::retry
+                        )
+                    }
+                    comments.itemCount == 0 -> {
+                        EmptyCommentState()
+                    }
+                    else -> {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            state = listState,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            if (comments.loadState.refresh is LoadState.Error) {
+                                item(key = "refreshError") {
+                                    LoadingIndicator(
+                                        loadState = comments.loadState.refresh,
+                                        onRetry = comments::retry
+                                    )
+                                }
+                            }
+                            items(comments.itemCount) { index ->
+                                val comment = comments[index]
+                                comment?.let {
+                                    BiliCommentCard(
+                                        comment = it,
+                                        uploaderMid = viewModel.uploaderMid,
+                                        onReplyClick = {
+                                            it.rpid?.let { rpid ->
+                                                onReplyClick(oid, rpid)
+                                            }
                                         }
-                                    }
+                                    )
+                                }
+                            }
+
+                            item {
+                                LoadingIndicator(
+                                    loadState = comments.loadState.append,
+                                    onRetry = comments::retry
                                 )
                             }
-                        }
-
-                        item {
-                            LoadingIndicator(comments.loadState.append)
                         }
                     }
                 }

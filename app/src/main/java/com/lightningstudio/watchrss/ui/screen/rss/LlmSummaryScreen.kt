@@ -27,7 +27,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -61,7 +60,7 @@ fun LlmSummaryScreen(
 }
 
 @Composable
-private fun LlmSummaryContent(
+internal fun LlmSummaryContent(
     state: LlmSummaryUiState,
     showTokenUsage: Boolean,
     onRetry: () -> Unit
@@ -76,7 +75,7 @@ private fun LlmSummaryContent(
 
     InstallDigitalCrownScrollHandler(scrollState)
 
-    WatchSurface(pureBlack = true) {
+    WatchSurface {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -253,7 +252,7 @@ private fun ErrorCard(message: String) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFFFF6B6B).copy(alpha = 0.12f))
+            .background(MaterialTheme.colorScheme.errorContainer)
             .padding(horizontal = 12.dp, vertical = 10.dp)
             .semantics {
                 contentDescription = "错误信息：$message"
@@ -264,7 +263,7 @@ private fun ErrorCard(message: String) {
             Text(
                 text = "生成失败",
                 style = MaterialTheme.typography.bodyMedium,
-                color = Color(0xFFFF6B6B),
+                color = MaterialTheme.colorScheme.onErrorContainer,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
             )
@@ -272,7 +271,7 @@ private fun ErrorCard(message: String) {
             Text(
                 text = message,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = MaterialTheme.colorScheme.onErrorContainer,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
             )

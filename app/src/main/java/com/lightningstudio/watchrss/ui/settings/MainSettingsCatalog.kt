@@ -17,13 +17,13 @@ object MainSettingsCatalog {
     )
 
     val mediaVolumeControl = MainSettingInfo(
-        title = "使用滚轮调节音量",
-        description = "播放器内可用滚轮调节媒体音量"
+        title = "使用表冠调节音量",
+        description = "播放器内可用表冠调节媒体音量"
     )
 
     val mediaVolumeGuard = MainSettingInfo(
         title = "音量调节防干扰",
-        description = "滚轮连续上调时先停一下，减少误触后突然过响"
+        description = "表冠连续上调时先停一下，减少误触后突然过响"
     )
 
     val mediaPlaybackStartVolumeLimit = MainSettingInfo(

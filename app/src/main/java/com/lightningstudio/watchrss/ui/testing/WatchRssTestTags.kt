@@ -96,6 +96,7 @@ object AddRssTestTags {
     const val ERROR_TEXT = "add_rss/error_text"
     const val RETRY_BUTTON = "add_rss/retry_button"
     const val CANCEL_ERROR_BUTTON = "add_rss/cancel_error_button"
+    const val BROWSER_VERIFICATION_BUTTON = "add_rss/browser_verification_button"
     const val PREVIEW_PANEL = "add_rss/preview_panel"
     const val CONFIRM_BUTTON = "add_rss/confirm_button"
     const val BACK_TO_INPUT_BUTTON = "add_rss/back_to_input_button"

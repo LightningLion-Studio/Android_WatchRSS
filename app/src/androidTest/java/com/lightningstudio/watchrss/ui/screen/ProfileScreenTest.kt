@@ -2,10 +2,13 @@ package com.lightningstudio.watchrss.ui.screen
 
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.testutil.setWatchContent
 import com.lightningstudio.watchrss.ui.testing.ProfileTestTags
 import org.junit.Assert.assertEquals
@@ -38,7 +41,11 @@ class ProfileScreenTest {
         composeRule.onNodeWithTag(ProfileTestTags.SETTINGS_ENTRY).assertExists()
         composeRule.onNodeWithTag(ProfileTestTags.ABOUT_ENTRY).performScrollTo().assertExists()
         composeRule.onNodeWithTag(ProfileTestTags.CONTACT_DEVELOPER_ENTRY).performScrollTo().assertExists()
-        composeRule.onNodeWithTag(ProfileTestTags.BEIAN_ENTRY).performScrollTo().assertExists()
+        composeRule.onNodeWithTag(ProfileTestTags.BEIAN_ENTRY)
+            .performScrollTo()
+            .assertWidthIsAtLeast(48.dp)
+            .assertHeightIsAtLeast(48.dp)
+            .assertExists()
     }
 
     @Test

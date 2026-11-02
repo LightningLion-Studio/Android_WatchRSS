@@ -1,10 +1,15 @@
 package com.lightningstudio.watchrss.ui.screen.common
 
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.testutil.setWatchContent
 import com.lightningstudio.watchrss.ui.screen.AboutScreen
 import com.lightningstudio.watchrss.ui.screen.ActionDialogScreen
@@ -39,8 +44,13 @@ class StaticCommonScreenTest {
         }
 
         composeRule.onNodeWithText("关于").assertExists()
-        composeRule.onNodeWithText("项目自介").performClick()
-        composeRule.onNodeWithText("隐私政策").performClick()
+        composeRule.onNodeWithText("项目自介")
+            .assertHeightIsAtLeast(48.dp)
+            .performClick()
+        composeRule.onNodeWithText("隐私政策")
+            .performScrollTo()
+            .assertHeightIsAtLeast(48.dp)
+            .performClick()
 
         composeRule.runOnIdle {
             assertEquals(listOf("intro", "privacy"), clicks)
@@ -59,8 +69,14 @@ class StaticCommonScreenTest {
         }
 
         composeRule.onNodeWithText("联系开发者").assertExists()
-        composeRule.onNodeWithText("加群").performClick()
-        composeRule.onNodeWithText("上传日志").performClick()
+        composeRule.onNodeWithText("加群")
+            .assertWidthIsAtLeast(48.dp)
+            .assertHeightIsAtLeast(48.dp)
+            .performClick()
+        composeRule.onNodeWithText("上传日志")
+            .assertWidthIsAtLeast(48.dp)
+            .assertHeightIsAtLeast(48.dp)
+            .performClick()
 
         composeRule.runOnIdle {
             assertEquals(listOf("join", "upload"), clicks)
@@ -84,8 +100,10 @@ class StaticCommonScreenTest {
             BeianScreen()
         }
 
-        composeRule.onNodeWithText("手机扫码查看").assertExists()
-        composeRule.onNodeWithContentDescription("备案查询二维码").assertExists()
+        composeRule.onNodeWithText("工信部备案", useUnmergedTree = true).assertExists()
+        composeRule.onNodeWithContentDescription(
+            "备案查询二维码，扫描后可在手机浏览器中打开备案查询页面"
+        ).assertExists()
     }
 
     @Test
@@ -98,8 +116,8 @@ class StaticCommonScreenTest {
         }
 
         composeRule.waitForIdle()
-        composeRule.onNodeWithText("加群").assertExists()
-        composeRule.onNodeWithText("QQ群号 1083518433").assertExists()
+        composeRule.onNodeWithText("加入 QQ 群", useUnmergedTree = true).assertExists()
+        composeRule.onNodeWithText("群号 1083518433", useUnmergedTree = true).assertExists()
     }
 
     @Test
@@ -126,8 +144,11 @@ class StaticCommonScreenTest {
             )
         }
 
-        composeRule.onNodeWithText("确认").performClick()
-        composeRule.onNodeWithText("删除").assertExists()
+        composeRule.onNodeWithText("确认")
+            .assertWidthIsAtLeast(48.dp)
+            .assertHeightIsAtLeast(48.dp)
+            .performClick()
+        composeRule.onNodeWithText("删除").assertExists().assertIsNotEnabled()
         composeRule.onNodeWithText("取消").assertExists()
 
         composeRule.runOnIdle {
