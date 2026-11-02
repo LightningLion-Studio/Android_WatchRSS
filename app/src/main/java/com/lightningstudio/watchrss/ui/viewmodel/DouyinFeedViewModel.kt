@@ -4,6 +4,7 @@ import com.lightningstudio.watchrss.data.douyin.DouyinOfflineReadiness
 import com.lightningstudio.watchrss.data.douyin.DouyinStockRuntime
 import com.lightningstudio.watchrss.data.douyin.DouyinCandidateRecovery
 import com.lightningstudio.watchrss.data.douyin.refreshDouyinItemFromFeed
+import com.lightningstudio.watchrss.data.douyin.refreshDouyinRestoredItem
 import com.lightningstudio.watchrss.data.douyin.toStreamItem
 import com.lightningstudio.watchrss.data.douyin.DouyinResult
 import kotlinx.coroutines.CancellationException
@@ -70,7 +71,9 @@ data class DouyinFeedUiState(
     val isSlowLoading: Boolean = false,
     val loadDeadlineExceeded: Boolean = false,
     val offlineReadiness: Map<String, DouyinOfflineReadiness> = emptyMap(),
-    val offlinePrefixEndedIds: Set<String> = emptySet()
+    val offlinePrefixEndedIds: Set<String> = emptySet(),
+    val unavailablePlaybackIds: Set<String> = emptySet(),
+    val trafficStopped: Boolean = false
 )
 
 private data class DouyinBootstrapState(
@@ -97,9 +100,11 @@ class DouyinFeedViewModel(
     private val storageDispatcher: CoroutineDispatcher = Dispatchers.IO.limitedParallelism(1),
     private val resumeToVideoFlowOnEntry: Boolean = false,
     private val resumeAwemeIdOnEntry: String? = null,
+    private val trafficGate: com.lightningstudio.watchrss.sdk.douyin.DouyinTrafficGate =
+        com.lightningstudio.watchrss.sdk.douyin.DouyinSessionTraffic.gate,
     private val stockReader: (Set<String>) -> List<DouyinStreamItem> = DouyinStockRuntime::restore
 ) : ViewModel() {
-    private val _uiState = MutableStateFlow(DouyinFeedUiState())
+    private val _uiState = MutableStateFlow(DouyinFeedUiState(trafficStopped = trafficGate.stopped.value))
     val uiState: StateFlow<DouyinFeedUiState> = _uiState
 
     private var feedLoadJob: Job? = null
@@ -107,6 +112,7 @@ class DouyinFeedViewModel(
     private var loadMoreJob: Job? = null
     private var stockJob: Job? = null
     private val directCandidateRecovery = DouyinCandidateRecovery()
+    private val automaticRefreshAttempts = linkedSetOf<String>()
 
     private var nextCursor: String? = null
     private var isRequestingMore: Boolean = false
@@ -126,6 +132,20 @@ class DouyinFeedViewModel(
     }
 
     init {
+        viewModelScope.launch {
+            trafficGate.stopped.collect { stopped ->
+                if (stopped) {
+                    if (!_uiState.value.trafficStopped) {
+                        cancelFeedLoad()
+                        loadMoreJob?.cancel()
+                        stockJob?.cancel()
+                        playbackRefreshJobs.values.toList().forEach { it.cancel() }
+                        playbackTransport.stop()
+                    }
+                    _uiState.update { it.copy(trafficStopped = true, isLoadingMore = false, proxyPlayUris = emptyMap(), message = null) }
+                }
+            }
+        }
         viewModelScope.launch {
             playbackSourceCoordinator.updates.collect(::applyPlaybackSourceRefreshEvent)
         }
@@ -150,7 +170,7 @@ class DouyinFeedViewModel(
     }
 
     fun loadCachedFeedForAppLaunch() {
-        if (feedLoadJob?.isActive == true) return
+        if (trafficGate.stopped.value || feedLoadJob?.isActive == true) return
         loadInitial(replaceExistingFeed = false, restoreEntry = true)
     }
 
@@ -201,7 +221,7 @@ class DouyinFeedViewModel(
     }
 
     private fun loadInitial(replaceExistingFeed: Boolean, restoreEntry: Boolean = false) {
-        if (feedLoadJob?.isActive == true) return
+        if ((trafficGate.stopped.value && !restoreEntry) || feedLoadJob?.isActive == true) return
         val generation = ++loadGeneration
         loadMoreJob?.cancel()
         playbackRefreshJobs.values.toList().forEach { it.cancel() }
@@ -228,8 +248,10 @@ class DouyinFeedViewModel(
                         val restored = restoreEntryPlayback(entryHeaders,
                             resumeToVideoFlowOnEntry, resumeAwemeIdOnEntry)
                         currentCoroutineContext().ensureActive()
-                        if (!shouldLoadInitialAfterRestore(restored, resumeToVideoFlowOnEntry)) {
-                            if (!resumeToVideoFlowOnEntry) refreshPreparedSources(generation)
+                        if (trafficGate.stopped.value) return@withTimeoutOrNull true
+                        if ((restored && sourceItems.any(::isDouyinPlayUrlExpired)) ||
+                            !shouldLoadInitialAfterRestore(restored, resumeToVideoFlowOnEntry)) {
+                            refreshPreparedSources(generation)
                             return@withTimeoutOrNull true
                         }
                     }
@@ -355,10 +377,10 @@ class DouyinFeedViewModel(
         val candidates = state.items.drop(preparedIndex).take(STARTUP_PLAYBACK_REFRESH_COUNT)
             .filter(::isDouyinPlayUrlExpired)
         for (item in candidates) {
-            val event = playbackSourceCoordinator.refresh(item, DouyinPlaybackRefreshTrigger.STARTUP_TTL)
-            currentCoroutineContext().ensureActive()
-            if (generation != loadGeneration) return
-            if (event.outcome != DouyinPlaybackRefreshOutcome.SKIPPED) applyPlaybackSourceRefreshEvent(event)
+            if (generation != loadGeneration || trafficGate.stopped.value) return
+            refreshPlaybackSource(item.awemeId, DouyinPlaybackSourceKind.REMOTE,
+                DouyinPlaybackRefreshTrigger.STARTUP_TTL)
+            playbackRefreshJobs[item.awemeId]?.join()
         }
     }
 
@@ -368,7 +390,10 @@ class DouyinFeedViewModel(
         trigger: DouyinPlaybackRefreshTrigger = DouyinPlaybackRefreshTrigger.PLAYBACK_ERROR
     ) {
         val normalizedAwemeId = awemeId.trim()
-        if (normalizedAwemeId.isEmpty()) return
+        if (normalizedAwemeId.isEmpty() || trafficGate.stopped.value) return
+        if (trigger in setOf(DouyinPlaybackRefreshTrigger.STARTUP_TTL,
+                DouyinPlaybackRefreshTrigger.FOREGROUND_HTTP_403, DouyinPlaybackRefreshTrigger.PREFETCH_HTTP_403) &&
+            !automaticRefreshAttempts.add(normalizedAwemeId)) return
         if (playbackRefreshJobs[normalizedAwemeId]?.isActive == true) return
 
         playbackRefreshJobs[normalizedAwemeId] = viewModelScope.launch {
@@ -414,6 +439,10 @@ class DouyinFeedViewModel(
                     )
                 }
 
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                _uiState.update { it.copy(unavailablePlaybackIds = it.unavailablePlaybackIds + normalizedAwemeId) }
             } finally { playbackRefreshJobs.remove(normalizedAwemeId) }
         }
     }
@@ -425,11 +454,17 @@ class DouyinFeedViewModel(
         localFallbackAvailable: Boolean
     ) {
         val current = sourceItems.firstOrNull { it.awemeId == awemeId } ?: return
-        val result = directCandidateRecovery.next(current)?.let { DouyinResult(DouyinErrorCodes.OK, data = it) }
-            ?: (if (directCandidateRecovery.allowFeedRefresh(current)) {
-                withTimeoutOrNull(10_000) { refreshDouyinItemFromFeed(repository, current) }
-            } else DouyinResult(DouyinErrorCodes.REQUEST_FAILED, "播放源候选已用尽"))
-            ?: DouyinResult(DouyinErrorCodes.REQUEST_FAILED, "播放源刷新超时")
+        val mayUseCandidate = trigger == DouyinPlaybackRefreshTrigger.PLAYBACK_ERROR ||
+            trigger == DouyinPlaybackRefreshTrigger.MANUAL
+        val result = (if (trigger == DouyinPlaybackRefreshTrigger.STARTUP_TTL) {
+            withTimeoutOrNull(10_000) { refreshDouyinRestoredItem(repository, current) }
+        } else {
+            (if (mayUseCandidate) directCandidateRecovery.next(current) else null)
+                ?.let { DouyinResult(DouyinErrorCodes.OK, data = it) }
+                ?: if (directCandidateRecovery.allowFeedRefresh(current)) {
+                    withTimeoutOrNull(10_000) { refreshDouyinItemFromFeed(repository, current) }
+                } else DouyinResult(DouyinErrorCodes.REQUEST_FAILED, "播放源候选已用尽")
+        }) ?: DouyinResult(DouyinErrorCodes.REQUEST_FAILED, "播放源刷新超时")
         val updated = result.data?.let(::updatePlaybackItem) == true
         val event = DouyinPlaybackSourceRefreshEvent(
             eventId = System.nanoTime(), awemeId = awemeId, trigger = trigger,
@@ -454,8 +489,10 @@ class DouyinFeedViewModel(
         event: DouyinPlaybackSourceRefreshEvent,
         suppressMessage: Boolean
     ) {
-        if (event.errorCode == DouyinErrorCodes.NOT_LOGGED_IN) {
-            _uiState.update { it.copy(isLoggedIn = false) }
+        if (event.trigger in setOf(DouyinPlaybackRefreshTrigger.STARTUP_TTL,
+                DouyinPlaybackRefreshTrigger.FOREGROUND_HTTP_403, DouyinPlaybackRefreshTrigger.PREFETCH_HTTP_403)) {
+            _uiState.update { it.copy(unavailablePlaybackIds = it.unavailablePlaybackIds + event.awemeId) }
+            return
         }
         if (!suppressMessage) {
             _uiState.update {
@@ -512,10 +549,10 @@ class DouyinFeedViewModel(
             reason = "restore_entry"
         )
         val hasBootstrapItems = visibleBootstrapItems.isNotEmpty()
-        val resumeAnchorPage = resolvePageAfterAwemeId(
+        val resumeAnchorPage = (if (persistedResumeAnchorAwemeId == null) resolvePageAfterAwemeId(
             awemeId = resumeAnchorAwemeId,
             items = visibleBootstrapItems
-        ) ?: resolvePageForAwemeId(
+        ) else null) ?: resolvePageForAwemeId(
             awemeId = resumeAnchorAwemeId,
             items = visibleBootstrapItems
         )
@@ -677,6 +714,10 @@ class DouyinFeedViewModel(
         val current = currentItems.getOrNull(itemIndex) ?: return
         val rawAnchorIndex = sourceItems.indexOfFirst { it.awemeId == current.awemeId }
         if (rawAnchorIndex < 0) return
+        if (isDouyinPlayUrlExpired(current)) {
+            refreshPlaybackSource(current.awemeId, DouyinPlaybackSourceKind.REMOTE,
+                DouyinPlaybackRefreshTrigger.STARTUP_TTL)
+        }
         val playHeaders = _uiState.value.playHeaders
         viewModelScope.launch(storageDispatcher) {
             watchHistoryStore.markWatched(current)
@@ -722,6 +763,11 @@ class DouyinFeedViewModel(
     fun discardPlaybackItem(awemeId: String) {
         val normalizedAwemeId = awemeId.trim()
         if (normalizedAwemeId.isEmpty()) return
+        val state = _uiState.value
+        if (state.items.getOrNull(state.currentPage - 1)?.awemeId == normalizedAwemeId) {
+            _uiState.update { it.copy(unavailablePlaybackIds = it.unavailablePlaybackIds + normalizedAwemeId) }
+            return
+        }
         if (!sessionQuarantinedAwemeIds.add(normalizedAwemeId)) return
 
         playbackRefreshJobs.remove(normalizedAwemeId)?.cancel()
@@ -750,7 +796,7 @@ class DouyinFeedViewModel(
 
     private fun loadMore() {
         val state = _uiState.value
-        if (isRequestingMore || !state.hasMore || state.isLoadingMore || state.isLoading) return
+        if (trafficGate.stopped.value || isRequestingMore || !state.hasMore || state.isLoadingMore || state.isLoading) return
         isRequestingMore = true
         val generation = loadGeneration
         loadMoreJob = viewModelScope.launch {
@@ -866,10 +912,10 @@ class DouyinFeedViewModel(
     private fun schedulePreload(items: List<DouyinStreamItem>, headers: Map<String, String>) {
         refreshOfflineReadiness()
         stockJob?.cancel()
-        if (items.isEmpty()) return
+        if (trafficGate.stopped.value || items.isEmpty()) return
         stockJob = viewModelScope.launch(storageDispatcher) {
             try {
-                DouyinStockRuntime.refill(items, headers, watchHistoryStore::readWatchedIds) {
+                DouyinStockRuntime.refill(items.filterNot(::isDouyinPlayUrlExpired), headers, watchHistoryStore::readWatchedIds) {
                     withTimeoutOrNull(10_000) { repository.fetchFeedPage(null, 12) }
                         ?.takeIf { it.isSuccess }?.data?.items.orEmpty().mapNotNull { it.toStreamItem() }
                 }
@@ -906,6 +952,7 @@ class DouyinFeedViewModel(
         _uiState.update { state ->
             state.copy(
                 items = visibleItems,
+                unavailablePlaybackIds = state.unavailablePlaybackIds - refreshedItem.awemeId,
                 offlineReadiness = state.offlineReadiness - refreshedItem.awemeId,
                 offlinePrefixEndedIds = state.offlinePrefixEndedIds - refreshedItem.awemeId,
                 localPlayPaths = visibleLocalPaths,
@@ -1061,9 +1108,10 @@ class DouyinFeedViewModel(
         headers: Map<String, String>,
         reason: String
     ): Map<String, String> {
-        if (visibleItems.isEmpty()) return emptyMap()
+        if (trafficGate.stopped.value || visibleItems.isEmpty()) return emptyMap()
         return playbackTransport.proxyUrisFor(
-            items = visibleItems,
+            items = visibleItems.filterNot(::isDouyinPlayUrlExpired)
+                .filterNot { it.awemeId in _uiState.value.unavailablePlaybackIds },
             headers = headers,
             reason = reason
         )

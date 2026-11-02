@@ -35,6 +35,32 @@ class BiliPlayerViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     @Test
+    fun processRestoreResolvesNewSignedUrlAndPreservesVideoAndPosition() = runTest {
+        fun repository(url: String) = TestBiliRepository().apply {
+            videoDetailResult = BiliResult(code = 0, data = BiliVideoDetail(
+                item = BiliItem(aid = 12L, bvid = "BV12", cid = 34L, title = "restored"),
+                pages = listOf(BiliPage(cid = 34L, part = "P1"))))
+            resolvedPlaybackSourceValue = BiliResolvedPlaybackSource(
+                cid = 34L, url = url, headers = emptyMap(), cacheKey = "same-video", quality = 32)
+            playbackProgressRecords += BiliPlaybackProgress(aid = 12L, bvid = "BV12", cid = 34L,
+                positionMs = 12_345L, durationMs = 60_000L, updatedAtMillis = 10L)
+        }
+        val beforeKill = createViewModel(repository("https://fixture.invalid/expired?deadline=1"))
+        advanceUntilIdle()
+        assertEquals("https://fixture.invalid/expired?deadline=1", beforeKill.uiState.value.initialSource?.url)
+        clearViewModel(beforeKill)
+
+        // A process restart creates a new repository; only identifiers and progress persist.
+        val restoredRepository = repository("https://fixture.invalid/fresh?deadline=9999999999")
+        val restored = createViewModel(restoredRepository)
+        advanceUntilIdle()
+        assertEquals("https://fixture.invalid/fresh?deadline=9999999999", restored.uiState.value.initialSource?.url)
+        assertEquals(12_345, restored.uiState.value.resumePositionMs)
+        assertEquals(listOf("resolve:34:12:BV12:32"), restoredRepository.callLog)
+        assertNull(restored.uiState.value.message)
+    }
+
+    @Test
     fun loadPlayUrl_usesPreparedPlaybackSource_whenWarmSourceExists() = runTest {
         val repo = TestBiliRepository().apply {
             videoDetailResult = BiliResult(

@@ -695,7 +695,7 @@ fun sampleDouyinStreamItem(
     title: String? = "测试抖音视频",
     author: String? = "测试作者",
     likeCount: Long = 12L,
-    playUrlResolvedAtMs: Long = 1_700_000_000_000L,
+    playUrlResolvedAtMs: Long = System.currentTimeMillis(),
     sourceOrigin: DouyinSourceOrigin = DouyinSourceOrigin.NETWORK_FEED
 ): DouyinStreamItem {
     return DouyinStreamItem(

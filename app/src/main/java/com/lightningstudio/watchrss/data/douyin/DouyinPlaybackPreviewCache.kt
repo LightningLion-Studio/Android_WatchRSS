@@ -40,6 +40,7 @@ import kotlin.math.min
 import okhttp3.Call
 import okhttp3.ConnectionPool
 import okhttp3.Dispatcher as OkHttpDispatcher
+import com.lightningstudio.watchrss.sdk.douyin.DouyinTrafficInterceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
@@ -484,7 +485,7 @@ private class DouyinPlaybackPreviewManager {
         keepAliveDuration = 10,
         timeUnit = TimeUnit.MINUTES
     )
-    private val httpClient = OkHttpClient.Builder()
+    private val httpClient = OkHttpClient.Builder().addInterceptor(DouyinTrafficInterceptor())
         .dispatcher(httpDispatcher)
         .connectionPool(connectionPool)
         .retryOnConnectionFailure(true)

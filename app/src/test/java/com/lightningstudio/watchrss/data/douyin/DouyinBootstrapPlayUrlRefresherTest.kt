@@ -51,7 +51,7 @@ class DouyinBootstrapPlayUrlRefresherTest {
     }
 
     @Test
-    fun refreshExpiredDouyinBootstrapPlayUrls_keepsOriginalItemWhenRefreshFails() = runTest {
+    fun refreshExpiredDouyinBootstrapPlayUrls_dropsExpiredRemoteItemWhenRefreshFails() = runTest {
         val nowMs = 1_800_000_000_000L
         val expired = sampleDouyinStreamItem(
             awemeId = "expired-aweme",
@@ -71,6 +71,6 @@ class DouyinBootstrapPlayUrlRefresherTest {
         assertTrue(repository.fetchVideoCalls.isEmpty())
         assertEquals(listOf<String?>(null), repository.fetchFeedPageCursors)
         assertTrue(result.refreshedAwemeIds.isEmpty())
-        assertEquals(expired, result.items.single())
+        assertTrue(result.items.isEmpty())
     }
 }

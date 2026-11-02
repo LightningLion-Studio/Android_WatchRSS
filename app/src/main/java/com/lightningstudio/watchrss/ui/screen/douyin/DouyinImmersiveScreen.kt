@@ -148,6 +148,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import com.lightningstudio.watchrss.sdk.douyin.DouyinTrafficInterceptor
+import com.lightningstudio.watchrss.data.douyin.isDouyinPlayUrlExpired
 import okhttp3.OkHttpClient
 import kotlin.math.abs
 import com.lightningstudio.watchrss.sdk.douyin.DouyinVideoCodec
@@ -606,21 +608,16 @@ internal fun DouyinImmersiveScreen(
     onOfflinePrefixEnded: (String) -> Unit = { },
     onPlaybackActiveChanged: (Boolean) -> Unit = { }
 ) {
-    var entryStartIndex by rememberSaveable {
-        mutableIntStateOf(
-            resolveDouyinEntryStartIndex(
-                currentPage = uiState.currentPage,
-                itemCount = uiState.items.size
-            )
-        )
-    }
+    var entryStartAwemeId by rememberSaveable { mutableStateOf<String?>(null) }
+    val entryStartIndex = resolveDouyinAnchoredEntryStartIndex(
+        items = uiState.items,
+        entryAwemeId = entryStartAwemeId.takeUnless { uiState.showTitlePage },
+        currentPage = uiState.currentPage
+    )
     var allowBluetoothPlayback by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(uiState.showTitlePage, uiState.currentPage, uiState.items.size) {
-        if (uiState.showTitlePage || entryStartIndex > uiState.items.lastIndex.coerceAtLeast(0)) {
-            entryStartIndex = resolveDouyinEntryStartIndex(
-                currentPage = uiState.currentPage,
-                itemCount = uiState.items.size
-            )
+    LaunchedEffect(uiState.showTitlePage, uiState.currentPage, uiState.items.map { it.awemeId }) {
+        if (uiState.showTitlePage || uiState.items.none { it.awemeId == entryStartAwemeId }) {
+            entryStartAwemeId = uiState.items.getOrNull(entryStartIndex)?.awemeId
         }
     }
     val pageCount = resolveDouyinPageCount(
@@ -743,6 +740,9 @@ internal fun DouyinImmersiveScreen(
     val preparedPlaybackOverrideUri = preparedItem?.awemeId?.let(runtimePlaybackOverrides::get)
     val preparedPlaybackTarget = when {
         preparedItem == null -> null
+        (uiState.trafficStopped || preparedItem.awemeId in quarantinedPlaybackRecords ||
+            preparedItem.awemeId in uiState.unavailablePlaybackIds ||
+            isDouyinPlayUrlExpired(preparedItem)) && preparedLocalUri == null -> null
         preparedIsPoisoned -> DouyinResolvedPlaybackTarget(
             mediaUri = buildDouyinInjectedFailureUri(
                 awemeId = preparedItem.awemeId,
@@ -780,6 +780,9 @@ internal fun DouyinImmersiveScreen(
     )
     val lookaheadTargets = preparedBackgroundItemIndices.mapNotNull { itemIndex ->
         val item = uiState.items.getOrNull(itemIndex) ?: return@mapNotNull null
+        if (uiState.trafficStopped || item.awemeId in quarantinedPlaybackRecords ||
+            item.awemeId in uiState.unavailablePlaybackIds ||
+            isDouyinPlayUrlExpired(item)) return@mapNotNull null
         val itemProxyUri = resolveDouyinProxyPlayUri(
             awemeId = item.awemeId,
             proxyPlayUris = uiState.proxyPlayUris
@@ -1302,6 +1305,14 @@ internal fun DouyinImmersiveScreen(
         allSlots.forEach(::stopSlotPlayback)
     }
 
+    LaunchedEffect(uiState.trafficStopped) {
+        if (uiState.trafficStopped) {
+            activeAutoplayEnabled = false
+            pendingAutoSkipPage = -1
+            stopAllPlayback()
+        }
+    }
+
     LaunchedEffect(showNetworkUnavailable, foregroundSlotKey, activeItem?.awemeId) {
         if (!showNetworkUnavailable) {
             return@LaunchedEffect
@@ -1325,6 +1336,7 @@ internal fun DouyinImmersiveScreen(
             DouyinPlaybackRefreshTrigger.PLAYBACK_ERROR
         }
     ) {
+        if (com.lightningstudio.watchrss.sdk.douyin.DouyinSessionTraffic.gate.stopped.value) return
         val item = activeItem ?: return
         if (activeIsPoisoned) {
             if (resetRetryCount) {
@@ -1400,14 +1412,15 @@ internal fun DouyinImmersiveScreen(
         )
         runtimePlaybackOverrides = runtimePlaybackOverrides - normalizedAwemeId
         slot?.let(::clearSlotBinding)
-        if (previous == null) {
+        val isHttpFailure = reason == DouyinPlaybackQuarantineReason.PrefetchHttpStatusError
+        if (previous == null && !isHttpFailure) {
             if (!singleItemImmersive) onDiscardPlaybackItem(normalizedAwemeId)
         }
         AppLogger.d(
             TAG,
             "TEST_EVENT quarantine awemeId=$normalizedAwemeId reason=${reason.debugLabel} count=${quarantinedPlaybackRecords[normalizedAwemeId]?.failureCount ?: 1} detail=${detail.orEmpty()}"
         )
-        if (autoSkipCurrent) {
+        if (autoSkipCurrent && !isHttpFailure) {
             activePausedByGesture = false
             activeAutoplayEnabled = false
             stopForegroundPlayback()
@@ -1533,7 +1546,7 @@ internal fun DouyinImmersiveScreen(
             )
         }
         if (target != pagerState.currentPage && !pagerState.isScrollInProgress) {
-            pagerState.animateScrollToPage(target)
+            pagerState.scrollToPage(target)
         }
     }
 
@@ -2204,6 +2217,7 @@ internal fun DouyinImmersiveScreen(
             }
 
             override fun onPlayerError(error: PlaybackException) {
+                if (com.lightningstudio.watchrss.sdk.douyin.DouyinSessionTraffic.gate.stopped.value) return
                 primarySlot.hasError = true
                 primarySlot.isBuffering = false
                 primarySlot.isPlaying = false
@@ -2323,6 +2337,7 @@ internal fun DouyinImmersiveScreen(
             }
 
             override fun onPlayerError(error: PlaybackException) {
+                if (com.lightningstudio.watchrss.sdk.douyin.DouyinSessionTraffic.gate.stopped.value) return
                 secondarySlot.hasError = true
                 secondarySlot.isBuffering = false
                 secondarySlot.isPlaying = false
@@ -2753,6 +2768,11 @@ internal fun DouyinImmersiveScreen(
                         }
                     }
                 },
+            key = { page ->
+                if (page == 0) "douyin-title" else uiState.items.getOrNull(
+                    resolveDouyinItemIndexForPagerPage(page, entryStartIndex) ?: -1
+                )?.awemeId ?: "douyin-empty-$page"
+            },
             flingBehavior = pagerFlingBehavior,
             beyondViewportPageCount = 1,
             userScrollEnabled = pagerUserScrollEnabled
@@ -2915,6 +2935,22 @@ internal fun DouyinImmersiveScreen(
                     modifier = Modifier.padding(watchDimensionResource(R.dimen.watch_safe_padding))
                 )
             }
+        }
+        val expiredPlaybackNotice = when {
+            uiState.trafficStopped -> "请求受限，已暂停加载"
+            activeItem?.awemeId in uiState.unavailablePlaybackIds -> "视频已过期，暂时无法播放"
+            activeItem?.awemeId in quarantinedPlaybackRecords -> "视频已过期，暂时无法播放"
+            activeItem?.awemeId in automatic403RefreshSources &&
+                uiState.playbackRefreshEvents[activeItem?.awemeId]?.outcome != DouyinPlaybackRefreshOutcome.SUCCESS ->
+                "视频已过期，正在刷新"
+            activeItem?.let(::isDouyinPlayUrlExpired) == true -> "视频已过期，正在刷新"
+            else -> null
+        }
+        if (!uiState.showTitlePage && expiredPlaybackNotice != null) {
+            Text(text = expiredPlaybackNotice, color = Color.White,
+                textAlign = TextAlign.Center, style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.align(Alignment.Center).padding(horizontal = 44.dp)
+                    .background(Color.Black.copy(alpha = 0.85f)).padding(8.dp))
         }
         val feedLoadNotice = douyinFeedLoadNotice(uiState.isSlowLoading, uiState.loadDeadlineExceeded)
         if (!uiState.showTitlePage && feedLoadNotice != null) {
@@ -3581,7 +3617,7 @@ private fun buildDouyinExoPlayer(
 ): ExoPlayer {
     val upstreamFactory = DefaultDataSource.Factory(
         context,
-        OkHttpDataSource.Factory(OkHttpClient()).apply {
+        OkHttpDataSource.Factory(OkHttpClient.Builder().addInterceptor(DouyinTrafficInterceptor()).build()).apply {
             setDefaultRequestProperties(headers)
         }
     )
@@ -3832,6 +3868,14 @@ internal fun resolveDouyinAutoSkipTargetPage(
         0
     }
 }
+
+/** Resolve the entry boundary by identity so removing a preceding neighbour cannot hide it. */
+internal fun resolveDouyinAnchoredEntryStartIndex(
+    items: List<DouyinStreamItem>,
+    entryAwemeId: String?,
+    currentPage: Int
+): Int = items.indexOfFirst { it.awemeId == entryAwemeId }.takeIf { it >= 0 }
+    ?: resolveDouyinEntryStartIndex(currentPage, items.size)
 
 internal fun resolveDouyinEntryStartIndex(currentPage: Int, itemCount: Int): Int {
     if (itemCount <= 0) return 0

@@ -123,7 +123,7 @@ class DouyinFeedViewModelTest {
 
         assertEquals(listOf("aweme-b", "aweme-c", "aweme-d"), viewModel.uiState.value.items.map { it.awemeId })
         assertTrue(viewModel.uiState.value.showTitlePage)
-        assertEquals(2, viewModel.uiState.value.currentPage)
+        assertEquals(1, viewModel.uiState.value.currentPage)
     }
 
     @Test
@@ -194,7 +194,7 @@ class DouyinFeedViewModelTest {
         advanceUntilIdle()
 
         assertTrue(firstRestore.uiState.value.showTitlePage)
-        assertEquals(2, firstRestore.uiState.value.currentPage)
+        assertEquals(1, firstRestore.uiState.value.currentPage)
         assertEquals(
             listOf(second.awemeId, third.awemeId, fourth.awemeId),
             firstRestore.uiState.value.items.map { it.awemeId }
@@ -212,7 +212,7 @@ class DouyinFeedViewModelTest {
         advanceUntilIdle()
 
         assertTrue(coldRestore.uiState.value.showTitlePage)
-        assertEquals(2, coldRestore.uiState.value.currentPage)
+        assertEquals(1, coldRestore.uiState.value.currentPage)
         assertEquals(second.awemeId, recentWindowStore.snapshot.anchorAwemeId)
     }
 
@@ -431,7 +431,7 @@ class DouyinFeedViewModelTest {
         advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value.showTitlePage)
-        assertEquals(2, viewModel.uiState.value.currentPage)
+        assertEquals(1, viewModel.uiState.value.currentPage)
         assertEquals(cachedItems.drop(14).map { it.awemeId }, viewModel.uiState.value.items.map { it.awemeId })
         assertTrue(repo.fetchFeedPageCursors.isEmpty())
     }
@@ -474,7 +474,7 @@ class DouyinFeedViewModelTest {
         advanceUntilIdle()
 
         assertTrue(viewModel.uiState.value.showTitlePage)
-        assertEquals(2, viewModel.uiState.value.currentPage)
+        assertEquals(1, viewModel.uiState.value.currentPage)
         assertEquals(cachedItems.drop(7).map { it.awemeId }, viewModel.uiState.value.items.map { it.awemeId })
         assertTrue(repo.fetchFeedPageCursors.isEmpty())
     }
@@ -836,7 +836,7 @@ class DouyinFeedViewModelTest {
             listOf(anchor.awemeId, next.awemeId, third.awemeId),
             viewModel.uiState.value.items.map { it.awemeId }
         )
-        assertEquals(2, viewModel.uiState.value.currentPage)
+        assertEquals(1, viewModel.uiState.value.currentPage)
         snapshotDir.deleteRecursively()
     }
 
@@ -1016,13 +1016,14 @@ class DouyinFeedViewModelTest {
                 )
             )
         )
+        repo.setVideoResult(awemeId, DouyinResult(DouyinErrorCodes.OK, data = DouyinContent.Video(
+            awemeId, "新标题", "新作者", 99L, "https://example.com/fresh.mp4", "")))
         advanceUntilIdle()
 
         val initial = viewModel.uiState.value.items.first { it.awemeId == awemeId }
-        assertEquals("https://example.com/old.mp4", initial.playUrl)
+        assertEquals("https://example.com/fresh.mp4", initial.playUrl)
 
         viewModel.enterVideoFlow()
-        viewModel.loadInitial()
         advanceUntilIdle()
 
         val refreshed = viewModel.uiState.value.items.first { it.awemeId == awemeId }
@@ -1030,7 +1031,7 @@ class DouyinFeedViewModelTest {
         assertEquals("新标题", refreshed.title)
         assertEquals("新作者", refreshed.author)
         assertEquals(99L, refreshed.likeCount)
-        assertEquals(DouyinSourceOrigin.NETWORK_FEED, refreshed.sourceOrigin)
+        assertEquals(DouyinSourceOrigin.VIDEO_REFRESH, refreshed.sourceOrigin)
         assertTrue(refreshed.playUrlResolvedAtMs > 0L)
     }
 
@@ -1092,7 +1093,7 @@ class DouyinFeedViewModelTest {
         val initialItem = sampleDouyinStreamItem(
             awemeId = awemeId,
             playUrl = "https://example.com/still-valid.mp4",
-            playUrlResolvedAtMs = 100L
+            playUrlResolvedAtMs = System.currentTimeMillis() - 1_000L
         )
         val page = DouyinResult(DouyinErrorCodes.OK, data = DouyinFeedPage(
             listOf(sampleDouyinVideo(awemeId = awemeId).apply { playUrl = initialItem.playUrl }), null, false))

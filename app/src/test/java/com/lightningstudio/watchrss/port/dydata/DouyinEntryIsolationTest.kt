@@ -27,7 +27,7 @@ class DouyinEntryIsolationTest {
         advanceUntilIdle()
         assertEquals(cached.map { it.awemeId }, model.uiState.value.items.map { it.awemeId })
         assertTrue(repository.fetchFeedPageCursors.isEmpty())
-        assertTrue(repository.fetchVideoCalls.isEmpty())
+        assertEquals(listOf("a", "b"), repository.fetchVideoCalls)
         assertEquals("restored-cursor", cache.cachedNextCursor)
         model.loadMoreForList()
         advanceUntilIdle()

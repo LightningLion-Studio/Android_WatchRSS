@@ -11,6 +11,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.job
 import kotlinx.coroutines.withContext
+import com.lightningstudio.watchrss.sdk.douyin.DouyinTrafficInterceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
@@ -45,7 +46,7 @@ class DouyinPreloadManager(
     // Fast cache lookups must not queue behind long-running mp4 downloads during entry restore.
     private val lookupDispatcher = Dispatchers.IO.limitedParallelism(4)
     private val downloadDispatcher = Dispatchers.IO.limitedParallelism(1)
-    private val httpClient = OkHttpClient.Builder()
+    private val httpClient = OkHttpClient.Builder().addInterceptor(DouyinTrafficInterceptor())
         .connectTimeout(8, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
         .build()
@@ -229,6 +230,7 @@ class DouyinPreloadManager(
             return target.absolutePath
         }
 
+        if (isDouyinPlayUrlExpired(item)) return null
         val temp = File(cacheDir, "${target.name}.tmp")
         val startedAtMs = System.currentTimeMillis()
         return try {

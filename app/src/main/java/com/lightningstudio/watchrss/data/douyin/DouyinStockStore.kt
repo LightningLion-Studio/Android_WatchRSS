@@ -18,6 +18,7 @@ import kotlinx.coroutines.job
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import com.lightningstudio.watchrss.sdk.douyin.DouyinTrafficInterceptor
 import okhttp3.OkHttpClient
 import okhttp3.Request
 
@@ -154,7 +155,7 @@ internal object DouyinStockRuntime {
     @Volatile private var epoch = 0L
     private var lastFeedAtMs = 0L
     private val refillMutex = Mutex()
-    private val http = OkHttpClient.Builder().connectTimeout(3, TimeUnit.SECONDS)
+    private val http = OkHttpClient.Builder().addInterceptor(DouyinTrafficInterceptor()).connectTimeout(3, TimeUnit.SECONDS)
         .readTimeout(4, TimeUnit.SECONDS).callTimeout(5, TimeUnit.SECONDS).build()
 
     @Synchronized

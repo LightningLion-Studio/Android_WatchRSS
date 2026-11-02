@@ -9,6 +9,19 @@ import org.junit.Test
 class DouyinImmersiveScreenPagingTest {
 
     @Test
+    fun removingPrecedingNeighbourPreservesEntryVideoAndPagerPosition() {
+        val items = (0..17).map { sampleDouyinStreamItem(awemeId = "item-$it") }
+        val before = resolveDouyinAnchoredEntryStartIndex(items, "item-7", 8)
+        assertEquals(7, before)
+        assertEquals(1, resolveDouyinPagerPage(8, before, 12))
+        val afterItems = items.filterNot { it.awemeId == "item-2" }
+        val after = resolveDouyinAnchoredEntryStartIndex(afterItems, "item-7", 7)
+        assertEquals(6, after)
+        assertEquals("item-7", afterItems[after].awemeId)
+        assertEquals(1, resolveDouyinPagerPage(7, after, 12))
+    }
+
+    @Test
     fun resolveDouyinEntryStartIndex_usesResumeTargetAsFirstVideoAfterCover() {
         assertEquals(2, resolveDouyinEntryStartIndex(currentPage = 3, itemCount = 6))
     }

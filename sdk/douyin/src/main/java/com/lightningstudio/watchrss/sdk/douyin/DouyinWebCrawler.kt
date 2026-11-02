@@ -21,7 +21,7 @@ class DouyinChallengeException : IOException("抖音请求受限，请稍后重�
 class DouyinWebCrawler(
     private val abogusInstance: ABogus,
     private val config: DouyinRequestConfig = DouyinRequestConfig(),
-    private val client: OkHttpClient = OkHttpClient.Builder()
+    private val client: OkHttpClient = OkHttpClient.Builder().addInterceptor(DouyinTrafficInterceptor())
         .connectTimeout(5, TimeUnit.SECONDS).readTimeout(8, TimeUnit.SECONDS)
         .callTimeout(9, TimeUnit.SECONDS).build()
 ) {
@@ -63,6 +63,10 @@ class DouyinWebCrawler(
 
     private suspend fun execute(request: Request, httpClient: OkHttpClient = client): String =
         suspendCancellableCoroutine { continuation ->
+            try { DouyinSessionTraffic.gate.checkAllowed() } catch (error: IOException) {
+                continuation.resumeWithException(error)
+                return@suspendCancellableCoroutine
+            }
             val call = httpClient.newCall(request)
             continuation.invokeOnCancellation { call.cancel() }
             call.enqueue(object : Callback {

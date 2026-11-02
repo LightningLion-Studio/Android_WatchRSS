@@ -102,6 +102,9 @@ class DouyinRepository(
     }
 
     override suspend fun fetchFeedPage(cursor: String?, count: Int): DouyinResult<DouyinFeedPage> {
+        if (com.lightningstudio.watchrss.sdk.douyin.DouyinSessionTraffic.gate.stopped.value) {
+            return DouyinResult(DouyinErrorCodes.CHALLENGE, "抖音请求已暂停")
+        }
         val cookie = cookieStore.readCookie().orEmpty()
         if (cookie.isBlank()) {
             return DouyinResult(DouyinErrorCodes.NOT_LOGGED_IN, "未登录")
@@ -128,6 +131,9 @@ class DouyinRepository(
     }
 
     override suspend fun fetchVideo(awemeId: String): DouyinResult<DouyinContent> {
+        if (com.lightningstudio.watchrss.sdk.douyin.DouyinSessionTraffic.gate.stopped.value) {
+            return DouyinResult(DouyinErrorCodes.CHALLENGE, "抖音请求已暂停")
+        }
         val cookie = cookieStore.readCookie().orEmpty()
         if (cookie.isBlank()) {
             return DouyinResult(DouyinErrorCodes.NOT_LOGGED_IN, "未登录")

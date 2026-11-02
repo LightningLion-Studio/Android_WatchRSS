@@ -11,8 +11,20 @@ fun isDouyinPlayUrlExpired(
     ttlMs: Long = DOUYIN_PLAY_URL_TTL_MS
 ): Boolean {
     val resolvedAtMs = item.playUrlResolvedAtMs
-    if (resolvedAtMs <= 0L) return true
-    return nowMs - resolvedAtMs >= ttlMs
+    if (resolvedAtMs <= 0L || resolvedAtMs > nowMs) return true
+    if (nowMs - resolvedAtMs >= ttlMs) return true
+    val deadline = runCatching {
+        java.net.URI(item.playUrl).rawQuery.orEmpty().split('&').mapNotNull { parameter ->
+            val parts = parameter.split('=', limit = 2)
+            if (parts.size != 2) return@mapNotNull null
+            when (parts[0].lowercase()) {
+                "expire", "expires", "x-expires" -> parts[1].toLongOrNull()?.times(1_000)
+                "wstime" -> parts[1].toLongOrNull(16)?.times(1_000)
+                else -> null
+            }
+        }.minOrNull()
+    }.getOrNull()
+    return deadline != null && nowMs >= deadline
 }
 
 suspend fun refreshExpiredDouyinBootstrapPlayUrls(
@@ -58,7 +70,8 @@ suspend fun refreshExpiredDouyinBootstrapPlayUrls(
 private fun replenishExpiredBootstrap(
     items: List<DouyinStreamItem>, fresh: List<DouyinStreamItem>, nowMs: Long, ttlMs: Long
 ): DouyinBootstrapPlayUrlRefreshResult {
-    if (fresh.isEmpty()) return DouyinBootstrapPlayUrlRefreshResult(items, emptyList())
+    if (fresh.isEmpty()) return DouyinBootstrapPlayUrlRefreshResult(
+        items.filterNot { isDouyinPlayUrlExpired(it, nowMs, ttlMs) }, emptyList())
     val retained = items.filterNot { isDouyinPlayUrlExpired(it, nowMs, ttlMs) }
     val merged = mergeDouyinPrioritizedItems(retained, fresh, maxOf(items.size, fresh.size))
     return DouyinBootstrapPlayUrlRefreshResult(merged, fresh.map { it.awemeId })

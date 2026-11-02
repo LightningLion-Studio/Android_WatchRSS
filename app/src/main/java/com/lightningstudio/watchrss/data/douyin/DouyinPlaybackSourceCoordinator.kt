@@ -147,10 +147,14 @@ class DouyinPlaybackSourceCoordinator(
             "refresh start awemeId=${item.awemeId} trigger=${trigger.name} resolvedAt=${item.playUrlResolvedAtMs}"
         )
         val result = try {
-            (if (trigger == DouyinPlaybackRefreshTrigger.STARTUP_TTL) null else candidateRecovery.next(item))
+            (if (trigger in setOf(DouyinPlaybackRefreshTrigger.PLAYBACK_ERROR,
+                    DouyinPlaybackRefreshTrigger.MANUAL)) candidateRecovery.next(item) else null)
                 ?.let { DouyinResult(DouyinErrorCodes.OK, data = it) }
                 ?: (if (candidateRecovery.allowFeedRefresh(item)) {
-                    withTimeoutOrNull(10_000) { refreshDouyinItemFromFeed(repository, item) }
+                    withTimeoutOrNull(10_000) {
+                        if (trigger == DouyinPlaybackRefreshTrigger.STARTUP_TTL) refreshDouyinRestoredItem(repository, item)
+                        else refreshDouyinItemFromFeed(repository, item)
+                    }
                 } else DouyinResult(DouyinErrorCodes.REQUEST_FAILED, "播放源候选已用尽"))
                 ?: DouyinResult(DouyinErrorCodes.REQUEST_FAILED, "播放源刷新超时")
         } catch (cancelled: CancellationException) {

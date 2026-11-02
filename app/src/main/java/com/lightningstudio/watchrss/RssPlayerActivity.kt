@@ -66,6 +66,13 @@ class RssPlayerActivity : BaseWatchActivity() {
                 )
                 BiliPlayerScreen(
                     uiState = uiState,
+                    playbackDataSourceFactoryProvider = if (awemeId.isNullOrBlank()) null else { headers, _ ->
+                        androidx.media3.datasource.DefaultDataSource.Factory(this@RssPlayerActivity,
+                            androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(
+                                okhttp3.OkHttpClient.Builder().addInterceptor(
+                                    com.lightningstudio.watchrss.sdk.douyin.DouyinTrafficInterceptor()).build()
+                            ).setDefaultRequestProperties(headers))
+                    },
                     onRetry = viewModel::loadPlayUrl,
                     onPlaybackError = viewModel::recoverFromPlaybackError,
                     onOpenWeb = {

@@ -53,3 +53,23 @@ internal suspend fun refreshDouyinItemFromFeed(
     else DouyinResult(if (result.isSuccess) DouyinErrorCodes.REQUEST_FAILED else result.code,
         result.message ?: "当前视频已过期，请刷新推荐")
 }
+
+/** Reuse the normal RSS player's detail request; never replay a persisted signed URL. */
+internal suspend fun refreshDouyinRestoredItem(
+    repository: DouyinRepositoryContract,
+    item: DouyinStreamItem
+): DouyinResult<DouyinStreamItem> {
+    val result = repository.fetchVideo(item.awemeId)
+    val video = result.data as? com.lightningstudio.watchrss.sdk.douyin.DouyinContent.Video
+    if (!result.isSuccess) return DouyinResult(result.code, result.message)
+    if (video == null || video.awemeId != item.awemeId || video.playUrl.isBlank()) {
+        return DouyinResult(DouyinErrorCodes.REQUEST_FAILED, "视频暂时无法播放")
+    }
+    val refreshed = item.copy(
+        playUrl = video.playUrl, coverUrl = video.coverUrl, title = video.desc,
+        author = video.authorName, likeCount = video.diggCount, variants = video.variants,
+        playUrlResolvedAtMs = System.currentTimeMillis(), sourceOrigin = DouyinSourceOrigin.VIDEO_REFRESH)
+    return if (isDouyinPlayUrlExpired(refreshed)) {
+        DouyinResult(DouyinErrorCodes.REQUEST_FAILED, "视频暂时无法播放")
+    } else DouyinResult(DouyinErrorCodes.OK, data = refreshed)
+}

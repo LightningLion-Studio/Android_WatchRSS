@@ -133,7 +133,7 @@ internal fun parseDouyinRecentWindow(
                         title = json.optString("title").takeIf { it.isNotBlank() },
                         author = json.optString("author").takeIf { it.isNotBlank() },
                         likeCount = json.optLong("likeCount", 0L),
-                        playUrlResolvedAtMs = json.optLong("playUrlResolvedAtMs", savedAtMs),
+                        playUrlResolvedAtMs = json.optLong("playUrlResolvedAtMs", 0L),
                         durationMs = json.optLong("durationMs", 0L).coerceAtLeast(0L),
                         sourceOrigin = DouyinSourceOrigin.fromPersistedValue(
                             json.optString("sourceOrigin").takeIf { it.isNotBlank() }

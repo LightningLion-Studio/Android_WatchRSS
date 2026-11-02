@@ -43,13 +43,11 @@ class DouyinPlaybackSourceCoordinatorTest {
         val backingRepository = TestDouyinRepository(initialLoggedIn = true)
         var feedCalls = 0
         val repository = object : DouyinRepositoryContract by backingRepository {
-            override suspend fun fetchFeedPage(cursor: String?, count: Int): DouyinResult<DouyinFeedPage> {
+            override suspend fun fetchVideo(awemeId: String): DouyinResult<com.lightningstudio.watchrss.sdk.douyin.DouyinContent> {
                 feedCalls++
                 gate.await()
-                return DouyinResult(DouyinErrorCodes.OK, data = DouyinFeedPage(
-                    listOf(sampleDouyinVideo(awemeId = staleItem.awemeId).apply {
-                        playUrl = "https://example.com/fresh.mp4"
-                    }), null, false))
+                return DouyinResult(DouyinErrorCodes.OK, data = com.lightningstudio.watchrss.sdk.douyin.DouyinContent.Video(
+                    awemeId, "fresh", "fixture", 0, "https://example.com/fresh.mp4", ""))
             }
         }
         val coordinatorScope = CoroutineScope(StandardTestDispatcher(testScheduler) + SupervisorJob())

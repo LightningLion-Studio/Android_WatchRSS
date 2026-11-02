@@ -47,7 +47,9 @@ class DouyinPlaybackTransport : DouyinPlaybackTransportContract {
             .fold(linkedMapOf<String, DouyinStreamItem>()) { acc, item ->
                 val awemeId = item.awemeId.trim()
                 val playUrl = item.playUrl.trim()
-                if (awemeId.isNotEmpty() && playUrl.startsWith("http", ignoreCase = true)) {
+                if (awemeId.isNotEmpty() && playUrl.startsWith("http", ignoreCase = true) &&
+                    !isDouyinPlayUrlExpired(item) &&
+                    !com.lightningstudio.watchrss.sdk.douyin.DouyinSessionTraffic.gate.stopped.value) {
                     acc.putIfAbsent(awemeId, item.copy(awemeId = awemeId, playUrl = playUrl))
                 }
                 acc
