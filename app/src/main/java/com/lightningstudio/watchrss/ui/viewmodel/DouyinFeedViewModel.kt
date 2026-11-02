@@ -96,7 +96,8 @@ class DouyinFeedViewModel(
         NoOpDouyinRecentWindowCacheCoordinator,
     private val storageDispatcher: CoroutineDispatcher = Dispatchers.IO.limitedParallelism(1),
     private val resumeToVideoFlowOnEntry: Boolean = false,
-    private val resumeAwemeIdOnEntry: String? = null
+    private val resumeAwemeIdOnEntry: String? = null,
+    private val stockReader: (Set<String>) -> List<DouyinStreamItem> = DouyinStockRuntime::restore
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(DouyinFeedUiState())
     val uiState: StateFlow<DouyinFeedUiState> = _uiState
@@ -227,8 +228,10 @@ class DouyinFeedViewModel(
                         val restored = restoreEntryPlayback(entryHeaders,
                             resumeToVideoFlowOnEntry, resumeAwemeIdOnEntry)
                         currentCoroutineContext().ensureActive()
-                        if (!shouldLoadInitialAfterRestore(restored, resumeToVideoFlowOnEntry) &&
-                            _uiState.value.items.none { isDouyinPlayUrlExpired(it) }) return@withTimeoutOrNull true
+                        if (!shouldLoadInitialAfterRestore(restored, resumeToVideoFlowOnEntry)) {
+                            if (!resumeToVideoFlowOnEntry) refreshPreparedSources(generation)
+                            return@withTimeoutOrNull true
+                        }
                     }
                     val headers = repository.buildPlayHeaders()
                     _uiState.update {
@@ -267,6 +270,7 @@ class DouyinFeedViewModel(
                         val localPaths = withContext(storageDispatcher) {
                             preloadManager.resolveLocalPaths(mergedItems.map { it.awemeId })
                         }
+                        if (replaceExistingFeed) withContext(storageDispatcher) { recentWindowStore.clear() }
                         currentCoroutineContext().ensureActive()
                         if (generation != loadGeneration) return@withTimeoutOrNull true
                         awemeIdSet.clear()
@@ -345,6 +349,19 @@ class DouyinFeedViewModel(
         }
     }
 
+    private suspend fun refreshPreparedSources(generation: Long) {
+        val state = _uiState.value
+        val preparedIndex = (state.currentPage - 1).coerceAtLeast(0)
+        val candidates = state.items.drop(preparedIndex).take(STARTUP_PLAYBACK_REFRESH_COUNT)
+            .filter(::isDouyinPlayUrlExpired)
+        for (item in candidates) {
+            val event = playbackSourceCoordinator.refresh(item, DouyinPlaybackRefreshTrigger.STARTUP_TTL)
+            currentCoroutineContext().ensureActive()
+            if (generation != loadGeneration) return
+            if (event.outcome != DouyinPlaybackRefreshOutcome.SKIPPED) applyPlaybackSourceRefreshEvent(event)
+        }
+    }
+
     fun refreshPlaybackSource(
         awemeId: String,
         failedSource: DouyinPlaybackSourceKind,
@@ -420,6 +437,10 @@ class DouyinFeedViewModel(
             item = result.data, errorCode = if (updated) null else result.code, message = result.message
         )
         applyPlaybackSourceRefreshEvent(event)
+        if (updated) {
+            cacheBootstrapPage(sourceItems, nextCursor, _uiState.value.hasMore)
+            schedulePreload(_uiState.value.items, _uiState.value.playHeaders)
+        }
         if (event.outcome == DouyinPlaybackRefreshOutcome.FAILURE) {
             handlePlaybackRefreshFailure(
                 event = event,
@@ -464,7 +485,7 @@ class DouyinFeedViewModel(
         resumeToVideoFlow: Boolean = false,
         resumeAwemeId: String? = null
     ): Boolean {
-        val bootstrapState = readBootstrapState()
+        val bootstrapState = readBootstrapState(includeStock = !resumeToVideoFlow && resumeAwemeId.isNullOrBlank())
         val latestAwemeId = withContext(storageDispatcher) {
             watchHistoryStore.readHistory()
                 .firstOrNull()
@@ -566,8 +587,8 @@ class DouyinFeedViewModel(
         return state.items.isNotEmpty() && state.hasMore && nextCursor.isNullOrBlank()
     }
 
-    private suspend fun readBootstrapState(): DouyinBootstrapState = withContext(storageDispatcher) {
-        val stockItems = DouyinStockRuntime.restore(watchHistoryStore.readWatchedIds())
+    private suspend fun readBootstrapState(includeStock: Boolean): DouyinBootstrapState = withContext(storageDispatcher) {
+        val stockItems = (if (includeStock) stockReader(watchHistoryStore.readWatchedIds()) else emptyList())
             .map { it.copy(sourceOrigin = DouyinSourceOrigin.BOOTSTRAP_CACHE) }
         val feedSnapshot = feedCacheStore.readSnapshot(limit = BOOTSTRAP_ITEMS)
         val pinnedSnapshotItems = DouyinPlaybackPreviewCache.restorePinnedItems()

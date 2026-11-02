@@ -83,34 +83,14 @@ class DouyinPlaybackPreviewCacheTest {
     }
 
     @Test
-    fun estimatePrefetchBytes_capsWarmupBudgetBelowFullPreviewBudget() {
+    fun estimatePrefetchBytes_uses1500msPlusHeaderAndCapsEachWarmupAt2MiB() {
         val previewBudget = estimatePreviewBytes(contentLength = null, durationMs = 30_000L)
-        val firstPrefetchBudget = estimatePrefetchBytes(
-            contentLength = null,
-            durationMs = 30_000L,
-            prefetchOrder = 0
-        )
-        val secondPrefetchBudget = estimatePrefetchBytes(
-            contentLength = null,
-            durationMs = 30_000L,
-            prefetchOrder = 1
-        )
-        val thirdPrefetchBudget = estimatePrefetchBytes(
-            contentLength = null,
-            durationMs = 30_000L,
-            prefetchOrder = 2
-        )
-        val fifthPrefetchBudget = estimatePrefetchBytes(
-            contentLength = null,
-            durationMs = 30_000L,
-            prefetchOrder = 4
-        )
-
-        assertTrue(firstPrefetchBudget < previewBudget)
-        assertEquals(2 * 1024 * 1024, firstPrefetchBudget)
-        assertEquals(1536 * 1024, secondPrefetchBudget)
-        assertEquals(1024 * 1024, thirdPrefetchBudget)
-        assertEquals(512 * 1024, fifthPrefetchBudget)
+        assertEquals(96 * 1024 + 128 * 1024, previewBudget)
+        for (order in listOf(0, 1, 2, 4)) {
+            assertEquals(previewBudget, estimatePrefetchBytes(null, 30_000L, order))
+            assertEquals(2 * 1024 * 1024, estimatePrefetchBytes(null, 30_000L, order, bitrate = 64_000_000))
+        }
+        assertEquals(4 * 1024 * 1024, estimatePreviewBytes(null, 30_000L, bitrate = 64_000_000))
     }
 
     @Test

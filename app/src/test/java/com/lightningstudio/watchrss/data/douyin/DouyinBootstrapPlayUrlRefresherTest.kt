@@ -1,6 +1,7 @@
 package com.lightningstudio.watchrss.data.douyin
 
-import com.lightningstudio.watchrss.sdk.douyin.DouyinContent
+import com.lightningstudio.watchrss.sdk.douyin.DouyinFeedPage
+import com.lightningstudio.watchrss.testutil.sampleDouyinVideo
 import com.lightningstudio.watchrss.testutil.TestDouyinRepository
 import com.lightningstudio.watchrss.testutil.sampleDouyinStreamItem
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -12,7 +13,7 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class DouyinBootstrapPlayUrlRefresherTest {
     @Test
-    fun refreshExpiredDouyinBootstrapPlayUrls_updatesExpiredItemsOnly() = runTest {
+    fun refreshExpiredDouyinBootstrapPlayUrls_replacesExpiredEntriesFromFeedAndRetainsFreshEntries() = runTest {
         val nowMs = 1_800_000_000_000L
         val expired = sampleDouyinStreamItem(
             awemeId = "expired-aweme",
@@ -25,20 +26,12 @@ class DouyinBootstrapPlayUrlRefresherTest {
             playUrlResolvedAtMs = nowMs - 1_000L
         )
         val repository = TestDouyinRepository(initialLoggedIn = true).apply {
-            setVideoResult(
-                expired.awemeId,
-                DouyinResult(
-                    code = DouyinErrorCodes.OK,
-                    data = DouyinContent.Video(
-                        awemeId = expired.awemeId,
-                        desc = "刷新后的标题",
-                        authorName = "刷新后的作者",
-                        diggCount = 99L,
-                        playUrl = "https://example.com/refreshed.mp4",
-                        coverUrl = "https://example.com/refreshed.jpg"
-                    )
-                )
-            )
+            feedPageResults = ArrayDeque(listOf(DouyinResult(DouyinErrorCodes.OK, data = DouyinFeedPage(
+                items = listOf(sampleDouyinVideo(awemeId = "replacement-aweme").apply {
+                    desc = "刷新后的标题"
+                    playUrl = "https://example.com/refreshed.mp4"
+                }), nextCursor = null, hasMore = false
+            ))))
         }
 
         val result = refreshExpiredDouyinBootstrapPlayUrls(
@@ -47,12 +40,14 @@ class DouyinBootstrapPlayUrlRefresherTest {
             nowMs = nowMs
         )
 
-        assertEquals(listOf("expired-aweme"), repository.fetchVideoCalls)
-        assertEquals(listOf("expired-aweme"), result.refreshedAwemeIds)
-        assertEquals("https://example.com/refreshed.mp4", result.items[0].playUrl)
-        assertEquals(nowMs, result.items[0].playUrlResolvedAtMs)
-        assertEquals(DouyinSourceOrigin.VIDEO_REFRESH, result.items[0].sourceOrigin)
-        assertEquals("https://example.com/fresh.mp4", result.items[1].playUrl)
+        assertTrue(repository.fetchVideoCalls.isEmpty())
+        assertEquals(listOf<String?>(null), repository.fetchFeedPageCursors)
+        assertEquals(listOf("replacement-aweme"), result.refreshedAwemeIds)
+        assertEquals(fresh, result.items[0])
+        assertEquals("replacement-aweme", result.items[1].awemeId)
+        assertEquals("https://example.com/refreshed.mp4", result.items[1].playUrl)
+        assertEquals(nowMs, result.items[1].playUrlResolvedAtMs)
+        assertEquals(DouyinSourceOrigin.NETWORK_FEED, result.items[1].sourceOrigin)
     }
 
     @Test
@@ -64,13 +59,7 @@ class DouyinBootstrapPlayUrlRefresherTest {
             playUrlResolvedAtMs = nowMs - DOUYIN_PLAY_URL_TTL_MS - 1L
         )
         val repository = TestDouyinRepository(initialLoggedIn = true).apply {
-            setVideoResult(
-                expired.awemeId,
-                DouyinResult(
-                    code = DouyinErrorCodes.REQUEST_FAILED,
-                    message = "network_failed"
-                )
-            )
+            feedPageResults = ArrayDeque(listOf(DouyinResult(DouyinErrorCodes.REQUEST_FAILED, "network_failed")))
         }
 
         val result = refreshExpiredDouyinBootstrapPlayUrls(
@@ -79,7 +68,8 @@ class DouyinBootstrapPlayUrlRefresherTest {
             nowMs = nowMs
         )
 
-        assertEquals(listOf("expired-aweme"), repository.fetchVideoCalls)
+        assertTrue(repository.fetchVideoCalls.isEmpty())
+        assertEquals(listOf<String?>(null), repository.fetchFeedPageCursors)
         assertTrue(result.refreshedAwemeIds.isEmpty())
         assertEquals(expired, result.items.single())
     }

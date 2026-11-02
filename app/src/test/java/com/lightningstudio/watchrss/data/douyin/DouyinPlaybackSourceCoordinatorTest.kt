@@ -1,6 +1,7 @@
 package com.lightningstudio.watchrss.data.douyin
 
-import com.lightningstudio.watchrss.sdk.douyin.DouyinContent
+import com.lightningstudio.watchrss.sdk.douyin.DouyinFeedPage
+import com.lightningstudio.watchrss.testutil.sampleDouyinVideo
 import com.lightningstudio.watchrss.testutil.TestDouyinFeedCacheStore
 import com.lightningstudio.watchrss.testutil.TestDouyinRecentWindowStore
 import com.lightningstudio.watchrss.testutil.TestDouyinRepository
@@ -13,6 +14,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -38,22 +40,17 @@ class DouyinPlaybackSourceCoordinatorTest {
             )
         )
         val gate = CompletableDeferred<Unit>()
-        val repository = TestDouyinRepository(initialLoggedIn = true).apply {
-            fetchVideoGate = gate
-            setVideoResult(
-                staleItem.awemeId,
-                DouyinResult(
-                    code = DouyinErrorCodes.OK,
-                    data = DouyinContent.Video(
-                        awemeId = staleItem.awemeId,
-                        desc = "fresh",
-                        authorName = "author",
-                        diggCount = 10L,
-                        playUrl = "https://example.com/fresh.mp4",
-                        coverUrl = ""
-                    )
-                )
-            )
+        val backingRepository = TestDouyinRepository(initialLoggedIn = true)
+        var feedCalls = 0
+        val repository = object : DouyinRepositoryContract by backingRepository {
+            override suspend fun fetchFeedPage(cursor: String?, count: Int): DouyinResult<DouyinFeedPage> {
+                feedCalls++
+                gate.await()
+                return DouyinResult(DouyinErrorCodes.OK, data = DouyinFeedPage(
+                    listOf(sampleDouyinVideo(awemeId = staleItem.awemeId).apply {
+                        playUrl = "https://example.com/fresh.mp4"
+                    }), null, false))
+            }
         }
         val coordinatorScope = CoroutineScope(StandardTestDispatcher(testScheduler) + SupervisorJob())
         val coordinator = DouyinPlaybackSourceCoordinator(
@@ -69,8 +66,9 @@ class DouyinPlaybackSourceCoordinatorTest {
         val foreground = async {
             coordinator.refresh(staleItem, DouyinPlaybackRefreshTrigger.FOREGROUND_HTTP_403)
         }
-        advanceUntilIdle()
-        assertEquals(listOf(staleItem.awemeId), repository.fetchVideoCalls)
+        runCurrent()
+        assertEquals(1, feedCalls)
+        assertEquals(emptyList<String>(), backingRepository.fetchVideoCalls)
 
         gate.complete(Unit)
         advanceUntilIdle()
@@ -92,6 +90,8 @@ class DouyinPlaybackSourceCoordinatorTest {
             "https://example.com/fresh.mp4",
             recentStore.snapshot.items.first().playUrl
         )
+        assertEquals(1, feedCalls)
+        assertEquals(emptyList<String>(), backingRepository.fetchVideoCalls)
         coordinatorScope.cancel()
     }
 }

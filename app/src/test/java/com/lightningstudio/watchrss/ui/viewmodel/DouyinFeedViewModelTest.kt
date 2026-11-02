@@ -480,7 +480,7 @@ class DouyinFeedViewModelTest {
     }
 
     @Test
-    fun refreshTitlePageFeed_replacesOldFlowAndClearsPinnedState() = runTest {
+    fun refreshTitlePageFeed_replacesOldFlowAndAnchorButRetainsCachedPrefixBytes() = runTest {
         val snapshotDir = Files.createTempDirectory("douyin-refresh-title").toFile()
         DouyinPlaybackPreviewCache.configureForTests(snapshotDir)
         DouyinPlaybackPreviewCache.writeSnapshotForTests(
@@ -534,6 +534,7 @@ class DouyinFeedViewModelTest {
         )
         advanceUntilIdle()
 
+        assertTrue(repo.fetchFeedPageCursors.isEmpty())
         viewModel.refreshTitlePageFeed()
         advanceUntilIdle()
 
@@ -543,7 +544,8 @@ class DouyinFeedViewModelTest {
         assertEquals(listOf("fresh-a", "fresh-b"), feedCacheStore.cachedItems.map { it.awemeId })
         assertEquals("cursor-fresh", feedCacheStore.cachedNextCursor)
         assertTrue(recentWindowStore.snapshot.items.isEmpty())
-        assertTrue(DouyinPlaybackPreviewCache.restorePinnedItems().isEmpty())
+        assertEquals(listOf("pinned-old"), DouyinPlaybackPreviewCache.restorePinnedItems().map { it.awemeId })
+        assertEquals(listOf<String?>(null), repo.fetchFeedPageCursors)
     }
 
     @Test
@@ -1043,20 +1045,13 @@ class DouyinFeedViewModelTest {
             localPaths[awemeId] = "/tmp/$awemeId.mp4"
         }
         val repo = TestDouyinRepository(initialLoggedIn = true).apply {
-            setVideoResult(
-                awemeId,
-                DouyinResult(
-                    code = DouyinErrorCodes.OK,
-                    data = DouyinContent.Video(
-                        awemeId = awemeId,
-                        desc = "刷新后标题",
-                        authorName = "刷新后作者",
-                        diggCount = 18L,
-                        playUrl = "https://example.com/refreshed.mp4",
-                        coverUrl = "https://example.com/refreshed.jpg"
-                    )
-                )
-            )
+            feedPageResults = ArrayDeque(listOf(DouyinResult(DouyinErrorCodes.OK, data = DouyinFeedPage(
+                listOf(sampleDouyinVideo(awemeId = awemeId).apply {
+                    desc = "刷新后标题"
+                    authorName = "刷新后作者"
+                    likeCount = 18L
+                    playUrl = "https://example.com/refreshed.mp4"
+                }), null, false))))
         }
         val viewModel = newViewModel(
             repository = repo,
@@ -1085,9 +1080,10 @@ class DouyinFeedViewModelTest {
         assertEquals("刷新后标题", refreshed.title)
         assertEquals("刷新后作者", refreshed.author)
         assertEquals(18L, refreshed.likeCount)
-        assertEquals(DouyinSourceOrigin.VIDEO_REFRESH, refreshed.sourceOrigin)
+        assertEquals(DouyinSourceOrigin.NETWORK_FEED, refreshed.sourceOrigin)
         assertTrue(refreshed.playUrlResolvedAtMs >= initialResolvedAtMs)
-        assertEquals(listOf(awemeId), repo.fetchVideoCalls)
+        assertTrue(repo.fetchVideoCalls.isEmpty())
+        assertEquals(listOf<String?>(null), repo.fetchFeedPageCursors)
     }
 
     @Test
@@ -1098,37 +1094,10 @@ class DouyinFeedViewModelTest {
             playUrl = "https://example.com/still-valid.mp4",
             playUrlResolvedAtMs = 100L
         )
+        val page = DouyinResult(DouyinErrorCodes.OK, data = DouyinFeedPage(
+            listOf(sampleDouyinVideo(awemeId = awemeId).apply { playUrl = initialItem.playUrl }), null, false))
         val repo = TestDouyinRepository(initialLoggedIn = true).apply {
-            feedPageResults = ArrayDeque(
-                listOf(
-                    DouyinResult(
-                        code = DouyinErrorCodes.OK,
-                        data = DouyinFeedPage(
-                            items = listOf(
-                                sampleDouyinVideo(awemeId = awemeId).apply {
-                                    playUrl = initialItem.playUrl
-                                }
-                            ),
-                            nextCursor = null,
-                            hasMore = false
-                        )
-                    )
-                )
-            )
-            setVideoResult(
-                awemeId,
-                DouyinResult(
-                    code = DouyinErrorCodes.OK,
-                    data = DouyinContent.Video(
-                        awemeId = awemeId,
-                        desc = initialItem.title.orEmpty(),
-                        authorName = initialItem.author.orEmpty(),
-                        diggCount = initialItem.likeCount,
-                        playUrl = initialItem.playUrl,
-                        coverUrl = initialItem.coverUrl.orEmpty()
-                    )
-                )
-            )
+            feedPageResults = ArrayDeque(listOf(page, page))
         }
         val cacheStore = TestDouyinFeedCacheStore(initialItems = listOf(initialItem))
         val viewModel = newViewModel(
@@ -1145,7 +1114,9 @@ class DouyinFeedViewModelTest {
         val refreshed = viewModel.uiState.value.items.single()
         assertEquals(initialItem.playUrl, refreshed.playUrl)
         assertTrue(refreshed.playUrlResolvedAtMs > initialItem.playUrlResolvedAtMs)
-        assertEquals(DouyinSourceOrigin.VIDEO_REFRESH, refreshed.sourceOrigin)
+        assertEquals(DouyinSourceOrigin.NETWORK_FEED, refreshed.sourceOrigin)
+        assertTrue(repo.fetchVideoCalls.isEmpty())
+        assertEquals(listOf<String?>(null, null), repo.fetchFeedPageCursors)
         assertTrue(cacheStore.savedSnapshots.isNotEmpty())
         assertEquals(refreshed.playUrlResolvedAtMs, cacheStore.savedSnapshots.last().first().playUrlResolvedAtMs)
     }
