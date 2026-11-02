@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.lightningstudio.watchrss.data.cache.CacheTrimReason
 import com.lightningstudio.watchrss.data.cache.ManagedCacheBucket
@@ -51,8 +50,6 @@ import javax.net.ssl.SSLException
 import kotlin.math.max
 import kotlin.math.min
 
-private val FEED_CACHE_JSON = stringPreferencesKey("bili_feed_cache_json")
-private val FEED_CACHE_AT = longPreferencesKey("bili_feed_cache_at")
 private val SEARCH_HISTORY_JSON = stringPreferencesKey("bili_search_history")
 private val LOCAL_INTERACTION_STATE_JSON = stringPreferencesKey("bili_local_interaction_state_json")
 private val LOCAL_PLAYBACK_PROGRESS_JSON = stringPreferencesKey("bili_playback_progress_json")
@@ -72,6 +69,7 @@ class BiliRepository(
     private val appContext = context.applicationContext
     private val accountStore = EncryptedBiliAccountStore(context)
     private val client = BiliClient(BiliSdkConfig(), accountStore)
+    private val recommendationHistory = BiliRecommendationHistory(dataStore)
     private val previewCacheDir = File(appContext.filesDir, PREVIEW_CACHE_DIR_NAME).apply { mkdirs() }
     private val downloadClient = OkHttpClient.Builder()
         .callTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
@@ -146,18 +144,31 @@ class BiliRepository(
         return result
     }
 
-    override suspend fun readFeedCache(): List<BiliItem> = withContext(Dispatchers.IO) {
-        val raw = dataStore.data.first()[FEED_CACHE_JSON].orEmpty()
+    override suspend fun feedAccountScope(): String? = biliRecommendationScope(accountStore.read())
+
+    override suspend fun readShownRecommendations(scope: String?): List<String> = recommendationHistory.read(scope)
+
+    override suspend fun rememberShownRecommendations(scope: String?, items: List<BiliItem>) =
+        recommendationHistory.remember(scope, items)
+
+    override suspend fun readFeedCache(): List<BiliItem> = readFeedCacheForAccount(feedAccountScope())
+
+    override suspend fun readFeedCacheForAccount(scope: String?): List<BiliItem> = withContext(Dispatchers.IO) {
+        if (scope == null) return@withContext emptyList()
+        // The legacy unowned cache cannot safely be attributed to the current account.
+        val raw = dataStore.data.first()[stringPreferencesKey("bili_feed_cache_v2:$scope")].orEmpty()
         if (raw.isBlank()) return@withContext emptyList()
         parseFeedCache(raw)
     }
 
-    override suspend fun writeFeedCache(items: List<BiliItem>) {
+    override suspend fun writeFeedCache(items: List<BiliItem>) = writeFeedCacheForAccount(feedAccountScope(), items)
+
+    override suspend fun writeFeedCacheForAccount(scope: String?, items: List<BiliItem>) {
+        if (scope == null) return
         val trimmed = items.take(FEED_CACHE_LIMIT)
         val raw = buildFeedCacheJson(trimmed)
         dataStore.edit { preferences ->
-            preferences[FEED_CACHE_JSON] = raw
-            preferences[FEED_CACHE_AT] = System.currentTimeMillis()
+            preferences[stringPreferencesKey("bili_feed_cache_v2:$scope")] = raw
         }
     }
 

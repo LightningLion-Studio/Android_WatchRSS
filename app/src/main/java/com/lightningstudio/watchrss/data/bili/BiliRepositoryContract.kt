@@ -34,6 +34,11 @@ interface BiliRepositoryContract {
     suspend fun fetchFeed(): BiliResult<BiliFeedPage> = unsupportedBiliRepositoryMethod()
     suspend fun readFeedCache(): List<BiliItem> = unsupportedBiliRepositoryMethod()
     suspend fun writeFeedCache(items: List<BiliItem>): Unit = unsupportedBiliRepositoryMethod()
+    suspend fun feedAccountScope(): String? = null
+    suspend fun readShownRecommendations(scope: String?): List<String> = emptyList()
+    suspend fun rememberShownRecommendations(scope: String?, items: List<BiliItem>) = Unit
+    suspend fun readFeedCacheForAccount(scope: String?): List<BiliItem> = readFeedCache()
+    suspend fun writeFeedCacheForAccount(scope: String?, items: List<BiliItem>) = writeFeedCache(items)
     suspend fun fetchVideoDetail(aid: Long? = null, bvid: String? = null): BiliResult<BiliVideoDetail> =
         unsupportedBiliRepositoryMethod()
     suspend fun fetchRemoteInteractionState(

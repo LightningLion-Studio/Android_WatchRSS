@@ -3,6 +3,7 @@ package com.lightningstudio.watchrss.ui.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.lightningstudio.watchrss.data.bili.BiliRepositoryContract
+import com.lightningstudio.watchrss.data.bili.biliRecommendationId
 import com.lightningstudio.watchrss.data.bili.buildBiliExternalSavedItem
 import com.lightningstudio.watchrss.data.bili.formatBiliError
 import com.lightningstudio.watchrss.data.rss.RssRepository
@@ -24,7 +25,8 @@ data class BiliFeedUiState(
     val lastRefreshAt: Long? = null,
     val canLoadMore: Boolean = true,
     val message: String? = null,
-    val messageEventId: Long = 0L
+    val messageEventId: Long = 0L,
+    val accountGeneration: Long = 0
 )
 
 class BiliFeedViewModel(
@@ -34,6 +36,10 @@ class BiliFeedViewModel(
     private val _uiState = MutableStateFlow(BiliFeedUiState())
     val uiState: StateFlow<BiliFeedUiState> = _uiState
 
+    private var accountInitialized = false
+    private var accountScope: String? = null
+    private var requestVersion = 0L
+
     init {
         refreshLoginState()
     }
@@ -41,60 +47,89 @@ class BiliFeedViewModel(
     fun refreshLoginState() {
         viewModelScope.launch {
             val loggedIn = repository.isLoggedIn()
-            _uiState.update { it.copy(isLoggedIn = loggedIn) }
-            if (loggedIn && _uiState.value.items.isEmpty()) {
+            val scope = if (loggedIn) repository.feedAccountScope() else null
+            adoptAccount(loggedIn, scope)
+            if (loggedIn && _uiState.value.items.isEmpty() && !_uiState.value.isRefreshing) {
                 refresh()
             }
+        }
+    }
+
+    private fun adoptAccount(loggedIn: Boolean, scope: String?) {
+        if (!accountInitialized || accountScope != scope || _uiState.value.isLoggedIn != loggedIn) {
+            accountInitialized = true
+            accountScope = scope
+            requestVersion++
+            _uiState.value = BiliFeedUiState(
+                isLoggedIn = loggedIn,
+                accountGeneration = _uiState.value.accountGeneration + 1,
+                messageEventId = _uiState.value.messageEventId
+            )
+        }
+    }
+
+    private suspend fun acceptsResult(version: Long, scope: String?): Boolean {
+        if (version != requestVersion) return false
+        if (!repository.isLoggedIn() || repository.feedAccountScope() != scope) {
+            refreshLoginState()
+            return false
+        }
+        return version == requestVersion
+    }
+
+    fun rememberShownItems(generation: Long, items: List<BiliItem>) {
+        val state = _uiState.value
+        if (!state.isLoggedIn || state.accountGeneration != generation) return
+        val visible = items.filter { it in state.items }
+        if (visible.isEmpty()) return
+        val scope = accountScope
+        viewModelScope.launch {
+            if (_uiState.value.accountGeneration != generation ||
+                !repository.isLoggedIn() || repository.feedAccountScope() != scope
+            ) return@launch
+            repository.rememberShownRecommendations(scope, visible)
         }
     }
 
     fun refresh() {
         viewModelScope.launch {
             val loggedIn = repository.isLoggedIn()
+            val scope = if (loggedIn) repository.feedAccountScope() else null
+            adoptAccount(loggedIn, scope)
             if (!loggedIn) {
-                _uiState.update {
-                    it.copy(
-                        isLoggedIn = false,
-                        isRefreshing = false,
-                        isLoadingMore = false,
-                        items = emptyList(),
-                        feedSource = null,
-                        canLoadMore = true,
-                        message = "请先登录获取推荐内容",
-                        messageEventId = it.messageEventId + 1
-                    )
-                }
+                publishMessage("请先登录获取推荐内容")
                 return@launch
             }
+            if (_uiState.value.isRefreshing) return@launch
+            val version = ++requestVersion
             val currentItems = _uiState.value.items
-            val useCachePrefix = currentItems.isEmpty()
-            val cachedItems = if (useCachePrefix) repository.readFeedCache() else emptyList()
-            val cachedPrefix = if (useCachePrefix) cachedItems.take(5) else emptyList()
-            _uiState.update {
-                it.copy(
-                    isLoggedIn = true,
-                    isRefreshing = true,
-                    isLoadingMore = false,
-                    items = if (cachedPrefix.isNotEmpty()) cachedPrefix else it.items,
-                    feedSource = if (cachedPrefix.isNotEmpty()) null else it.feedSource,
-                    canLoadMore = true,
-                    message = null
-                )
+            _uiState.update { it.copy(isRefreshing = true, isLoadingMore = false, message = null) }
+            val shown = repository.readShownRecommendations(scope).toSet()
+            val cachedItems = if (currentItems.isEmpty()) {
+                unseenUnique(repository.readFeedCacheForAccount(scope), shown)
+            } else emptyList()
+            if (!acceptsResult(version, scope)) return@launch
+            val cachedPrefix = cachedItems.take(5)
+            if (cachedPrefix.isNotEmpty()) {
+                _uiState.update { it.copy(items = cachedPrefix, feedSource = null) }
             }
             val result = repository.fetchFeed()
+            if (!acceptsResult(version, scope)) return@launch
             if (result.isSuccess) {
                 val page = result.data
-                val freshItems = page?.items.orEmpty()
+                val fetchedItems = page?.items.orEmpty()
+                val freshItems = unseenUnique(fetchedItems, repository.readShownRecommendations(scope).toSet())
+                if (!acceptsResult(version, scope)) return@launch
                 val merged = when {
-                    freshItems.isEmpty() && cachedItems.isNotEmpty() -> cachedItems
-                    freshItems.isEmpty() && currentItems.isNotEmpty() -> currentItems
-                    cachedPrefix.isNotEmpty() -> mergeCachedAndFresh(cachedPrefix, freshItems)
+                    fetchedItems.isEmpty() && cachedItems.isNotEmpty() -> cachedItems
+                    fetchedItems.isEmpty() && currentItems.isNotEmpty() -> currentItems
+                    cachedPrefix.isNotEmpty() -> appendUnique(cachedPrefix, freshItems)
                     else -> freshItems
                 }
                 if (freshItems.isNotEmpty()) {
-                    repository.writeFeedCache(freshItems)
+                    repository.writeFeedCacheForAccount(scope, freshItems)
                 }
-                updateFeed(page, merged)
+                if (acceptsResult(version, scope)) updateFeed(page, merged)
             } else {
                 _uiState.update {
                     it.copy(
@@ -115,11 +150,17 @@ class BiliFeedViewModel(
             if (!state.isLoggedIn || state.isRefreshing || state.isLoadingMore || !state.canLoadMore) {
                 return@launch
             }
+            val version = requestVersion
+            val scope = accountScope
+            if (!acceptsResult(version, scope)) return@launch
+            if (_uiState.value.isLoadingMore || _uiState.value.isRefreshing) return@launch
             _uiState.update { it.copy(isLoadingMore = true, message = null) }
             val result = repository.fetchFeed()
+            if (!acceptsResult(version, scope)) return@launch
             if (result.isSuccess) {
                 val page = result.data
-                val freshItems = page?.items.orEmpty()
+                val freshItems = unseenUnique(page?.items.orEmpty(), repository.readShownRecommendations(scope).toSet())
+                if (!acceptsResult(version, scope)) return@launch
                 val merged = appendUnique(state.items, freshItems)
                 val hasNewItems = merged.size > state.items.size
                 _uiState.update {
@@ -127,7 +168,7 @@ class BiliFeedViewModel(
                         isLoadingMore = false,
                         items = merged,
                         feedSource = page?.source ?: it.feedSource,
-                        canLoadMore = hasNewItems && freshItems.isNotEmpty()
+                        canLoadMore = hasNewItems
                     )
                 }
             } else {
@@ -140,6 +181,11 @@ class BiliFeedViewModel(
                 }
             }
         }
+    }
+
+    private fun unseenUnique(items: List<BiliItem>, shown: Set<String>): List<BiliItem> {
+        val seen = shown.toMutableSet()
+        return items.filter { seen.add(itemKey(it)) }
     }
 
     fun clearMessage(expectedEventId: Long? = null) {
@@ -189,23 +235,8 @@ class BiliFeedViewModel(
         }
     }
 
-    private fun mergeCachedAndFresh(
-        cachedPrefix: List<BiliItem>,
-        freshItems: List<BiliItem>
-    ): List<BiliItem> {
-        if (cachedPrefix.isEmpty()) return freshItems
-        val seen = cachedPrefix.map { itemKey(it) }.toMutableSet()
-        val filteredFresh = freshItems.filter { seen.add(itemKey(it)) }
-        return cachedPrefix + filteredFresh
-    }
-
-    private fun itemKey(item: BiliItem): String {
-        return when {
-            !item.bvid.isNullOrBlank() -> "bvid:${item.bvid}"
-            item.aid != null -> "aid:${item.aid}"
-            else -> "title:${item.title.orEmpty()}"
-        }
-    }
+    private fun itemKey(item: BiliItem): String =
+        biliRecommendationId(item) ?: "title:${item.title.orEmpty()}"
 
     private fun publishMessage(message: String) {
         _uiState.update {

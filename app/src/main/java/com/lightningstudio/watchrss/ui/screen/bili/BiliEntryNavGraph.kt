@@ -89,6 +89,7 @@ fun BiliEntryNavGraph(repository: BiliRepositoryContract, rssRepository: RssRepo
             if (originalContentEnabled) {
                 BiliFeedScreen(
                     uiState = uiState,
+                    onItemsShown = viewModel::rememberShownItems,
                     onLoginClick = { context.startActivity(BiliLoginActivity.createIntent(context)) },
                     onRefresh = viewModel::refresh,
                     onHeaderClick = { context.startActivity(BiliChannelInfoActivity.createIntent(context)) },
@@ -137,6 +138,7 @@ fun BiliEntryNavGraph(repository: BiliRepositoryContract, rssRepository: RssRepo
             } else {
                 BiliRssFeedScreen(
                     uiState = uiState,
+                    onItemsShown = viewModel::rememberShownItems,
                     onLoginClick = { context.startActivity(BiliLoginActivity.createIntent(context)) },
                     onRefresh = viewModel::refresh,
                     onHeaderClick = { context.startActivity(BiliChannelInfoActivity.createIntent(context)) },

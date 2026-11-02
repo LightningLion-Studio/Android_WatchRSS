@@ -80,13 +80,15 @@ fun BiliRssFeedScreen(
     onFavoriteClick: (BiliItem) -> Unit,
     onWatchLaterClick: (BiliItem) -> Unit,
     onItemClick: (BiliItem) -> Unit,
-    onItemLongClick: (BiliItem) -> Unit
+    onItemLongClick: (BiliItem) -> Unit,
+    onItemsShown: (Long, List<BiliItem>) -> Unit = { _, _ -> }
 ) {
     val baseDensity = LocalDensity.current
     CompositionLocalProvider(LocalDensity provides Density(2f, baseDensity.fontScale)) {
         val safePadding = watchDimensionResource(R.dimen.watch_safe_padding)
         val itemSpacing = watchDimensionResource(R.dimen.hey_distance_8dp)
         val listState = rememberLazyListState()
+        RememberBiliShownRecommendations(listState, uiState, onItemsShown)
         InstallDigitalCrownLazyListHandler(listState)
         val canRefresh = rememberPullRefreshEnabled(listState)
         val isScrolling by remember(listState) {
