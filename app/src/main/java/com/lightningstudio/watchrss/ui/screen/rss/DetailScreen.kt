@@ -6,7 +6,6 @@ import android.view.View
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -76,12 +75,8 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -169,6 +164,12 @@ fun DetailScreen(
     onOpenChapter: (Long) -> Unit = {},
     onBack: (Long, Boolean, Boolean) -> Unit
 ) {
+    val settings = (LocalContext.current.applicationContext as com.lightningstudio.watchrss.WatchRssApplication)
+        .container.settingsRepository
+    val pagingScope = rememberCoroutineScope()
+    val pageMode by settings.readerPageMode.collectAsState(initial = null)
+    val pageSeconds by settings.readerPageSeconds.collectAsState(initial = 15)
+    val autoPage by settings.readerAutoPageEnabled.collectAsState(initial = false)
     val item by viewModel.item.collectAsState()
     val novelNavigation by viewModel.novelNavigation.collectAsState()
     val channel by viewModel.channel.collectAsState()
@@ -193,7 +194,15 @@ fun DetailScreen(
     val baseDensity = LocalDensity.current
     CompositionLocalProvider(LocalDensity provides Density(2f, baseDensity.fontScale)) {
         val isImportedText = ImportedContentIds.isImportedTextItemUrl(item?.link)
+        if (pageMode == null) {
+            com.lightningstudio.watchrss.ui.reader.ReaderBackgroundSurface(Modifier.fillMaxSize()) { }
+            return@CompositionLocalProvider
+        }
         DetailContent(
+            readerPageMode = pageMode == true,
+            readerPageSeconds = pageSeconds,
+            readerAutoPageEnabled = autoPage,
+            onReaderPageModeChange = { mode -> pagingScope.launch { settings.setReaderPageMode(mode) } },
             novelMenuExpanded = novelMenuExpanded,
             onNovelMenuExpandedChange = onNovelMenuExpandedChange,
             initialIsNovelMode = initialIsNovelMode || ImportedContentIds.isNovelContentItemUrl(item?.link),
@@ -250,6 +259,10 @@ internal fun isReaderAiSummaryEntryVisible(
 @OptIn(FlowPreview::class)
 @Composable
 internal fun DetailContent(
+    readerPageMode: Boolean = false,
+    readerPageSeconds: Int = 15,
+    readerAutoPageEnabled: Boolean = false,
+    onReaderPageModeChange: (Boolean) -> Unit = {},
     novelMenuExpanded: Boolean = false,
     onNovelMenuExpandedChange: (Boolean) -> Unit = {},
     initialIsNovelMode: Boolean = false,
@@ -289,10 +302,77 @@ internal fun DetailContent(
     onBack: (Long, Boolean, Boolean) -> Unit
 ) {
     val context = LocalContext.current
-    val rootView = LocalView.current
     val density = LocalDensity.current
     val useSystemShare = remember(context, shareUseSystem) {
         shareUseSystem && isSystemShareSettingSupported(context)
+    }
+    var bridgedPageProgress by rememberSaveable(item?.id) { mutableStateOf<Float?>(null) }
+    val novelReader = initialIsNovelMode || ImportedContentIds.isNovelContentItemUrl(item?.link)
+    if (readerPageMode && novelReader) {
+        LaunchedEffect(Unit) { onReaderAutoScrollPlayingChange(false) }
+        val chrome = LocalReaderPresetRuntime.current.preset.readerChromeStyle()
+        com.lightningstudio.watchrss.ui.reader.ReaderBackgroundSurface(Modifier.fillMaxSize()) {
+            if (item != null) {
+                com.lightningstudio.watchrss.ui.reader.ReaderDiscreteSurface(
+                    itemId = item.id,
+                    title = item.title,
+                    texts = remember(contentBlocks) { contentBlocks.map { (it as? ContentBlock.Text)?.text.orEmpty() } },
+                    mediaSegments = remember(contentBlocks) {
+                        contentBlocks.indices.filter { contentBlocks[it] !is ContentBlock.Text }.toSet()
+                    },
+                    mediaContent = { index ->
+                        val block = contentBlocks.getOrNull(index)
+                        when (block) {
+                            is ContentBlock.Image -> coil.compose.AsyncImage(
+                                model = resolveMediaUrl(block.url, offlineMedia, item.link),
+                                contentDescription = block.alt ?: "插图",
+                                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                            is ContentBlock.Video -> Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+                                coil.compose.AsyncImage(
+                                    model = block.poster?.let { resolveMediaUrl(it, offlineMedia, item.link) },
+                                    contentDescription = "视频预览",
+                                    modifier = Modifier.weight(1f).fillMaxWidth()
+                                )
+                                com.lightningstudio.watchrss.ui.components.WatchTextButton(onClick = {
+                                    openRssVideo(context, resolveMediaUrl(block.url, offlineMedia, item.link), item.link, item.channelId)
+                                }) { Text("播放视频") }
+                            }
+                            else -> Unit
+                        }
+                    },
+                    imported = importedTextReader,
+                    initialProgress = bridgedPageProgress ?: item.readingProgress,
+                    pageSeconds = readerPageSeconds,
+                    autoEnabled = readerAutoPageEnabled,
+                    suspended = novelMenuExpanded || isStartingActivity || readAloudState.isPlaying,
+                    color = chrome.contentColor,
+                    navigation = novelNavigation,
+                    loadChunk = onLoadImportedTextChunk,
+                    saveProgress = onSaveReadingProgress,
+                    onPosition = { bridgedPageProgress = it },
+                    onOpenChapter = onOpenChapter,
+                    onBack = { reachedBottom -> onBack(item.id, reachedBottom, isWatchLater) },
+                    onReadAloud = { progress -> onOpenReadAloudControls(ReadAloudStartAnchor(progress = progress), originalContentEnabled) }
+                )
+            }
+            NovelReadingMenu(
+                expanded = novelMenuExpanded,
+                onExpandedChange = onNovelMenuExpandedChange,
+                scrolling = false,
+                pageTurning = false,
+                pageMode = true,
+                backgroundColor = chrome.backgroundColor,
+                surfaceColor = MaterialTheme.colorScheme.surfaceVariant,
+                textColor = chrome.contentColor,
+                accentColor = chrome.accentColor,
+                readAloudEnabled = item != null,
+                onReadAloud = { onOpenReadAloud(bridgedPageProgress?.let { ReadAloudStartAnchor(progress = it) }, originalContentEnabled) },
+                onModeSelected = onReaderPageModeChange
+            )
+        }
+        return
     }
     val listState = rememberLazyListState()
     val safePadding = com.lightningstudio.watchrss.ui.reader.ReaderPageLayout.topSafePadding
@@ -401,7 +481,7 @@ internal fun DetailContent(
         val itemId = item?.id ?: return@LaunchedEffect
         if (itemId != lastItemId) {
             lastItemId = itemId
-            pendingRestoreProgress = item?.readingProgress
+            pendingRestoreProgress = bridgedPageProgress ?: item?.readingProgress
             hasRestoredPosition = false
             pendingImportedTextOffsetRestore = null
             pendingContentTextOffsetRestore = null
@@ -1275,104 +1355,10 @@ internal fun DetailContent(
         }
 
         val listSemanticsModifier = Modifier.clearAndSetSemantics { }
-        val pageTransitionProgress = remember { Animatable(1f) }
-        var pageSnapshot by remember(item?.id) { mutableStateOf<ImageBitmap?>(null) }
-        var pageSnapshotOrigin by remember { mutableStateOf(Offset.Zero) }
-        var pageTurnDirection by remember { mutableStateOf(1) }
-        var isPageTurning by remember { mutableStateOf(false) }
-        var isPageMode by rememberSaveable { mutableStateOf(false) }
-        val isNovelPageMode = isNovelMode && isPageMode
-        val pageTurnScope = rememberCoroutineScope()
-
         BoxWithConstraints(Modifier.fillMaxSize()) {
-            val viewportWidthPx = with(density) { maxWidth.toPx() }
-            val viewportHeightPx = with(density) { maxHeight.toPx() }
-
-            fun turnPage(direction: Int) {
-                if (isPageTurning || viewportHeightPx <= 0f || viewportWidthPx <= 0f) return
-                if ((direction > 0 && !listState.canScrollForward) ||
-                    (direction < 0 && !listState.canScrollBackward)
-                ) return
-                pageTurnScope.launch {
-                    if (rootView.width <= 0 || rootView.height <= 0) return@launch
-                    val oldPage = runCatching {
-                        val screenBitmap = android.graphics.Bitmap.createBitmap(
-                            rootView.width,
-                            rootView.height,
-                            android.graphics.Bitmap.Config.ARGB_8888
-                        ).also { bitmap ->
-                            rootView.draw(android.graphics.Canvas(bitmap))
-                        }
-                        val left = pageSnapshotOrigin.x.roundToInt().coerceIn(0, screenBitmap.width - 1)
-                        val top = pageSnapshotOrigin.y.roundToInt().coerceIn(0, screenBitmap.height - 1)
-                        val width = viewportWidthPx.roundToInt()
-                            .coerceAtMost(screenBitmap.width - left).coerceAtLeast(1)
-                        val height = viewportHeightPx.roundToInt()
-                            .coerceAtMost(screenBitmap.height - top).coerceAtLeast(1)
-                        val viewportBitmap = android.graphics.Bitmap.createBitmap(
-                            screenBitmap,
-                            left,
-                            top,
-                            width,
-                            height
-                        )
-                        screenBitmap.recycle()
-                        viewportBitmap.asImageBitmap()
-                    }.getOrNull() ?: return@launch
-                    isPageTurning = true
-                    pageSnapshot = oldPage
-                    pageTurnDirection = direction
-                    pageTransitionProgress.snapTo(0f)
-                    val consumed = listState.scrollBy(viewportHeightPx * direction)
-                    if (kotlin.math.abs(consumed) < 1f) {
-                        pageSnapshot = null
-                        pageTransitionProgress.snapTo(1f)
-                        isPageTurning = false
-                        return@launch
-                    }
-                    // Align the next viewport to a complete text line when a page
-                    // boundary falls inside a paragraph. Keep the final scroll to
-                    // the end intact so the bottom controls remain reachable.
-                    if (direction < 0 || listState.canScrollForward) {
-                        androidx.compose.runtime.withFrameNanos { }
-                        val info = listState.layoutInfo
-                        val topItem = info.visibleItemsInfo.firstOrNull {
-                            it.offset <= info.viewportStartOffset && it.offset + it.size > info.viewportStartOffset
-                        }
-                        val layout = topItem?.let {
-                            contentTextBlockLayouts[it.index - contentBlockFirstItemIndex]
-                                ?: importedTextChunkLayouts[it.index - importedTextFirstItemIndex]
-                        }
-                        if (topItem != null && layout != null && layout.lineCount > 0) {
-                            val padding = (topItem.size - layout.size.height).coerceAtLeast(0)
-                            val textTop = topItem.offset + padding
-                            val textY = (info.viewportStartOffset - textTop).toFloat()
-                            if (textY > 0f && textY < layout.size.height) {
-                                val line = layout.getLineForVerticalPosition(textY)
-                                val correction = textTop + layout.getLineTop(line) - info.viewportStartOffset
-                                if (correction < -1f) listState.scrollBy(correction)
-                            }
-                        }
-                    }
-                    pageTransitionProgress.animateTo(
-                        targetValue = 1f,
-                        animationSpec = tween(220, easing = LinearEasing)
-                    )
-                    pageSnapshot = null
-                    isPageTurning = false
-                }
-            }
-
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .onGloballyPositioned { pageSnapshotOrigin = it.positionInRoot() }
-                    .graphicsLayer {
-                        if (isPageTurning) {
-                            translationX = (1f - pageTransitionProgress.value) *
-                                viewportWidthPx * pageTurnDirection
-                        }
-                    }
                     .nestedScroll(manualAutoScrollConnection)
                     .then(listSemanticsModifier),
                 state = listState,
@@ -1835,16 +1821,8 @@ internal fun DetailContent(
                                 icon = Icons.Outlined.FormatSize,
                                 contentDescription = "字号与主题",
                                 tint = normalIconColor,
-                                containerColor = if (isNovelPageMode) {
-                                    activeActionContainerColor
-                                } else {
-                                    actionContainerColor
-                                },
-                                borderColor = if (isNovelPageMode) {
-                                    activeActionBorderColor
-                                } else {
-                                    actionBorderColor
-                                },
+                                containerColor = actionContainerColor,
+                                borderColor = actionBorderColor,
                                 size = actionIconSize,
                                 padding = actionIconPadding,
                                 enabled = !isScrolling,
@@ -1901,56 +1879,13 @@ internal fun DetailContent(
                 }
             }
 
-            if (isNovelPageMode && !isPageTurning) {
-                val noIndication = remember { MutableInteractionSource() }
-                Row(Modifier.fillMaxSize()) {
-                    Box(
-                        Modifier
-                            .weight(1f)
-                            .fillMaxSize()
-                            .clickable(
-                                interactionSource = noIndication,
-                                indication = null,
-                                onClickLabel = "上一页",
-                                role = Role.Button,
-                                onClick = { turnPage(-1) }
-                            )
-                    )
-                    Spacer(Modifier.weight(1f).fillMaxSize())
-                    Box(
-                        Modifier
-                            .weight(1f)
-                            .fillMaxSize()
-                            .clickable(
-                                interactionSource = noIndication,
-                                indication = null,
-                                onClickLabel = "下一页",
-                                role = Role.Button,
-                                onClick = { turnPage(1) }
-                            )
-                    )
-                }
-            }
-
-            pageSnapshot?.let { bitmap ->
-                Image(
-                    bitmap = bitmap,
-                    contentDescription = null,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer {
-                            translationX = -pageTurnDirection *
-                                pageTransitionProgress.value * viewportWidthPx
-                        }
-                )
-            }
             if (isNovelMode) {
                 NovelReadingMenu(
                     expanded = novelMenuExpanded,
                     onExpandedChange = onNovelMenuExpandedChange,
                     scrolling = isScrolling,
-                    pageTurning = isPageTurning,
-                    pageMode = isNovelPageMode,
+                    pageTurning = false,
+                    pageMode = false,
                     backgroundColor = backgroundColor,
                     surfaceColor = actionContainerColor,
                     textColor = textColor,
@@ -1962,7 +1897,11 @@ internal fun DetailContent(
                         }
                         onOpenReadAloud(null, originalContentEnabled)
                     },
-                    onModeSelected = { isPageMode = it }
+                    onModeSelected = { mode ->
+                        bridgedPageProgress = currentReadingProgress()
+                        if (readerAutoScrollPlayingState.value) setAutoScrollPlaying(false, showFeedback = false)
+                        onReaderPageModeChange(mode)
+                    }
                 )
             }
         }

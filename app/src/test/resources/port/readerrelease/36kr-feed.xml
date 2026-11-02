@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Synthetic offline regression fixture. Contains no site-issued verification tokens. -->
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+<channel><title>36氪</title><link>https://36kr.com/</link><description>公开资讯 fixture</description>
+<item><title>测试资讯</title><guid>fixture-36kr-1</guid><link>https://36kr.com/p/fixture-1</link>
+<description>本地离线解析</description><content:encoded><![CDATA[<p>完整正文，保留中文。</p>]]></content:encoded></item>
+</channel></rss>

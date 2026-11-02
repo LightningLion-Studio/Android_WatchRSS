@@ -20,7 +20,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class MainActivity : BaseWatchActivity() {
     private var keepSplashOnScreen = true
@@ -79,12 +78,8 @@ class MainActivity : BaseWatchActivity() {
                 finish()
                 return@launch
             }
-            if (launcherEntry) {
-                if (maybeResumeLastContent(intent)) {
-                    finish()
-                    return@launch
-                }
-            }
+            // A launcher entry is a new navigation request. Android restores an
+            // existing activity from its Bundle independently of this entry point.
             startActivity(
                 HomeFeedListActivity.createIntent(
                     context = this@MainActivity,
@@ -115,31 +110,6 @@ class MainActivity : BaseWatchActivity() {
                 }
             }
         }
-    }
-
-    private suspend fun maybeResumeLastContent(sourceIntent: Intent?): Boolean {
-        if (!isLauncherEntry(sourceIntent)) return false
-        val resumeIntent = withContext(Dispatchers.IO) {
-            AppResumeStateStore.load(this@MainActivity)
-        } ?: return false
-        val component = resumeIntent.component ?: return false
-        val homeIntent = HomeFeedListActivity.createIntent(
-            context = this@MainActivity,
-            launcherEntry = true
-        )
-        if (component.className == MainActivity::class.java.name ||
-            component.className == HomeFeedListActivity::class.java.name
-        ) {
-            startActivity(homeIntent)
-            return true
-        }
-        startActivities(
-            arrayOf(
-                homeIntent,
-                resumeIntent
-            )
-        )
-        return true
     }
 
     private fun isLauncherEntry(intent: Intent?): Boolean {

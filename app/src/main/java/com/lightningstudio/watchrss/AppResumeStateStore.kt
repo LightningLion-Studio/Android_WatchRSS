@@ -46,6 +46,7 @@ object AppResumeStateStore {
     private fun normalizeIntent(context: Context, intent: Intent): Intent? {
         val component = intent.component ?: resolveInternalComponent(context, intent) ?: return null
         if (component.packageName != context.packageName) return null
+        if (!allowsPersistentResume(component.className)) return null
         return Intent().setComponent(component).replaceExtras(intent)
     }
 
@@ -56,3 +57,10 @@ object AppResumeStateStore {
 
     private fun prefs(context: Context) = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 }
+
+// Persist only passive reading destinations. Player queues remain owned by their
+// repositories and are opened through an explicit user action.
+internal fun allowsPersistentResume(className: String): Boolean = className in setOf(
+    "com.lightningstudio.watchrss.DetailActivity",
+    "com.lightningstudio.watchrss.HomeFeedListActivity"
+)

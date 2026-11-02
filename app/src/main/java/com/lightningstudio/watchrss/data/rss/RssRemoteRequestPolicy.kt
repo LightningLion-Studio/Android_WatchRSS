@@ -10,12 +10,26 @@ object RssRemoteRequestPolicy {
         "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 " +
             "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
 
+    // Keep browser verification and feed requests on the same desktop identity.
+    const val PUBLIC_36KR_USER_AGENT: String =
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 " +
+            "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+    private val public36krFeed = Regex(
+        "^https://36kr\\.com(?::443)?/(?:feed|feed-article|feed-newsflash|feed-moment)(?:\\?[^#]*)?$",
+        RegexOption.IGNORE_CASE
+    )
+
+    fun browserUserAgentFor(url: String): String? =
+        PUBLIC_36KR_USER_AGENT.takeIf { public36krFeed.matches(url) }
+
     private val defaultHeaders = linkedMapOf(
         "User-Agent" to DEFAULT_USER_AGENT
     )
 
     fun headerMapFor(url: String): Map<String, String> {
         val headers = LinkedHashMap(defaultHeaders)
+        browserUserAgentFor(url)?.let { headers["User-Agent"] = it }
         val host = runCatching { URL(url).host.lowercase() }.getOrDefault("")
         if (host == "sspai.com" || host.endsWith(".sspai.com")) {
             headers["Referer"] = "https://sspai.com/"

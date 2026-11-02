@@ -59,6 +59,9 @@ internal fun RssBrowserVerificationView(
             CookieManager.getInstance().setAcceptCookie(true)
             WebView(viewContext).apply {
                 setBackgroundColor(Color.BLACK)
+                settings.userAgentString =
+                    com.lightningstudio.watchrss.data.rss.RssRemoteRequestPolicy.browserUserAgentFor(url)
+                        ?: android.webkit.WebSettings.getDefaultUserAgent(viewContext)
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
                 settings.allowFileAccess = false
@@ -224,6 +227,9 @@ internal fun RssBrowserVerificationView(
         update = { view ->
             if (view.tag != pageRequestKey) {
                 view.tag = pageRequestKey
+                view.settings.userAgentString =
+                    com.lightningstudio.watchrss.data.rss.RssRemoteRequestPolicy.browserUserAgentFor(url)
+                        ?: android.webkit.WebSettings.getDefaultUserAgent(view.context)
                 if (challengeHtml.isNotBlank()) {
                     view.loadDataWithBaseURL(url, challengeHtml, "text/html", "UTF-8", url)
                 } else {

@@ -341,6 +341,11 @@ private fun MainSettingsPage(
 
             Spacer(modifier = Modifier.height(entrySpacing))
 
+            (context.applicationContext as? com.lightningstudio.watchrss.WatchRssApplication)?.let { app ->
+                com.lightningstudio.watchrss.ui.reader.ReaderPagingSettings(app.container.settingsRepository)
+            }
+            Spacer(modifier = Modifier.height(entrySpacing))
+
             WatchSettingsPillRow(
                 label = "自动滚动",
                 onClick = onOpenAutoScrollSettings

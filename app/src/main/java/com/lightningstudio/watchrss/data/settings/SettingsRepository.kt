@@ -15,6 +15,9 @@ private val CACHE_LIMIT_BYTES = longPreferencesKey("cache_limit_bytes")
 private val OOBE_SEEN_VERSION = intPreferencesKey("oobe_seen_version")
 private val READING_THEME_DARK = booleanPreferencesKey("reading_theme_dark")
 private val READING_FONT_SIZE_SP = intPreferencesKey("reading_font_size_sp")
+private val READER_PAGE_MODE = booleanPreferencesKey("reader_page_mode")
+private val READER_PAGE_SECONDS = intPreferencesKey("reader_page_seconds")
+private val READER_AUTO_PAGE_ENABLED = booleanPreferencesKey("reader_auto_page_enabled")
 private val READER_TAP_TO_SCROLL = booleanPreferencesKey("reader_tap_to_scroll")
 private val READER_AUTO_SCROLL_ENABLED = booleanPreferencesKey("reader_auto_scroll_enabled")
 private val READER_AUTO_SCROLL_LINES_PER_SECOND = floatPreferencesKey("reader_auto_scroll_lines_per_second")
@@ -48,6 +51,9 @@ const val DEFAULT_CACHE_LIMIT_MB: Long = MIN_CACHE_LIMIT_MB
 val CACHE_LIMIT_OPTIONS_MB: List<Long> = listOf(512L, 768L, 1024L, 1536L, 2048L, 2560L, 3072L, 4096L)
 const val MB_BYTES: Long = 1024 * 1024
 const val DEFAULT_READING_FONT_SIZE_SP: Int = 14
+const val DEFAULT_READER_PAGE_SECONDS: Int = 15
+const val MIN_READER_PAGE_SECONDS: Int = 5
+const val MAX_READER_PAGE_SECONDS: Int = 120
 const val DEFAULT_READER_AUTO_SCROLL_ENABLED: Boolean = false
 const val DEFAULT_READER_AUTO_SCROLL_LINES_PER_SECOND: Float = 2f
 const val MIN_READER_AUTO_SCROLL_LINES_PER_SECOND: Float = 0.5f
@@ -72,6 +78,25 @@ class SettingsRepository(private val dataStore: DataStore<Preferences>) {
     val readingFontSizeSp: Flow<Int> = dataStore.data.map { preferences ->
         preferences[READING_FONT_SIZE_SP] ?: DEFAULT_READING_FONT_SIZE_SP
     }
+    val readerPageMode: Flow<Boolean> = dataStore.data.map { it[READER_PAGE_MODE] ?: false }
+    val readerPageSeconds: Flow<Int> = dataStore.data.map {
+        (it[READER_PAGE_SECONDS] ?: DEFAULT_READER_PAGE_SECONDS)
+            .coerceIn(MIN_READER_PAGE_SECONDS, MAX_READER_PAGE_SECONDS)
+    }
+    val readerAutoPageEnabled: Flow<Boolean> = dataStore.data.map { it[READER_AUTO_PAGE_ENABLED] ?: false }
+
+    suspend fun setReaderPageMode(value: Boolean) {
+        dataStore.edit { it[READER_PAGE_MODE] = value }
+    }
+
+    suspend fun setReaderPageSeconds(value: Int) {
+        dataStore.edit { it[READER_PAGE_SECONDS] = value.coerceIn(MIN_READER_PAGE_SECONDS, MAX_READER_PAGE_SECONDS) }
+    }
+
+    suspend fun setReaderAutoPageEnabled(value: Boolean) {
+        dataStore.edit { it[READER_AUTO_PAGE_ENABLED] = value }
+    }
+
     val readerTapToScrollEnabled: Flow<Boolean> = dataStore.data.map { it[READER_TAP_TO_SCROLL] ?: false }
 
     suspend fun setReaderTapToScrollEnabled(value: Boolean) {
