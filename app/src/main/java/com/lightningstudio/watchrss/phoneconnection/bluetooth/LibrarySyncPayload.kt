@@ -1036,6 +1036,11 @@ object LibrarySyncPayload {
             require(frame.optString("phase") == PHASE_MANIFEST) { "资料库清单批次阶段异常" }
             require(frame.optInt("version", PROTOCOL_VERSION) == expectedVersion) { "资料库清单协议版本不一致" }
             require(frame.optString("deviceId") == expectedDeviceId) { "资料库清单设备身份不一致" }
+            require(parseChangeSequence(frame) == parseChangeSequence(frames.first()) &&
+                parseCursor(frame) == parseCursor(frames.first()) &&
+                frame.optString("libraryMode") == frames.first().optString("libraryMode") &&
+                frame.optString("libraryAccountUserId") == frames.first().optString("libraryAccountUserId") &&
+                frame.optString("libraryAccountBackend") == frames.first().optString("libraryAccountBackend")) { "资料库清单版本或账号发生变化" }
             MANIFEST_ARRAY_FIELDS.forEach { field ->
                 val source = frame.optJSONArray(field) ?: JSONArray()
                 for (itemIndex in 0 until source.length()) {

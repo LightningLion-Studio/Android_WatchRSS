@@ -61,7 +61,7 @@ fun MiniProgramPairingScreen(state: PairingUiState, transport: PairingTransport,
             is PairingUiState.Starting -> StartingPage(state.transport, actions)
             is PairingUiState.NeedsPermission -> RestartPage("请重新配对", "联网后重新生成配对码", transport, actions)
             is PairingUiState.WaitingForScan -> Unit
-            is PairingUiState.Confirming -> ConfirmPage(state.account, actions)
+            is PairingUiState.Confirming -> ConfirmPage(state, actions)
             is PairingUiState.Working -> WorkingPage(state.current, actions)
             is PairingUiState.Done -> DonePage(state.cloudReady, actions)
             is PairingUiState.Failed -> FailedPage(state, transport, actions)
@@ -103,7 +103,7 @@ private fun ScanPage(state: PairingUiState.WaitingForScan, actions: PairingActio
             }
             Column(Modifier.fillMaxWidth().padding(horizontal = 22.dp).padding(bottom = 26.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = "用小程序扫码",
+                    text = "用手机 App 或小程序扫码",
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurface,
                     textAlign = TextAlign.Center,
@@ -128,11 +128,16 @@ private fun ScanPage(state: PairingUiState.WaitingForScan, actions: PairingActio
 }
 
 @Composable
-private fun ConfirmPage(account: String, actions: PairingActions) {
+private fun ConfirmPage(state: PairingUiState.Confirming, actions: PairingActions) {
+    if (state.sas.isNotEmpty()) {
+        Text(state.sas.chunked(4).joinToString(" "), style = MaterialTheme.typography.headlineMedium,
+            color = MaterialTheme.colorScheme.onSurface, textAlign = TextAlign.Center)
+        PageBody("请核对手机 App 或小程序的配对码")
+    }
     PageBody("绑定到这个账号？")
     Spacer(Modifier.height(4.dp))
     Text(
-        text = account,
+        text = state.account,
         style = MaterialTheme.typography.headlineSmall,
         color = MaterialTheme.colorScheme.onSurface,
         textAlign = TextAlign.Center,
@@ -141,7 +146,7 @@ private fun ConfirmPage(account: String, actions: PairingActions) {
     )
     Spacer(Modifier.height(4.dp))
     Text(
-        text = "确认后手表将登录此账号",
+        text = if (state.watchConfirmed) "手表已确认，等待手机确认" else if (state.phoneConfirmed) "手机已确认，请核对配对码" else "配对码一致时，确认绑定",
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         textAlign = TextAlign.Center,
@@ -166,7 +171,7 @@ private fun ConfirmPage(account: String, actions: PairingActions) {
             Icon(Icons.Filled.Close, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(26.dp))
         }
         PairingPill(
-            "确认绑定",
+            if (state.watchConfirmed) "已确认" else "一致，绑定",
             onClick = actions.confirm,
             primary = true,
             testTag = PhoneConnectionTestTags.PAIRING_CONFIRM,

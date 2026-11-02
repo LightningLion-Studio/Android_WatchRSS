@@ -114,13 +114,52 @@ class WatchCloudLibraryAdapter(
         restore(bytes.inputStream(), remoteDeviceId)
 
     suspend fun restore(input: InputStream, remoteDeviceId: String): Int =
-        restoreStream(input, remoteDeviceId, stateOnly = false)
+        restoreVerified(input, remoteDeviceId, stateOnly = false)
 
     suspend fun restoreState(bytes: ByteArray, remoteDeviceId: String): Int =
         restoreState(bytes.inputStream(), remoteDeviceId)
 
     suspend fun restoreState(input: InputStream, remoteDeviceId: String): Int =
-        restoreStream(input, remoteDeviceId, stateOnly = true)
+        restoreVerified(input, remoteDeviceId, stateOnly = true)
+
+    /** Authenticate the complete object and inspect its format before any repository mutation. */
+    private suspend fun restoreVerified(input: InputStream, remoteDeviceId: String, stateOnly: Boolean): Int {
+        val file = java.io.File.createTempFile("watchrss-cloud-restore-", ".json")
+        try {
+            file.outputStream().use { input.copyTo(it) }
+            file.inputStream().use { validateFormat(it, stateOnly) }
+            return file.inputStream().use { restoreStream(it, remoteDeviceId, stateOnly) }
+        } finally { file.delete() }
+    }
+
+    private fun validateFormat(input: InputStream, stateOnly: Boolean) {
+        val reader = JsonReader(input.reader(Charsets.UTF_8))
+        var format: String? = null
+        var version = 0
+        val seen = hashSetOf<String>()
+        reader.beginObject()
+        while (reader.hasNext()) {
+            val name = reader.nextName()
+            if (!seen.add(name)) throw WatchCloudUpgradeRequired()
+            when (name) {
+                "format" -> format = reader.nextString()
+                "version" -> version = reader.nextInt()
+                "articles", "rssSources", "sources" -> {
+                    reader.beginArray()
+                    while (reader.hasNext()) WatchCloudRecordCodec.requireKnownFields(
+                        if (name == "articles") "article" else "source", readObject(reader), allowBody = !stateOnly)
+                    reader.endArray()
+                }
+                "deviceId", "success", "action", "sentAt", "exportedAt", "stats" -> reader.skipValue()
+                else -> throw WatchCloudUpgradeRequired()
+            }
+        }
+        reader.endObject()
+        require(reader.peek() == JsonToken.END_DOCUMENT) { "云端资料包含多余内容" }
+        if (stateOnly) {
+            if (format != "watchrss-rss-state" || version != 1) throw WatchCloudUpgradeRequired()
+        } else if (format != null || version !in 1..LibrarySyncPayload.PROTOCOL_VERSION) throw WatchCloudUpgradeRequired()
+    }
 
     // A failed/truncated stream may have committed earlier rows. Merge APIs retain
     // their normal LWW/tombstone checks, so retrying never resets local state.
@@ -201,13 +240,14 @@ class WatchCloudLibraryAdapter(
         return applied
     }
 
-    // Protocol rows are flat scalar objects. Unknown nested fields are skipped,
-    // never recursively materialized; memory is bounded by the current chapter.
+    // Protocol rows are flat scalar objects. Unknown fields stop publication instead
+    // of being dropped from a future format; memory is bounded by the current chapter.
     private fun readObject(reader: JsonReader): JSONObject {
         val row = JSONObject()
         reader.beginObject()
         while (reader.hasNext()) {
             val name = reader.nextName()
+            if (row.has(name)) throw WatchCloudUpgradeRequired()
             when (reader.peek()) {
                 JsonToken.NULL -> { reader.nextNull(); row.put(name, JSONObject.NULL) }
                 JsonToken.BOOLEAN -> row.put(name, reader.nextBoolean())
@@ -216,7 +256,7 @@ class WatchCloudLibraryAdapter(
                     row.put(name, number.toLongOrNull() ?: number.toDouble())
                 }
                 JsonToken.STRING -> row.put(name, reader.nextString())
-                else -> reader.skipValue()
+                else -> throw WatchCloudUpgradeRequired()
             }
         }
         reader.endObject()

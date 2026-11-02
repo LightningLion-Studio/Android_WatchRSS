@@ -10,6 +10,18 @@ import javax.crypto.spec.SecretKeySpec;
 
 /** JVM-testable wire crypto shared byte-for-byte by Android and PodJS hosts. */
 public final class BleSetupCrypto {
+    public static String sas(byte[] secret,String sessionId,String userId) throws Exception {
+        if(secret.length!=32)throw new IllegalArgumentException("Invalid setup secret");
+        java.io.ByteArrayOutputStream out=new java.io.ByteArrayOutputStream();
+        java.io.DataOutputStream data=new java.io.DataOutputStream(out);
+        for(String field:new String[]{"watchrss/pairing-sas/v2",sessionId,userId}){
+            byte[] bytes=field.getBytes(StandardCharsets.UTF_8);data.writeInt(bytes.length);data.write(bytes);
+        }
+        Mac mac=Mac.getInstance("HmacSHA256");mac.init(new SecretKeySpec(secret,"HmacSHA256"));
+        byte[] digest=mac.doFinal(out.toByteArray());
+        try{return String.format(java.util.Locale.ROOT,"%08d",new java.math.BigInteger(1,Arrays.copyOfRange(digest,0,8)).mod(java.math.BigInteger.valueOf(100000000)).longValue());}
+        finally{Arrays.fill(digest,(byte)0);}
+    }
     public static byte[] crypt(byte[] secret,String sessionId,int mode,String direction,int sequence,byte[] nonce,byte[] bytes) throws Exception {
         return crypt(secret,sessionId,mode,direction,sequence,nonce,bytes,15);
     }

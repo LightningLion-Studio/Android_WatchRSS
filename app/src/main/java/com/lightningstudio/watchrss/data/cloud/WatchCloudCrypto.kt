@@ -122,6 +122,15 @@ data class WatchCloudManifest(
 
     companion object {
         fun parse(json: JSONObject): WatchCloudManifest {
+            WatchCloudProtocolV2.features(json)
+            if (json.keys().asSequence().any { it !in setOf("format", "schemaVersion", "snapshotId", "sourceDeviceId",
+                    "deviceSequence", "keyVersion", "createdAtMillis", "parentHeads", "observedHeads", "objects", "settings",
+                    "credentialEnvelopes", "features", "requiredFeatures") }) throw WatchCloudUpgradeRequired()
+            val names = json.getJSONArray("objects").objects { it.getString("name") }
+            if (names.distinct().size != names.size || names.any { it !in setOf("library-sync.json", "rss-state.json",
+                    "private-library.wrss", "notes-state.json", "notes-assets.zip") }) throw WatchCloudUpgradeRequired()
+            if (json.optJSONObject("settings")?.length()?.let { it > 0 } == true ||
+                json.optJSONObject("credentialEnvelopes")?.length()?.let { it > 0 } == true) throw WatchCloudUpgradeRequired()
             require(
                 json.getString("format") == "watchrss-cloud-snapshot" &&
                     json.getInt("schemaVersion") == 2

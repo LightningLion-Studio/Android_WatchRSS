@@ -127,10 +127,12 @@ internal object WatchCloudReaderArchive {
                 }
             }
             val manifest = JSONObject(requireNotNull(metadata["manifest.json"]) { "云阅读归档缺少清单" }.toString(Charsets.UTF_8))
+            WatchCloudProtocolV2.features(manifest)
             require(manifest.getString("format") in setOf("watchrss-library-backup", "watchrss-reader-backup") && manifest.getInt("version") in 1..3) { "云阅读归档版本不受支持" }
             require(setOf("manifest.json", "sources.json", "articles.json", "saved_items.json").all(names::contains)) { "云阅读归档缺少必要条目" }
             val snapshot = metadata["reader/manifest.json"]?.let { raw ->
                 val json = JSONObject(raw.toString(Charsets.UTF_8))
+                WatchCloudProtocolV2.features(json)
                 ReaderPresetSnapshot(ReaderPresetSyncPayload.parsePresets(json.optJSONArray("presets")), ReaderPresetSyncPayload.parseFonts(json.optJSONArray("fonts")),
                     ReaderPresetSyncPayload.parseBackgrounds(json.optJSONArray("backgrounds")), ReaderPresetSyncPayload.parseDeletions(json.optJSONArray("deletions")))
             }

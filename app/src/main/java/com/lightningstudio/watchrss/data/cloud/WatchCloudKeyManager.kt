@@ -79,6 +79,43 @@ class WatchCloudKeyManager(context: Context) {
         } finally { existing?.fill(0) }
     }
 
+    /** Decrypt and validate the entire delivered version chain before one durable key-store write. */
+    internal fun acceptTrustedEnvelopes(userId: String, deviceId: String, bootstrap: WatchCloudBootstrap,
+        envelopes: List<WatchDeviceKeyEnvelope> = bootstrap.envelopes, attestation: org.json.JSONObject? = null) {
+        val epoch = requireNotNull(bootstrap.libraryEpoch)
+        val privateKey = getOrCreateDeviceKey(userId, deviceId).private
+        val candidates = linkedMapOf<Int, ByteArray>()
+        try {
+            for (envelope in envelopes) {
+                require(envelope.keyVersion !in candidates) { "重复的云密钥版本" }
+                candidates[envelope.keyVersion] = unwrapWatchDeviceEnvelope(envelope, userId, deviceId, privateKey)
+            }
+            for (version in keyVersions(userId)) {
+                val existing = accountKey(userId, version) ?: continue
+                val candidate = candidates[version]
+                if (candidate != null) {
+                    try { require(java.security.MessageDigest.isEqual(existing, candidate)) { "同版本云密钥冲突" } }
+                    finally { existing.fill(0) }
+                } else candidates[version] = existing
+            }
+            WatchCloudProtocolV2.validateKeys(userId, epoch, bootstrap.keyVersionFloor, bootstrap.keyCommitments, candidates)
+            val required = (0 until bootstrap.keyCommitments.length()).map {
+                bootstrap.keyCommitments.getJSONObject(it).getInt("keyVersion")
+            }.toSet()
+            require(candidates.keys == required) { "缺少历史云密钥，请在手机 App 或小程序重新授权" }
+            attestation?.let {
+                val version = it.getInt("keyVersion")
+                require(version == required.max()) { "设备证明版本无效" }
+                require(WatchCloudProtocolV2.equal(it.getString("mac"), WatchCloudProtocolV2.attestation(
+                    candidates.getValue(version), userId, epoch, deviceId, publicKeySpki(userId, deviceId)))) { "设备密钥证明不匹配" }
+            }
+            val editor = preferences.edit()
+            candidates.forEach { (version, key) -> editor.putString(accountName(userId, version), key.b64()) }
+            editor.putInt(currentName(userId), required.max())
+            check(editor.commit()) { "云密钥保存失败" }
+        } finally { candidates.values.forEach { it.fill(0) } }
+    }
+
     fun deviceKeyAlgorithm(userId: String, deviceId: String): String =
         if (getOrCreateDeviceKey(userId, deviceId).public.algorithm == "RSA") "RSA-2048" else "P-256"
 

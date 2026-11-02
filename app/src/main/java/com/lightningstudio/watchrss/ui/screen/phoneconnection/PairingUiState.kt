@@ -33,7 +33,7 @@ sealed interface PairingUiState {
         val qr: Bitmap,
         val expiresAtElapsed: Long
     ) : PairingUiState { override val live get() = true }
-    data class Confirming(val account: String) : PairingUiState { override val live get() = true }
+    data class Confirming(val account: String, val sas: String = "", val phoneConfirmed: Boolean = false, val watchConfirmed: Boolean = false) : PairingUiState { override val live get() = true }
     data class Working(val current: PairingStep) : PairingUiState { override val live get() = true }
     /** Only entered after the account (and optionally the cloud key) is durably saved. */
     data class Done(val cloudReady: Boolean) : PairingUiState
@@ -50,7 +50,7 @@ fun pairingDoneDetail(cloudReady: Boolean): String =
 fun pairingStartingLabel(transport: PairingTransport): String = "正在生成配对码…"
 
 fun pairingScanHint(transport: PairingTransport): String =
-    "在微信打开腕上RSS小程序，点“添加手表”扫码"
+    "用腕上RSS手机 App 或微信小程序，点“添加手表”扫码"
 
 /** Remaining whole seconds formatted as m:ss for the QR lifetime hint. */
 fun pairingCountdown(remainingMillis: Long): String {
@@ -67,7 +67,7 @@ fun pairingFailure(error: Throwable, transport: PairingTransport, qrShown: Boole
         reason == ProvisioningSession.Failure.EXPIRED ->
             PairingUiState.Failed("配对码已过期", "重新生成一个即可", suggestOther = false)
         reason == ProvisioningSession.Failure.CLOSED || (qrShown && reason == null) ->
-            PairingUiState.Failed("连接已断开", "请重新开始，再用小程序扫码", suggestOther = false)
+            PairingUiState.Failed("连接已断开", "请重新开始，再用手机 App 或微信小程序扫码", suggestOther = false)
         else -> PairingUiState.Failed("配对没有完成", "请重新开始配对", suggestOther = false)
     }
 }

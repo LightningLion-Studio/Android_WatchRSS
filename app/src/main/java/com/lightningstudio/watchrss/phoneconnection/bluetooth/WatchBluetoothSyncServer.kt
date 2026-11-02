@@ -545,6 +545,8 @@ class WatchBluetoothSyncServer(
             val remoteChangeSequence = LibrarySyncPayload.parseChangeSequence(request)
             val remoteManifest = LibrarySyncPayload.parseArticleManifest(request)
             val incomingSources = LibrarySyncPayload.parseRssSources(request)
+            val checkpoint = ArticleReceiveCheckpoint(java.io.File(dataContext().filesDir, "phone-article-checkpoints"),
+                request.optString("libraryAccountBackend") + "|" + request.optString("libraryAccountUserId"), remoteDeviceId, remoteManifest)
             WatchBluetoothDebugLog.event(
                 sessionId = sessionId,
                 event = "library.manifest.parsed",
@@ -614,7 +616,7 @@ class WatchBluetoothSyncServer(
                     remoteManifest = remoteManifest,
                     maxBodyRequestChunks = LibrarySyncPayload.MAX_BODY_REQUEST_CHUNKS_PER_SYNC,
                     supportsMetadataOnlyArticles = supportsMetadataOnlyArticles
-                )
+                ).map(checkpoint::remaining)
                 LibrarySyncPayload.buildManifestResponseFromEntries(
                     deviceId = localDeviceId,
                     articleManifest = outgoingWindow.articleManifest,
@@ -660,7 +662,9 @@ class WatchBluetoothSyncServer(
             }
 
             val chunkedArticleRequests = if (supportsChunkedBodies) {
-                readChunkedArticleRequestFrames(client, sessionId) { articles ->
+                readChunkedArticleRequestFrames(client, sessionId,
+                    checkpoint = if (watchIsSource) null else checkpoint,
+                    checkOwner = { requireLibraryAccount(request) }) { articles ->
                     if (watchIsSource) {
                         SyncedSavedArticleMergeStats(articles.size, 0)
                     } else dataContainer().rssRepository.mergeSyncedChunkedArticles(
@@ -935,6 +939,8 @@ class WatchBluetoothSyncServer(
     private suspend fun readChunkedArticleRequestFrames(
         client: WatchSyncTransport,
         sessionId: String,
+        checkpoint: ArticleReceiveCheckpoint?,
+        checkOwner: () -> Unit,
         mergeArticles: suspend (List<SyncedChunkedArticle>) -> SyncedSavedArticleMergeStats
     ): ChunkedArticleRequestFrames {
         val first = readFrameLoggedWithTimeout(
@@ -957,7 +963,10 @@ class WatchBluetoothSyncServer(
 
         suspend fun mergeReady(articles: List<SyncedChunkedArticle>) {
             if (articles.isEmpty()) return
+            checkOwner()
             val merged = mergeArticles(articles)
+            checkOwner()
+            articles.forEach { checkpoint?.applied(it.article.articleId) }
             receivedForMerge += merged.received
             applied += merged.applied
         }
@@ -965,7 +974,9 @@ class WatchBluetoothSyncServer(
         suspend fun consume(frame: JSONObject) {
             stats.add(frame)
             val ready = mutableListOf<SyncedChunkedArticle>()
-            LibrarySyncPayload.parseChunkedArticles(frame).forEach { payload ->
+            checkOwner()
+            LibrarySyncPayload.parseChunkedArticles(frame).forEach { incoming ->
+                val payload = checkpoint?.stage(incoming) ?: incoming
                 val current = pendingArticle
                 if (current == null) {
                     require(payload.article.articleId !in completedArticleIds) {

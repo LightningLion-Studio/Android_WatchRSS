@@ -10,11 +10,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
 import com.lightningstudio.watchrss.data.cloud.WatchCloudKeyManager
-import com.lightningstudio.watchrss.data.cloud.WatchDeviceKeyEnvelope
 import com.lightningstudio.watchrss.data.telemetry.WatchInstallationIdentity
 import com.lightningstudio.watchrss.phoneconnection.WatchDeviceIdentity
 import com.lightningstudio.watchrss.phoneconnection.bluetooth.AccountSyncPayload
 import com.lightningstudio.watchrss.phoneconnection.provisioning.OnlineProvisioningSession
+import com.lightningstudio.watchrss.phoneconnection.provisioning.PairingConsent
 import com.lightningstudio.watchrss.phoneconnection.provisioning.ProvisioningSession
 import com.lightningstudio.watchrss.ui.screen.phoneconnection.MiniProgramPairingScreen
 import com.lightningstudio.watchrss.ui.screen.phoneconnection.PairingActions
@@ -114,6 +114,7 @@ class MiniProgramPairingActivity : BaseWatchActivity() {
                 }
             } finally {
                 owned?.close()
+                if (bindingSaved && owned != null) (application as WatchRssApplication).finishAccountSyncUi(owned!!.sessionId())
                 if (session === owned) session = null
                 if (current()) confirmation = null
             }
@@ -133,47 +134,60 @@ class MiniProgramPairingActivity : BaseWatchActivity() {
         var userId: String? = null
         var saved = false
         var keySaved = false
+        var consent: PairingConsent? = null
+        var pendingApproval: CompletableDeferred<Boolean>? = null
+        var pairingLabel = "当前账号"
         while (isActive) {
             val request = channel.receive()
             val sequence = request.getInt("_sequence")
             try {
                 val response = when (request.getString("action")) {
                     "prepare" -> {
-                        check(userId == null)
                         val requested = request.getString("userId")
-                        check(requested.matches(Regex("[a-fA-F0-9-]{36}")))
+                        check(java.util.UUID.fromString(requested).toString() == requested)
+                        check(userId == null || userId == requested)
+                        val extended = request.optInt("pairingUxVersion") == 1
                         val existing = app.accountStore.read()
-                        if (existing != null && existing.userId != requested) {
-                            throw PairingStop(
-                                PairingUiState.Failed("手表已登录其他账号", "请先在手表上退出原账号，再重新配对", suggestOther = false),
-                                "手表已绑定其他账号，请先在手表退出原账号"
-                            )
-                        }
-                        val approval = CompletableDeferred<Boolean>()
-                        withContext(Dispatchers.Main) { if (current()) confirmation = approval else approval.complete(false) }
-                        show(PairingUiState.Confirming(request.optString("phoneMasked", "当前账号").take(24)))
-                        val approved = withTimeoutOrNull(CONFIRM_TIMEOUT_MS) { approval.await() }
-                        withContext(Dispatchers.Main) { if (confirmation === approval) confirmation = null }
-                        when (approved) {
-                            null -> throw PairingStop(PairingUiState.Failed("等待确认超时", "请重新开始配对", suggestOther = false), "手表未确认绑定")
-                            false -> throw PairingStop(PairingUiState.Cancelled, "已在手表上取消绑定")
-                            true -> Unit
+                        val conflict = existing != null && existing.userId != requested
+                        if (conflict && !extended) throw PairingStop(
+                            PairingUiState.Failed("手表已登录其他账号", "请先在手表上退出原账号，再重新配对", false),
+                            "手表已绑定其他账号，请先在手表退出原账号")
+                        val publicKey = keys.publicKeySpki(requested, deviceId)
+                        if (pendingApproval == null) {
+                            val approval = CompletableDeferred<Boolean>()
+                            pendingApproval = approval
+                            pairingLabel = request.optString("phoneMasked", "当前账号").take(24)
+                            val sas = channel.sas(requested)
+                            if (extended) consent = PairingConsent(requested, deviceId, installId, sas, conflict, SystemClock::elapsedRealtime)
+                            withContext(Dispatchers.Main) { if (current()) confirmation = approval else approval.complete(false) }
+                            show(PairingUiState.Confirming(pairingLabel, sas))
                         }
                         userId = requested
-                        show(PairingUiState.Working(PairingStep.Saving))
-                        val publicKey = runCatching {
-                            keys.publicKeySpki(requested, deviceId)
-                        }.getOrDefault("")
-                        JSONObject().put("success", true).put("deviceId", deviceId).put("publicKeySpki", publicKey).put("userId", requested)
+                        if (extended) requireNotNull(consent).receipt(publicKey)
+                        else {
+                            val approved = withTimeoutOrNull(CONFIRM_TIMEOUT_MS) { requireNotNull(pendingApproval).await() }
+                            if (approved != true) throw PairingStop(PairingUiState.Cancelled, "手表未确认绑定")
+                            show(PairingUiState.Working(PairingStep.Saving))
+                            JSONObject().put("success", true).put("deviceId", deviceId).put("installId", installId)
+                                .put("publicKeySpki", publicKey).put("userId", requested)
+                        }
+                    }
+                    "pairingStatus" -> {
+                        val status = requireNotNull(consent)
+                        if (pendingApproval?.isCompleted == true && status.watch == "pending") status.watchDecision(pendingApproval!!.await())
+                        status.update(request)
+                        show(PairingUiState.Confirming(pairingLabel, status.sas, status.phone == "confirmed", status.watch == "confirmed"))
+                        status.receipt(keys.publicKeySpki(requireNotNull(userId), deviceId)).put("action", "pairingStatus")
                     }
                     "configure" -> {
                         check(userId != null && !saved)
+                        check(consent == null || consent!!.bothConfirmed) { "pairing_confirmation_required" }
                         val accountState = AccountSyncPayload.parseRequest(request)
                         check(accountState.userId == userId && accountState.installId == installId && accountState.backendBaseUrl == "https://sly-data-plane.watchrss.cn")
                         check(accountState.tokenExpiresAtMillis > System.currentTimeMillis() && accountState.watchRefreshToken.isNotBlank())
                         val existing = app.accountStore.read()
                         check(existing == null || existing.userId == userId)
-                        app.accountStore.save(accountState)
+                        app.acceptAccountSync(accountState, channel.sessionId())
                         saved = true
                         // Re-pairing the same account retains its durable cloud authorization.
                         keySaved = runCatching {
@@ -185,23 +199,24 @@ class MiniProgramPairingActivity : BaseWatchActivity() {
                             if (current()) { bindingSaved = true; cloudSaved = keySaved }
                         }
                         show(PairingUiState.Working(PairingStep.Cloud))
+                        // The phone requires the watch's own durable account registration before granting keys.
+                        try { app.cloudSyncService.registerPairedAccount() }
+                        catch (error: Exception) { if (error is CancellationException) throw error }
                         JSONObject().put("success", true).put("bound", true).put("deviceId", deviceId).put("userId", userId).put("cloudReady", keySaved)
                     }
                     "key" -> {
                         check(saved && request.getString("userId") == userId)
-                        val envelope = request.getJSONObject("envelope")
-                        val key = keys.acceptEnvelope(
-                            userId!!, deviceId,
-                            WatchDeviceKeyEnvelope(
-                                envelope.getString("algorithm"), envelope.getInt("keyVersion"),
-                                envelope.getString("wrappedKeyBase64"), envelope.getString("nonceBase64"),
-                                envelope.getString("ephemeralPublicKeySpki")
-                            )
-                        )
-                        Arrays.fill(key, 0.toByte())
+                        if (request.has("payload")) {
+                            val service = app.cloudSyncService
+                            service.acceptPairingPayload(userId!!, request.getString("libraryEpoch"), request.getString("payload"))
+                        } else {
+                            // Current v2 servers require a commitment-bound multi-version payload.
+                            throw IllegalStateException("请更新手机 App 或小程序后重新授权云同步")
+                        }
                         keySaved = true
                         withContext(Dispatchers.Main) { if (current()) cloudSaved = true }
-                        JSONObject().put("success", true).put("cloudReady", true).put("deviceId", deviceId).put("keyVersion", envelope.getInt("keyVersion"))
+                        JSONObject().put("success", true).put("cloudReady", true).put("deviceId", deviceId)
+                            .put("keyVersion", keys.currentKeyVersion(userId!!))
                     }
                     "finish" -> {
                         check(saved && (!request.optBoolean("cloudReady") || keySaved))
@@ -210,6 +225,7 @@ class MiniProgramPairingActivity : BaseWatchActivity() {
                     else -> error("unsupported")
                 }
                 channel.respond(sequence, response)
+                if (consent?.rejected == true) { show(PairingUiState.Cancelled); return }
                 if (request.getString("action") == "finish") {
                     show(PairingUiState.Done(keySaved))
                     // Let the phone collect the final receipt, then end the session ourselves.

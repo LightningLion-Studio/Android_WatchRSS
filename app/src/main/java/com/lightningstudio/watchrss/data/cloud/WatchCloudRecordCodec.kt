@@ -22,6 +22,12 @@ internal object WatchCloudRecordCodec {
     private val sourceFields = setOf("url", "sourceDeviceId", "title", "description", "siteUrl", "imageUrl",
         "createdAt", "updatedAt", "sortOrder", "isPinned", "deleted", "deletedAt", "useOriginalContent", "continuePlaybackInBackground")
 
+    internal fun requireKnownFields(kind: String, value: JSONObject, allowBody: Boolean = false) {
+        val supported = when (kind) { "article" -> articleFields; "source" -> sourceFields; else -> throw WatchCloudUpgradeRequired() }
+        val extra = if (allowBody && kind == "article") setOf("contentHtmlGzip", "contentTextGzip") else emptySet()
+        if (value.keys().asSequence().any { it !in supported && it !in extra }) throw WatchCloudUpgradeRequired()
+    }
+
     fun metadata(kind: String, value: JSONObject): JSONObject {
         val allowed = when (kind) { "article" -> articleFields; "source" -> sourceFields; else -> error("云记录类型无效") }
         require(!value.has("contentHtml") && !value.has("contentText") &&
@@ -103,12 +109,19 @@ internal object WatchCloudRecordCodec {
             body = WatchCloudCodec.aes(false, derived, nonce, ciphertext, aad(userId, recordId, version))
             try {
                 val root = JSONObject(body.toString(Charsets.UTF_8))
+                WatchCloudProtocolV2.features(root)
+                if (root.keys().asSequence().any { it !in setOf("format", "version", "kind", "value", "features", "requiredFeatures") })
+                    throw WatchCloudUpgradeRequired()
                 require(root.getString("format") == "watchrss-rss-record" && root.getInt("version") == 1)
                 val kind = root.getString("kind")
-                val value = metadata(kind, root.getJSONObject("value"))
+                val raw = root.getJSONObject("value")
+                requireKnownFields(kind, raw)
+                val value = metadata(kind, raw)
                 val expected = recordId(key, userId, kind, value)
                 require(MessageDigest.isEqual(expected.toByteArray(), recordId.toByteArray()))
                 return WatchCloudRecordValue(kind, value)
+            } catch (upgrade: WatchCloudUpgradeRequired) {
+                throw upgrade
             } catch (_: Exception) {
                 // JSONException can embed plaintext snippets. Never propagate its
                 // message/cause into the app's generic error telemetry pipeline.

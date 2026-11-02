@@ -32,7 +32,11 @@ data class WatchCloudDevice(
 data class WatchCloudBootstrap(
     val member: WatchCloudMember,
     val devices: List<WatchCloudDevice>,
-    val envelopes: List<WatchDeviceKeyEnvelope>
+    val envelopes: List<WatchDeviceKeyEnvelope>,
+    val libraryEpoch: String? = null,
+    val contentGeneration: String? = null,
+    val keyVersionFloor: Int = 0,
+    val keyCommitments: JSONArray = JSONArray()
 )
 
 data class WatchCloudHead(
@@ -42,7 +46,8 @@ data class WatchCloudHead(
     val keyVersion: Int,
     val manifestHash: String,
     val manifestBytes: Long,
-    val observedHeads: Map<String, Long>
+    val observedHeads: Map<String, Long>,
+    val contentLayout: Int? = null
 )
 
 data class WatchCloudDownloadObject(
@@ -76,6 +81,13 @@ class WatchCloudClient(
     private val http: OkHttpClient = OkHttpClient(),
     private val accountProvider: (suspend (WatchAccountState) -> WatchAccountState)? = null
 ) {
+    private data class Fence(val epoch: String, val generation: String?)
+    private val fences = java.util.concurrent.ConcurrentHashMap<String, Fence>()
+    private fun scope(account: WatchAccountState) = account.backendBaseUrl.trimEnd('/') + "|" + account.userId + "|" + account.installId
+    internal fun epoch(account: WatchAccountState): String? = fences[scope(account)]?.epoch
+    internal suspend fun v2Get(account: WatchAccountState, path: String): JSONObject = get(account, path).use { it.json() }
+    internal suspend fun v2Post(account: WatchAccountState, path: String, body: JSONObject): JSONObject = post(account, path, body).use { it.json() }
+
     internal suspend fun requestAccount(original: WatchAccountState): WatchAccountState {
         val current = accountProvider?.invoke(original) ?: original
         require(current.userId == original.userId && current.installId == original.installId &&
@@ -96,6 +108,7 @@ class WatchCloudClient(
                     if (body.optString("error") == "cloud_record_cursor_invalid") throw WatchCloudRecordCursorInvalid()
                     throw IOException("HTTP 400: " + body.optString("error"))
                 }
+                checkGeneration(account, body)
                 body
             }
         }
@@ -115,6 +128,15 @@ class WatchCloudClient(
     suspend fun bootstrap(account: WatchAccountState): WatchCloudBootstrap =
         post(account, "/functions/v1/cloud/bootstrap", JSONObject()).use { response ->
             val json = response.json()
+            WatchCloudProtocolV2.features(json)
+            val epoch = if (json.has("libraryEpoch")) WatchCloudProtocolV2.uuid(json.getString("libraryEpoch")) else null
+            val generation = if (json.has("contentGeneration")) WatchCloudProtocolV2.uuid(json.getString("contentGeneration")) else null
+            if (epoch == null && fences.containsKey(scope(account))) throw WatchCloudUpgradeRequired()
+            if (epoch != null) {
+                val fence = Fence(epoch, generation)
+                val previous = fences.putIfAbsent(scope(account), fence)
+                require(previous == null || previous == fence) { "云端资料库发生变化，请重启应用后重新检查；本机资料已保留" }
+            }
             val member = json.getJSONObject("member")
             val envelopes = json.getJSONArray("keyEnvelopes")
             val envelopeJson = (0 until envelopes.length())
@@ -131,6 +153,9 @@ class WatchCloudClient(
                 devices = json.getJSONArray("devices").objects {
                     WatchCloudDevice(it.getString("deviceId"), it.optLong("lastSequence"))
                 },
+                libraryEpoch = epoch, contentGeneration = generation,
+                keyVersionFloor = json.optInt("keyVersionFloor"),
+                keyCommitments = json.optJSONArray("keyCommitments") ?: JSONArray(),
                 envelopes = envelopeJson.map {
                     WatchDeviceKeyEnvelope(
                         algorithm = it.getString("algorithm"),
@@ -164,7 +189,9 @@ class WatchCloudClient(
         publicKeySpki: String,
         displayName: String,
         keyVersion: Int,
-        keyAlgorithm: String = "P-256"
+        keyAlgorithm: String = "P-256",
+        attestation: String? = null,
+        attestationKeyVersion: Int? = null
     ) {
         post(
             account,
@@ -175,6 +202,7 @@ class WatchCloudClient(
                 put("displayName", displayName)
                 put("publicKeySpki", publicKeySpki)
                 put("keyAlgorithm", keyAlgorithm)
+                attestation?.let { put("attestation", it); put("attestationKeyVersion", attestationKeyVersion) }
                 put("keyVersion", keyVersion)
                 put("capabilities", JSONObject().apply {
                     put("snapshotSchema", 2)
@@ -188,7 +216,10 @@ class WatchCloudClient(
 
     suspend fun heads(account: WatchAccountState): List<WatchCloudHead> =
         get(account, "/functions/v1/cloud/snapshots/heads").use { response ->
-            response.json().getJSONArray("heads").objects { item ->
+            val json = response.json()
+            checkGeneration(account, json)
+            json.getJSONArray("heads").objects { item ->
+                WatchCloudProtocolV2.features(item)
                 WatchCloudHead(
                     id = item.getString("id"),
                     sourceDeviceId = item.getString("sourceDeviceId"),
@@ -196,7 +227,8 @@ class WatchCloudClient(
                     keyVersion = item.optInt("keyVersion", 1),
                     manifestHash = item.getString("manifestSha256"),
                     manifestBytes = item.getLong("manifestSizeBytes"),
-                    observedHeads = item.getJSONObject("observedHeads").longMap()
+                    observedHeads = item.getJSONObject("observedHeads").longMap(),
+                    contentLayout = if (item.isNull("contentLayout")) null else item.getInt("contentLayout")
                 )
             }
         }
@@ -204,6 +236,7 @@ class WatchCloudClient(
     suspend fun snapshot(account: WatchAccountState, id: String): WatchCloudDownload =
         get(account, "/functions/v1/cloud/snapshots/$id").use { response ->
             val json = response.json()
+            checkGeneration(account, json)
             WatchCloudDownload(
                 manifestUrl = json.getJSONObject("snapshot").getString("manifestSignedUrl"),
                 chunks = json.getJSONArray("chunks").objects {
@@ -222,7 +255,10 @@ class WatchCloudClient(
         retentionDays: Int?
     ): List<WatchCloudUploadTarget> =
         post(
-            account,
+            account.also {
+                // This codec cannot publish layout 3 / private-overlay content. Never label legacy bytes as v3.
+                if (epoch(it) != null) throw WatchCloudUpgradeRequired()
+            },
             "/functions/v1/cloud/snapshots/reserve",
             JSONObject().apply {
                 put("snapshotId", snapshot.manifest.snapshotId)
@@ -428,6 +464,10 @@ class WatchCloudClient(
             // A full library merge can outlive an access token; resolve the same session
             // immediately before every authenticated request, including ack and complete.
             val current = requestAccount(account)
+            fences[scope(account)]?.let { fence ->
+                builder.header("x-watchrss-library-epoch", fence.epoch)
+                fence.generation?.let { builder.header("x-watchrss-content-generation", it) }
+            }
             http.newCall(
                 builder
                     .withWatchRssAppVersionHeader()
@@ -438,6 +478,14 @@ class WatchCloudClient(
                 if (!it.isSuccessful && it.code !in allowedStatuses) throw it.error()
             }
         }
+
+    private fun checkGeneration(account: WatchAccountState, json: JSONObject) {
+        WatchCloudProtocolV2.features(json)
+        fences[scope(account)]?.let { fence ->
+            require(!json.has("libraryEpoch") || json.getString("libraryEpoch") == fence.epoch) { "云端资料库身份发生变化" }
+            require(fence.generation == null || json.optString("contentGeneration") == fence.generation) { "云端内容版本发生变化；本机资料已保留" }
+        }
+    }
 
     private fun okhttp3.Response.json(): JSONObject =
         JSONObject(body?.string().orEmpty().ifBlank { "{}" })

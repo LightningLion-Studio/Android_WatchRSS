@@ -68,8 +68,8 @@ fun PhoneConnectionScreen(
             PageTitle("连接手机")
             Spacer(Modifier.height(12.dp))
             ConnectionOption(
-                title = "微信扫码连接",
-                subtitle = "用腕上RSS小程序扫一扫",
+                title = "扫码连接",
+                subtitle = "用手机 App 或微信小程序扫一扫",
                 primary = true,
                 testTag = PhoneConnectionTestTags.MINI_PROGRAM_ENTRY,
                 onClick = onPairMiniProgram ?: {

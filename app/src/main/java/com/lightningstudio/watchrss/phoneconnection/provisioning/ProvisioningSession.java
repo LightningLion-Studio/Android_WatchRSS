@@ -11,6 +11,7 @@ public interface ProvisioningSession extends Closeable {
     void start() throws Exception;
     String qr() throws Exception;
     String sessionId();
+    default String sas(String userId) throws Exception { throw new IllegalStateException("Pairing SAS unavailable"); }
     JSONObject receive() throws Exception;
     void respond(int sequence,JSONObject result) throws Exception;
     @Override void close();

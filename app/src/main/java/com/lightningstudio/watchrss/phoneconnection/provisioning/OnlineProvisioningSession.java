@@ -64,6 +64,7 @@ public final class OnlineProvisioningSession implements ProvisioningSession {
         deadline=clock.millis()+LIFETIME_MS;
     }
     @Override public String sessionId(){return sessionId;}
+    @Override public synchronized String sas(String userId) throws Exception { check();return BleSetupCrypto.sas(secret,sessionId,userId); }
     private void check(){
         if(!closed&&clock.millis()>=deadline){close();throw new Failure(Failure.EXPIRED,"二维码已过期，请重新开始");}
         if(closed)throw new Failure(Failure.CLOSED,"配对已结束，请在手表重新打开配对页面");

@@ -50,11 +50,17 @@ class CloudSyncActivity : BaseWatchActivity() {
                     approvalBusy = false
                     approvalJob?.cancel()
                     approvalJob = null
+                    approvalRequest?.id?.let { id -> scope.launch { runCatching { service?.cancelCodeApproval(id) } } }
                     approvalCode = ""
                     approvalRequest = null
                 }
                 LaunchedEffect(account?.userId) { closeApproval() }
-                DisposableEffect(Unit) { onDispose { approvalJob?.cancel() } }
+                DisposableEffect(Unit) { onDispose {
+                    approvalJob?.cancel()
+                    approvalRequest?.id?.let { id -> scope.launch(kotlinx.coroutines.NonCancellable) {
+                        runCatching { service?.cancelCodeApproval(id) }
+                    } }
+                } }
                 LaunchedEffect(approvalOpen, approvalRequest) {
                     val request = approvalRequest
                     if (approvalOpen && request != null) {
@@ -80,7 +86,14 @@ class CloudSyncActivity : BaseWatchActivity() {
                     approvalJob = scope.launch {
                         try {
                             approvalRequest = service.requestCodeApproval()
-                            approvalMessage = "请在已授权的手机或小程序上批准手表，再输入显示的8位配对码。5分钟内有效。"
+                            if (generation == approvalGeneration) approvalBusy = false
+                            approvalMessage = "请在已授权的手机 App 或微信小程序上开始授权。"
+                            while (approvalOpen && !approvalSuccess && generation == approvalGeneration) {
+                                val request = approvalRequest ?: break
+                                val code = service.pollCodeApproval(request)
+                                if (code != null) approvalMessage = "手表校验码：${code.chunked(4).joinToString(" ")}。两端一致时，输入此码确认。"
+                                delay(1500)
+                            }
                         } catch (error: Exception) {
                             if (error is CancellationException) throw error
                             approvalMessage = friendlyApprovalError(error).first
@@ -94,7 +107,10 @@ class CloudSyncActivity : BaseWatchActivity() {
                     manualSync = null
                 }
                 CloudSyncScreen(
-                    state = cloudSyncUiState(account, status, manualPending = manualSync != null),
+                    state = cloudSyncUiState(account, status, manualPending = manualSync != null).let { ui ->
+                        val progress = status?.takeIf { it.accountId == account?.userId }?.restoreProgress
+                        if (progress == null || ui.detail.contains(progress)) ui else ui.copy(detail = ui.detail + "\n" + progress)
+                    },
                     onAction = { action ->
                         when (action) {
                             CloudSyncAction.REQUEST_APPROVAL -> requestApproval()
@@ -119,6 +135,7 @@ class CloudSyncActivity : BaseWatchActivity() {
                             if (request != null && service != null && !approvalBusy) {
                                 val code = approvalCode
                                 val generation = approvalGeneration
+                                approvalJob?.cancel()
                                 approvalBusy = true
                                 approvalMessage = "正在验证配对码…"
                                 approvalJob = scope.launch {

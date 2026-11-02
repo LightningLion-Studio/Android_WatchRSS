@@ -52,11 +52,12 @@ internal class WatchCloudRecordSync(
                 continue
             } ?: return false // 404, not 403.
             checkOwner()
+            WatchCloudProtocolV2.features(page)
             val rows = page.getJSONArray("items")
             when (page.getInt("formatVersion")) {
                 0 -> { require(rows.length() == 0); checkOwner(); store.reset(scope); return false }
                 1 -> Unit
-                else -> error("云增量记录格式不受支持")
+                else -> throw WatchCloudUpgradeRequired()
             }
             val next = page.getString("cursor")
             val head = page.getString("headRevision")

@@ -43,6 +43,7 @@ internal class WatchCloudNotesAdapter(context: Context, private val repository: 
     }
 
     suspend fun restore(stateBytes: ByteArray?, archive: ByteArray?): Int {
+        stateBytes?.let { WatchCloudProtocolV2.features(org.json.JSONObject(it.toString(Charsets.UTF_8))) }
         val state = stateBytes?.let(NoteCloudStateCodec::decodeState) ?: return 0
         val entries = archive?.let(MarkdownNoteArchive::read).orEmpty()
         val incoming = entries.filter { it.path.startsWith("notes/assets/") }.associate {
