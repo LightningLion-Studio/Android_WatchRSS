@@ -21,7 +21,6 @@ import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
-import com.lightningstudio.watchrss.ui.components.ThirdPartyPlatformNotice
 import com.lightningstudio.watchrss.ui.screen.bili.BiliPlayerScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.BiliPlayerViewModel
@@ -79,11 +78,6 @@ class BiliPlayerActivity : BaseWatchActivity() {
                         }
                     }.collectAsState(initial = false)
                     Column(modifier = androidx.compose.ui.Modifier.fillMaxSize()) {
-                        ThirdPartyPlatformNotice(
-                            platform = "哔哩哔哩",
-                            compact = true,
-                            modifier = androidx.compose.ui.Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
                         Box(modifier = androidx.compose.ui.Modifier.weight(1f).fillMaxSize()) {
                             BiliPlayerScreen(
                         uiState = uiState,

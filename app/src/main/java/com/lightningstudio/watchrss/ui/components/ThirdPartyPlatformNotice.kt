@@ -34,6 +34,23 @@ object AppTransparencyStore {
         .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
         .getBoolean(INITIAL_APP_DISCLOSURE_KEY, false)
 
+    /** 平台说明弹窗每个平台只展示一次（与 PodJS `watchrss.transparency.<platform>_disclosure_v1` 一致）。 */
+    fun isPlatformDisclosureAcknowledged(context: Context, platform: String): Boolean = context
+        .applicationContext
+        .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+        .getBoolean(platformKey(platform), false)
+
+    fun acknowledgePlatformDisclosure(context: Context, platform: String) {
+        context.applicationContext
+            .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(platformKey(platform), true)
+            .apply()
+    }
+
+    private fun platformKey(platform: String) =
+        if (platform == "抖音") "douyin_disclosure_v1" else "bili_disclosure_v1"
+
     fun acknowledgeInitialAppDisclosure(context: Context) {
         context.applicationContext
             .getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)

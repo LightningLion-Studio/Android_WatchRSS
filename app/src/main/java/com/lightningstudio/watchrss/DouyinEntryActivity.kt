@@ -35,7 +35,6 @@ import com.lightningstudio.watchrss.debug.DouyinPlaybackDebugController
 import com.lightningstudio.watchrss.ui.components.AppTransparencyStore
 import com.lightningstudio.watchrss.ui.components.InitialAppTransparencyDialog
 import com.lightningstudio.watchrss.ui.components.ThirdPartyPlatformConfirmationDialog
-import com.lightningstudio.watchrss.ui.components.ThirdPartyPlatformNotice
 import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.screen.douyin.DouyinImmersiveScreen
 import com.lightningstudio.watchrss.ui.screen.douyin.DouyinLoginScreen
@@ -120,27 +119,28 @@ class DouyinEntryActivity : BaseWatchActivity() {
                     var showInitialTransparency by remember {
                         mutableStateOf(!AppTransparencyStore.isInitialAppDisclosureAcknowledged(this@DouyinEntryActivity))
                     }
-                    var showPlatformConfirmation by remember { mutableStateOf(!showInitialTransparency) }
+                    val platformAcknowledged = remember {
+                        AppTransparencyStore.isPlatformDisclosureAcknowledged(this@DouyinEntryActivity, "抖音")
+                    }
+                    var showPlatformConfirmation by remember { mutableStateOf(!showInitialTransparency && !platformAcknowledged) }
                     if (showInitialTransparency) {
                         InitialAppTransparencyDialog(
                             onAcknowledge = {
                                 AppTransparencyStore.acknowledgeInitialAppDisclosure(this@DouyinEntryActivity)
                                 showInitialTransparency = false
-                                showPlatformConfirmation = true
+                                showPlatformConfirmation = !platformAcknowledged
                             }
                         )
                     } else if (showPlatformConfirmation) {
                         ThirdPartyPlatformConfirmationDialog(
                             platform = "抖音",
-                            onConfirm = { showPlatformConfirmation = false }
+                            onConfirm = {
+                                AppTransparencyStore.acknowledgePlatformDisclosure(this@DouyinEntryActivity, "抖音")
+                                showPlatformConfirmation = false
+                            }
                         )
                     }
                     Column(modifier = Modifier.fillMaxSize()) {
-                        ThirdPartyPlatformNotice(
-                            platform = "抖音",
-                            compact = true,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
                         Box(modifier = Modifier.weight(1f).fillMaxSize()) {
                             val warningMessage = remember { mutableStateOf<String?>(null) }
                     val uiState by viewModel.uiState.collectAsState()

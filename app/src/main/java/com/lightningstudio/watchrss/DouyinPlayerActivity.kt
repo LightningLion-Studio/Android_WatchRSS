@@ -30,7 +30,6 @@ import com.lightningstudio.watchrss.data.rss.BuiltinChannelType
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_PLAYBACK_START_VOLUME_LIMIT_PERCENT
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_CONTROL_ENABLED
 import com.lightningstudio.watchrss.data.settings.DEFAULT_MEDIA_VOLUME_GUARD_ENABLED
-import com.lightningstudio.watchrss.ui.components.ThirdPartyPlatformNotice
 import com.lightningstudio.watchrss.ui.screen.PlatformEntryScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import kotlinx.coroutines.flow.map
@@ -63,11 +62,6 @@ class DouyinPlayerActivity : BaseWatchActivity() {
                 val baseDensity = LocalDensity.current
                 CompositionLocalProvider(LocalDensity provides Density(2f, baseDensity.fontScale)) {
                     Column(modifier = Modifier.fillMaxSize()) {
-                        ThirdPartyPlatformNotice(
-                            platform = "抖音",
-                            compact = true,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
                         Box(modifier = Modifier.weight(1f).fillMaxSize()) {
                             val volumeGuardEnabled by settingsRepository.mediaVolumeGuardEnabled.collectAsState(
                                 initial = DEFAULT_MEDIA_VOLUME_GUARD_ENABLED

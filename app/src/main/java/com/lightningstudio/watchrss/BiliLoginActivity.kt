@@ -17,7 +17,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
-import com.lightningstudio.watchrss.ui.components.ThirdPartyPlatformNotice
 import com.lightningstudio.watchrss.ui.screen.bili.BiliLoginScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.viewmodel.BiliLoginViewModel
@@ -52,11 +51,6 @@ class BiliLoginActivity : BaseWatchActivity() {
                 }
 
                 Column(modifier = androidx.compose.ui.Modifier.fillMaxSize()) {
-                    ThirdPartyPlatformNotice(
-                        platform = "哔哩哔哩",
-                        compact = true,
-                        modifier = androidx.compose.ui.Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
                     Box(modifier = androidx.compose.ui.Modifier.weight(1f).fillMaxSize()) {
                         BiliLoginScreen(
                             uiState = uiState,

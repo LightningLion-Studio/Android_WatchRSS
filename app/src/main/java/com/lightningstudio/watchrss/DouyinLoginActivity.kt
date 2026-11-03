@@ -22,7 +22,6 @@ import com.lightningstudio.watchrss.data.network.DefaultInternetAvailabilityMoni
 import com.lightningstudio.watchrss.data.network.InternetAvailabilityStatus
 import com.lightningstudio.watchrss.ui.screen.douyin.DouyinLoginBannedScreen
 import com.lightningstudio.watchrss.ui.screen.douyin.DouyinLoginCheckingScreen
-import com.lightningstudio.watchrss.ui.components.ThirdPartyPlatformNotice
 import com.lightningstudio.watchrss.ui.screen.douyin.DouyinLoginScreen
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 import com.lightningstudio.watchrss.ui.util.getWebViewUnavailableMessage
@@ -74,11 +73,6 @@ class DouyinLoginActivity : BaseWatchActivity() {
 
                         InternetAvailabilityStatus.Available -> {
                             Column(modifier = Modifier.fillMaxSize()) {
-                                ThirdPartyPlatformNotice(
-                                    platform = "抖音",
-                                    compact = true,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
                                 Box(modifier = Modifier.weight(1f).fillMaxSize()) {
                                     DouyinLoginScreen(
                                 initialErrorMessage = initialWebViewError,

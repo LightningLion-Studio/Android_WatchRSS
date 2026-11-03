@@ -21,7 +21,6 @@ import com.lightningstudio.watchrss.data.douyin.buildDouyinShareLink
 import com.lightningstudio.watchrss.data.douyin.containsDouyinSavedItem
 import com.lightningstudio.watchrss.data.rss.ExternalSavedItem
 import com.lightningstudio.watchrss.data.rss.SaveType
-import com.lightningstudio.watchrss.ui.components.ThirdPartyPlatformNotice
 import com.lightningstudio.watchrss.ui.screen.ActionDialogScreen
 import com.lightningstudio.watchrss.ui.screen.ActionItem
 import com.lightningstudio.watchrss.ui.screen.rss.shareCurrent
@@ -153,11 +152,6 @@ class DouyinVideoActionsActivity : BaseWatchActivity() {
                 )
 
                 Column(modifier = Modifier.fillMaxSize()) {
-                    ThirdPartyPlatformNotice(
-                        platform = "抖音",
-                        compact = true,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
                     Box(modifier = Modifier.weight(1f).fillMaxSize()) {
                         ActionDialogScreen(
                             items = items,

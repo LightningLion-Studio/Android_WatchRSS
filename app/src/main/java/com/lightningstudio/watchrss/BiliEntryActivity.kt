@@ -17,7 +17,6 @@ import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.ui.components.AppTransparencyStore
 import com.lightningstudio.watchrss.ui.components.InitialAppTransparencyDialog
 import com.lightningstudio.watchrss.ui.components.ThirdPartyPlatformConfirmationDialog
-import com.lightningstudio.watchrss.ui.components.ThirdPartyPlatformNotice
 import com.lightningstudio.watchrss.ui.screen.bili.BiliEntryNavGraph
 import com.lightningstudio.watchrss.ui.theme.WatchRSSTheme
 
@@ -35,27 +34,28 @@ class BiliEntryActivity : BaseWatchActivity() {
                     var showInitialTransparency by remember {
                         mutableStateOf(!AppTransparencyStore.isInitialAppDisclosureAcknowledged(this@BiliEntryActivity))
                     }
-                    var showPlatformConfirmation by remember { mutableStateOf(!showInitialTransparency) }
+                    val platformAcknowledged = remember {
+                        AppTransparencyStore.isPlatformDisclosureAcknowledged(this@BiliEntryActivity, "哔哩哔哩")
+                    }
+                    var showPlatformConfirmation by remember { mutableStateOf(!showInitialTransparency && !platformAcknowledged) }
                     if (showInitialTransparency) {
                         InitialAppTransparencyDialog(
                             onAcknowledge = {
                                 AppTransparencyStore.acknowledgeInitialAppDisclosure(this@BiliEntryActivity)
                                 showInitialTransparency = false
-                                showPlatformConfirmation = true
+                                showPlatformConfirmation = !platformAcknowledged
                             }
                         )
                     } else if (showPlatformConfirmation) {
                         ThirdPartyPlatformConfirmationDialog(
                             platform = "哔哩哔哩",
-                            onConfirm = { showPlatformConfirmation = false }
+                            onConfirm = {
+                                AppTransparencyStore.acknowledgePlatformDisclosure(this@BiliEntryActivity, "哔哩哔哩")
+                                showPlatformConfirmation = false
+                            }
                         )
                     }
                     Column(modifier = androidx.compose.ui.Modifier.fillMaxSize()) {
-                        ThirdPartyPlatformNotice(
-                            platform = "哔哩哔哩",
-                            compact = true,
-                            modifier = androidx.compose.ui.Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
                         Box(modifier = androidx.compose.ui.Modifier.weight(1f).fillMaxSize()) {
                             BiliEntryNavGraph(repository = repository, rssRepository = rssRepository)
                         }
