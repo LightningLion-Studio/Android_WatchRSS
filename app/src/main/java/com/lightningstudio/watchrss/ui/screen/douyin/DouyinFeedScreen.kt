@@ -127,7 +127,7 @@ private fun DouyinFeedHeader(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "抖音精选",
+            text = "抖音",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface,
             textAlign = TextAlign.Center

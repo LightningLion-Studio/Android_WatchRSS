@@ -3050,7 +3050,7 @@ private fun DouyinTitlePage(
                         ) {
                             Text(
                                 text = channelTitleWithStyledHint(
-                                    title = "腕上RSS · 抖音频道",
+                                    title = "抖音",
                                     titleSize = MaterialTheme.typography.titleMedium.fontSize
                                 ),
                                 style = MaterialTheme.typography.titleMedium,
@@ -3329,7 +3329,7 @@ private fun DouyinVideoPage(
                     Text(if (paused) "已暂停 · 控制" else "控制")
                 }
                 if (muted) {
-                    com.lightningstudio.watchrss.ui.components.WatchTextButton(onClick = onToggleMuted) { Text("开启声音") }
+                    com.lightningstudio.watchrss.ui.components.WatchTextButton(onClick = onToggleMuted) { Text("取消静音") }
                 }
             }
         }
@@ -3402,7 +3402,7 @@ private fun DouyinVideoPage(
                     if (isActive) com.lightningstudio.watchrss.ui.components.PlaybackSeekControl(videoSlot?.player, onScrubbingChanged = { seeking = it })
                     Row(horizontalArrangement = Arrangement.Center) {
                         com.lightningstudio.watchrss.ui.components.WatchTextButton(onClick = onToggleMuted) {
-                            Text(if (muted) "开启声音" else "静音")
+                            Text(if (muted) "取消静音" else "静音")
                         }
                         com.lightningstudio.watchrss.ui.components.WatchTextButton(onClick = onDoubleTap) {
                             Text(if (paused) "继续" else "暂停")

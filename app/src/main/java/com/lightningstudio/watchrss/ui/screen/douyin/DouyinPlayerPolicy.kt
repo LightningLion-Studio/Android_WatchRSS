@@ -38,7 +38,7 @@ internal fun shouldEndDouyinOfflinePrefix(
 ): Boolean = unavailable && readiness == DouyinOfflineReadiness.PREFIX_READY && hasPlayed
 
 internal fun douyinFeedLoadNotice(isSlow: Boolean, deadlineExceeded: Boolean): String? = when {
-    deadlineExceeded -> "加载超时，点此重试"
-    isSlow -> "加载较慢，正在等待…"
+    deadlineExceeded -> "内容加载较慢，请稍候"
+    isSlow -> "内容加载较慢，请稍候"
     else -> null
 }

@@ -233,7 +233,7 @@ class DouyinFeedViewModel(
             val slow = launch {
                 delay(1_500)
                 if (generation == loadGeneration) _uiState.update { it.copy(
-                    isSlowLoading = true, message = "加载较慢，请稍候", messageEventId = it.messageEventId + 1
+                    isSlowLoading = true, message = "内容加载较慢，请稍候", messageEventId = it.messageEventId + 1
                 ) }
             }
             try {
@@ -356,7 +356,7 @@ class DouyinFeedViewModel(
                     true
                 }
                 if (completed == null && generation == loadGeneration) _uiState.update { it.copy(
-                    loadDeadlineExceeded = true, message = "加载超时，请重试", messageEventId = it.messageEventId + 1
+                    loadDeadlineExceeded = true, message = "内容加载较慢，请稍候", messageEventId = it.messageEventId + 1
                 ) }
             } catch (cancelled: CancellationException) {
                 throw cancelled

@@ -123,7 +123,7 @@ fun PlaybackControlPanel(
             PlaybackSeekControl(player)
             WatchTextButton(enabled = player != null, onClick = onTogglePlayback) { Text(if (state.playing) "暂停" else "继续播放") }
             muted?.let {
-                WatchTextButton(onClick = onToggleMuted) { Text(if (it) "开启声音" else "静音") }
+                WatchTextButton(onClick = onToggleMuted) { Text(if (it) "取消静音" else "静音") }
             }
             Text("音量 ${volume.percentText}")
             Slider(

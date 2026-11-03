@@ -194,7 +194,7 @@ private fun DouyinHistoryItemRow(
 @Composable
 private fun EmptyHistory() {
     Text(
-        text = "暂无播放历史",
+        text = "暂无播放历史\n播放过的视频会显示在这里",
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         fontSize = textSize(R.dimen.hey_m_desription),
         textAlign = TextAlign.Center,

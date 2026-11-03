@@ -69,10 +69,10 @@ class DouyinPlayerPolicyTest {
     }
 
     @Test
-    fun fakeLoadStatesShowDeadlineBeforeSlowNoticeAndRetainIndependentContent() {
+    fun slowAndDeadlineStatesUseTheSamePodjsNoticeAndRetainIndependentContent() {
         assertNull(douyinFeedLoadNotice(false, false))
-        assertEquals("加载较慢，正在等待…", douyinFeedLoadNotice(true, false))
-        assertEquals("加载超时，点此重试", douyinFeedLoadNotice(true, true))
-        assertEquals("加载超时，点此重试", douyinFeedLoadNotice(false, true))
+        assertEquals("内容加载较慢，请稍候", douyinFeedLoadNotice(true, false))
+        assertEquals("内容加载较慢，请稍候", douyinFeedLoadNotice(true, true))
+        assertEquals("内容加载较慢，请稍候", douyinFeedLoadNotice(false, true))
     }
 }
