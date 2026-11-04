@@ -35,6 +35,7 @@ class ProfileScreenTest {
             )
         }
 
+        composeRule.onNodeWithTag(ProfileTestTags.CLOUD_SYNC_ENTRY).assertDoesNotExist()
         composeRule.onNodeWithTag(ProfileTestTags.FAVORITES_ENTRY).assertExists()
         composeRule.onNodeWithTag(ProfileTestTags.WATCH_LATER_ENTRY).assertExists()
         composeRule.onNodeWithTag(ProfileTestTags.PHONE_CONNECTION_ENTRY).performScrollTo().assertExists()
@@ -131,10 +132,11 @@ class ProfileScreenTest {
     }
 
     @Test
-    fun profileScreen_ordersCloudSyncBelowAccountAndRoutesOnlyToIt() {
+    fun profileScreen_ordersCloudSyncBelowAccountWhenExplicitlyEnabled() {
         val clicks = mutableListOf<String>()
         composeRule.setWatchContent {
             ProfileScreen(
+                showCloudSyncEntry = true,
                 onAccountClick = { clicks += "account" },
                 onCloudSyncClick = { clicks += "cloud" },
                 onFavoritesClick = { clicks += "favorites" },

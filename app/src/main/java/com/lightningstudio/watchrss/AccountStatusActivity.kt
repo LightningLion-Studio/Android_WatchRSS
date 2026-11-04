@@ -23,7 +23,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.lightningstudio.watchrss.data.account.WatchAccountState
-import com.lightningstudio.watchrss.data.cloud.WatchCloudSyncService
 import com.lightningstudio.watchrss.ui.components.DownloadPhoneAppButton
 import com.lightningstudio.watchrss.ui.components.ThirdPartyPlatformNotice
 import com.lightningstudio.watchrss.ui.components.WatchRssAccessBoundaryCard
@@ -38,7 +37,7 @@ class AccountStatusActivity : BaseWatchActivity() {
         setContent {
             WatchRSSTheme {
                 val state by (application as WatchRssApplication).accountStore.state.collectAsState()
-                AccountStatusScreen(state, (application as WatchRssApplication).cloudSyncService)
+                AccountStatusScreen(state)
             }
         }
     }
@@ -51,8 +50,7 @@ class AccountStatusActivity : BaseWatchActivity() {
 
 @Composable
 private fun AccountStatusScreen(
-    state: WatchAccountState?,
-    cloudSyncService: WatchCloudSyncService?
+    state: WatchAccountState?
 ) {
     val scrollState = androidx.compose.foundation.rememberScrollState()
     InstallDigitalCrownScrollHandler(scrollState)
@@ -90,7 +88,7 @@ private fun AccountStatusScreen(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 DownloadPhoneAppButton(
-                    operation = "登录账号与云同步",
+                    operation = "登录账号",
                     modifier = Modifier.offset(y = (-4).dp)
                 )
             } else {
@@ -99,8 +97,6 @@ private fun AccountStatusScreen(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold
                 )
-                Text("WatchRSS云会员：${state.entitlement.plan}")
-                Text("状态：${if (state.entitlement.active) "有效" else "未生效"}")
                 Text("诊断：${if (state.telemetryConfig.diagnosticsEnabled) "已开启" else "未开启"}")
                 Text("Access Token：${if (state.isTokenExpired) "待刷新" else "有效"}")
                 Text(
@@ -110,11 +106,6 @@ private fun AccountStatusScreen(
                         else -> "有效"
                     }}"
                 )
-                if (BuildConfig.DEBUG) {
-                    cloudSyncService?.let { service ->
-                        WatchCloudControlsPanel(service)
-                    }
-                }
             }
             Spacer(modifier = Modifier.height(24.dp))
         }

@@ -35,11 +35,12 @@ android {
     buildToolsVersion = "36.1.0"
 
     defaultConfig {
-        applicationId = "com.lightningstudio.watchrss"
+        applicationId = providers.gradleProperty("watchrss.applicationId")
+            .getOrElse("com.lightningstudio.watchrss")
         minSdk = 30
         targetSdk = 34
-        versionCode = 41
-        versionName = "1.3.3-final"
+        versionCode = 42
+        versionName = "1.3.3-1"
         buildConfigField("String", "WATCHRSS_OPENPANEL_CLIENT_ID", "\"3b151c92-b189-48a3-ae77-148db3235ca1\"")
         buildConfigField("String", "WATCHRSS_OPENPANEL_CLIENT_SECRET", "\"\"")
         buildConfigField("String", "WATCHRSS_OPENPANEL_API_URL", "\"http://10.0.2.2:3001\"")

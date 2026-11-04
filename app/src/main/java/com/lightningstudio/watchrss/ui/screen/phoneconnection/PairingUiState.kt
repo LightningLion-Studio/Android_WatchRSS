@@ -19,7 +19,7 @@ enum class PairingStep(val label: String) {
     Scanned("手机已扫码"),
     Confirmed("已确认账号"),
     Saving("保存账号"),
-    Cloud("开启云同步")
+    Cloud("正在完成配对")
 }
 
 sealed interface PairingUiState {
@@ -42,10 +42,10 @@ sealed interface PairingUiState {
     data object Paused : PairingUiState
 }
 
-fun pairingDoneTitle(cloudReady: Boolean): String = if (cloudReady) "全部设置完成" else "手表已绑定"
+fun pairingDoneTitle(cloudReady: Boolean): String = "手表已绑定"
 
 fun pairingDoneDetail(cloudReady: Boolean): String =
-    if (cloudReady) "账号已登录，云同步已开启" else "账号已登录，可在“我的 → 云同步”查看当前状态"
+    "账号已登录，可以开始使用"
 
 fun pairingStartingLabel(transport: PairingTransport): String = "正在生成配对码…"
 

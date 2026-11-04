@@ -3,7 +3,6 @@ package com.lightningstudio.watchrss.ui.screen.phoneconnection
 import com.lightningstudio.watchrss.phoneconnection.provisioning.ProvisioningSession
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -23,9 +22,11 @@ class PairingUiStateTest {
     }
 
     @Test
-    fun outcomes_distinguishBoundFromCloudReady() {
-        assertNotEquals(pairingDoneTitle(true), pairingDoneTitle(false))
-        assertNotEquals(pairingDoneDetail(true), pairingDoneDetail(false))
+    fun outcomes_showAccountBindingWithoutCloudPromotion() {
+        for (cloudReady in listOf(true, false)) {
+            assertEquals("手表已绑定", pairingDoneTitle(cloudReady))
+            assertEquals("账号已登录，可以开始使用", pairingDoneDetail(cloudReady))
+        }
     }
 
     @Test

@@ -47,8 +47,9 @@ class ReleaseFeatureVisibilityGuardTest {
 
         assertFalse(accountStatus.contains("立即云同步"))
         assertTrue(accountStatus.contains("Spacer(modifier = Modifier.height(24.dp))"))
-        assertTrue(accountStatus.contains("if (BuildConfig.DEBUG)"))
-        assertTrue(accountStatus.contains("cloudSyncService: WatchCloudSyncService?"))
+        assertFalse(accountStatus.contains("WatchCloudControlsPanel"))
+        assertFalse(accountStatus.contains("cloudSyncService"))
+        assertFalse(accountStatus.contains("WatchRSS云会员"))
     }
 
     @Test

@@ -9,7 +9,7 @@ class LibraryAccountScopeTest {
         JSONObject().put("action", action).put("libraryAccountUserId", user).put("libraryAccountBackend", backend)
 
     @Test fun ownAccountCanUseAllLibraryOperations() {
-        listOf("syncLibrary", "pullSavedItems", "syncNotes", "syncNoteAsset", "syncReader", "previewReader", "syncLlmTokenUsage", "remoteInput").forEach {
+        listOf("clearLibrary", "syncLibrary", "pullSavedItems", "syncNotes", "syncNoteAsset", "syncReader", "previewReader", "syncLlmTokenUsage", "remoteInput").forEach {
             LibraryAccountScope.requireMatching(request(it), alpha)
         }
     }
@@ -41,5 +41,43 @@ class LibraryAccountScopeTest {
         org.junit.Assert.assertFalse(LibraryAccountScope.matchesAccount(request(user = "beta"), alpha))
         org.junit.Assert.assertFalse(LibraryAccountScope.matchesAccount(request(backend = "https://other.example"), alpha))
         org.junit.Assert.assertFalse(LibraryAccountScope.matchesAccount(request(), null))
+    }
+    @Test fun legacyMergeCanFollowSuccessfulAccountSyncOnSameConnection() {
+        val session = LibraryAccountSession()
+        session.confirm(alpha)
+        listOf("syncLibrary", "syncReader", "syncNotes", "syncLlmTokenUsage").forEach {
+            session.requireMatching(JSONObject().put("action", it), alpha)
+        }
+    }
+    @Test fun disconnectedOrFailedAccountSyncRevokesLegacyAccess() {
+        val session = LibraryAccountSession()
+        session.confirm(alpha)
+        session.reset()
+        org.junit.Assert.assertTrue(runCatching {
+            session.requireMatching(JSONObject().put("action", "syncLibrary"), alpha)
+        }.isFailure)
+    }
+    @Test fun legacyConfirmationCannotSelectAnotherAccountOrBackend() {
+        val session = LibraryAccountSession()
+        session.confirm(alpha)
+        listOf(alpha.first to "beta", "https://other.example" to "alpha").forEach { other ->
+            org.junit.Assert.assertTrue(runCatching {
+                session.requireMatching(JSONObject().put("action", "syncLibrary"), other)
+            }.isFailure)
+        }
+        org.junit.Assert.assertTrue(runCatching {
+            session.requireMatching(request(user = "beta"), alpha)
+        }.isFailure)
+    }
+    @Test fun clearLibraryRequiresTheSameAccountGuard() {
+        val session = LibraryAccountSession()
+        org.junit.Assert.assertTrue(runCatching {
+            session.requireMatching(JSONObject().put("action", "clearLibrary"), alpha)
+        }.isFailure)
+        org.junit.Assert.assertTrue(runCatching {
+            session.requireMatching(request(action = "clearLibrary", user = "beta"), alpha)
+        }.isFailure)
+        session.confirm(alpha)
+        session.requireMatching(JSONObject().put("action", "clearLibrary"), alpha)
     }
 }

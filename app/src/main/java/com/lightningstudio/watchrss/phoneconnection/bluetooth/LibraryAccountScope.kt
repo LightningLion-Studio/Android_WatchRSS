@@ -6,6 +6,7 @@ import org.json.JSONObject
 internal object LibraryAccountScope {
     private val dataActions = setOf(
         BluetoothSyncProtocol.ACTION_SYNC_LIBRARY,
+        BluetoothSyncProtocol.ACTION_CLEAR_LIBRARY,
         BluetoothSyncProtocol.ACTION_REMOTE_INPUT,
         BluetoothSyncProtocol.ACTION_PULL_SAVED_ITEMS,
         BluetoothSyncProtocol.ACTION_SYNC_NOTES,
@@ -23,12 +24,16 @@ internal object LibraryAccountScope {
         require(current == next) { "手表账号已变化，请手动同步确认账号" }
     }
 
-    fun requireMatching(request: JSONObject, identity: Pair<String, String>?) {
+    fun requireMatching(
+        request: JSONObject,
+        identity: Pair<String, String>?,
+        confirmedSessionIdentity: Pair<String, String>? = null
+    ) {
         val action = request.optString("action")
         if (action !in dataActions) return
         if (action == BluetoothSyncProtocol.ACTION_SYNC_LIBRARY && request.optString("phase") == LibrarySyncPayload.PHASE_PROBE) return
         if (!request.has("libraryAccountUserId")) {
-            require(identity == null) { "请升级手机端后再同步账号资料" }
+            require(identity == null || confirmedSessionIdentity == identity) { "请重新连接并同步账号后再同步资料" }
             return
         }
         val userId = request.optString("libraryAccountUserId")
@@ -36,5 +41,18 @@ internal object LibraryAccountScope {
         require(userId == identity?.second.orEmpty() && (identity == null || backend == identity.first)) {
             "手机与当前同步会话的资料账号不一致，请先同步账号或重新连接"
         }
+    }
+}
+
+/** Legacy phones identify their library once through a successful account sync on this transport. */
+internal class LibraryAccountSession {
+    private var confirmedIdentity: Pair<String, String>? = null
+
+    fun reset() { confirmedIdentity = null }
+
+    fun confirm(identity: Pair<String, String>) { confirmedIdentity = identity }
+
+    fun requireMatching(request: JSONObject, identity: Pair<String, String>?) {
+        LibraryAccountScope.requireMatching(request, identity, confirmedIdentity)
     }
 }

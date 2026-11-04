@@ -190,11 +190,6 @@ fun WatchRssAccessBoundaryCard(
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Text(
-                "WatchRSS云会员与平台会员分别由WatchRSS和对应平台管理。",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
     }
 }

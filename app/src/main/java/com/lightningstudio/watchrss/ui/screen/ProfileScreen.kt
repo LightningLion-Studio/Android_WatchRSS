@@ -50,7 +50,7 @@ import androidx.compose.ui.unit.dp
 fun ProfileScreen(
     showAccountEntry: Boolean = true,
     showPhoneConnectionEntry: Boolean = true,
-    showCloudSyncEntry: Boolean = showAccountEntry,
+    showCloudSyncEntry: Boolean = false,
     onAccountClick: () -> Unit = {},
     onCloudSyncClick: () -> Unit = {},
     onFavoritesClick: () -> Unit,

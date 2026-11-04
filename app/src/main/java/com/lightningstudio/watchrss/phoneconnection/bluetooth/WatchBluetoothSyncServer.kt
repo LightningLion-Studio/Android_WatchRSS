@@ -196,6 +196,7 @@ class WatchBluetoothSyncServer(
     private val onActionCompleted: ((BluetoothSyncResult) -> Unit)? = null,
     private val responseAckTimeoutMs: Long = RESPONSE_ACK_TIMEOUT_MS
 ) {
+    private val libraryAccountSession = LibraryAccountSession()
     private var sessionContainer: com.lightningstudio.watchrss.data.AppContainer? = null
     private fun dataContainer(): com.lightningstudio.watchrss.data.AppContainer = sessionContainer ?: run {
         (context.applicationContext as WatchRssApplication).container.also { sessionContainer = it }
@@ -205,7 +206,7 @@ class WatchBluetoothSyncServer(
         val selected = dataContainer()
         val identity = (selected as? com.lightningstudio.watchrss.data.DefaultAppContainer)?.accountIdentity
             ?: selected.watchAccountStore.state.value?.let { it.backendBaseUrl.trimEnd('/') to it.userId }
-        LibraryAccountScope.requireMatching(request, identity)
+        libraryAccountSession.requireMatching(request, identity)
     }
 
     @SuppressLint("MissingPermission")
@@ -278,6 +279,8 @@ class WatchBluetoothSyncServer(
                 )
             }.getOrThrow()
         } finally {
+            libraryAccountSession.reset()
+            sessionContainer = null
             (context.applicationContext as WatchRssApplication).finishAccountSyncUi(sessionId)
         }
     }
@@ -315,6 +318,8 @@ class WatchBluetoothSyncServer(
                 )
             }.getOrThrow()
         } finally {
+            libraryAccountSession.reset()
+            sessionContainer = null
             (context.applicationContext as WatchRssApplication).finishAccountSyncUi(sessionId)
         }
     }
@@ -328,6 +333,8 @@ class WatchBluetoothSyncServer(
         totalStartedAt: Long,
         initialRequestTimeoutMs: Long
     ): BluetoothSyncResult {
+        libraryAccountSession.reset()
+        sessionContainer = null
         Log.i(TAG, "accepted from name=$remoteName address=$remoteAddress")
         WatchBluetoothDebugLog.event(
             sessionId = sessionId,
@@ -913,6 +920,7 @@ class WatchBluetoothSyncServer(
             label = "articlesRequest",
             timeoutMs = EXCHANGE_FRAME_READ_TIMEOUT_MS
         )
+        requireLibraryAccount(first)
         val batchCount = LibrarySyncPayload.validateArticleRequestFrame(
             frame = first,
             expectedBatchIndex = 0
@@ -926,6 +934,7 @@ class WatchBluetoothSyncServer(
                 label = batchLabel("articlesRequest", index, batchCount),
                 timeoutMs = EXCHANGE_FRAME_READ_TIMEOUT_MS
             )
+            requireLibraryAccount(frame)
             LibrarySyncPayload.validateArticleRequestFrame(
                 frame = frame,
                 expectedBatchIndex = index,
@@ -972,6 +981,7 @@ class WatchBluetoothSyncServer(
         }
 
         suspend fun consume(frame: JSONObject) {
+            requireLibraryAccount(frame)
             stats.add(frame)
             val ready = mutableListOf<SyncedChunkedArticle>()
             checkOwner()
@@ -1323,6 +1333,7 @@ class WatchBluetoothSyncServer(
                 }
 
                 BluetoothSyncProtocol.ACTION_SYNC_ACCOUNT -> {
+                    libraryAccountSession.reset()
                     val app = context.applicationContext as WatchRssApplication
                     val localDeviceId = WatchDeviceIdentity(context).deviceId
                     val state = AccountSyncPayload.parseRequest(request)
@@ -1347,7 +1358,9 @@ class WatchBluetoothSyncServer(
                         deviceId = localDeviceId,
                         state = state,
                         telemetryBacklog = app.usageTelemetry.backlogCount()
-                    ).apply { put("isolatedLibrary", true) }
+                    ).apply { put("isolatedLibrary", true) }.also {
+                        libraryAccountSession.confirm(state.backendBaseUrl.trimEnd('/') to state.userId)
+                    }
                 }
 
                 BluetoothSyncProtocol.ACTION_SYNC_READER -> {
@@ -1557,6 +1570,7 @@ class WatchBluetoothSyncServer(
         var lastReadElapsedMs = 0L
         val stats = ReaderPreviewStreamStats()
         while (true) {
+            requireLibraryAccount(request)
             val handleStartedAt = SystemClock.elapsedRealtime()
             lastResponse = ReaderPresetPreviewPayload.handle(
                 request = request,

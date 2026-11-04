@@ -22,10 +22,6 @@ class ProfileActivity : BaseWatchActivity() {
                         if (!allowNavigation()) return@ProfileScreen
                         startActivity(Intent(this, AccountStatusActivity::class.java))
                     },
-                    onCloudSyncClick = {
-                        if (!allowNavigation()) return@ProfileScreen
-                        startActivity(Intent(this, CloudSyncActivity::class.java))
-                    },
                     onFavoritesClick = {
                         if (!allowNavigation()) return@ProfileScreen
                         val intent = Intent(this, SavedItemsActivity::class.java)
