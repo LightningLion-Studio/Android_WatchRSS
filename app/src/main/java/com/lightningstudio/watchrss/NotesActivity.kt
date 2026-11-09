@@ -886,15 +886,14 @@ internal fun WatchNoteRawEditor(
             titleSelectionToRestoreOnFocus = null
         }
     }
+    // The editor sits on the reader background, so text follows the reader preset colors.
     val bodyTextStyle = MaterialTheme.typography.bodyLarge.copy(
-        color = MaterialTheme.colorScheme.onSurface,
+        color = readerTextStyle(ReaderTextRole.BODY).color,
         textAlign = TextAlign.Start,
         lineHeight = MaterialTheme.typography.bodyLarge.lineHeight * 1.2f
     )
-    val titleTextStyle = readerTextStyle(ReaderTextRole.TITLE).copy(
-        color = MaterialTheme.colorScheme.onSurface,
-        textAlign = TextAlign.Center
-    )
+    val titleTextStyle = readerTextStyle(ReaderTextRole.TITLE).copy(textAlign = TextAlign.Center)
+    val placeholderColor = readerTextStyle(ReaderTextRole.SUBTITLE).color
     val cursorColor = MaterialTheme.colorScheme.primary
     val configuration = LocalConfiguration.current
     val minimumBodyHeight = configuration.screenHeightDp.dp * 0.58f
@@ -1003,7 +1002,7 @@ internal fun WatchNoteRawEditor(
                                         } else {
                                             "未命名笔记"
                                         },
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        color = placeholderColor,
                                         style = titleTextStyle
                                     )
                                 }
@@ -1089,7 +1088,7 @@ internal fun WatchNoteRawEditor(
                         if (editorValue.text.isEmpty()) {
                             Text(
                                 text = "输入正文，图片引用显示为占位",
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = placeholderColor,
                                 style = bodyTextStyle
                             )
                         }

@@ -1,7 +1,10 @@
 package com.lightningstudio.watchrss.ui.util
 
 import android.text.TextPaint
+import kotlin.math.abs
+import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sqrt
 
 fun normalizeWatchTitleWhitespace(title: String): String {
     val collapsed = title
@@ -54,6 +57,56 @@ fun formatWatchTitleForWidthLimits(
         minPrefixCharsBeforeSuffixOnLastLine = minPrefixCharsBeforeSuffixOnLastLine,
         measureText = paint::measureText
     )
+}
+
+/**
+ * Page title text for the current screen shape. A round screen gets explicit
+ * line breaks within the width limits; a rectangular screen keeps the title
+ * as is and wraps it across the full width. A protected suffix stays attached
+ * to the last word in both cases.
+ */
+internal fun formatWatchScreenTitle(
+    title: String,
+    isRound: Boolean,
+    availableWidthPx: Float,
+    firstLimitPx: Float,
+    secondLimitPx: Float,
+    protectedSuffix: String? = null,
+    measureText: (String) -> Float
+): String {
+    if (!isRound) {
+        return if (protectedSuffix == null) title else "$title $protectedSuffix"
+    }
+    return formatWatchTitleForWidthLimitsWithMeasurer(
+        title = if (protectedSuffix == null) title else "$title $protectedSuffix",
+        availableWidthPx = availableWidthPx,
+        firstLimitPx = firstLimitPx,
+        secondLimitPx = secondLimitPx,
+        protectedSuffix = protectedSuffix,
+        minPrefixCharsBeforeSuffixOnLastLine = 2,
+        measureText = measureText
+    )
+}
+
+/**
+ * Widest centred line that stays inside a round screen. The line box spans
+ * [lineTopPx, lineTopPx + lineHeightPx] and is centred at [lineCenterXPx];
+ * all values are window pixels. The edge farther from the screen centre
+ * sets the chord, and [marginPx] is kept free on each side.
+ */
+internal fun roundScreenLineWidthPx(
+    lineTopPx: Float,
+    lineHeightPx: Float,
+    lineCenterXPx: Float,
+    screenCenterXPx: Float,
+    screenCenterYPx: Float,
+    radiusPx: Float,
+    marginPx: Float
+): Float {
+    val farthestDy = max(abs(lineTopPx - screenCenterYPx), abs(lineTopPx + lineHeightPx - screenCenterYPx))
+    if (farthestDy >= radiusPx) return 0f
+    val halfChord = sqrt(radiusPx * radiusPx - farthestDy * farthestDy)
+    return ((halfChord - abs(lineCenterXPx - screenCenterXPx) - marginPx) * 2f).coerceAtLeast(0f)
 }
 
 internal fun formatWatchTitleForWidthLimitsWithMeasurer(

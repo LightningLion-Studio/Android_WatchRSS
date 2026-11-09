@@ -41,21 +41,17 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import com.lightningstudio.watchrss.ui.theme.watchDimensionResource
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import com.lightningstudio.watchrss.R
+import com.lightningstudio.watchrss.ui.components.WatchPageTitle
+import com.lightningstudio.watchrss.ui.components.watchChannelTitleStyle
 import com.lightningstudio.watchrss.sdk.bili.BiliItem
 import com.lightningstudio.watchrss.ui.components.EmptyStateCard
 import com.lightningstudio.watchrss.ui.components.PullRefreshBox
@@ -68,7 +64,6 @@ import com.lightningstudio.watchrss.ui.viewmodel.BiliFeedUiState
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 
-private const val CHANNEL_TITLE_CLICK_HINT_SYMBOL = "ⓘ"
 
 @Composable
 fun BiliRssFeedScreen(
@@ -399,7 +394,6 @@ private fun BiliRssFeedHeader(
     onLoginClick: () -> Unit,
     onHeaderClick: () -> Unit
 ) {
-    val titleSize = textSize(R.dimen.hey_m_title)
     val captionSize = textSize(R.dimen.hey_caption)
     val spacing = watchDimensionResource(R.dimen.hey_distance_6dp)
 
@@ -417,16 +411,10 @@ private fun BiliRssFeedHeader(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(spacing)
         ) {
-            Text(
-                text = channelTitleWithStyledHint(
-                    "腕上RSS · 哔哩哔哩频道",
-                    titleSize,
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                ),
-                color = MaterialTheme.colorScheme.onSurface,
-                fontSize = titleSize,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
+            WatchPageTitle(
+                text = "腕上RSS · 哔哩哔哩频道",
+                style = watchChannelTitleStyle(),
+                showInfoHint = true
             )
             Text(
                 text = if (isLoggedIn) "已登录" else "未登录",
@@ -448,25 +436,6 @@ private fun BiliRssFeedHeader(
     }
 }
 
-private fun channelTitleWithStyledHint(
-    title: String,
-    titleSize: TextUnit,
-    hintColor: Color
-): androidx.compose.ui.text.AnnotatedString {
-    val hintSize = (titleSize.value - 2f).coerceAtLeast(8f).sp
-    return buildAnnotatedString {
-        append("$title ")
-        withStyle(
-            SpanStyle(
-                color = hintColor,
-                fontWeight = FontWeight.Bold,
-                fontSize = hintSize
-            )
-        ) {
-            append(CHANNEL_TITLE_CLICK_HINT_SYMBOL)
-        }
-    }
-}
 
 @Composable
 private fun textSize(id: Int): TextUnit {
