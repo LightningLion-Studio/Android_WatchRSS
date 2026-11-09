@@ -42,6 +42,9 @@ import com.lightningstudio.watchrss.ui.input.InstallDigitalCrownScrollHandler
 import com.lightningstudio.watchrss.ui.theme.WatchDimens
 import com.lightningstudio.watchrss.ui.theme.watchQrSizeFor
 import com.lightningstudio.watchrss.ui.util.QrCodeGenerator
+import com.lightningstudio.watchrss.ui.util.roundHintQrSidePx
+import com.lightningstudio.watchrss.ui.theme.rememberIsRoundWatch
+import androidx.compose.ui.text.rememberTextMeasurer
 import com.lightningstudio.watchrss.ui.viewmodel.BiliLoginUiState
 import kotlin.math.roundToInt
 
@@ -71,7 +74,10 @@ fun BiliLoginScreen(
     }
     val safePadding = WatchDimens.watch_safe_padding
     val spacing = watchDimensionResource(R.dimen.hey_distance_6dp)
-    val topPadding = 4.dp
+    val isRound = rememberIsRoundWatch()
+    // A round screen uses the smaller hint so the hint and QR code fit the circle together.
+    val hintStyle = if (isRound) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge
+    val hintMeasurer = rememberTextMeasurer()
     val titleSpacing = spacing / 4
     val scrollState = rememberScrollState()
     InstallDigitalCrownScrollHandler(scrollState)
@@ -92,11 +98,33 @@ fun BiliLoginScreen(
             canRefresh = canRefresh
         ) {
             BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                val qrSize = watchQrSizeFor(
+                val baseQrSize = watchQrSizeFor(
                     availableWidth = (maxWidth - safePadding * 2).coerceAtLeast(0.dp),
                     availableHeight = maxHeight,
                     preferredSize = 180.dp
                 )
+                // Round screen: centre the hint and QR code as one group, each corner inside the circle.
+                val density = androidx.compose.ui.platform.LocalDensity.current
+                val roundLayout = if (isRound) {
+                    val hint = remember(hintStyle, density) { hintMeasurer.measure(BILI_QR_HINT, hintStyle).size }
+                    with(density) {
+                        val side = roundHintQrSidePx(
+                            radiusPx = minOf(maxWidth, maxHeight).toPx() / 2f,
+                            hintWidthPx = hint.width.toFloat(),
+                            hintHeightPx = hint.height.toFloat(),
+                            gapPx = titleSpacing.toPx(),
+                            marginPx = 2.dp.toPx(),
+                            maxSidePx = baseQrSize.toPx()
+                        )
+                        side.takeIf { it > 0f }?.let {
+                            it.toDp() to ((maxHeight.toPx() - hint.height - titleSpacing.toPx() - it) / 2f).toDp()
+                        }
+                    }
+                } else {
+                    null
+                }
+                val qrSize = roundLayout?.first ?: baseQrSize
+                val topPadding = roundLayout?.second?.coerceAtLeast(0.dp) ?: 4.dp
 
                 Column(
                     modifier = Modifier
@@ -107,8 +135,8 @@ fun BiliLoginScreen(
                     verticalArrangement = Arrangement.spacedBy(titleSpacing, Alignment.Top)
                 ) {
                     Text(
-                        text = "使用 B站手机客户端扫码",
-                        style = MaterialTheme.typography.bodyLarge,
+                        text = BILI_QR_HINT,
+                        style = hintStyle,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     val sizePx = with(androidx.compose.ui.platform.LocalDensity.current) {
@@ -162,6 +190,8 @@ fun BiliLoginScreen(
         }
     }
 }
+
+private const val BILI_QR_HINT = "使用 B站手机客户端扫码"
 
 private fun statusText(status: QrPollStatus): String {
     return when (status) {

@@ -109,6 +109,37 @@ internal fun roundScreenLineWidthPx(
     return ((halfChord - abs(lineCenterXPx - screenCenterXPx) - marginPx) * 2f).coerceAtLeast(0f)
 }
 
+/**
+ * Largest side of a square QR code stacked under a one-line hint, with the pair
+ * centred vertically on a round screen, so every corner of both keeps
+ * [marginPx] inside the circle. Returns 0 when the hint alone does not fit.
+ */
+internal fun roundHintQrSidePx(
+    radiusPx: Float,
+    hintWidthPx: Float,
+    hintHeightPx: Float,
+    gapPx: Float,
+    marginPx: Float,
+    maxSidePx: Float
+): Float {
+    fun fits(side: Float): Boolean {
+        val halfDy = (hintHeightPx + gapPx + side) / 2f + marginPx
+        val limit = radiusPx * radiusPx - halfDy * halfDy
+        val hintHalf = hintWidthPx / 2f + marginPx
+        val qrHalf = side / 2f + marginPx
+        return hintHalf * hintHalf <= limit && qrHalf * qrHalf <= limit
+    }
+    if (!fits(0f)) return 0f
+    if (fits(maxSidePx)) return maxSidePx
+    var low = 0f
+    var high = maxSidePx
+    repeat(32) {
+        val mid = (low + high) / 2f
+        if (fits(mid)) low = mid else high = mid
+    }
+    return low
+}
+
 internal fun formatWatchTitleForWidthLimitsWithMeasurer(
     title: String,
     availableWidthPx: Float,

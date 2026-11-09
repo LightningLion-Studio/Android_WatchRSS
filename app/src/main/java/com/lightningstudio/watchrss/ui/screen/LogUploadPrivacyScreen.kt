@@ -1,6 +1,7 @@
 package com.lightningstudio.watchrss.ui.screen
 
 import androidx.compose.foundation.background
+import com.lightningstudio.watchrss.ui.components.WatchPageTitle
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -59,13 +60,7 @@ fun LogUploadPrivacyScreen(
             verticalArrangement = Arrangement.Top,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(
-                text = "隐私及防诈说明",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center
-            )
+            WatchPageTitle(text = "隐私及防诈说明")
 
             Spacer(modifier = Modifier.height(sectionSpacing))
 

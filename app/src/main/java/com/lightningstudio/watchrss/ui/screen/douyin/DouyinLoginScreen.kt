@@ -57,6 +57,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.lightningstudio.watchrss.WatchRssApplication
+import com.lightningstudio.watchrss.ui.theme.rememberIsRoundWatch
 import com.lightningstudio.watchrss.ui.util.getWebViewUnavailableMessage
 import com.lightningstudio.watchrss.ui.util.offlineToastMessageOrNull
 import com.lightningstudio.watchrss.ui.util.showAppToast
@@ -672,7 +673,8 @@ private fun NativeQRCodeView(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp)
+                // A round screen keeps both hint lines inside the circle.
+                .padding(horizontal = 16.dp, vertical = if (rememberIsRoundWatch()) 28.dp else 16.dp)
         ) {
             // Top hint
             Text(

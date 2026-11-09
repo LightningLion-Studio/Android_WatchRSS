@@ -82,4 +82,18 @@ class WatchTitleFormattingTest {
         assertEquals(top - 20f, offCentre, 0.01f)
         assertEquals(0f, roundScreenLineWidthPx(-10f, 52f, 233f, 233f, 233f, 233f, 0f), 0f)
     }
+
+    @Test
+    fun roundHintQrSideKeepsHintAndQrCornersInsideCircle() {
+        // 466 px round screen; hint 276 x 34 px over the QR code, 3 px gap, 4 px margin.
+        val r = 233f
+        val side = roundHintQrSidePx(r, 276f, 34f, 3f, 4f, maxSidePx = 358f)
+        val halfDy = (34f + 3f + side) / 2f + 4f
+
+        assertTrue(side in 250f..358f)
+        assertTrue((side / 2f + 4f) * (side / 2f + 4f) + halfDy * halfDy <= r * r + 0.5f)
+        assertTrue((138f + 4f) * (138f + 4f) + halfDy * halfDy <= r * r + 0.5f)
+        assertEquals(100f, roundHintQrSidePx(r, 100f, 34f, 3f, 4f, maxSidePx = 100f), 0f)
+        assertEquals(0f, roundHintQrSidePx(r, 470f, 34f, 3f, 4f, maxSidePx = 358f), 0f)
+    }
 }
