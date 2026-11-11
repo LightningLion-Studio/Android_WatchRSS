@@ -138,6 +138,8 @@ class DouyinUnifiedParser {
 
     private fun parseVideoVariant(item: JSONObject?): DouyinVideoVariant? {
         if (item == null) return null
+        // DASH entries carry video only; their audio lives in bit_rate_audio.
+        if (item.optString("format").equals("dash", ignoreCase = true)) return null
         val playAddr = item.optJSONObject("play_addr") ?: return null
         val playUrl = firstNonBlankString(playAddr.optJSONArray("url_list")) ?: return null
         val videoExtra = item.optJSONObject("video_extra")

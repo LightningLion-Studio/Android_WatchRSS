@@ -47,7 +47,7 @@ internal fun selectPreferredVariant(
 ): DouyinVideoVariant? {
     val playableVariants = variants
         .asSequence()
-        .filter { it.playUrl.isNotBlank() }
+        .filter { it.playUrl.isNotBlank() && !isDouyinVideoOnlyUrl(it.playUrl) }
         .filter { it.codec != DouyinVideoCodec.H265 || hevcSupported }
         .toList()
     if (playableVariants.isEmpty()) return null
@@ -63,6 +63,9 @@ internal fun selectPreferredVariant(
             .thenBy { codecPriority(it.codec) }
     )
 }
+
+/** DASH video streams (cached before the parser skipped them) have no audio track. */
+internal fun isDouyinVideoOnlyUrl(url: String): Boolean = url.contains("/media-video-")
 
 private fun normalizedVerticalResolution(variant: DouyinVideoVariant): Int? {
     val shortSide = listOf(variant.width, variant.height)

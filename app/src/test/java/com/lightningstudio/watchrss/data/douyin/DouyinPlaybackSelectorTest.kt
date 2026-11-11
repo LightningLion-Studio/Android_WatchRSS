@@ -9,6 +9,15 @@ import org.junit.Test
 
 class DouyinPlaybackSelectorTest {
     @Test
+    fun selectPreferredVariant_skipsVideoOnlyDashStreams() {
+        val muxed = variant(codec = DouyinVideoCodec.H264, bitrate = 900_000L, definition = "540p", quality = "normal_540_0")
+        val dash = muxed.copy(playUrl = "https://example.com/tos/media-video-avc1/?br=200", bitrate = 200_000L)
+
+        assertEquals(muxed.playUrl, selectPreferredVariant(listOf(dash, muxed))?.playUrl)
+        assertNull(selectPreferredVariant(listOf(dash)))
+    }
+
+    @Test
     fun selectPreferredVariant_prefers540pH264() {
         val selected = selectPreferredVariant(
             variants = listOf(
