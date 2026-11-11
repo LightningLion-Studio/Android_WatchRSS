@@ -45,16 +45,19 @@ class DouyinRestoreSafetyTest {
         resumeAwemeIdOnEntry = anchor, trafficGate = gate, stockReader = { emptyList() }
     ))
 
-    @Test fun eighteenExpiredRestoredUrlsNeverReachPlaybackWhileRefreshIsPending() = runTest {
+    @Test fun eighteenExpiredRestoredUrlsNeverReachPlaybackWhileReplacementFeedIsPending() = runTest {
         val items = (0..17).map { sampleDouyinStreamItem(awemeId = "restored-$it", playUrlResolvedAtMs = 0) }
         val release = CompletableDeferred<Unit>()
-        var calls = 0
-        val repo = object : DouyinRepositoryContract by TestDouyinRepository(true) {
+        var detailCalls = 0
+        val backing = TestDouyinRepository(true)
+        val repo = object : DouyinRepositoryContract by backing {
             override suspend fun fetchVideo(awemeId: String): DouyinResult<DouyinContent> {
-                calls++
+                detailCalls++
+                return DouyinResult(DouyinErrorCodes.REQUEST_FAILED, "detail must not be used")
+            }
+            override suspend fun fetchFeedPage(cursor: String?, count: Int): DouyinResult<DouyinFeedPage> {
                 release.await()
-                return DouyinResult(DouyinErrorCodes.OK, data = DouyinContent.Video(
-                    awemeId, "fresh", "fixture", 0, "https://fresh.invalid/$awemeId", ""))
+                return backing.fetchFeedPage(cursor, count)
             }
         }
         val transport = Transport()
@@ -64,14 +67,11 @@ class DouyinRestoreSafetyTest {
         assertEquals(1, vm.uiState.value.currentPage)
         assertTrue(vm.uiState.value.proxyPlayUris.isEmpty())
         assertTrue(transport.registered.flatten().isEmpty())
-        assertEquals(1, calls)
         release.complete(Unit)
         advanceUntilIdle()
-        assertEquals(2, calls) // One ordinary detail refresh for each prepared item.
-        assertEquals(listOf("restored-0", "restored-1"), vm.uiState.value.proxyPlayUris.keys.toList())
+        assertEquals(0, detailCalls)
+        assertTrue(vm.uiState.value.items.none { it.awemeId.startsWith("restored-") })
         assertTrue(transport.registered.flatten().all { !isDouyinPlayUrlExpired(it) })
-        assertEquals(items.map { it.awemeId }, vm.uiState.value.items.map { it.awemeId })
-        assertEquals(1, vm.uiState.value.currentPage)
     }
 
     @Test fun eighteenExpiredItemsAndForbiddenNeighboursStopAtThreeWithoutAdvancingOrLoggingOut() = runTest {

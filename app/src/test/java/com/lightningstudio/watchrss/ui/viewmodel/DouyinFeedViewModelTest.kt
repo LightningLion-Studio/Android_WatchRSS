@@ -127,7 +127,7 @@ class DouyinFeedViewModelTest {
     }
 
     @Test
-    fun init_refreshesExpiredPreparedItemAndOneLookahead_withoutBlockingRestore() = runTest {
+    fun init_replacesExpiredRestoredQueueWithFreshFeed_withoutPerItemRefresh() = runTest {
         val cachedItems = listOf(
             sampleDouyinStreamItem(
                 awemeId = "aweme-a",
@@ -156,15 +156,10 @@ class DouyinFeedViewModelTest {
 
         advanceUntilIdle()
 
-        assertEquals(listOf("aweme-a", "aweme-b"), coordinator.refreshCalls)
-        assertEquals(
-            listOf(
-                "https://example.com/refreshed-aweme-a.mp4",
-                "https://example.com/refreshed-aweme-b.mp4",
-                "https://example.com/stale-c.mp4"
-            ),
-            viewModel.uiState.value.items.map { it.playUrl }
-        )
+        // Expired restored videos are not refreshed one by one; the stale queue is replaced by a fresh feed.
+        assertTrue(coordinator.refreshCalls.isEmpty())
+        assertTrue(viewModel.uiState.value.items.isNotEmpty())
+        assertTrue(viewModel.uiState.value.items.none { it.playUrl.startsWith("https://example.com/stale-") })
     }
 
     @Test
@@ -1031,7 +1026,8 @@ class DouyinFeedViewModelTest {
         assertEquals("新标题", refreshed.title)
         assertEquals("新作者", refreshed.author)
         assertEquals(99L, refreshed.likeCount)
-        assertEquals(DouyinSourceOrigin.VIDEO_REFRESH, refreshed.sourceOrigin)
+        // The expired cached queue is replaced by the fresh feed, not refreshed through detail.
+        assertEquals(DouyinSourceOrigin.NETWORK_FEED, refreshed.sourceOrigin)
         assertTrue(refreshed.playUrlResolvedAtMs > 0L)
     }
 

@@ -220,7 +220,7 @@ class DouyinFeedViewModel(
         }
     }
 
-    private fun loadInitial(replaceExistingFeed: Boolean, restoreEntry: Boolean = false, deadlineMs: Long = 10_000) {
+    private fun loadInitial(replaceExistingFeed: Boolean, restoreEntry: Boolean = false, deadlineMs: Long = 10_000, pageSize: Int = PAGE_SIZE) {
         if ((trafficGate.stopped.value && !restoreEntry) || feedLoadJob?.isActive == true) return
         val generation = ++loadGeneration
         loadMoreJob?.cancel()
@@ -229,6 +229,7 @@ class DouyinFeedViewModel(
         isRequestingMore = false
         _uiState.update { it.copy(isLoadingMore = false) }
         _uiState.update { it.copy(isLoading = true, isSlowLoading = false, loadDeadlineExceeded = false, message = null) }
+        var staleRestore = false
         feedLoadJob = viewModelScope.launch {
             val slow = launch {
                 delay(1_500)
@@ -249,8 +250,14 @@ class DouyinFeedViewModel(
                             resumeToVideoFlowOnEntry, resumeAwemeIdOnEntry)
                         currentCoroutineContext().ensureActive()
                         if (trafficGate.stopped.value) return@withTimeoutOrNull true
-                        if ((restored && sourceItems.any(::isDouyinPlayUrlExpired)) ||
-                            !shouldLoadInitialAfterRestore(restored, resumeToVideoFlowOnEntry)) {
+                        if (restored && sourceItems.drop((_uiState.value.currentPage - 1).coerceAtLeast(0))
+                                .take(STARTUP_PLAYBACK_REFRESH_COUNT).any(::isDouyinPlayUrlExpired)) {
+                            // Expired restored videos cannot be refreshed one by one: detail is challenged and feed
+                            // no longer lists them. PodJS replaces the queue; do the same after this restore step.
+                            staleRestore = true
+                            return@withTimeoutOrNull true
+                        }
+                        if (!shouldLoadInitialAfterRestore(restored, resumeToVideoFlowOnEntry)) {
                             refreshPreparedSources(generation)
                             return@withTimeoutOrNull true
                         }
@@ -263,7 +270,7 @@ class DouyinFeedViewModel(
                             message = null
                         )
                     }
-                    val result = repository.fetchFeedPage(cursor = null, count = PAGE_SIZE)
+                    val result = repository.fetchFeedPage(cursor = null, count = pageSize)
                     currentCoroutineContext().ensureActive()
                     if (generation != loadGeneration) return@withTimeoutOrNull true
                     if (result.isSuccess) {
@@ -358,16 +365,13 @@ class DouyinFeedViewModel(
                 if (completed == null && generation == loadGeneration) _uiState.update { it.copy(
                     loadDeadlineExceeded = true, message = "内容加载较慢，请稍候", messageEventId = it.messageEventId + 1
                 ) }
-                if (restoreEntry && generation == loadGeneration && !trafficGate.stopped.value &&
-                    sourceItems.drop((_uiState.value.currentPage - 1).coerceAtLeast(0))
-                        .take(STARTUP_PLAYBACK_REFRESH_COUNT).any(::isDouyinPlayUrlExpired)) {
-                    // The restored videos could not be refreshed one by one (detail is challenged or slow):
-                    // replace the stale queue with a fresh feed, with a new deadline. A failed feed load
+                if (staleRestore && generation == loadGeneration && !trafficGate.stopped.value) {
+                    // Replace the stale queue with a fresh feed, with a new deadline. A failed feed load
                     // keeps the cached queue.
                     val staleJob = feedLoadJob
                     viewModelScope.launch {
                         staleJob?.join()
-                        if (generation == loadGeneration) loadInitial(replaceExistingFeed = true, deadlineMs = STALE_REPLACEMENT_DEADLINE_MS)
+                        if (generation == loadGeneration) loadInitial(replaceExistingFeed = true, deadlineMs = STALE_REPLACEMENT_DEADLINE_MS, pageSize = STALE_REPLACEMENT_PAGE_SIZE)
                     }
                 }
             } catch (cancelled: CancellationException) {
@@ -726,9 +730,10 @@ class DouyinFeedViewModel(
         val current = currentItems.getOrNull(itemIndex) ?: return
         val rawAnchorIndex = sourceItems.indexOfFirst { it.awemeId == current.awemeId }
         if (rawAnchorIndex < 0) return
-        if (isDouyinPlayUrlExpired(current)) {
-            refreshPlaybackSource(current.awemeId, DouyinPlaybackSourceKind.REMOTE,
-                DouyinPlaybackRefreshTrigger.STARTUP_TTL)
+        if (isDouyinPlayUrlExpired(current) && !trafficGate.stopped.value) {
+            // The queue outlived its signed URLs. Per-video refresh cannot recover it, so replace it with a fresh feed.
+            loadInitial(replaceExistingFeed = true, deadlineMs = STALE_REPLACEMENT_DEADLINE_MS, pageSize = STALE_REPLACEMENT_PAGE_SIZE)
+            return
         }
         val playHeaders = _uiState.value.playHeaders
         viewModelScope.launch(storageDispatcher) {
@@ -1148,8 +1153,10 @@ class DouyinFeedViewModel(
     companion object {
         private const val TAG = "DouyinFeedVM"
         private const val PAGE_SIZE = 16
-        /** A 2 MB feed page needs 6-10 s on the watch; the stale queue has nothing playable to wait behind. */
-        private const val STALE_REPLACEMENT_DEADLINE_MS = 25_000L
+        /** The douyin feed answers in 6-25 s on the watch; the stale queue has nothing playable to wait behind. */
+        private const val STALE_REPLACEMENT_DEADLINE_MS = 60_000L
+        /** A smaller page downloads faster on the watch; load-more continues from its cursor. */
+        private const val STALE_REPLACEMENT_PAGE_SIZE = 6
         private const val BOOTSTRAP_ITEMS = PAGE_SIZE
         private const val DOUYIN_PLAYBACK_SNAPSHOT_STARTUP_COUNT = 6
         private const val STARTUP_PLAYBACK_REFRESH_COUNT = 2

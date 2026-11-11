@@ -14,7 +14,7 @@ import org.junit.Test
 class DouyinEntryIsolationTest {
     @get:Rule val main = MainDispatcherRule()
 
-    @Test fun failedRefreshOfExpiredRestoredQueueReplacesItWithFreshFeed() = runTest {
+    @Test fun expiredRestoredQueueIsReplacedByFreshFeed() = runTest {
         val cached = listOf("a", "b", "c").map { sampleDouyinStreamItem(awemeId = it, playUrlResolvedAtMs = 0) }
         val repository = TestDouyinRepository(initialLoggedIn = true)
         val cache = TestDouyinFeedCacheStore(cached).apply {
@@ -25,8 +25,8 @@ class DouyinEntryIsolationTest {
             watchHistoryStore = TestDouyinWatchHistoryStore(), feedCacheStore = cache,
             storageDispatcher = main.dispatcher))
         advanceUntilIdle()
-        // The two prepared items are refreshed one by one first; after both fail, one fresh feed replaces the queue.
-        assertEquals(listOf("a", "b"), repository.fetchVideoCalls)
+        // No per-item detail refresh: one fresh feed replaces the stale queue.
+        assertTrue(repository.fetchVideoCalls.isEmpty())
         assertEquals(listOf<String?>(null), repository.fetchFeedPageCursors)
         assertTrue(model.uiState.value.items.none { it.awemeId in setOf("a", "b", "c") })
         assertTrue(model.uiState.value.items.isNotEmpty())
