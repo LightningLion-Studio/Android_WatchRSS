@@ -37,6 +37,7 @@ import com.lightningstudio.watchrss.ui.components.InitialAppTransparencyDialog
 import com.lightningstudio.watchrss.ui.components.ThirdPartyPlatformConfirmationDialog
 import com.lightningstudio.watchrss.ui.components.WatchCircularProgressIndicator
 import com.lightningstudio.watchrss.ui.screen.douyin.DouyinImmersiveScreen
+import com.lightningstudio.watchrss.ui.screen.douyin.DouyinImmersiveScreenStack
 import com.lightningstudio.watchrss.ui.screen.douyin.DouyinLoginScreen
 import com.lightningstudio.watchrss.ui.screen.douyin.DouyinRssFeedScreen
 import com.lightningstudio.watchrss.ui.screen.douyin.rememberDouyinPlayerPoolSession
@@ -100,6 +101,11 @@ class DouyinEntryActivity : BaseWatchActivity() {
         }
     }
 
+    override fun onDestroy() {
+        DouyinImmersiveScreenStack.popWasTop(this)
+        super.onDestroy()
+    }
+
     override fun onStop() {
         viewModel.cancelFeedLoad()
         super.onStop()
@@ -107,6 +113,10 @@ class DouyinEntryActivity : BaseWatchActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // A relaunch from the launcher can stack a second entry over a stopped one; keep only the newest.
+        liveInstance?.get()?.takeIf { it !== this && !it.isFinishing }?.finish()
+        liveInstance = java.lang.ref.WeakReference(this)
+        DouyinImmersiveScreenStack.push(this)
         setupSystemBars()
         pendingAutoEnterFlow = true
         pendingResumeAwemeId = readResumeAwemeId(intent)
@@ -222,7 +232,9 @@ class DouyinEntryActivity : BaseWatchActivity() {
                         SideEffect { disableSwipeBack = false }
                         val playerSession = rememberDouyinPlayerPoolSession(
                             headers = uiState.playHeaders,
-                            enabled = originalContentEnabled
+                            enabled = originalContentEnabled,
+                            // Players are per activity: two entries driving one pool rebind each other forever.
+                            namespace = "feed:${System.identityHashCode(this@DouyinEntryActivity)}"
                         )
                         if (originalContentEnabled) {
                             if (playerSession == null) {
@@ -450,6 +462,7 @@ class DouyinEntryActivity : BaseWatchActivity() {
     }
 
     companion object {
+        private var liveInstance: java.lang.ref.WeakReference<DouyinEntryActivity>? = null
         const val EXTRA_DEBUG_AUTO_ENTER_FLOW = "watchrss.debug.auto_enter_douyin_flow"
         const val EXTRA_RESUME_TO_VIDEO_FLOW = "resume_to_video_flow"
         const val EXTRA_RESUME_AWEME_ID = "resume_aweme_id"

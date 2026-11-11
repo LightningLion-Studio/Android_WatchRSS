@@ -281,6 +281,23 @@ internal data class DouyinPlayerPoolSession(
     val slots: List<DouyinPlayerSlotState>
 )
 
+/** Only the newest Douyin owner may persist and clear the shared preview cache on exit. */
+internal object DouyinImmersiveScreenStack {
+    private val tokens = ArrayList<Any>()
+
+    @Synchronized
+    fun push(token: Any) {
+        tokens += token
+    }
+
+    @Synchronized
+    fun popWasTop(token: Any): Boolean {
+        val wasTop = tokens.lastOrNull() === token
+        tokens.remove(token)
+        return wasTop
+    }
+}
+
 private data class DouyinPlayerPoolEntry(
     val session: DouyinPlayerPoolSession,
     var refCount: Int
@@ -2438,8 +2455,13 @@ internal fun DouyinImmersiveScreen(
     }
 
     DisposableEffect(playerSession) {
+        val token = Any()
+        DouyinImmersiveScreenStack.push(token)
         onDispose {
-            persistCurrentPreviewSnapshots(clearAfterPersist = true)
+            // A screen replaced by a newer one must not wipe the cache that screen is using.
+            if (DouyinImmersiveScreenStack.popWasTop(token)) {
+                persistCurrentPreviewSnapshots(clearAfterPersist = true)
+            }
         }
     }
 
