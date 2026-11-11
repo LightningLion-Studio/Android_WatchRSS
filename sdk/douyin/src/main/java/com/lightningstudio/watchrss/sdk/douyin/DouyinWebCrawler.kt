@@ -22,8 +22,7 @@ class DouyinWebCrawler(
     private val abogusInstance: ABogus,
     private val config: DouyinRequestConfig = DouyinRequestConfig(),
     private val client: OkHttpClient = OkHttpClient.Builder().addInterceptor(DouyinTrafficInterceptor())
-        .connectTimeout(5, TimeUnit.SECONDS).readTimeout(8, TimeUnit.SECONDS)
-        .callTimeout(9, TimeUnit.SECONDS).build()
+        .connectTimeout(10, TimeUnit.SECONDS).readTimeout(10, TimeUnit.SECONDS).build() // Like PodJS: no total call timeout; a feed page is about 2 MB.
 ) {
     suspend fun fetchOneVideo(awemeId: String, cookie: String): String = execute(
         request("/aweme/v1/web/aweme/detail/", PostDetail(awemeId).toMap(), cookie)

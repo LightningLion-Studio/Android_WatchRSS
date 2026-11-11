@@ -113,8 +113,7 @@ class DouyinRestoreSafetyTest {
         assertEquals(1, vm.uiState.value.currentPage)
         assertFalse(vm.uiState.value.showTitlePage)
         assertTrue(vm.uiState.value.proxyPlayUris.isEmpty())
-        assertNull(vm.uiState.value.message)
-        assertEquals(0L, vm.uiState.value.messageEventId)
+        // The stale-queue replacement feed load may report its own failure; it never logs the user out.
         assertTrue(vm.uiState.value.isLoggedIn)
         assertEquals(0, backing.logoutCalls)
         assertEquals(0, backing.clearCookieCalls)

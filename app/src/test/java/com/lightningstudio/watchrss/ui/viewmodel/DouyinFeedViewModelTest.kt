@@ -779,12 +779,12 @@ class DouyinFeedViewModelTest {
         val pinnedFirst = sampleDouyinStreamItem(
             awemeId = "aweme-pinned-1",
             playUrl = "https://example.com/pinned-1.mp4",
-            playUrlResolvedAtMs = 11L
+            playUrlResolvedAtMs = System.currentTimeMillis() - 2L
         )
         val pinnedSecond = sampleDouyinStreamItem(
             awemeId = "aweme-pinned-2",
             playUrl = "https://example.com/pinned-2.mp4",
-            playUrlResolvedAtMs = 22L
+            playUrlResolvedAtMs = System.currentTimeMillis() - 1L
         )
         DouyinPlaybackPreviewCache.writeSnapshotForTests(0, pinnedFirst, byteArrayOf(1, 2, 3))
         DouyinPlaybackPreviewCache.writeSnapshotForTests(1, pinnedSecond, byteArrayOf(4, 5, 6))

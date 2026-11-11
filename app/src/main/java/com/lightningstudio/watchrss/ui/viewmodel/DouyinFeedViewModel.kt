@@ -220,7 +220,7 @@ class DouyinFeedViewModel(
         }
     }
 
-    private fun loadInitial(replaceExistingFeed: Boolean, restoreEntry: Boolean = false) {
+    private fun loadInitial(replaceExistingFeed: Boolean, restoreEntry: Boolean = false, deadlineMs: Long = 10_000) {
         if ((trafficGate.stopped.value && !restoreEntry) || feedLoadJob?.isActive == true) return
         val generation = ++loadGeneration
         loadMoreJob?.cancel()
@@ -237,7 +237,7 @@ class DouyinFeedViewModel(
                 ) }
             }
             try {
-                val completed = withTimeoutOrNull(10_000) {
+                val completed = withTimeoutOrNull(deadlineMs) {
                     if (restoreEntry) {
                         val loggedIn = repository.isLoggedIn()
                         currentCoroutineContext().ensureActive()
@@ -358,6 +358,18 @@ class DouyinFeedViewModel(
                 if (completed == null && generation == loadGeneration) _uiState.update { it.copy(
                     loadDeadlineExceeded = true, message = "内容加载较慢，请稍候", messageEventId = it.messageEventId + 1
                 ) }
+                if (restoreEntry && generation == loadGeneration && !trafficGate.stopped.value &&
+                    sourceItems.drop((_uiState.value.currentPage - 1).coerceAtLeast(0))
+                        .take(STARTUP_PLAYBACK_REFRESH_COUNT).any(::isDouyinPlayUrlExpired)) {
+                    // The restored videos could not be refreshed one by one (detail is challenged or slow):
+                    // replace the stale queue with a fresh feed, with a new deadline. A failed feed load
+                    // keeps the cached queue.
+                    val staleJob = feedLoadJob
+                    viewModelScope.launch {
+                        staleJob?.join()
+                        if (generation == loadGeneration) loadInitial(replaceExistingFeed = true, deadlineMs = STALE_REPLACEMENT_DEADLINE_MS)
+                    }
+                }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
@@ -1136,6 +1148,8 @@ class DouyinFeedViewModel(
     companion object {
         private const val TAG = "DouyinFeedVM"
         private const val PAGE_SIZE = 16
+        /** A 2 MB feed page needs 6-10 s on the watch; the stale queue has nothing playable to wait behind. */
+        private const val STALE_REPLACEMENT_DEADLINE_MS = 25_000L
         private const val BOOTSTRAP_ITEMS = PAGE_SIZE
         private const val DOUYIN_PLAYBACK_SNAPSHOT_STARTUP_COUNT = 6
         private const val STARTUP_PLAYBACK_REFRESH_COUNT = 2

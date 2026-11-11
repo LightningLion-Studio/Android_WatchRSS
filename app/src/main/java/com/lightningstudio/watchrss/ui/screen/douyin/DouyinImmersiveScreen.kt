@@ -1637,7 +1637,8 @@ internal fun DouyinImmersiveScreen(
         val playbackWindowItems = uiState.items.map { item ->
             uiState.proxyPlayUris[item.awemeId]
                 ?.let { proxyUri -> item.copy(playUrl = proxyUri) }
-                ?: item
+                // An expired signed URL always returns 403, and three 403s latch the traffic gate.
+                ?: if (isDouyinPlayUrlExpired(item)) item.copy(playUrl = "") else item
         }
         DouyinPlaybackPreviewCache.updatePlaybackWindow(
             items = playbackWindowItems,

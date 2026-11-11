@@ -14,7 +14,7 @@ import org.junit.Test
 class DouyinEntryIsolationTest {
     @get:Rule val main = MainDispatcherRule()
 
-    @Test fun expiredMetadataAloneDoesNotReplaceRestoredQueueOrPaginationCursor() = runTest {
+    @Test fun failedRefreshOfExpiredRestoredQueueReplacesItWithFreshFeed() = runTest {
         val cached = listOf("a", "b", "c").map { sampleDouyinStreamItem(awemeId = it, playUrlResolvedAtMs = 0) }
         val repository = TestDouyinRepository(initialLoggedIn = true)
         val cache = TestDouyinFeedCacheStore(cached).apply {
@@ -25,13 +25,12 @@ class DouyinEntryIsolationTest {
             watchHistoryStore = TestDouyinWatchHistoryStore(), feedCacheStore = cache,
             storageDispatcher = main.dispatcher))
         advanceUntilIdle()
-        assertEquals(cached.map { it.awemeId }, model.uiState.value.items.map { it.awemeId })
-        assertTrue(repository.fetchFeedPageCursors.isEmpty())
+        // The two prepared items are refreshed one by one first; after both fail, one fresh feed replaces the queue.
         assertEquals(listOf("a", "b"), repository.fetchVideoCalls)
-        assertEquals("restored-cursor", cache.cachedNextCursor)
-        model.loadMoreForList()
-        advanceUntilIdle()
-        assertEquals(listOf("restored-cursor"), repository.fetchFeedPageCursors)
+        assertEquals(listOf<String?>(null), repository.fetchFeedPageCursors)
+        assertTrue(model.uiState.value.items.none { it.awemeId in setOf("a", "b", "c") })
+        assertTrue(model.uiState.value.items.isNotEmpty())
+        assertTrue(model.uiState.value.showTitlePage)
     }
 
     @Test fun explicitResumeDoesNotReadOrPrependUnrelatedStock() = runTest {
